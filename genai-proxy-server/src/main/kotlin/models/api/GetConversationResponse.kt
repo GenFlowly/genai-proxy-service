@@ -48,7 +48,12 @@ data class PromptAndResponse(
      * Author of the user message. Lets viewers of a shared conversation see
      * who sent each prompt instead of assuming it was themselves.
      */
-    val sender: MessageSender? = null
+    val sender: MessageSender? = null,
+    /**
+     * The user message's own id. Lets the client target this exact turn
+     * (e.g. Regenerate) by id instead of guessing from a response's id.
+     */
+    val promptMessageId: String? = null
 )
 
 /** Display identity of a message author, joined from CustomerProfile. */
