@@ -56,6 +56,8 @@ interface BackendPromptAndResponse {
     promptCreatedAt?: string | null;
     /** Author of the user message (customerId + display name/picture) */
     sender?: MessageSender | null;
+    /** The user message's own id — carried onto each response below as previousMessageId, for Regenerate to target. */
+    promptMessageId?: string | null;
 }
 
 interface BackendGetConversationResponse {
@@ -138,6 +140,9 @@ export async function getConversation(
                     model: resp.model ?? null,
                     text: resp.text ?? '',
                     messageId: resp.messageId || `msg-${index}-${respIndex}`,
+                    // The turn's user message id — lets Regenerate target this
+                    // exact turn instead of guessing from a response's id.
+                    previousMessageId: item.promptMessageId ?? undefined,
                     // In-flight placeholder renders as a generating card (spinner),
                     // never the "No responses were generated" empty state.
                     isLoading: resp.inFlight ?? false,
