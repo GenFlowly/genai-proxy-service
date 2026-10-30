@@ -315,6 +315,50 @@ describe('ConversationHistoryComponent', () => {
         }
     })
 
+    test('collapsing Recents stops auto-loading more pages: no live end sentinel, no extra fetch', async () => {
+        mockGetCustomerConversations.mockResolvedValueOnce({ conversations: defaultConversations, lastEvaluatedKey: 'page2-key' })
+
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('history-end-sentinel')).toBeInTheDocument()
+        })
+
+        fireEvent.click(screen.getByTestId('conv-history-recents-heading'))
+
+        // Nothing visible to reach the end of anymore — the sentinel (and the
+        // IntersectionObserver behind it) is gone entirely, not just inert
+        await waitFor(() => {
+            expect(screen.queryByTestId('history-end-sentinel')).not.toBeInTheDocument()
+        })
+        expect(mockGetCustomerConversations).toHaveBeenCalledTimes(1)
+    })
+
+    test('collapsing Projects only collapses the Projects panel; History is a separate widget and stays put', async () => {
+        mockGetProjects.mockResolvedValue({
+            projects: [{ projectId: 'proj-1', name: 'Project One', createdAt: null, updatedAt: null }],
+        })
+
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conv-history-projects-heading')).toBeInTheDocument()
+        })
+        expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        // Normal (uncollapsed) state: the Projects pane keeps its dragged
+        // fraction height, and the History pane fills the rest
+        expect(screen.getByTestId('projects-pane')).toHaveStyle({ flexBasis: '40%' })
+        expect(screen.getByTestId('history-pane').className).not.toContain('paneFillCollapsed')
+
+        fireEvent.click(screen.getByTestId('conv-history-projects-heading'))
+
+        // Projects hugs its own header now (no fixed fraction)...
+        expect(screen.getByTestId('projects-pane').style.flexBasis).toBe('')
+        // ...History is untouched: still rendering normally, nothing collapsed
+        expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        expect(screen.getByTestId('history-pane').className).not.toContain('paneFillCollapsed')
+    })
+
     test('patches title of existing item when conversationTitle changes', async () => {
         // Start with no title
         setupMocks({ conversationId: 'conv-2', conversationTitle: null })
