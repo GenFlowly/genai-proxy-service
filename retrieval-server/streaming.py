@@ -570,5 +570,14 @@ async def stream_response(
             thread_id=thread_id,
         ):
             yield f"data: {json.dumps(payload)}\n\n"
-    finally:
+    except GeneratorExit:
+        # Client disconnected (Starlette aclose()): yielding here would raise
+        # "async generator ignored GeneratorExit" and leave inner-generator
+        # cleanup to GC. GeneratorExit is a BaseException, so it must be
+        # caught before the broader handler below.
+        raise
+    except BaseException:
+        yield "data: [DONE]\n\n"
+        raise
+    else:
         yield "data: [DONE]\n\n"

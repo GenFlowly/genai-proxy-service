@@ -534,7 +534,10 @@
             "title": "Connect Voyage AI",
             "description": "Voyage AI generates the embeddings used to index and search your conversations and notes.",
             "linkLabel": "Get a Voyage AI API key",
-            "keyPlaceholder": "pa-..."
+            "keyPlaceholder": "pa-...",
+            "hfTokenHint": "Hugging Face token (optional)",
+            "hfTokenPlaceholder": "hf_...",
+            "hfTokenNote": "Optional: authenticates the tokenizer downloads Voyage embedding models fetch from Hugging Face, avoiding anonymous rate limits."
         },
         "tavily": {
             "title": "Connect web search",
@@ -674,7 +677,11 @@
         "embeddingKeysSettings": {
             "title": "Embedding Model API Keys",
             "subtitle": "Bring your own keys for the embedding models that index and search your data. The OpenAI key is shared with the LLM API Keys page — one key serves both. Default embedding models are chosen on the Defaults page.",
-            "voyageLabel": "Voyage AI"
+            "voyageLabel": "Voyage AI",
+            "huggingFaceLabel": "Hugging Face token",
+            "huggingFaceNote": "Optional: authenticates the tokenizer downloads Voyage embedding models fetch from Hugging Face, avoiding anonymous rate limits.",
+            "removeKey": "Remove",
+            "keyRemoved": "Token removed."
         },
         "embeddingDefaults": {
             "title": "Default embedding models",

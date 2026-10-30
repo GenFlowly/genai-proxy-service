@@ -8,10 +8,14 @@ import { APIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 /**
  * Providers a customer can bring an embedding API key for. OPENAI shares its
  * key with the text-generation vendor of the same name — one key serves both.
+ * HUGGINGFACE is not an embedding provider: it is an optional Hugging Face Hub
+ * token that authenticates tokenizer downloads for Voyage models. It shares
+ * this credential flow but never appears in the model listings.
  */
 export enum EmbeddingVendor {
     OPENAI = 'OPENAI',
     VOYAGE = 'VOYAGE',
+    HUGGINGFACE = 'HUGGINGFACE',
 }
 
 export interface EmbeddingKeyStatus {
@@ -97,4 +101,22 @@ export async function storeEmbeddingKey(
     }
 
     return (await response.json()) as StoreEmbeddingKeyResponse
+}
+
+/**
+ * Delete a stored embedding-page credential. The backend only allows
+ * HUGGINGFACE — the OpenAI/Voyage keys are not deletable.
+ */
+export async function deleteEmbeddingKey(token: string, vendor: EmbeddingVendor): Promise<void> {
+    const response = await fetchWithRetry(endpoints.deleteEmbeddingKey(vendor), {
+        method: HttpMethod.DELETE,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Delete embedding key failed: ${response.status} ${response.statusText}`)
+    }
 }

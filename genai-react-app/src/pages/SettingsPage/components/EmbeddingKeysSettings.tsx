@@ -6,6 +6,7 @@ import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendor
 import {
     EmbeddingKeyStatus,
     EmbeddingVendor,
+    deleteEmbeddingKey,
     getEmbeddingKeys,
     storeEmbeddingKey,
 } from '../../../services/embeddingKeysService'
@@ -29,6 +30,11 @@ const keySet = (status?: EmbeddingKeyStatus): boolean =>
  * embeddings permission) reports as not set, with the backend's detail
  * message shown below — even though the LLM page shows the same key as set.
  * The per-category default embedding models live on the Defaults page.
+ *
+ * The optional Hugging Face token rides the same credential endpoints but is
+ * rendered in its own manager: it is the only removable credential (the
+ * OpenAI row doubles as the LLM key; Voyage backs stored preferences), and a
+ * shared manager instance would put remove buttons on every row.
  */
 export function EmbeddingKeysSettings(): React.ReactElement {
     const { t } = useTranslation()
@@ -72,10 +78,24 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         },
     ]), [statuses, t])
 
-    const vendorLabel = (vendor: EmbeddingVendor) =>
-        vendor === EmbeddingVendor.VOYAGE
-            ? t('settingsPage.embeddingKeysSettings.voyageLabel')
-            : 'OpenAI'
+    const hfRows: VendorApiKeyRowData[] = useMemo(() => ([
+        {
+            vendor: EmbeddingVendor.HUGGINGFACE,
+            label: t('settingsPage.embeddingKeysSettings.huggingFaceLabel'),
+            keySet: keySet(statuses.find(s => s.vendor === EmbeddingVendor.HUGGINGFACE)),
+        },
+    ]), [statuses, t])
+
+    const vendorLabel = (vendor: EmbeddingVendor) => {
+        switch (vendor) {
+            case EmbeddingVendor.VOYAGE:
+                return t('settingsPage.embeddingKeysSettings.voyageLabel')
+            case EmbeddingVendor.HUGGINGFACE:
+                return t('settingsPage.embeddingKeysSettings.huggingFaceLabel')
+            default:
+                return 'OpenAI'
+        }
+    }
 
     const handleSaveKey = async (vendor: string, apiKey: string) => {
         if (!isAuthenticated || !customerId) {
@@ -113,6 +133,19 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         }
     }
 
+    const handleDeleteKey = async (vendor: string) => {
+        if (!isAuthenticated || !customerId) {
+            throw new Error(t('settingsPage.aiSettings.loginFirstToast'))
+        }
+        const token = await getAccessTokenSilently()
+        await deleteEmbeddingKey(token, vendor as EmbeddingVendor)
+        setStatus({
+            vendor: vendor as EmbeddingVendor,
+            isAPIKeyValid: false,
+            status: APIKeyStatus.NOT_SET,
+        })
+    }
+
     const problems = statuses.filter(s => s.detail)
 
     return (
@@ -136,6 +169,25 @@ export function EmbeddingKeysSettings(): React.ReactElement {
                         keyEmpty: t('settingsPage.aiSettings.enterValidApiKeyToast'),
                     }}
                     data-testid="embedding-keys"
+                />
+                <p className={styles.note}>{t('settingsPage.embeddingKeysSettings.huggingFaceNote')}</p>
+                <VendorApiKeysManager
+                    rows={hfRows}
+                    onSaveKey={handleSaveKey}
+                    onDeleteKey={handleDeleteKey}
+                    strings={{
+                        keySetPill: t('settingsPage.aiSettings.keySetPill'),
+                        keyNotSetPill: t('settingsPage.aiSettings.keyNotSetPill'),
+                        keyHint: t('settingsPage.aiSettings.apiKeyHint'),
+                        keyPlaceholder: 'hf_...',
+                        keyReplacePlaceholder: t('settingsPage.aiSettings.overwriteApiKey'),
+                        saveKey: t('settingsPage.aiSettings.save'),
+                        removeKey: t('settingsPage.embeddingKeysSettings.removeKey'),
+                        keyRemoved: t('settingsPage.embeddingKeysSettings.keyRemoved'),
+                        saving: t('settingsPage.aiSettings.savingLabel'),
+                        keyEmpty: t('settingsPage.aiSettings.enterValidApiKeyToast'),
+                    }}
+                    data-testid="hf-token"
                 />
                 {problems.map(s => (
                     <p key={s.vendor} className={styles.keyProblem} data-testid={`embedding-key-problem-${s.vendor}`}>
