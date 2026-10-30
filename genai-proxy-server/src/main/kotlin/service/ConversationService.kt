@@ -182,7 +182,7 @@ class ConversationService(
                     val prompt = Prompt(instructionId = msg.instructionId ?: "", instructionVersion = msg.instructionVersion ?: "", prompt = msg.text, attachments = msg.attachments)
                     currentTurnUserIds = mutableSetOf(msg.messageId)
                     currentTurnPrompt = msg.text
-                    pairs.add(PromptAndResponse(prompt, responses, msg.createdAt, resolveSender(msg.customerId, senderCache)))
+                    pairs.add(PromptAndResponse(prompt, responses, msg.createdAt, resolveSender(msg.customerId, senderCache), msg.messageId))
                 }
             }
             i++
@@ -387,7 +387,15 @@ class ConversationService(
             ?.takeIf { it.isNotBlank() }
             ?.let { getMessage(message.conversationId, it) }
         if (previousMessage != null) {
-            message.sequence = previousMessage.sequence?.plus(1) ?: 1
+            // previousMessage.sequence + 1 alone collides whenever two messages
+            // chain off the same parent — parallel per-vendor sends, or a
+            // Regenerate reusing the original turn's user message. A tie's
+            // relative order is undefined (DDB scan order, not insertion
+            // order), so "latest wins" display logic needs an unambiguous
+            // sequence: always bump past whatever's newest in the conversation too.
+            val latestSequence = conversationRepository.getMessagesForConversation(message.conversationId)
+                .maxOfOrNull { it.sequence ?: 0 } ?: 0
+            message.sequence = maxOf(previousMessage.sequence?.plus(1) ?: 1, latestSequence + 1)
         }
         return message
     }

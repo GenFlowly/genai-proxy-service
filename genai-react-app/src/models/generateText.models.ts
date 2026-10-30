@@ -31,6 +31,12 @@ export interface GenerateTextStreamRequest {
     agentId?: string | null
     /** Project a brand-new conversation is created into; only read when conversationId is empty. */
     projectId?: string | null
+    /**
+     * Set by the Regenerate button: the user message id of the turn being
+     * regenerated, so the backend reuses that exact message instead of
+     * creating a new one.
+     */
+    regenerateMessageId?: string
 }
 
 export interface GenerateTextResponse {

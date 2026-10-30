@@ -47,4 +47,14 @@ data class GenerateTextStreamRequest(
      * failing the generation.
      */
     val projectId: String? = null,
+
+    /**
+     * Set by the Regenerate button: the user message id of the turn being
+     * regenerated. Lets the backend reuse that exact message as the parent
+     * instead of creating a new one — the "latest message is still role=user"
+     * heuristic (findActiveTurnUserMessage) only holds for racing parallel
+     * vendor calls of the original send, never for a later Regenerate click,
+     * since by then the first AI reply is already persisted.
+     */
+    val regenerateMessageId: String? = null,
 )

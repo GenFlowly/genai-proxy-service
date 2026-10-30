@@ -349,7 +349,8 @@ class GenerationOrchestrator(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
         agentId: String? = null,
-        projectId: String? = null
+        projectId: String? = null,
+        regenerateMessageId: String? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -392,11 +393,19 @@ class GenerationOrchestrator(
         }
 
         var actualPreviousMessageId = selectedResponseId
-        // A parallel per-vendor stream call for the same turn may have already
-        // persisted this turn's user message — reuse it instead of chaining a
-        // duplicate off it (which fragments history into per-vendor pairs).
         var existingUserMessage: Message? = null
-        if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
+        if (!regenerateMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
+            // Regenerate click: the client told us exactly which turn's user
+            // message to reuse — trust that id rather than guessing, and
+            // chain the new AI reply off the SAME previousMessageId so it
+            // lands in that turn's response group instead of starting a new one.
+            existingUserMessage = conversationService.getMessage(activeConversationId, regenerateMessageId)
+                ?.takeIf { it.role == "user" }
+            actualPreviousMessageId = existingUserMessage?.previousMessageId ?: actualPreviousMessageId
+        } else if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
+            // A parallel per-vendor stream call for the same turn may have already
+            // persisted this turn's user message — reuse it instead of chaining a
+            // duplicate off it (which fragments history into per-vendor pairs).
             existingUserMessage = conversationService.findActiveTurnUserMessage(
                 activeConversationId, userRequestRawPrompt, attachments.map { it.attachmentId },
                 toolResults.toResultsJson()
@@ -440,7 +449,7 @@ class GenerationOrchestrator(
             conversationService.addMessageInConversation(message)
             logger.info("Added Message id {} to conversation", message.messageId)
         } else {
-            logger.info("Reusing user message id {} for parallel vendor stream", message.messageId)
+            logger.info("Reusing existing user message id {} (regenerate or parallel vendor stream)", message.messageId)
         }
 
         // Step 4 - Track instruction usage (strict: counts each unique conversation+instruction once)
