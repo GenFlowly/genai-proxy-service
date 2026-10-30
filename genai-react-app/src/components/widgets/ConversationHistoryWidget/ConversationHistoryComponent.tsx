@@ -607,24 +607,27 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
         }]
         : []
 
-    // Every present section collapsed means there's nothing left to scroll,
-    // so the split should hug its (header-only) content instead of still
+    // Projects and History (Pinned + Recents) are two separate panel
+    // widgets, each with its own collapsed state — collapsing one must not
+    // affect the other. A widget counts as collapsed once none of ITS OWN
+    // sections have anything expanded (including "nothing to expand at
+    // all", e.g. zero projects), so it hugs its header instead of still
     // reserving its full dragged/fill height — see VerticalSplit's
-    // `collapsed` prop. A section that isn't rendered at all can't block this.
-    const presentSections = [
-        projectBuckets.length > 0 && 'projects',
-        globalPinned.length > 0 && 'pinned',
-        globalRecent.length > 0 && 'recent',
-    ].filter((id): id is string => !!id)
-    const allSectionsCollapsed = presentSections.length > 0
-        && presentSections.every(id => !sectionExpanded[id])
+    // `topCollapsed`/`bottomCollapsed` props.
+    const topCollapsed = projectBuckets.length === 0 || !sectionExpanded.projects
+    const pinnedPresent = globalPinned.length > 0
+    const recentPresent = globalRecent.length > 0
+    const bottomCollapsed = (pinnedPresent || recentPresent)
+        && (!pinnedPresent || !sectionExpanded.pinned)
+        && (!recentPresent || !sectionExpanded.recent)
 
     return (
         <>
             <VerticalSplit
                 storageKey={HISTORY_SPLIT_STORAGE_KEY}
                 separatorLabel={t('conversation.conversationHistory.resizePanels')}
-                collapsed={allSectionsCollapsed}
+                topCollapsed={topCollapsed}
+                bottomCollapsed={bottomCollapsed}
                 handleTestId="history-split-handle"
                 topTestId="projects-pane"
                 bottomTestId="history-pane"
@@ -646,14 +649,19 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                         // Older pages stream in as the end of the list nears;
                         // paused while a fetch runs and after a failure —
                         // auto-retrying a failing request would loop, so the
-                        // footer button below is the post-failure retry
-                        onEndReached={hasMore && !isLoading && !error ? handleLoadMore : undefined}
+                        // footer button below is the post-failure retry.
+                        // Collapsed Recents has no visible end to reach —
+                        // without this gate, the panel's own end-sentinel
+                        // sits in view of a now-tiny scroll area and the
+                        // IntersectionObserver re-fires on every resulting
+                        // re-render, looping fetches behind a closed section
+                        onEndReached={hasMore && !isLoading && !error && sectionExpanded.recent ? handleLoadMore : undefined}
                         isLoading={isLoading}
                         hasError={error}
                         errorText={t('conversation.conversationHistory.failedToLoad')}
                         emptyText={t('conversation.conversationHistory.noConversationsYet')}
                         listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
-                        footer={hasMore && (isLoading || error) && (
+                        footer={hasMore && sectionExpanded.recent && (isLoading || error) && (
                             <SidebarListLoadMore
                                 label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
                                 onClick={handleLoadMore}
