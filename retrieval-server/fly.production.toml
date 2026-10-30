@@ -51,8 +51,10 @@ primary_region = "iad"
 
 # Right-sized 2026-09: embeddings are API-backed (Voyage) — no local torch /
 # sentence-transformers resident in memory, and CPU sat under 1% of one core.
-# Bumped 1024mb -> 2048mb 2026-10-25: process RSS was climbing to the 1 GB
-# ceiling and getting OOM-killed every ~3.5h (root cause still open).
+# 2026-10-25..30: temporarily 2048mb while the embedding-client leak was open;
+# back to 1024mb with the fix (documents/Incidents/
+# RetrievalServerMemoryLeakIncidentOct2026.md). Healthy RSS is ~300-800MB; the
+# memory-headroom and RSS-slope Grafana alerts fire long before this ceiling.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "2048mb"
+  memory = "1024mb"

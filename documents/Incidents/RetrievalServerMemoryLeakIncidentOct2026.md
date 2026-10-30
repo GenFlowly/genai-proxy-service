@@ -158,7 +158,7 @@ Residual uncertainty, stated honestly: full prod traffic was not replayed agains
   - Tests: same key+model → identical instance; rotated key → new instance; LRU bound respected.
 - Ship as encoding-library **0.1.39**, repin consumers, deploy retrieval-server (rides the proxy-server workflow) and rebuild the encoding lambda images.
 - Pin `voyageai` in requirements and **file the bug upstream** (suggest a module-level cache keyed by model only).
-- **Validation:** watch `process_resident_memory_bytes` for 24 h post-deploy. Expect flat ~300–800 MB. After a few clean days, downsize the VM 2048 → 1024 MB and remove the stopgap comment.
+- **Validation:** watch `process_resident_memory_bytes` for 24 h post-deploy. Expect flat ~300–800 MB. *(As built: the VM was downsized 2048 → 1024 MB in the same change at the owner's direction — the downsize rides the same prod deploy as the fix rather than waiting for a soak. Backstop: the memory-headroom and RSS-slope alerts fire well before a 1 GB ceiling becomes an OOM, and the stopgap comment is gone from fly.production.toml.)*
 
 Implementation notes (as built, vs. the spec above):
 
@@ -205,7 +205,7 @@ Implementation status (2026-10-29), all uncommitted on `development`:
 
 ---
 
-## 9. Preventing this class of bug
+## 9. Preventing this class of bug (implemented 2026-10-30, except where noted)
 
 - **Lock dependencies.** Adopt a lockfile (`uv lock` / pip-tools) for retrieval-server, encoding-server, and encoding-library consumers. Dependency updates become deliberate, reviewable diffs. Keep `--no-cache` builds (correctness) — safe once pinned.
 - **Lint for the exact antipattern:** enable ruff/flake8-bugbear **B019** (`lru_cache` on methods) in Python CI. It can't catch the bug inside a vendor SDK, but it stops us writing the same one.
@@ -214,11 +214,29 @@ Implementation status (2026-10-29), all uncommitted on `development`:
   - Constructing a third-party SDK client per-call is **presumed expensive until benchmarked**.
 - **Stopgaps carry a leash:** any mitigation that masks a defect (RAM bump, retry loop, timeout raise) must ship with a tracked follow-up issue **and** an alert that fires if the underlying defect persists.
 - **Post-deploy soak check:** first-hour RSS slope after every prod deploy, compared against the trailing baseline (dashboard panel + annotation; see §10). This would have flagged the leak on day one — the first leaky process OOM'd in 27 minutes.
-- **CI records image provenance:** have the build step archive `pip freeze` output per image as a build artifact, so "what changed between deploys" is a text diff instead of registry-image forensics.
+- **CI records image provenance:** have the build step archive `pip freeze` output per image as a build artifact, so "what changed between deploys" is a text diff instead of registry-image forensics. *(As built: superseded by the lockfiles — the committed lock IS the image's dependency manifest, and "what changed" is `git diff` on it.)*
+
+As built (2026-10-30):
+
+- Lockfiles: `requirements*.lock.txt` compiled by `scripts/compile-python-locks.sh` **inside the same base images the Dockerfiles use** (host-side pip-compile would resolve for the wrong platform; the lambda locks additionally resolve under `--only-binary=:all:`, so every pin is wheel-installable). All 5 Dockerfiles and all 4 deploy-workflow test jobs install only from locks. `encoding-library` stays range-pinned — it's a library.
+- CI gates: `flake8-bugbear B019` enforced in the library publish workflow and all four service test jobs (baseline clean); deploy workflows wait up to 5 minutes for the pinned `genflowly-encoding-library` version to be **servable** on PyPI before installing — the same-push publish race failed this deploy twice on 2026-10-30 (upload in-flight, then CDN propagation).
+- Review rules codified in `genai-proxy-server/development.md` → "Python dependency locking & memory-safety review rules" (cache removals are measured changes, per-call SDK clients presumed expensive, bounded caches only, stopgaps carry a leash).
+- Post-deploy soak: implemented as the "RSS slope" dashboard panel + the 6h slow-leak alert (§10) rather than a separate CI job.
+- Found during implementation (same class, fixed in the same pass): `ubuntu-latest` 26.04 dropped EOL Python 3.9 from the publish matrix (now 3.11–3.13), and its newer buildx attaches provenance attestations that Lambda rejects (`BUILDX_NO_DEFAULT_ATTESTATIONS=1` in both encoding workflows).
 
 ---
 
-## 10. Observability changes (proposed)
+## 10. Observability changes (implemented 2026-10-30; log shipping scaffolded, deploy pending credentials)
+
+As built, deltas from the proposals below:
+
+- The proxy counter is **`generation_total{status, vendor, model}`** (not `generation_failure_total`): status carries `ok` / `cancelled` / the failure kind, so one canonical metric yields both the transport-error alert and the failure-share denominator. Added to the canonical-metrics table in development.md.
+- **Alerts as code:** `observability/grafana/alerts/alerts-production.json` (10 rules: memory headroom <15%/30m, restart churn >2/24h, RSS slope >20MB/h/6h, generation transport_error (critical), generation failure share >5%, stream errors, proxy+retrieval 5xx share >2%, retry exhaustion, per-vendor LLM failure share >10%). The prod Grafana workflow upserts them by uid through the provisioning API, resolving the Prometheus datasource uid at deploy time. Rules fire into the default notification policy — **wiring a contact point (email/Slack) in Grafana Cloud is a one-time manual step**.
+- **Dashboards:** "Process memory (leak watch)" row (RSS per process, RSS slope soak panel, restarts/24h, open fds) added to both fly-backend dashboards.
+- **Log shipping:** scaffolded in `observability/log-shipper/` (fly.toml + README with exact deploy commands). Decision: Grafana Cloud free tier — **14-day retention** (not 30; 30d needs a paid plan, 14 covered this incident's 4-day window with room). Cost: one 256MB Fly machine, ~$2–3/mo; ingest $0 at our volume. Needs Loki credentials to deploy; the kernel-OOM LogQL alert is documented in that README and gets added to alerts-as-code once the Loki datasource exists.
+- **Debug tooling:** `GET /debug/memory` on the retrieval server (tracemalloc top-N by site, gc stats, RSS) — 404s unless the `MEMORY_DEBUG_ENDPOINT=1` secret is set for an investigation window.
+
+Original proposals (kept for context):
 
 ### Alerts (Grafana, sourced from `observability/grafana/` per repo convention)
 
