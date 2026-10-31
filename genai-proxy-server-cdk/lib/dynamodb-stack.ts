@@ -153,6 +153,39 @@ export class DynamoDBStack extends cdk.Stack {
                     },
                     projectionType: dynamodb.ProjectionType.ALL,
                 },
+                // CloudFormation permits only ONE GSI creation per stack update:
+                // the two indexes below must reach an environment in two
+                // sequential deploys (deploy with pinnedIndex first, then add
+                // projectIndex), and the proxy-server code that queries them
+                // ships only after both are ACTIVE.
+                {
+                    // Sparse: pinnedAt exists only while a conversation is pinned,
+                    // so this index contains exactly the pinned set — presence is
+                    // the flag, and the sort key yields newest-pinned-first without
+                    // an in-memory sort. Serves GET /conversations/pinned without
+                    // reading (and post-filtering) the customer's entire
+                    // conversation partition.
+                    indexName: 'pinnedIndex',
+                    partitionKey: {
+                        name: 'customerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'pinnedAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.INCLUDE,
+                    nonKeyAttributes: [
+                        'conversationId',
+                        'title',
+                        'createdAt',
+                        'updatedAt',
+                        'archivedAt',
+                        'projectId',
+                        'parentConversationId',
+                        'vendors',
+                    ],
+                },
             ],
         };
 
