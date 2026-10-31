@@ -57,4 +57,13 @@ data class GenerateTextStreamRequest(
      * since by then the first AI reply is already persisted.
      */
     val regenerateMessageId: String? = null,
+
+    /**
+     * Client-generated id for this generation, usable with the cancel endpoint
+     * from the moment the request is sent. The server-assigned
+     * responseMessageId only reaches the client in the response headers, so a
+     * Stop pressed before they arrive (the early "thinking" window) would
+     * otherwise have no id to cancel with.
+     */
+    val generationId: String? = null,
 )

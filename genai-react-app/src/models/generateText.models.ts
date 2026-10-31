@@ -37,6 +37,13 @@ export interface GenerateTextStreamRequest {
      * creating a new one.
      */
     regenerateMessageId?: string
+    /**
+     * Client-generated id for this generation, usable with the cancel endpoint
+     * from the moment the request is sent — the server's responseMessageId
+     * only arrives in the response headers, too late for a Stop pressed while
+     * the model is still "thinking".
+     */
+    generationId?: string
 }
 
 export interface GenerateTextResponse {

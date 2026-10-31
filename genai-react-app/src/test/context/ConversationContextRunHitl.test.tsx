@@ -401,24 +401,41 @@ describe('ConversationContext durable-run HITL', () => {
         await waitFor(() => expect(getByTestId('txt')).toHaveTextContent('hello world'));
     });
 
-    test('stream cancels the run server-side on abort after metadata', async () => {
+    test('Stop cancels the generation server-side with the client generation id', async () => {
         const { generateTextStream } = require('../../services/generateTextStreamService');
         const { cancelGeneration } = require('../../services/cancelGenerationService');
         cancelGeneration.mockResolvedValue(true);
+        let sentRequest: any = null;
         generateTextStream.mockImplementation((...args: any[]) => {
-            args[3]?.({ conversationId: 'c1', responseMessageId: 'rm1' }); // real id -> currentMsgId != placeholder
-            const e: any = new Error('aborted');
-            e.name = 'AbortError';
-            return Promise.reject(e);
+            sentRequest = args[1];
+            const signal: AbortSignal | undefined = args[5];
+            // Hang until aborted — a Stop pressed mid-"thinking", before any
+            // response headers/metadata arrive, must still cancel server-side.
+            return new Promise((_, reject) => {
+                const abort = () => {
+                    const e: any = new Error('aborted');
+                    e.name = 'AbortError';
+                    reject(e);
+                };
+                if (signal?.aborted) abort();
+                else signal?.addEventListener('abort', abort);
+            });
         });
 
         const Comp = () => {
             const c = useConversation();
-            return <button data-testid="s" onClick={() => c.generateResponsesStream('conv-default')}>s</button>;
+            return (
+                <div>
+                    <button data-testid="s" onClick={() => c.generateResponsesStream('conv-default')}>s</button>
+                    <button data-testid="stop" onClick={() => c.stopGenerating('conv-default')}>stop</button>
+                </div>
+            );
         };
         const { getByTestId } = render(<MemoryRouter><ConversationProvider><Comp /></ConversationProvider></MemoryRouter>);
         await act(async () => { getByTestId('s').click(); });
-        await waitFor(() => expect(cancelGeneration).toHaveBeenCalledWith('token', 'rm1'));
+        await waitFor(() => expect(sentRequest?.generationId).toBeTruthy());
+        await act(async () => { getByTestId('stop').click(); });
+        await waitFor(() => expect(cancelGeneration).toHaveBeenCalledWith('token', sentRequest.generationId));
     });
 
     test('conversation block + selection actions', async () => {

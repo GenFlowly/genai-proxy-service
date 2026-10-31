@@ -93,6 +93,34 @@ describe('fetchWithRetry', () => {
         expect(response.status).toBe(403);
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
+
+    it('should not retry a deliberate abort (AbortError rethrows immediately)', async () => {
+        // Re-issuing an aborted request would restart the very generation the
+        // user just stopped (and bill for it) — the abort must surface at once.
+        const abortError: any = new Error('The user aborted a request.');
+        abortError.name = 'AbortError';
+        (global.fetch as jest.Mock).mockRejectedValue(abortError);
+
+        const promise = fetchWithRetry('https://api.example.com/data', { retries: 3, backoff: 1 });
+
+        await expect(promise).rejects.toBe(abortError);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not retry when the provided signal is already aborted', async () => {
+        const controller = new AbortController();
+        controller.abort();
+        (global.fetch as jest.Mock).mockRejectedValue(new TypeError('aborted'));
+
+        const promise = fetchWithRetry('https://api.example.com/data', {
+            retries: 3,
+            backoff: 1,
+            signal: controller.signal,
+        });
+
+        await expect(promise).rejects.toThrow();
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
 });
 // Trigger coverage run
 // Trigger coverage run

@@ -2,7 +2,7 @@ import json
 import logging
 import re
 import time
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
 from encoding_library.observability import count
 from graph.image_normalize import ImageNormalizationError
@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 # Same marker shape the client's linkifyCitations matches (Response.tsx).
 _CITATION_MARKER = re.compile(r"\[(\d{1,3})\]")
+
+# How often (at most) stream_events_dicts polls should_stop between events.
+_STOP_CHECK_INTERVAL_SECONDS = 1.0
 
 
 def _cited_web_sources(sources: list, answer: str) -> Optional[list]:
@@ -259,6 +262,7 @@ async def stream_events_dicts(
     structured_output: bool = False,
     builtin_tool_names: Optional[set[str]] = None,
     thread_id: Optional[str] = None,
+    should_stop: Optional[Callable[[], Awaitable[bool]]] = None,
 ) -> AsyncIterator[dict]:
     """
     Run a graph and yield outbound stream events as plain dict payloads:
@@ -306,6 +310,14 @@ async def stream_events_dicts(
         thread_id:       When set, passed as config.configurable.thread_id so a
                          checkpointer-bound (durable) graph persists/resumes this
                          run. The stateless /retrieve path leaves it None.
+        should_stop:     Async predicate polled between graph events (throttled);
+                         True aborts the run — remaining steps (LLM rounds, web
+                         searches, vector lookups) are skipped. The /retrieve
+                         path passes request.is_disconnected so a user cancel
+                         (the proxy drops the connection) stops billing; the
+                         durable /runs path leaves it None — background runs
+                         outlive their stream by design and are stopped via
+                         their own cancel endpoint.
     """
     if graph is None:
         raise ValueError("stream_events_dicts requires a compiled graph — no fallback available")
@@ -346,7 +358,23 @@ async def stream_events_dicts(
         # Required by LangGraph whenever a checkpointer is attached (durable runs).
         config["configurable"] = {"thread_id": thread_id}
     try:
-        async for event in graph.astream_events(state, config=config, version="v2"):
+        events = graph.astream_events(state, config=config, version="v2")
+        last_stop_check = time.monotonic()
+        async for event in events:
+            # A gone client (user hit Stop → the proxy cancelled its relay and
+            # dropped this connection) makes every further step unobservable
+            # billed work. aclose() cancels the graph's in-flight tasks, so no
+            # future step runs; the step currently executing still completes.
+            if should_stop is not None and time.monotonic() - last_stop_check >= _STOP_CHECK_INTERVAL_SECONDS:
+                last_stop_check = time.monotonic()
+                if await should_stop():
+                    count("stream_client_disconnect_total", vendor=_provider)
+                    logger.info(
+                        "Stream: client disconnected — aborting run after %d events, %d tokens",
+                        event_count, token_count,
+                    )
+                    await events.aclose()
+                    return
             event_type = event.get("event", "")
             node = event.get("metadata", {}).get("langgraph_node", "")
             event_count += 1
@@ -552,6 +580,7 @@ async def stream_response(
     structured_output: bool = False,
     builtin_tool_names: Optional[set[str]] = None,
     thread_id: Optional[str] = None,
+    should_stop: Optional[Callable[[], Awaitable[bool]]] = None,
 ) -> AsyncIterator[str]:
     """SSE wrapper over stream_events_dicts for the stateless /retrieve path:
     each event dict becomes a `data: {json}\\n\\n` frame, followed by the
@@ -568,6 +597,7 @@ async def stream_response(
             structured_output=structured_output,
             builtin_tool_names=builtin_tool_names,
             thread_id=thread_id,
+            should_stop=should_stop,
         ):
             yield f"data: {json.dumps(payload)}\n\n"
     except GeneratorExit:
