@@ -186,6 +186,23 @@ export class DynamoDBStack extends cdk.Stack {
                         'vendors',
                     ],
                 },
+                {
+                    // Sparse: only project-assigned conversations carry projectId.
+                    // Serves project-scoped listing/unassignment (project delete)
+                    // without reading the whole customer partition. KEYS_ONLY
+                    // projects the base keys (customerId, conversationId), which
+                    // is all the delete path needs.
+                    indexName: 'projectIndex',
+                    partitionKey: {
+                        name: 'projectId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'updatedAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+                },
             ],
         };
 
