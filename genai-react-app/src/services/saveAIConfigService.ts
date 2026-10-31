@@ -6,7 +6,6 @@ import { fetchWithRetry } from "../utils/apiUtils";
 export interface SaveAIConfigPreferencesRequest {
     aiConfigPreferences: {
         preferredModels?: AIConfig[]
-        preferredGenerativeMode?: string
         /** Preferred conversation agent (graphId). Empty string clears it. */
         preferredAgentId?: string
         /** Legacy single default embedding model name (e.g. voyage-4-large). */

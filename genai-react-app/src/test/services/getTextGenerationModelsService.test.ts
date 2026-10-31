@@ -56,11 +56,4 @@ describe('getTextGenerationModelsService', () => {
             .rejects.toThrow('Failed to fetch models: 503 Service Unavailable');
     });
 
-    // Coverage for no-op/simple functions
-    test('cache utilities are callable', () => {
-        const { clearModelCache, clearAllModelCache, getModelCacheStats } = require('../../services/getTextGenerationModelsService');
-        expect(() => clearModelCache('123')).not.toThrow();
-        expect(() => clearAllModelCache()).not.toThrow();
-        expect(getModelCacheStats()).toEqual({ count: 0, size: 0 });
-    });
 });

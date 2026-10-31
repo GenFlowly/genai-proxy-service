@@ -4,8 +4,9 @@ import { prefetchDefaultsPageData } from '../services/defaultsCacheService'
 
 /**
  * Fire-and-forget warm-up of the Settings → Defaults page caches as soon as
- * the session is authenticated, so the page renders populated on first visit
- * (the embedding-model catalog in particular can take seconds server-side).
+ * the session is authenticated, so the page renders populated on first visit.
+ * The embedding-model catalog is excluded — it is fetched only when the
+ * Settings page itself mounts (see prefetchDefaultsPageData).
  */
 export function useDefaultsPrefetch(): void {
     const { isAuthenticated, customerId, getAccessTokenSilently } = useAuth()

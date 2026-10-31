@@ -4,6 +4,8 @@ import com.genflowly.DynamoDBConstants.ARCHIVED_AT_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_CUSTOMER_UPDATED_GSI_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_ID_GSI_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_ID_KEY
+import com.genflowly.DynamoDBConstants.CONVERSATION_PINNED_GSI_KEY
+import com.genflowly.DynamoDBConstants.CONVERSATION_PROJECT_GSI_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
@@ -12,8 +14,10 @@ import com.genflowly.DynamoDBConstants.PARENT_CONVERSATION_ID_KEY
 import com.genflowly.DynamoDBConstants.PENDING_RUNS_KEY
 import com.genflowly.DynamoDBConstants.PINNED_AT_KEY
 import com.genflowly.DynamoDBConstants.PROJECT_ID_KEY
+import com.genflowly.DynamoDBConstants.VENDORS_KEY
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
+import com.genflowly.models.api.GetPinnedConversationsResponse
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -179,7 +183,10 @@ class ConversationRepository(
 
     /**
      * Bumps the conversation's updatedAt to now, so it surfaces at the top of
-     * the last-activity-ordered listing ([CONVERSATION_CUSTOMER_UPDATED_GSI_KEY]).
+     * the last-activity-ordered listing ([CONVERSATION_CUSTOMER_UPDATED_GSI_KEY]),
+     * and folds the message's vendors into the row's denormalized [VENDORS_KEY]
+     * String Set in the same write — list endpoints render vendor badges from
+     * that set instead of reading the Message table.
      *
      * Guarded by attribute_exists so a wrong (customerId, conversationId) pair —
      * e.g. a sender who isn't the owner of a shared conversation — never
@@ -187,9 +194,20 @@ class ConversationRepository(
      */
     suspend fun touchConversation(
         customerId: String,
-        conversationId: String
+        conversationId: String,
+        vendors: Set<String> = emptySet()
     ): Boolean = withContext(Dispatchers.IO) {
         try {
+            val attrNames = mutableMapOf("#ua" to "updatedAt", "#cid" to CONVERSATION_ID_KEY)
+            val attrValues = mutableMapOf<String, AttributeValue>(
+                ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
+            )
+            var updateExpression = "SET #ua = :now"
+            if (vendors.isNotEmpty()) {
+                updateExpression += " ADD #v :vendors"
+                attrNames["#v"] = VENDORS_KEY
+                attrValues[":vendors"] = AttributeValue.builder().ss(vendors).build()
+            }
             dynamoDbClient.updateItem(
                 UpdateItemRequest.builder()
                     .tableName(CONVERSATION_TABLE)
@@ -197,10 +215,10 @@ class ConversationRepository(
                         CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                     ))
-                    .updateExpression("SET #ua = :now")
+                    .updateExpression(updateExpression)
                     .conditionExpression("attribute_exists(#cid)")
-                    .expressionAttributeNames(mapOf("#ua" to "updatedAt", "#cid" to CONVERSATION_ID_KEY))
-                    .expressionAttributeValues(mapOf(":now" to AttributeValue.builder().s(Instant.now().toString()).build()))
+                    .expressionAttributeNames(attrNames)
+                    .expressionAttributeValues(attrValues)
                     .build()
             )
             true
@@ -591,10 +609,10 @@ class ConversationRepository(
 
         val response = dynamoDbClient.query(queryBuilder.build())
 
-        // The listing GSI's INCLUDE projection carries neither projectId nor
-        // parentConversationId (same reason the pinned query reads the base
-        // table), and changing a GSI projection means replacing the index. One
-        // BatchGetItem on the base table per page (≤50 keys) fills the gap instead.
+        // The listing GSI's INCLUDE projection carries neither projectId,
+        // parentConversationId, pinnedAt nor vendors, and changing a GSI
+        // projection means replacing the index. One BatchGetItem on the base
+        // table per page (≤50 keys) fills the gap instead.
         val pageConversationIds = response.items().mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
         val baseRowByConversation: Map<String, Map<String, AttributeValue>> =
             if (pageConversationIds.isEmpty()) emptyMap()
@@ -606,10 +624,12 @@ class ConversationRepository(
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(it).build()
                     )
                 },
-                projectionExpression = "$CONVERSATION_ID_KEY, #pid, #parent",
+                projectionExpression = "$CONVERSATION_ID_KEY, #pid, #parent, #pa, #v",
                 expressionAttributeNames = mapOf(
                     "#pid" to PROJECT_ID_KEY,
-                    "#parent" to PARENT_CONVERSATION_ID_KEY
+                    "#parent" to PARENT_CONVERSATION_ID_KEY,
+                    "#pa" to PINNED_AT_KEY,
+                    "#v" to VENDORS_KEY
                 )
             ).mapNotNull { item ->
                 item[CONVERSATION_ID_KEY]?.s()?.let { it to item }
@@ -620,18 +640,17 @@ class ConversationRepository(
             val title     = item["title"]?.s()
             val createdAt = item["createdAt"]?.s()
             val updatedAt = item["updatedAt"]?.s()
-
-            val messages = getMessagesForConversation(convId)
-            val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
+            val baseRow   = baseRowByConversation[convId]
 
             ConversationSummary(
                 conversationId = convId,
                 title = title,
                 createdAt = createdAt,
                 updatedAt = updatedAt,
-                vendors = vendors,
-                projectId = baseRowByConversation[convId]?.get(PROJECT_ID_KEY)?.s(),
-                parentConversationId = baseRowByConversation[convId]?.get(PARENT_CONVERSATION_ID_KEY)?.s()
+                pinnedAt = baseRow?.get(PINNED_AT_KEY)?.s(),
+                vendors = resolveVendors(customerId, convId, baseRow?.get(VENDORS_KEY)),
+                projectId = baseRow?.get(PROJECT_ID_KEY)?.s(),
+                parentConversationId = baseRow?.get(PARENT_CONVERSATION_ID_KEY)?.s()
             )
         }
 
@@ -645,64 +664,103 @@ class ConversationRepository(
     }
 
     /**
-     * Fetches all pinned (and not archived) conversations for the customer,
-     * most recently pinned first.
+     * One page of the customer's pinned (and not archived) conversations, most
+     * recently pinned first.
      *
-     * Queries the base table (not the customerId GSI) because the GSI projection
-     * doesn't include [PINNED_AT_KEY] — the base table returns full items, so the
-     * pinned filter can be evaluated without an index change.
+     * Queries the sparse [CONVERSATION_PINNED_GSI_KEY] index: pinnedAt only
+     * exists while a conversation is pinned, so the index holds exactly the
+     * pinned set, pre-sorted by the sort key — read cost scales with pinned
+     * count, not the customer's total conversations. The index projection
+     * carries every ConversationSummary field, so no base-table follow-up.
      */
     suspend fun getPinnedConversationsByCustomer(
         customerId: String,
-        maxItems: Int = 50
-    ): List<ConversationSummary> = withContext(Dispatchers.IO) {
-        val pinnedItems = mutableListOf<Map<String, AttributeValue>>()
-        var startKey: Map<String, AttributeValue>? = null
+        pageSize: Int = 50,
+        exclusiveStartKey: String? = null
+    ): GetPinnedConversationsResponse = withContext(Dispatchers.IO) {
+        val queryBuilder = QueryRequest.builder()
+            .tableName(CONVERSATION_TABLE)
+            .indexName(CONVERSATION_PINNED_GSI_KEY)
+            .keyConditionExpression("#cid = :cid")
+            .filterExpression("attribute_not_exists(#aa)")
+            .expressionAttributeNames(mapOf(
+                "#cid" to CUSTOMER_ID_KEY,
+                "#aa" to ARCHIVED_AT_KEY
+            ))
+            .expressionAttributeValues(mapOf(
+                ":cid" to AttributeValue.builder().s(customerId).build()
+            ))
+            .scanIndexForward(false) // most recently pinned first
+            .limit(pageSize)
 
-        // A filtered query can return empty pages with a lastEvaluatedKey, so
-        // keep paging until the key is absent (or we have enough items).
-        do {
-            val queryBuilder = QueryRequest.builder()
-                .tableName(CONVERSATION_TABLE)
-                .keyConditionExpression("#cid = :cid")
-                .filterExpression("attribute_exists(#pa) AND attribute_not_exists(#aa)")
-                .expressionAttributeNames(mapOf(
-                    "#cid" to CUSTOMER_ID_KEY,
-                    "#pa" to PINNED_AT_KEY,
-                    "#aa" to ARCHIVED_AT_KEY
-                ))
-                .expressionAttributeValues(mapOf(
-                    ":cid" to AttributeValue.builder().s(customerId).build()
-                ))
-            startKey?.let { queryBuilder.exclusiveStartKey(it) }
-
-            val response = dynamoDbClient.query(queryBuilder.build())
-            pinnedItems += response.items()
-            startKey = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
-                response.lastEvaluatedKey()
-            } else null
-        } while (startKey != null && pinnedItems.size < maxItems)
-
-        pinnedItems
-            .sortedByDescending { it[PINNED_AT_KEY]?.s() ?: "" }
-            .take(maxItems)
-            .mapNotNull { item ->
-                val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
-
-                val messages = getMessagesForConversation(convId)
-                val vendors = messages.flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().takeIf { it.isNotEmpty() }
-
-                ConversationSummary(
-                    conversationId = convId,
-                    title = item["title"]?.s(),
-                    createdAt = item["createdAt"]?.s(),
-                    updatedAt = item["updatedAt"]?.s(),
-                    pinnedAt = item[PINNED_AT_KEY]?.s(),
-                    vendors = vendors,
-                    projectId = item[PROJECT_ID_KEY]?.s(),
-                    parentConversationId = item[PARENT_CONVERSATION_ID_KEY]?.s()
-                )
+        if (!exclusiveStartKey.isNullOrBlank()) {
+            try {
+                val keyMap: Map<String, String> = Json.decodeFromString(exclusiveStartKey)
+                queryBuilder.exclusiveStartKey(keyMap.mapValues { (_, v) -> AttributeValue.builder().s(v).build() })
+            } catch (e: Exception) {
+                logger.warn("Failed to parse pinned exclusiveStartKey, starting from beginning: ${e.message}")
             }
+        }
+
+        val response = dynamoDbClient.query(queryBuilder.build())
+
+        val conversations = response.items().mapNotNull { item ->
+            val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
+            ConversationSummary(
+                conversationId = convId,
+                title = item["title"]?.s(),
+                createdAt = item["createdAt"]?.s(),
+                updatedAt = item["updatedAt"]?.s(),
+                pinnedAt = item[PINNED_AT_KEY]?.s(),
+                vendors = resolveVendors(customerId, convId, item[VENDORS_KEY]),
+                projectId = item[PROJECT_ID_KEY]?.s(),
+                parentConversationId = item[PARENT_CONVERSATION_ID_KEY]?.s()
+            )
+        }
+
+        val nextPageToken: String? = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+            Json.encodeToString(response.lastEvaluatedKey().mapValues { (_, v) -> v.s() ?: "" })
+        } else null
+
+        GetPinnedConversationsResponse(conversations = conversations, lastEvaluatedKey = nextPageToken)
+    }
+
+    /**
+     * Vendors for a summary row: the denormalized [VENDORS_KEY] set when
+     * present, else computed from the messages and written back so the row
+     * never pays the Message-table read again. Rows written before
+     * denormalization (and conversations with no AI replies yet) take the
+     * fallback path.
+     */
+    private suspend fun resolveVendors(
+        customerId: String,
+        conversationId: String,
+        vendorsAttr: AttributeValue?
+    ): List<String>? {
+        vendorsAttr?.ss()?.takeIf { it.isNotEmpty() }?.let { return it.sorted() }
+
+        val vendors = getMessagesForConversation(conversationId)
+            .flatMap { it.aiConfig }.map { it.aiVendor.name }.distinct().sorted()
+        if (vendors.isEmpty()) return null
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("ADD #v :vendors")
+                    .conditionExpression("attribute_exists(#cid)")
+                    .expressionAttributeNames(mapOf("#v" to VENDORS_KEY, "#cid" to CONVERSATION_ID_KEY))
+                    .expressionAttributeValues(mapOf(":vendors" to AttributeValue.builder().ss(vendors).build()))
+                    .build()
+            )
+        } catch (e: Exception) {
+            // Best-effort backfill: the read result is correct either way
+            logger.warn("Failed to backfill vendors for conversation $conversationId: ${e.message}")
+        }
+        return vendors
     }
 
     /**
@@ -718,10 +776,16 @@ class ConversationRepository(
         var startKey: Map<String, AttributeValue>? = null
 
         do {
+            // Sparse projectIndex holds only project-assigned rows, so this
+            // reads exactly the project's conversations instead of filtering
+            // the customer's whole partition. The customerId filter is an
+            // ownership guard — projectIds are globally unique, but a crafted
+            // id must never unassign another customer's rows.
             val queryBuilder = QueryRequest.builder()
                 .tableName(CONVERSATION_TABLE)
-                .keyConditionExpression("#cid = :cid")
-                .filterExpression("#pid = :pid")
+                .indexName(CONVERSATION_PROJECT_GSI_KEY)
+                .keyConditionExpression("#pid = :pid")
+                .filterExpression("#cid = :cid")
                 .expressionAttributeNames(mapOf(
                     "#cid" to CUSTOMER_ID_KEY,
                     "#pid" to PROJECT_ID_KEY
@@ -730,7 +794,6 @@ class ConversationRepository(
                     ":cid" to AttributeValue.builder().s(customerId).build(),
                     ":pid" to AttributeValue.builder().s(projectId).build()
                 ))
-                .projectionExpression(CONVERSATION_ID_KEY)
             startKey?.let { queryBuilder.exclusiveStartKey(it) }
 
             val response = dynamoDbClient.query(queryBuilder.build())

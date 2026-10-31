@@ -83,16 +83,24 @@ describe('defaultsCacheService', () => {
     test('prefetchDefaultsPageData warms every cache and swallows individual failures', async () => {
         mockGetRequestAgents.mockRejectedValue(new Error('down'));
         mockGetCustomerAgents.mockResolvedValue({ agents: [] });
-        mockGetEmbeddingModels.mockResolvedValue({ vendorModels: [] });
         mockGetProviderCatalog.mockResolvedValue({ providers: [] });
 
         await prefetchDefaultsPageData('tok', 'CU_P');
 
         expect(mockGetRequestAgents).toHaveBeenCalledWith('tok');
         expect(mockGetCustomerAgents).toHaveBeenCalledWith('tok');
-        expect(mockGetEmbeddingModels).toHaveBeenCalledWith('tok');
         expect(mockGetProviderCatalog).toHaveBeenCalledWith('tok');
         expect(customerAgentsCache.getCached('CU_P')).toEqual({ agents: [] });
         expect(requestAgentsCache.getCached('CU_P')).toBeNull();
+    });
+
+    test('prefetchDefaultsPageData does not fetch the embedding-model catalog', async () => {
+        mockGetRequestAgents.mockResolvedValue({ entries: [] });
+        mockGetCustomerAgents.mockResolvedValue({ agents: [] });
+        mockGetProviderCatalog.mockResolvedValue({ providers: [] });
+
+        await prefetchDefaultsPageData('tok', 'CU_P');
+
+        expect(mockGetEmbeddingModels).not.toHaveBeenCalled();
     });
 });

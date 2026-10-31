@@ -23,10 +23,20 @@ fun Route.registerGetPinnedConversationsRoutes(
         get(Routes.GET_PINNED_CONVERSATIONS, {
             tags("Conversations")
             summary = "List pinned conversations"
-            description = "Returns the customer's pinned conversations, most recently pinned first."
+            description = "Returns the customer's pinned conversations, most recently pinned first, with cursor-based pagination."
+            request {
+                queryParameter<Int>("pageSize") {
+                    description = "Page size, 1-50 (default 50)"
+                    required = false
+                }
+                queryParameter<String>("lastEvaluatedKey") {
+                    description = "Pagination cursor returned by the previous page"
+                    required = false
+                }
+            }
             response {
                 code(HttpStatusCode.OK) {
-                    description = "The customer's pinned conversations"
+                    description = "One page of pinned conversations plus the cursor for the next page"
                     body<GetPinnedConversationsResponse>()
                 }
                 code(HttpStatusCode.InternalServerError) {
@@ -38,9 +48,16 @@ fun Route.registerGetPinnedConversationsRoutes(
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 
-                val conversations = conversationManagementService.getPinnedConversations(customerId)
+                val pageSize = (call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 50).coerceIn(1, 50)
+                val exclusiveStartKey = call.request.queryParameters["lastEvaluatedKey"]?.takeIf { it.isNotBlank() }
 
-                call.respond(HttpStatusCode.OK, GetPinnedConversationsResponse(conversations = conversations))
+                val response = conversationManagementService.getPinnedConversations(
+                    customerId = customerId,
+                    pageSize = pageSize,
+                    exclusiveStartKey = exclusiveStartKey
+                )
+
+                call.respond(HttpStatusCode.OK, response)
             } catch (e: Exception) {
                 logger.error("Unexpected error in Get Pinned Conversations controller: {}", e.message, e)
                 call.respond(

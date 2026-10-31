@@ -21,4 +21,11 @@ data class CreateProjectRequest(val name: String)
 data class RenameProjectRequest(val name: String)
 
 @Serializable
-data class GetProjectsResponse(val projects: List<Project>)
+data class GetProjectsResponse(
+    val projects: List<Project>,
+    /**
+     * Cursor for the next page — present only when the caller requested
+     * paginated reads via pageSize; the default full listing leaves it null.
+     */
+    val lastEvaluatedKey: String? = null
+)

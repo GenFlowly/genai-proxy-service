@@ -374,10 +374,11 @@ class ConversationService(
      * fails the message write.
      */
     private suspend fun touchConversationForMessage(message: Message) {
-        if (conversationRepository.touchConversation(message.customerId, message.conversationId)) return
+        val vendors = message.aiConfig.map { it.aiVendor.name }.toSet()
+        if (conversationRepository.touchConversation(message.customerId, message.conversationId, vendors)) return
         val ownerCustomerId = conversationRepository.getConversationById(message.conversationId)?.customerId
         if (ownerCustomerId != null && ownerCustomerId != message.customerId) {
-            conversationRepository.touchConversation(ownerCustomerId, message.conversationId)
+            conversationRepository.touchConversation(ownerCustomerId, message.conversationId, vendors)
         }
     }
 
