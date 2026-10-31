@@ -20,7 +20,8 @@ class CustomerRequestAgentMapServiceTest {
     private val mapRepo = mockk<RequestAgentMapRepository>(relaxed = true)
     private val graphRepo = mockk<GraphRepository>()
     private val resolution = mockk<AgentResolutionService>(relaxed = true)
-    private val service = CustomerRequestAgentMapService(mapRepo, graphRepo, resolution)
+    private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
+    private val service = CustomerRequestAgentMapService(mapRepo, graphRepo, resolution, cacheVersions)
 
     private fun mapEntry(
         scope: String,

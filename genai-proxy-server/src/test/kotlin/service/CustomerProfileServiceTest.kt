@@ -25,7 +25,8 @@ class CustomerProfileServiceTest {
     private val credentialsService = mockk<CustomerCredentialsService>(relaxed = true)
     private val instructionService = mockk<InstructionService>(relaxed = true)
     private val appConfig = mockk<AppConfig>(relaxed = true)
-    private val service = CustomerProfileService(profileRepo, credentialsService, instructionService, appConfig)
+    private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
+    private val service = CustomerProfileService(profileRepo, credentialsService, instructionService, appConfig, cacheVersions)
 
     private fun s(v: String): AttributeValue = AttributeValue.builder().s(v).build()
 

@@ -22,6 +22,7 @@ import com.genflowly.models.AgentCategory
 import com.genflowly.models.GenerationNodeConfig
 import com.genflowly.models.NodeModelPreference
 import com.genflowly.SYSTEM_SCOPE
+import com.genflowly.repository.CacheVersionRepository
 import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.InstructionRepository
 import com.genflowly.repository.RequestAgentMapRepository
@@ -59,11 +60,31 @@ class GraphService(
     private val graphRepository: GraphRepository,
     private val instructionRepository: InstructionRepository,
     private val requestAgentMapRepository: RequestAgentMapRepository,
+    private val cacheVersionService: CacheVersionService,
 ) {
 
     private val nodeConfigJson = kotlinx.serialization.json.Json {
         encodeDefaults = false
         ignoreUnknownKeys = true
+    }
+
+    // The /agents and /request-agents client caches are version-gated: every
+    // mutation of graphs, nodes or map entries in this service must bump the
+    // matching counter or clients serve stale data until the next bump.
+    private suspend fun bumpAgentsVersion(ownerId: String) {
+        if (ownerId == SYSTEM_GRAPH_OWNER) {
+            cacheVersionService.bumpSystem(CacheVersionRepository.Resource.AGENTS)
+        } else {
+            cacheVersionService.bumpCustomer(ownerId, CacheVersionRepository.Resource.AGENTS)
+        }
+    }
+
+    private suspend fun bumpRequestAgentsVersion(ownerId: String) {
+        if (ownerId == SYSTEM_GRAPH_OWNER) {
+            cacheVersionService.bumpSystem(CacheVersionRepository.Resource.REQUEST_AGENTS)
+        } else {
+            cacheVersionService.bumpCustomer(ownerId, CacheVersionRepository.Resource.REQUEST_AGENTS)
+        }
     }
 
     // ─── Generation agents (1-node graphs behind the request-agent map) ───────
@@ -118,6 +139,7 @@ class GraphService(
             category = category,
         )
         logger.info { "Created generation agent $graphId ('${req.name}') → instruction ${req.instructionId} for $customerId" }
+        bumpAgentsVersion(customerId)
 
         return AgentResponse(
             graphId = graphId,
@@ -238,6 +260,10 @@ class GraphService(
         } else {
             logger.info { "Published seeded System agent $graphId ('${req.name}')" }
         }
+        // Node rows above are rewritten even when the graph row already
+        // existed, so the bump is unconditional — over-invalidation is safe,
+        // a missed node-content change is not.
+        bumpAgentsVersion(SYSTEM_GRAPH_OWNER)
 
         val item = graphRepository.getCustomerGraph(graphId)
             ?: throw IllegalStateException("Seeded graph $graphId not readable after creation.")
@@ -355,17 +381,19 @@ class GraphService(
         // override pointing at the fork. (The default graph needs no map —
         // its fork wins by being the customer's isDefault graph.)
         if (source[GRAPH_IS_DEFAULT_KEY]?.bool() != true) {
-            requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE)
+            val mirroredEntries = requestAgentMapRepository.listMapEntries(SYSTEM_SCOPE)
                 .filter { it.graphId == graphId }
-                .forEach { entry ->
-                    requestAgentMapRepository.putMapEntry(
-                        entry.copy(scope = customerId, graphId = forkedId, updatedBy = customerId)
-                    )
-                    logger.info {
-                        "Customer $customerId override: ${entry.requestType} → fork $forkedId of $graphId"
-                    }
+            mirroredEntries.forEach { entry ->
+                requestAgentMapRepository.putMapEntry(
+                    entry.copy(scope = customerId, graphId = forkedId, updatedBy = customerId)
+                )
+                logger.info {
+                    "Customer $customerId override: ${entry.requestType} → fork $forkedId of $graphId"
                 }
+            }
+            if (mirroredEntries.isNotEmpty()) bumpRequestAgentsVersion(customerId)
         }
+        bumpAgentsVersion(customerId)
 
         val nodeById = graphRepository.listCustomerGraphNodes(customerId)
             .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
@@ -392,9 +420,11 @@ class GraphService(
 
         // Drop this customer's request-type overrides that pointed at the
         // deleted graph — resolution reverts to the System mapping.
-        requestAgentMapRepository.listMapEntries(customerId)
+        val removedOverrides = requestAgentMapRepository.listMapEntries(customerId)
             .filter { it.graphId == graphId }
-            .forEach { requestAgentMapRepository.deleteMapEntry(customerId, it.requestType) }
+        removedOverrides.forEach { requestAgentMapRepository.deleteMapEntry(customerId, it.requestType) }
+        if (removedOverrides.isNotEmpty()) bumpRequestAgentsVersion(customerId)
+        bumpAgentsVersion(customerId)
 
         logger.info { "Deleted agent $graphId (+${nodeIds.size} node(s)) for customer $customerId" }
     }
@@ -405,6 +435,7 @@ class GraphService(
         val nodeId = com.genflowly.models.generateNodeId()
         graphRepository.createCustomerGraphNode(customerId, nodeId, req.nodeType, req.name, req.config)
         logger.info { "Created graph node $nodeId for customer $customerId" }
+        bumpAgentsVersion(customerId)
         return GraphNodeResponse(
             nodeId = nodeId,
             nodeType = req.nodeType,
@@ -426,6 +457,7 @@ class GraphService(
             name = req.name ?: current[NODE_NAME_KEY]!!.s(),
             config = req.config ?: current[NODE_CONFIG_KEY]!!.s(),
         )
+        bumpAgentsVersion(customerId)
         return nodeItemToResponse(updated)
     }
 
@@ -441,6 +473,7 @@ class GraphService(
             ?: error("Graph node $nodeId not found")
         requireOwnership(item, customerId, "node", nodeId)
         graphRepository.deleteCustomerGraphNode(nodeId)
+        bumpAgentsVersion(customerId)
     }
 
     suspend fun listGraphNodes(customerId: String): List<GraphNodeResponse> =
@@ -467,6 +500,7 @@ class GraphService(
             ?: error("Graph node $nodeId not found")
         requireOwnership(current, customerId, "node", nodeId)
         val updated = graphRepository.rollbackCustomerGraphNode(nodeId, toVersion)
+        bumpAgentsVersion(customerId)
         return nodeItemToResponse(updated)
     }
 
@@ -485,6 +519,7 @@ class GraphService(
             maxIterations = req.maxIterations ?: 10,
         )
         logger.info { "Created graph $graphId for customer $customerId" }
+        bumpAgentsVersion(customerId)
         return CustomerGraphResponse(
             graphId = graphId,
             name = req.name,
@@ -512,6 +547,7 @@ class GraphService(
             entryPoint = req.entryPoint ?: current[GRAPH_ENTRY_POINT_KEY]!!.s(),
             maxIterations = req.maxIterations ?: current[GRAPH_MAX_ITERATIONS_KEY]?.n()?.toInt() ?: 10,
         )
+        bumpAgentsVersion(customerId)
         return graphItemToResponse(updated)
     }
 
@@ -527,6 +563,7 @@ class GraphService(
             ?: error("Graph $graphId not found")
         requireOwnership(item, customerId, "graph", graphId)
         graphRepository.deleteCustomerGraph(graphId)
+        bumpAgentsVersion(customerId)
     }
 
     suspend fun listGraphs(customerId: String): List<CustomerGraphResponse> =
@@ -556,6 +593,7 @@ class GraphService(
             ?: error("Graph $graphId not found")
         requireOwnership(current, customerId, "graph", graphId)
         val updated = graphRepository.rollbackCustomerGraph(graphId, toVersion)
+        bumpAgentsVersion(customerId)
         return graphItemToResponse(updated)
     }
 
@@ -699,6 +737,7 @@ class GraphService(
             category = (req.category?.let { AgentCategory.parse(it) } ?: AgentCategory.CONVERSATION).name,
         )
         logger.info { "Created graph agent $graphId ('${req.name}', ${nodeIds.size} node(s)) for $ownerId" }
+        bumpAgentsVersion(ownerId)
 
         val nodeById = graphRepository.listCustomerGraphNodes(ownerId)
             .associateBy { it[NODE_ID_KEY]?.s() ?: "" }
@@ -870,6 +909,10 @@ class GraphService(
             category      = patchedCategory,
         )
         logger.info { "Updated agent $graphId for $ownerId (${addNodes.size} added, ${removeSet.size} removed node(s))" }
+        bumpAgentsVersion(ownerId)
+        // A System agent's name shows up as platformAgentName in
+        // /request-agents — a System-side edit must invalidate that cache too.
+        if (ownerId == SYSTEM_GRAPH_OWNER) bumpRequestAgentsVersion(SYSTEM_GRAPH_OWNER)
 
         // ── Re-fetch updated nodes and build hydrated response ────────────────
         val refreshedById = graphRepository.listCustomerGraphNodes(ownerId)

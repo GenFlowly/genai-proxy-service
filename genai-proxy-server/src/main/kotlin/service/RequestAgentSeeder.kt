@@ -12,6 +12,7 @@ import com.genflowly.models.api.NewAgentNode
 import com.genflowly.observability.Metrics
 import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.InstructionRepository
+import com.genflowly.repository.CacheVersionRepository
 import com.genflowly.repository.RequestAgentMapRepository
 import java.util.UUID
 import kotlinx.serialization.json.buildJsonObject
@@ -52,6 +53,7 @@ class RequestAgentSeeder(
     private val instructionRepository: InstructionRepository,
     private val requestAgentMapRepository: RequestAgentMapRepository,
     private val agentResolutionService: AgentResolutionService,
+    private val cacheVersionService: CacheVersionService,
 ) {
 
     /** Publish seeds for request types with no map row; never updates existing rows. */
@@ -143,6 +145,7 @@ class RequestAgentSeeder(
         )
         if (created) {
             agentResolutionService.invalidate(requestType)
+            cacheVersionService.bumpSystem(CacheVersionRepository.Resource.REQUEST_AGENTS)
             Metrics.count("request_agent_seed_total", 1.0, "status" to "seeded", "requestType" to requestType.name)
             logger.info {
                 "Seeded $requestType → graph $graphId (instruction $instructionId, '${seed.mapKey}')"

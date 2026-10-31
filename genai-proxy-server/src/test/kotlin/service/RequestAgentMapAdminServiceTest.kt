@@ -20,7 +20,8 @@ class RequestAgentMapAdminServiceTest {
     private val mapRepo = mockk<RequestAgentMapRepository>(relaxed = true)
     private val graphRepo = mockk<GraphRepository>()
     private val resolution = mockk<AgentResolutionService>(relaxed = true)
-    private val service = RequestAgentMapAdminService(mapRepo, graphRepo, resolution)
+    private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
+    private val service = RequestAgentMapAdminService(mapRepo, graphRepo, resolution, cacheVersions)
 
     private fun graphOwnedBy(customerId: String) = mapOf(
         DynamoDBConstants.CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()

@@ -47,7 +47,7 @@ class RequestAgentSeederTest {
     private val mapRepo = mockk<RequestAgentMapRepository>()
     private val resolution = mockk<AgentResolutionService>(relaxed = true)
     private val seeder =
-        RequestAgentSeeder(RequestAgentSeeds(), graphService, graphRepo, instructionRepo, mapRepo, resolution)
+        RequestAgentSeeder(RequestAgentSeeds(), graphService, graphRepo, instructionRepo, mapRepo, resolution, mockk<CacheVersionService>(relaxed = true))
 
     private fun agentResponse(graphId: String) = AgentResponse(
         graphId = graphId, name = "a", isDefault = false, entryPoint = "NOD1",

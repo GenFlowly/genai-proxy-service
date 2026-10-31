@@ -2,6 +2,7 @@ package com.genflowly.service
 
 import com.genflowly.models.api.GetProjectsResponse
 import com.genflowly.models.api.Project
+import com.genflowly.repository.CacheVersionRepository
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ProjectRepository
 import org.slf4j.LoggerFactory
@@ -17,12 +18,16 @@ class ProjectNotFoundException(projectId: String) : Exception("Project $projectI
  */
 class ProjectService(
     private val projectRepository: ProjectRepository,
-    private val conversationRepository: ConversationRepository
+    private val conversationRepository: ConversationRepository,
+    private val cacheVersionService: CacheVersionService
 ) {
     private val logger = LoggerFactory.getLogger(ProjectService::class.java)
 
-    suspend fun createProject(customerId: String, name: String): Project =
-        projectRepository.createProject(customerId, validateName(name))
+    suspend fun createProject(customerId: String, name: String): Project {
+        val project = projectRepository.createProject(customerId, validateName(name))
+        cacheVersionService.bumpCustomer(customerId, CacheVersionRepository.Resource.PROJECTS)
+        return project
+    }
 
     /**
      * Without pageSize: the full list, most recently updated first (what the
@@ -49,6 +54,7 @@ class ProjectService(
         if (!renamed) {
             throw ProjectNotFoundException(projectId)
         }
+        cacheVersionService.bumpCustomer(customerId, CacheVersionRepository.Resource.PROJECTS)
     }
 
     /**
@@ -66,6 +72,7 @@ class ProjectService(
             logger.info("Unassigned ${assigned.size} conversations while deleting project $projectId")
         }
         projectRepository.deleteProject(customerId, projectId)
+        cacheVersionService.bumpCustomer(customerId, CacheVersionRepository.Resource.PROJECTS)
     }
 
     private fun validateName(name: String): String {

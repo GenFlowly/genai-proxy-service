@@ -31,7 +31,8 @@ class PublishSystemAgentTest {
     private val graphRepo = mockk<GraphRepository>(relaxed = true)
     private val instructionRepo = mockk<InstructionRepository>(relaxed = true)
     private val requestAgentMapRepo = mockk<RequestAgentMapRepository>(relaxed = true)
-    private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo)
+    private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
+    private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo, cacheVersions)
 
     /** The agent-loop template, exactly as the admin panel publishes it. */
     private fun agentLoopRequest(isDefault: Boolean = false) = CreateGraphAgentRequest(
