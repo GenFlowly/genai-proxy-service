@@ -32,6 +32,11 @@ import i18n from '../i18n'
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
 const ConversationUIContext = createContext<IConversationUIContext | undefined>(undefined)
 
+// crypto.randomUUID requires a secure context — fall back for plain-HTTP dev hosts and jsdom
+const newGenerationId = (): string =>
+    globalThis.crypto?.randomUUID?.() ??
+    `gen-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
 /**
  * Human-in-the-loop state for durable runs paused on an in-graph interrupt().
  * Kept in a small app-owned context because the main conversation value is typed
@@ -105,26 +110,47 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     
     // Manage aborted streams natively
     const abortControllers = useRef<Map<string, AbortController>>(new Map())
+    // Client-generated id per in-flight stream (same key as abortControllers),
+    // sent with the generate request so Stop can cancel server-side at any
+    // moment — the server's responseMessageId only arrives in the response
+    // headers, too late for a Stop pressed during the "thinking" phase.
+    const generationIds = useRef<Map<string, string>>(new Map())
 
     const stopGenerating = useCallback((blockId?: string, vendor?: string) => {
         const idToAbort = blockId || activeBlockId;
         if (!idToAbort) return;
 
-        if (vendor) {
-            const key = `${idToAbort}-${vendor}`
-            if (abortControllers.current.has(key)) {
-                abortControllers.current.get(key)?.abort()
-                abortControllers.current.delete(key)
+        const keysToStop = vendor
+            ? [`${idToAbort}-${vendor}`]
+            : Array.from(abortControllers.current.keys()).filter(
+                key => key.startsWith(`${idToAbort}-`) || key === idToAbort
+            )
+
+        const idsToCancel: string[] = []
+        keysToStop.forEach(key => {
+            abortControllers.current.get(key)?.abort()
+            abortControllers.current.delete(key)
+            const generationId = generationIds.current.get(key)
+            if (generationId) {
+                idsToCancel.push(generationId)
+                generationIds.current.delete(key)
             }
-        } else {
-            Array.from(abortControllers.current.entries()).forEach(([key, controller]) => {
-                if (key.startsWith(`${idToAbort}-`) || key === idToAbort) {
-                    controller.abort()
-                    abortControllers.current.delete(key)
-                }
-            })
-        }
-    }, [activeBlockId])
+        })
+
+        if (idsToCancel.length === 0) return
+        // Aborting the fetch only detaches this client — generation survives
+        // disconnects by design and keeps consuming tokens/tools, so a true
+        // Stop must also cancel server-side. Awaited with retries: an
+        // unacknowledged cancel means the model keeps generating and billing.
+        void (async () => {
+            try {
+                const token = await getAccessTokenSilently()
+                await Promise.all(idsToCancel.map(generationId => cancelGeneration(token, generationId)))
+            } catch (e) {
+                console.warn('Failed to cancel generation server-side', e)
+            }
+        })()
+    }, [activeBlockId, getAccessTokenSilently])
 
     // ✅ Ref to always hold the latest conversationId
     const conversationIdRef = useRef(conversationId)
@@ -325,7 +351,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         onAwaitingInput?: (payload: AwaitingInput) => void,
         onContentReset?: () => void,
         onStopReason?: (reason: string) => void,
-        regenerateMessageId?: string
+        regenerateMessageId?: string,
+        generationId?: string
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -342,6 +369,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             // Starting fresh inside a project: the new conversation is born in it
             projectId: (idOverride || conversationIdRef.current) ? undefined : pendingProjectIdRef.current,
             regenerateMessageId,
+            generationId,
         }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
     }
 
@@ -719,6 +747,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         aiConfigs.forEach(c => {
              const controller = new AbortController()
              abortControllers.current.set(`${id}-${c.aiVendor}`, controller)
+             generationIds.current.set(`${id}-${c.aiVendor}`, newGenerationId())
         })
 
         const timestamp = Date.now()
@@ -996,7 +1025,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         handleAwaitingInput,
                         handleContentReset,
                         handleStopReason,
-                        regenerateMessageId
+                        regenerateMessageId,
+                        generationIds.current.get(`${id}-${conf.aiVendor}`)
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer
@@ -1010,14 +1040,9 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                     }
                     if (err?.name === 'AbortError') {
                         // User stopped this vendor — keep whatever streamed, no
-                        // error. Generation survives the dropped connection by
-                        // design, so a true stop also cancels it server-side
-                        // (fire-and-forget; the partial text is persisted).
-                        if (currentMsgId !== msgId) {
-                            cancelGeneration(token, currentMsgId).catch(e =>
-                                console.warn('Failed to cancel generation server-side', e)
-                            )
-                        }
+                        // error. stopGenerating already issued the server-side
+                        // cancel, keyed by the client-generated generationId so
+                        // it works even before response headers arrive.
                         finishVendorMessage(null)
                         return
                     }

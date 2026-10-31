@@ -27,13 +27,16 @@ fun Route.registerCancelGenerationRoute(
         post(Routes.CANCEL_GENERATION, {
             tags("Generation")
             summary = "Cancel an in-flight streamed generation"
-            description = "Stops the model generation running for the given X-Response-Message-Id. " +
-                    "The partial text streamed so far is kept as the response message. " +
-                    "Returns cancelled=false when nothing is running under that id " +
-                    "(generation already finished or never existed)."
+            description = "Stops the model generation running for the given id — either the " +
+                    "X-Response-Message-Id from the stream's response headers, or the " +
+                    "client-generated generationId sent with the generate request (usable " +
+                    "immediately, before headers arrive). The partial text streamed so far " +
+                    "is kept as the response message. Returns cancelled=false when nothing " +
+                    "is running under that id; the id is then remembered briefly so a " +
+                    "generation still in pre-launch setup self-cancels once it registers."
             request {
                 queryParameter<String>("responseMessageId") {
-                    description = "Response message id of the in-flight generation"
+                    description = "Response message id or client generationId of the in-flight generation"
                     required = true
                 }
             }

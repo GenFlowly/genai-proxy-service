@@ -45,6 +45,14 @@ export async function fetchWithRetry(url: string, options: FetchRetryOptions = {
             return response;
 
         } catch (error) {
+            // A deliberate abort (user hit Stop) must surface immediately —
+            // re-issuing the request would restart the very work being stopped.
+            if (
+                (error as DOMException)?.name === 'AbortError' ||
+                (fetchOptions.signal as AbortSignal | undefined)?.aborted
+            ) {
+                throw error
+            }
             // Network errors (fetch throws) are also candidates for retry
             if (attempt < retries) {
                 const delay = backoff * Math.pow(2, attempt);
