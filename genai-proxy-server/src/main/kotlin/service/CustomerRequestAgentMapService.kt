@@ -9,6 +9,7 @@ import com.genflowly.models.RequestType
 import com.genflowly.models.api.CustomerRequestAgentStatus
 import com.genflowly.models.api.GetCustomerRequestAgentsResponse
 import com.genflowly.models.api.PutCustomerRequestAgentRequest
+import com.genflowly.repository.CacheVersionRepository
 import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.RequestAgentMapRepository
 import kotlinx.coroutines.async
@@ -29,7 +30,8 @@ private val logger = KotlinLogging.logger {}
 class CustomerRequestAgentMapService(
     private val requestAgentMapRepository: RequestAgentMapRepository,
     private val graphRepository: GraphRepository,
-    private val agentResolutionService: AgentResolutionService
+    private val agentResolutionService: AgentResolutionService,
+    private val cacheVersionService: CacheVersionService
 ) {
 
     /** Every default action plus this customer's override, when set. */
@@ -104,6 +106,7 @@ class CustomerRequestAgentMapService(
             )
         )
         agentResolutionService.invalidate(requestType)
+        cacheVersionService.bumpCustomer(customerId, CacheVersionRepository.Resource.REQUEST_AGENTS)
         logger.info { "Customer $customerId mapped $requestType → ${request.graphId}" }
     }
 
@@ -111,6 +114,7 @@ class CustomerRequestAgentMapService(
     suspend fun deleteEntry(customerId: String, requestType: RequestType) {
         requestAgentMapRepository.deleteMapEntry(customerId, requestType.name)
         agentResolutionService.invalidate(requestType)
+        cacheVersionService.bumpCustomer(customerId, CacheVersionRepository.Resource.REQUEST_AGENTS)
         logger.info { "Customer $customerId removed their $requestType mapping" }
     }
 

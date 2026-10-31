@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { AIVendor } from '../../../constants/vendors'
 import { useAuth } from '../../../context/AuthContext'
-import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
-import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
+import { useTextGenerationModels } from '../../../hooks/queries/useTextGenerationModels'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import { PillButton } from '@genflowly/component-library'
 import { VendorBrandName } from '../BrandName/BrandName'
@@ -19,41 +18,12 @@ export interface VendorModelSelectProps {
 
 export default function VendorModelSelect({ vendor, model, onChange }: VendorModelSelectProps) {
     const { t } = useTranslation()
-    const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList } = useAuth()
-    const [vendorModels, setVendorModels] = useState<AIVendorModelList[]>([])
+    const { aiVendorAPIKeyStatusList } = useAuth()
 
-    const fetchModels = useCallback(async () => {
-        if (!isAuthenticated || !customerId) return
-
-        // Use the same localStorage cache as AIVendorWidget
-        const cacheKey = `${customerId}_ai_vendor_models`
-        const cached = localStorage.getItem(cacheKey)
-        if (cached) {
-            try {
-                const parsed = JSON.parse(cached)
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setVendorModels(parsed)
-                    return
-                }
-            } catch { /* ignore malformed cache */ }
-        }
-
-        try {
-            const token = await getAccessTokenSilently()
-            const response = await getTextGenerationModels(token, customerId, { aiVendor: ALL_VENDORS })
-            const data = response.aiVendorModelList || []
-            setVendorModels(data)
-            if (data.length > 0) {
-                localStorage.setItem(cacheKey, JSON.stringify(data))
-            }
-        } catch (err) {
-            console.error('VendorModelSelect: failed to fetch models', err)
-        }
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
-
-    useEffect(() => {
-        fetchModels()
-    }, [fetchModels])
+    // Same query/localStorage seed as AIVendorWidget — requests all vendors so
+    // the picker can show models for any vendor the user may enable.
+    const { data: modelsData } = useTextGenerationModels(ALL_VENDORS)
+    const vendorModels = modelsData ?? []
 
     const isVendorEnabled = (v: AIVendor) =>
         aiVendorAPIKeyStatusList.find(s => s.aiVendor === v)?.status === APIKeyStatus.VALID

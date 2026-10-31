@@ -28,4 +28,16 @@ export interface OnboardCustomerResponse {
     }[]
     /** False only for an account that has never dismissed the first-time setup wizard */
     onboardingCompleted: boolean
+    /**
+     * Monotonic per-resource counters bumped on every server-side mutation.
+     * A cached resource whose stored counter matches the current one is
+     * fresh — skip the refetch. Absent/null = no version gating this session.
+     */
+    cacheVersions?: CacheVersions | null
+}
+
+export interface CacheVersions {
+    agents: number
+    requestAgents: number
+    projects: number
 }

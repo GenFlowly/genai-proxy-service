@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { InstructionResponse } from '../models/instruction.models'
 import { useAuth } from './AuthContext'
+import { customerKey, StorageSuffix } from '../utils/storageKeys'
 
 export interface AIConfig {
     /** Vendor id: legacy enum name (OPENAI/CLAUDE/GEMINI) or a BYOK provider id */
@@ -54,9 +55,9 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     // 🔹 Restore from localStorage
     useEffect(() => {
         if (customerId) {
-            const savedPrompt = localStorage.getItem(`${customerId}_system_prompt`)
-            const savedInstructionId = localStorage.getItem(`${customerId}_selected_instruction_id`)
-            const savedAgentId = localStorage.getItem(`${customerId}_selected_agent_id`)
+            const savedPrompt = localStorage.getItem(customerKey(customerId, StorageSuffix.systemPrompt))
+            const savedInstructionId = localStorage.getItem(customerKey(customerId, StorageSuffix.selectedInstructionId))
+            const savedAgentId = localStorage.getItem(customerKey(customerId, StorageSuffix.selectedAgentId))
 
             setSystemPrompt(savedPrompt || '')
             setSelectedInstructionId(savedInstructionId || null)
@@ -70,8 +71,8 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     // 🔹 Persist to localStorage
     useEffect(() => {
         if (customerId && isSystemPromptLoaded) {
-            const promptKey = `${customerId}_system_prompt`
-            const idKey = `${customerId}_selected_instruction_id`
+            const promptKey = customerKey(customerId, StorageSuffix.systemPrompt)
+            const idKey = customerKey(customerId, StorageSuffix.selectedInstructionId)
 
             if (systemPrompt.trim()) {
                 localStorage.setItem(promptKey, systemPrompt)
@@ -85,7 +86,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
                 localStorage.removeItem(idKey)
             }
 
-            const agentKey = `${customerId}_selected_agent_id`
+            const agentKey = customerKey(customerId, StorageSuffix.selectedAgentId)
             if (selectedAgentId) {
                 localStorage.setItem(agentKey, selectedAgentId)
             } else {
@@ -99,7 +100,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     // value; later picks are pushed to the backend by the AgentPicker widget.
     useEffect(() => {
         if (!customerId || !isSystemPromptLoaded || agentPrefSeeded || !aiConfigPreferences) return
-        const saved = localStorage.getItem(`${customerId}_selected_agent_id`)
+        const saved = localStorage.getItem(customerKey(customerId, StorageSuffix.selectedAgentId))
         if (!saved && aiConfigPreferences.preferredAgentId) {
             setSelectedAgentId(aiConfigPreferences.preferredAgentId)
         }

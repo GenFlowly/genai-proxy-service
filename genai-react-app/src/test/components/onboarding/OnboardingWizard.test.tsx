@@ -12,9 +12,9 @@ jest.mock('../../../context/AuthContext', () => ({
 // factory. Chaining here silently no-ops in this project's babel/CRA jest
 // setup (the call returns undefined instead of the configured value).
 jest.mock('../../../services/providerCatalogService', () => ({
-    getProviderCatalog: jest.fn(),
+    fetchProviderCatalog: jest.fn(),
     getCachedProviderCatalog: jest.fn(() => null),
-    subscribeProviderCatalog: jest.fn(() => () => { }),
+    saveProviderCatalog: jest.fn(),
 }))
 
 jest.mock('../../../services/storeCustomerVendorApiKeysService', () => ({
@@ -37,7 +37,8 @@ jest.mock('../../../services/customerToolsService', () => ({
 }))
 
 import { useAuth } from '../../../context/AuthContext'
-import { getProviderCatalog } from '../../../services/providerCatalogService'
+import { fetchProviderCatalog } from '../../../services/providerCatalogService'
+import { withQueryClient } from '../../utils/queryWrapper'
 import { storeCustomerVendorApiKey } from '../../../services/storeCustomerVendorApiKeysService'
 import { storeCustomerVectorDBConfig } from '../../../services/storeCustomerVectorDBConfigService'
 import { getEmbeddingKeys, storeEmbeddingKey } from '../../../services/embeddingKeysService'
@@ -63,7 +64,7 @@ describe('OnboardingWizard', () => {
     beforeEach(() => {
         jest.clearAllMocks()
         mockUseAuth.mockReturnValue(baseAuth())
-        ;(getProviderCatalog as jest.Mock).mockResolvedValue({ providers: [] })
+        ;(fetchProviderCatalog as jest.Mock).mockResolvedValue({ providers: [] })
         ;(storeCustomerVendorApiKey as jest.Mock).mockResolvedValue({
             apiKeyStatus: { aiVendor: 'CLAUDE', isAPIKeyValid: true, status: 'API key is valid', updateSuccessful: true },
         })
@@ -81,7 +82,7 @@ describe('OnboardingWizard', () => {
     })
 
     test('starts on the LLM step and shows progress 1 of 4', () => {
-        render(<OnboardingWizard onDone={jest.fn()} />)
+        render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
         expect(screen.getByTestId('onboarding-progress')).toHaveTextContent('Step 1 of 4')
         expect(screen.getByTestId('onboarding-llm-vendor-select')).toBeInTheDocument()
         expect(screen.queryByTestId('onboarding-back')).not.toBeInTheDocument()
@@ -89,7 +90,7 @@ describe('OnboardingWizard', () => {
 
     test('"Skip setup" finishes the wizard immediately from step 1', async () => {
         const onDone = jest.fn().mockResolvedValue(undefined)
-        render(<OnboardingWizard onDone={onDone} />)
+        render(withQueryClient(<OnboardingWizard onDone={onDone} />))
 
         fireEvent.click(screen.getByTestId('onboarding-skip-all'))
 
@@ -98,7 +99,7 @@ describe('OnboardingWizard', () => {
 
     test('shows an inline error and stays open if finishing the wizard fails', async () => {
         const onDone = jest.fn().mockRejectedValue(new Error('network down'))
-        render(<OnboardingWizard onDone={onDone} />)
+        render(withQueryClient(<OnboardingWizard onDone={onDone} />))
 
         fireEvent.click(screen.getByTestId('onboarding-skip-all'))
 
@@ -108,7 +109,7 @@ describe('OnboardingWizard', () => {
 
     test('"Skip this step" advances through all 4 steps without saving anything, then finishes on the last', async () => {
         const onDone = jest.fn().mockResolvedValue(undefined)
-        render(<OnboardingWizard onDone={onDone} />)
+        render(withQueryClient(<OnboardingWizard onDone={onDone} />))
 
         expect(screen.getByTestId('onboarding-llm-vendor-select')).toBeInTheDocument()
         fireEvent.click(screen.getByTestId('onboarding-skip-step'))
@@ -130,7 +131,7 @@ describe('OnboardingWizard', () => {
     })
 
     test('"Back" returns to the previous step', async () => {
-        render(<OnboardingWizard onDone={jest.fn()} />)
+        render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
 
         fireEvent.click(screen.getByTestId('onboarding-skip-step'))
         expect(await screen.findByTestId('onboarding-zilliz-endpoint-input')).toBeInTheDocument()
@@ -146,12 +147,12 @@ describe('OnboardingWizard', () => {
                 { aiVendor: 'CLAUDE', isAPIKeyValid: true, status: 'API key is valid', updateSuccessful: true },
             ],
         }))
-        render(<OnboardingWizard onDone={jest.fn()} />)
+        render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
         expect(screen.getByTestId('onboarding-step-message')).toHaveTextContent('Already set up')
     })
 
     test('Continue is disabled on the LLM step once a key is entered without picking a vendor', () => {
-        render(<OnboardingWizard onDone={jest.fn()} />)
+        render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
 
         expect(screen.getByTestId('onboarding-continue')).not.toBeDisabled()
         fireEvent.change(screen.getByTestId('onboarding-llm-key-input'), { target: { value: 'sk-test-key' } })
@@ -164,7 +165,7 @@ describe('OnboardingWizard', () => {
     test('LLM step saves a valid key and vendor, then advances to Zilliz', async () => {
         const updateVendorApiKeyStatus = jest.fn()
         mockUseAuth.mockReturnValue(baseAuth({ updateVendorApiKeyStatus }))
-        render(<OnboardingWizard onDone={jest.fn()} />)
+        render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
 
         fireEvent.change(screen.getByTestId('onboarding-llm-vendor-select'), { target: { value: 'CLAUDE' } })
         fireEvent.change(screen.getByTestId('onboarding-llm-key-input'), { target: { value: 'sk-test-key' } })
@@ -179,7 +180,7 @@ describe('OnboardingWizard', () => {
         ;(storeCustomerVendorApiKey as jest.Mock).mockResolvedValueOnce({
             apiKeyStatus: { aiVendor: 'CLAUDE', isAPIKeyValid: false, status: 'API key is not valid', updateSuccessful: false, detail: 'invalid key' },
         })
-        render(<OnboardingWizard onDone={jest.fn()} />)
+        render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
 
         fireEvent.change(screen.getByTestId('onboarding-llm-vendor-select'), { target: { value: 'CLAUDE' } })
         fireEvent.change(screen.getByTestId('onboarding-llm-key-input'), { target: { value: 'sk-bad-key' } })
@@ -191,7 +192,7 @@ describe('OnboardingWizard', () => {
 
     test('LLM step shows a generic error when the save call throws', async () => {
         ;(storeCustomerVendorApiKey as jest.Mock).mockRejectedValueOnce(new Error('boom'))
-        render(<OnboardingWizard onDone={jest.fn()} />)
+        render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
 
         fireEvent.change(screen.getByTestId('onboarding-llm-vendor-select'), { target: { value: 'CLAUDE' } })
         fireEvent.change(screen.getByTestId('onboarding-llm-key-input'), { target: { value: 'sk-bad-key' } })
@@ -202,7 +203,7 @@ describe('OnboardingWizard', () => {
 
     describe('Zilliz step', () => {
         async function goToZillizStep() {
-            render(<OnboardingWizard onDone={jest.fn()} />)
+            render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
             fireEvent.click(screen.getByTestId('onboarding-skip-step'))
             await screen.findByTestId('onboarding-zilliz-endpoint-input')
         }
@@ -268,7 +269,7 @@ describe('OnboardingWizard', () => {
 
     describe('Voyage step', () => {
         async function goToVoyageStep() {
-            render(<OnboardingWizard onDone={jest.fn()} />)
+            render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
             fireEvent.click(screen.getByTestId('onboarding-skip-step'))
             await screen.findByTestId('onboarding-zilliz-endpoint-input')
             fireEvent.click(screen.getByTestId('onboarding-skip-step'))
@@ -355,7 +356,7 @@ describe('OnboardingWizard', () => {
 
     describe('Tavily step', () => {
         async function goToTavilyStep() {
-            render(<OnboardingWizard onDone={jest.fn()} />)
+            render(withQueryClient(<OnboardingWizard onDone={jest.fn()} />))
             fireEvent.click(screen.getByTestId('onboarding-skip-step'))
             await screen.findByTestId('onboarding-zilliz-endpoint-input')
             fireEvent.click(screen.getByTestId('onboarding-skip-step'))
@@ -374,7 +375,7 @@ describe('OnboardingWizard', () => {
 
         test('saves a key and finishes the wizard', async () => {
             const onDone = jest.fn().mockResolvedValue(undefined)
-            render(<OnboardingWizard onDone={onDone} />)
+            render(withQueryClient(<OnboardingWizard onDone={onDone} />))
             fireEvent.click(screen.getByTestId('onboarding-skip-step'))
             await screen.findByTestId('onboarding-zilliz-endpoint-input')
             fireEvent.click(screen.getByTestId('onboarding-skip-step'))

@@ -2,12 +2,15 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AgentPickerWidget from '../../../../../components/widgets/SidebarWidgets/AgentPickerWidget/AgentPickerWidget';
 import { useSidebarWidget } from '../../../../../hooks/useSidebarWidget';
+import { useAuth } from '../../../../../context/AuthContext';
 import { useToast } from '../../../../../context/ToastContext';
+import { withQueryClient } from '../../../../utils/queryWrapper';
 import * as agentsService from '../../../../../services/agentsService';
 import * as configService from '../../../../../services/saveAIConfigService';
 import '@testing-library/jest-dom';
 
 jest.mock('../../../../../hooks/useSidebarWidget');
+jest.mock('../../../../../context/AuthContext');
 jest.mock('../../../../../context/ToastContext');
 jest.mock('../../../../../services/agentsService');
 jest.mock('../../../../../services/saveAIConfigService');
@@ -41,6 +44,7 @@ const agent = (overrides: Record<string, any> = {}) => ({
 
 describe('AgentPickerWidget', () => {
     const mockUseSidebarWidget = useSidebarWidget as jest.Mock;
+    const mockUseAuth = useAuth as jest.Mock;
     const mockUseToast = useToast as jest.Mock;
     const mockGetCustomerAgents = agentsService.getCustomerAgents as jest.Mock;
     const mockSavePreferences = configService.saveAIConfigPreferences as jest.Mock;
@@ -53,13 +57,21 @@ describe('AgentPickerWidget', () => {
     // earlier test must never paint into the next one.
     let testSeq = 0;
     const setup = (selectedAgentId: string | null = null, customerId?: string) => {
+        const effectiveCustomerId = customerId ?? `cust-${testSeq}`;
         mockUseSidebarWidget.mockReturnValue({
             ai: { selectedAgentId, setSelectedAgentId: mockSetSelectedAgentId },
             auth: {
                 getAccessTokenSilently: mockGetAccessTokenSilently,
-                customerId: customerId ?? `cust-${testSeq}`,
+                customerId: effectiveCustomerId,
                 isAuthenticated: true,
             },
+        });
+        mockUseAuth.mockReturnValue({
+            isAuthenticated: true,
+            isOnboarding: false,
+            customerId: effectiveCustomerId,
+            cacheVersions: null,
+            getAccessTokenSilently: mockGetAccessTokenSilently,
         });
     };
 
@@ -81,7 +93,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         expect(await screen.findByTestId('agent-option-GRP-SYS')).toBeInTheDocument();
         expect(screen.getByTestId('agent-option-GRP-OWN')).toBeInTheDocument();
@@ -100,7 +112,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         expect(await screen.findByTestId('agent-option-GRP-LEGACY')).toBeInTheDocument();
         expect(screen.getByTestId('agent-option-GRP-CONV')).toBeInTheDocument();
@@ -116,7 +128,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         const select = await screen.findByTestId('agent-picker-select');
         expect(select).toHaveValue('GRP-SYS');
@@ -130,7 +142,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         expect(await screen.findByTestId('agent-picker-select')).toHaveValue('GRP-FORK');
     });
@@ -143,7 +155,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         const select = await screen.findByTestId('agent-picker-select');
         fireEvent.change(select, { target: { value: 'GRP-OWN' } });
@@ -173,7 +185,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         expect(await screen.findByTestId('agent-picker-select')).toHaveValue('GRP-OTHER');
         expect(screen.getByTestId('agent-option-GRP-OTHER')).toHaveTextContent('Research Agent (Default)');
@@ -190,7 +202,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         fireEvent.change(await screen.findByTestId('agent-picker-select'), { target: { value: 'GRP-OWN' } });
         await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Could not save agent preference'));
@@ -204,7 +216,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         expect(await screen.findByTestId('agent-option-GRP-SYS')).toHaveTextContent(
             'Default Smart Agent (System, Default)'
@@ -220,7 +232,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         await waitFor(() => expect(mockSetSelectedAgentId).toHaveBeenCalledWith(null));
     });
@@ -233,7 +245,7 @@ describe('AgentPickerWidget', () => {
             ],
         });
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         await screen.findByTestId('agent-picker-select');
         expect(screen.getByTestId('agent-collapsed-icon')).toBeInTheDocument();
@@ -246,7 +258,7 @@ describe('AgentPickerWidget', () => {
     it('shows an error message when loading fails with no cached copy', async () => {
         mockGetCustomerAgents.mockRejectedValue(new Error('boom'));
 
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         expect(await screen.findByText('Could not load agents')).toBeInTheDocument();
     });
@@ -256,12 +268,12 @@ describe('AgentPickerWidget', () => {
         mockGetCustomerAgents.mockResolvedValue({
             agents: [agent({ graphId: 'GRP-SYS', name: 'Default Smart Agent', isSystem: true, isDefault: true })],
         });
-        const { unmount } = render(<AgentPickerWidget />);
+        const { unmount } = render(withQueryClient(<AgentPickerWidget />));
         await screen.findByTestId('agent-option-GRP-SYS');
         unmount();
 
         mockGetCustomerAgents.mockRejectedValue(new Error('boom'));
-        render(<AgentPickerWidget />);
+        render(withQueryClient(<AgentPickerWidget />));
 
         expect(await screen.findByTestId('agent-option-GRP-SYS')).toBeInTheDocument();
         expect(screen.queryByText('Could not load agents')).not.toBeInTheDocument();

@@ -1,9 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Auth0Provider } from '@auth0/auth0-react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@genflowly/component-library';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { queryClient } from './queryClient';
 import AppContent from './AppContent';
 import { config } from "./config/env";
 import { useVisualViewportHeight } from './hooks/useVisualViewportHeight';
@@ -41,13 +43,15 @@ export default function App(): React.ReactElement {
       useRefreshTokens={true}
       useRefreshTokensFallback={true}
     >
-      <ThemeProvider>
-        <AuthProvider>
-          <ErrorBoundary fallback={<AppCrashedFallback />}>
-            <AppContent />
-          </ErrorBoundary>
-        </AuthProvider>
-      </ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <ErrorBoundary fallback={<AppCrashedFallback />}>
+              <AppContent />
+            </ErrorBoundary>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
     </Auth0Provider>
   );
 }

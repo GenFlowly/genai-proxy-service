@@ -21,7 +21,8 @@ class CustomerProfileService(
     private val customerProfileRepository: CustomerProfileRepository,
     private val customerCredentialsService: CustomerCredentialsService,
     private val instructionService: InstructionService,
-    private val appConfig: com.genflowly.config.AppConfig
+    private val appConfig: com.genflowly.config.AppConfig,
+    private val cacheVersionService: CacheVersionService
 ) {
 
     suspend fun savePreferences(
@@ -179,6 +180,7 @@ class CustomerProfileService(
             val aiVendorAPIKeyStatusList = async { customerCredentialsService.getAIVendorAPIKeyStatusList(customerProfile.customerId) }
             val vectorDBConfigStatusList = async { customerCredentialsService.getCustomerVectorDBConfigStatusList(customerProfile.customerId) }
             val customerInstructions = async { instructionService.getLatestCustomerInstructions(customerProfile.customerId) }
+            val cacheVersions = async { cacheVersionService.getCacheVersions(customerProfile.customerId) }
 
             // Fire and forget backfill missing categories/icons using AI
             instructionService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await())
@@ -191,7 +193,8 @@ class CustomerProfileService(
                 customerPicture = customerProfile.picture,
                 customerInstructions = customerInstructions.await(),
                 vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
-                onboardingCompleted = customerProfile.onboardingCompleted
+                onboardingCompleted = customerProfile.onboardingCompleted,
+                cacheVersions = cacheVersions.await()
             )
         }
     }

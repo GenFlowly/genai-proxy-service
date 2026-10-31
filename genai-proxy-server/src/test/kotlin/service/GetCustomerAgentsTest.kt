@@ -20,7 +20,8 @@ class GetCustomerAgentsTest {
     private val graphRepo = mockk<GraphRepository>(relaxed = true)
     private val instructionRepo = mockk<InstructionRepository>(relaxed = true)
     private val requestAgentMapRepo = mockk<RequestAgentMapRepository>(relaxed = true)
-    private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo)
+    private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
+    private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo, cacheVersions)
 
     private fun graphItem(
         graphId: String,

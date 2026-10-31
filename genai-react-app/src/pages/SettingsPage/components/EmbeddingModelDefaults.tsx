@@ -1,13 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InputSelectWithHint, PillButton } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
 import {
     EmbeddingVendor,
-    EmbeddingVendorModels,
 } from '../../../services/embeddingKeysService'
-import { embeddingModelsCache } from '../../../services/defaultsCacheService'
+import { useEmbeddingModels } from '../../../hooks/queries/useEmbeddingModels'
 import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
 import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import { ICONS } from '../../../constants/icons'
@@ -41,7 +40,6 @@ export function EmbeddingModelDefaults(): React.ReactElement {
     const { showToast } = useToast()
     const vendorDisplayName = useVendorDisplayNames()
 
-    const [vendorModels, setVendorModels] = useState<EmbeddingVendorModels[]>([])
     const [selections, setSelections] = useState<Record<EmbeddingCategory, CategorySelection>>({
         conversations: { vendor: '', model: '' },
         notes: { vendor: '', model: '' },
@@ -50,24 +48,10 @@ export function EmbeddingModelDefaults(): React.ReactElement {
 
     // Models are fetched with the customer's stored keys — providers without
     // a saved key come back absent, so the dropdown only offers usable models.
-    // The last known list renders immediately while the fetch (which can wait
-    // on a server-side probe) revalidates it.
-    const loadModels = useCallback(async () => {
-        if (!isAuthenticated || !customerId) return
-        const cached = embeddingModelsCache.getCached(customerId)
-        if (cached) setVendorModels(cached.vendorModels)
-        try {
-            const token = await getAccessTokenSilently()
-            const response = await embeddingModelsCache.fetch(token, customerId)
-            setVendorModels(response.vendorModels)
-        } catch (err) {
-            console.error('EmbeddingModelDefaults: failed to fetch embedding models', err)
-        }
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
-
-    useEffect(() => {
-        void loadModels()
-    }, [loadModels])
+    // The last known list renders immediately (placeholder data) while the
+    // fetch (which can wait on a server-side probe) revalidates it.
+    const { data: embeddingModelsData } = useEmbeddingModels()
+    const vendorModels = useMemo(() => embeddingModelsData?.vendorModels ?? [], [embeddingModelsData])
 
     // Prefill from the customer's saved preferences; the per-category
     // preference wins, the legacy single embeddingModel is the fallback.

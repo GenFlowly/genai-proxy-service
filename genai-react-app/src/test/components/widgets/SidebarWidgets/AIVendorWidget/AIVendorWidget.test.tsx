@@ -2,6 +2,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AIVendorWidget from '../../../../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget';
 import { useSidebarWidget } from '../../../../../hooks/useSidebarWidget';
+import { useAuth } from '../../../../../context/AuthContext';
+import { withQueryClient } from '../../../../utils/queryWrapper';
 import { useToast } from '../../../../../context/ToastContext';
 import { AIVendor } from '../../../../../constants/vendors';
 import { APIKeyStatus } from '../../../../../models/storeCustomerVendorAPIKeys.models';
@@ -11,6 +13,7 @@ import '@testing-library/jest-dom';
 
 // Mocks
 jest.mock('../../../../../hooks/useSidebarWidget');
+jest.mock('../../../../../context/AuthContext');
 jest.mock('../../../../../context/ToastContext');
 jest.mock('../../../../../services/getTextGenerationModelsService');
 jest.mock('../../../../../services/saveAIConfigService');
@@ -47,6 +50,7 @@ jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
 
 describe('AIVendorWidget', () => {
     const mockUseSidebarWidget = useSidebarWidget as jest.Mock;
+    const mockUseAuth = useAuth as jest.Mock;
     const mockUseToast = useToast as jest.Mock;
     const mockGetTextGenerationModels = refreshService.getTextGenerationModels as jest.Mock;
     const mockSaveAIConfigPreferences = configService.saveAIConfigPreferences as jest.Mock;
@@ -83,6 +87,15 @@ describe('AIVendorWidget', () => {
             }
         });
 
+        mockUseAuth.mockReturnValue({
+            isAuthenticated: true,
+            isOnboarding: false,
+            customerId: 'cust-123',
+            cacheVersions: null,
+            getAccessTokenSilently: mockGetAccessTokenSilently,
+        });
+        localStorage.clear();
+
         // Mock model fetch response
         mockGetTextGenerationModels.mockResolvedValue({
             aiVendorModelList: [
@@ -93,7 +106,7 @@ describe('AIVendorWidget', () => {
     });
 
     test('renders only vendors with a valid key and toggles correctly', async () => {
-        render(<AIVendorWidget />);
+        render(withQueryClient(<AIVendorWidget />));
 
         // OpenAI has a valid key → rendered; Claude's key is NOT_SET → hidden
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -128,7 +141,7 @@ describe('AIVendorWidget', () => {
             }
         });
 
-        render(<AIVendorWidget />);
+        render(withQueryClient(<AIVendorWidget />));
 
         expect(screen.queryByTestId(`vendor-toggle-${AIVendor.OPENAI}`)).not.toBeInTheDocument();
         expect(screen.getByText('No API keys set')).toBeInTheDocument();
@@ -151,7 +164,7 @@ describe('AIVendorWidget', () => {
             }
         });
 
-        render(<AIVendorWidget />);
+        render(withQueryClient(<AIVendorWidget />));
         await waitFor(() => expect(mockGetTextGenerationModels).toHaveBeenCalled());
 
         const openAIToggle = screen.getByTestId(`vendor-toggle-${AIVendor.OPENAI}`);
@@ -162,7 +175,7 @@ describe('AIVendorWidget', () => {
     });
 
     test('handles model selection change', async () => {
-        render(<AIVendorWidget />);
+        render(withQueryClient(<AIVendorWidget />));
         await waitFor(() => expect(mockGetTextGenerationModels).toHaveBeenCalled());
 
         const select = screen.getByTestId(`model-select-${AIVendor.OPENAI}`);
@@ -172,7 +185,10 @@ describe('AIVendorWidget', () => {
     });
 
     test('refreshes models on button click', async () => {
-        render(<AIVendorWidget />);
+        render(withQueryClient(<AIVendorWidget />));
+        // A refetch during the initial in-flight fetch is deduped by
+        // react-query — wait for the mount fetch to land before clicking.
+        await waitFor(() => expect(mockGetTextGenerationModels).toHaveBeenCalledTimes(1));
         const refreshBtn = screen.getByTestId('refresh-models-button');
 
         fireEvent.click(refreshBtn);
@@ -205,7 +221,7 @@ describe('AIVendorWidget', () => {
             }
         });
 
-        render(<AIVendorWidget />);
+        render(withQueryClient(<AIVendorWidget />));
         const saveBtn = screen.getByLabelText('Set as default');
 
         fireEvent.click(saveBtn);
