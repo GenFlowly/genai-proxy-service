@@ -107,6 +107,17 @@ object DynamoDBConstants {
     const val DELETED_AT_KEY = "deletedAt"
     const val ARCHIVED_AT_KEY = "archivedAt"
     const val PINNED_AT_KEY = "pinnedAt"
+    // Distinct AI vendors that have answered in this conversation, denormalized
+    // onto the Conversation row (String Set, ADDed on message write) so list
+    // endpoints never have to read the Message table to render vendor badges.
+    // Absent on rows created before denormalization — list reads lazily
+    // backfill it from the messages.
+    const val VENDORS_KEY = "vendors"
+    // Sparse GSI (customerId, pinnedAt): contains exactly the pinned rows —
+    // pinnedAt only exists while pinned — pre-sorted most-recently-pinned-first.
+    const val CONVERSATION_PINNED_GSI_KEY = "pinnedIndex"
+    // Sparse GSI (projectId, updatedAt), KEYS_ONLY: only project-assigned rows.
+    const val CONVERSATION_PROJECT_GSI_KEY = "projectIndex"
     // Conversation this one was forked from (POST /conversation/fork). Never
     // removed or updated after creation; the sidebar uses it to draw the fork
     // tree. A dangling value (parent archived/deleted) renders the fork flat.

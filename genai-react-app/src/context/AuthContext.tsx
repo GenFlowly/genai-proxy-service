@@ -180,9 +180,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             setCustomerId(onboardData.customerId)
                         }
                         if (onboardData.aiVendorAPIKeyStatusList) {
-                            setAiVendorAPIKeyStatusList(onboardData.aiVendorAPIKeyStatusList)
+                            // Identity-stable set: consumers key fetch effects on this
+                            // array (AIVendorWidget re-requests /models when it changes),
+                            // so an unchanged list must keep its previous identity or
+                            // every onboard sync double-fires those requests.
+                            const freshStatuses = onboardData.aiVendorAPIKeyStatusList
+                            setAiVendorAPIKeyStatusList(prev =>
+                                JSON.stringify(prev) === JSON.stringify(freshStatuses) ? prev : freshStatuses
+                            )
                             if (onboardData.customerId) {
-                                writeCache(vendorKeysCacheKey(onboardData.customerId), onboardData.aiVendorAPIKeyStatusList)
+                                writeCache(vendorKeysCacheKey(onboardData.customerId), freshStatuses)
                             }
                         }
                         if (onboardData.customerInstructions) {

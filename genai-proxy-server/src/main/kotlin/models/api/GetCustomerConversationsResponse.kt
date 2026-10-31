@@ -25,7 +25,13 @@ data class ConversationSummary(
 
 @Serializable
 data class GetPinnedConversationsResponse(
-    val conversations: List<ConversationSummary>
+    val conversations: List<ConversationSummary>,
+    /**
+     * Opaque cursor for the next page of pinned conversations (same contract
+     * as [GetCustomerConversationsResponse.lastEvaluatedKey]). Null when the
+     * pinned set fit in one page.
+     */
+    val lastEvaluatedKey: String? = null
 )
 
 @Serializable

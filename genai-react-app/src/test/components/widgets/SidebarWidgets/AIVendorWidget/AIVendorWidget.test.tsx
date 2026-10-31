@@ -50,7 +50,6 @@ describe('AIVendorWidget', () => {
     const mockUseToast = useToast as jest.Mock;
     const mockGetTextGenerationModels = refreshService.getTextGenerationModels as jest.Mock;
     const mockSaveAIConfigPreferences = configService.saveAIConfigPreferences as jest.Mock;
-    const mockClearAllModelCache = refreshService.clearAllModelCache as jest.Mock;
     const mockShowToast = jest.fn();
 
     const mockSetSelectedModelForAIVendor = jest.fn();
@@ -180,7 +179,6 @@ describe('AIVendorWidget', () => {
 
         await waitFor(() => {
             expect(mockResetConfig).toHaveBeenCalled();
-            expect(mockClearAllModelCache).toHaveBeenCalled();
             expect(mockGetTextGenerationModels).toHaveBeenCalledTimes(2); // Once on mount, once on click
         });
     });

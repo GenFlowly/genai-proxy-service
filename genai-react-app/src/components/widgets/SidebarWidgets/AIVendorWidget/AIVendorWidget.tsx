@@ -1,10 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useToast } from '../../../../context/ToastContext'
-import {
-    getTextGenerationModels,
-    clearAllModelCache,
-} from '../../../../services/getTextGenerationModelsService'
+import { getTextGenerationModels } from '../../../../services/getTextGenerationModelsService'
 import {
     GetTextGenerationModelsResponse,
     AIVendorModelList,
@@ -67,6 +64,12 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
     const fetchModels = useCallback(
         async (forceRefresh = false) => {
             if (!isAuthenticated || !customerId) return
+            // No valid keys → the server can only answer with an empty list;
+            // skip the round trip entirely.
+            if (vendors.length === 0) {
+                setAiVendorModels([])
+                return
+            }
 
             let cachedData: AIVendorModelList[] | null = null
 
@@ -135,7 +138,6 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
         try {
             setIsRefreshing(true)
             resetConfig()
-            clearAllModelCache()
             await fetchModels(true)
         } finally {
             setIsRefreshing(false)

@@ -71,7 +71,6 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                 customerProfileService.savePreferences(
                     customerId,
                     request.aiConfigPreferences?.preferredModels,
-                    request.aiConfigPreferences?.preferredGenerativeMode,
                     request.otherPreferences,
                     request.aiConfigPreferences?.embeddingMode,
                     request.aiConfigPreferences?.embeddingModel,
