@@ -116,7 +116,8 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.useLearnedPreferences,
                     request.agentId,
                     request.projectId,
-                    request.regenerateMessageId
+                    request.regenerateMessageId,
+                    request.generationId
                 )
 
                 call.response.header(ResponseHeaders.CONVERSATION_ID, streamResult.conversationId)

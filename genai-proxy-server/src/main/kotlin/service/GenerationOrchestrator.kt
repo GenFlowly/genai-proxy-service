@@ -65,33 +65,71 @@ class GenerationOrchestrator(
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
     /**
-     * In-flight streamed generations by responseMessageId, for explicit
-     * client cancellation. Entries remove themselves on completion.
+     * In-flight streamed generations, for explicit client cancellation. Each
+     * generation is registered under its responseMessageId AND (when the
+     * client supplied one) its client-generated generationId, so Stop works
+     * even before the response headers deliver the server-side id. Entries
+     * remove themselves on completion.
      */
-    private data class ActiveGeneration(val customerId: String, val job: kotlinx.coroutines.Job)
+    private data class ActiveGeneration(
+        val customerId: String,
+        val responseMessageId: String,
+        val job: kotlinx.coroutines.Job
+    )
     private val activeGenerations = java.util.concurrent.ConcurrentHashMap<String, ActiveGeneration>()
     // responseMessageId -> durable run_id, for runs started on the /runs path. Lets
     // cancelGeneration also stop the background run on the retrieval-server.
     private val activeRunIds = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /**
+     * Cancels that arrived before their generation job was registered: a Stop
+     * in the first instants of a request lands while the orchestrator is still
+     * in pre-launch setup (conversation/message persistence), when
+     * activeGenerations has no entry yet. The id is parked here and honored at
+     * registration time, so Stop is reliable at any moment of a generation's
+     * life. Entries expire — an id that never registers (generation already
+     * finished, or a bogus id) must not pin memory.
+     */
+    private data class PreCancel(val customerId: String, val atMillis: Long)
+    private val preCancelledGenerations = java.util.concurrent.ConcurrentHashMap<String, PreCancel>()
+    private val preCancelTtlMillis = 60_000L
 
     /**
      * True cancel for a streamed generation: stops the upstream LLM work (the
      * background job survives client disconnects by design, so closing the
      * HTTP stream alone no longer stops it). The partial text streamed so far
-     * is persisted. Returns false when nothing is running under that id for
-     * this customer (already finished, or not the caller's generation).
+     * is persisted. [generationId] is either the server-side responseMessageId
+     * or the client-generated generationId sent with the generate request.
+     * Returns false when nothing is running under that id for this customer —
+     * in that case the id is remembered briefly, so a generation that is still
+     * in pre-launch setup self-cancels the moment it registers.
      */
-    suspend fun cancelGeneration(customerId: String, responseMessageId: String): Boolean {
-        val active = activeGenerations[responseMessageId] ?: return false
+    suspend fun cancelGeneration(customerId: String, generationId: String): Boolean {
+        val active = activeGenerations[generationId]
+        if (active == null) {
+            val now = System.currentTimeMillis()
+            preCancelledGenerations[generationId] = PreCancel(customerId, now)
+            preCancelledGenerations.entries.removeIf { now - it.value.atMillis > preCancelTtlMillis }
+            logger.info("Cancel for unregistered generation {} by {} — parked as pre-cancel", generationId, customerId)
+            return false
+        }
         if (active.customerId != customerId) return false
-        logger.info("Cancelling generation {} for customer {}", responseMessageId, customerId)
+        logger.info("Cancelling generation {} for customer {}", generationId, customerId)
         active.job.cancel(kotlinx.coroutines.CancellationException("Cancelled by user"))
         // Durable path: stop the background run on the retrieval-server too — the
         // job cancel only stops the proxy's relay, not the durable workflow.
-        activeRunIds[responseMessageId]?.let { runId ->
+        activeRunIds[active.responseMessageId]?.let { runId ->
             runCatching { runsClient.cancelRun(runId) }
                 .onFailure { logger.warn("Failed to cancel durable run {}: {}", runId, it.message) }
         }
+        return true
+    }
+
+    /** Consume a parked pre-cancel for [id], only if it belongs to [customerId]. */
+    private fun consumePreCancel(customerId: String, id: String?): Boolean {
+        if (id.isNullOrBlank()) return false
+        val entry = preCancelledGenerations[id] ?: return false
+        if (entry.customerId != customerId) return false
+        preCancelledGenerations.remove(id)
         return true
     }
 
@@ -352,7 +390,8 @@ class GenerationOrchestrator(
         useLearnedPreferences: Boolean = true,
         agentId: String? = null,
         projectId: String? = null,
-        regenerateMessageId: String? = null
+        regenerateMessageId: String? = null,
+        clientGenerationId: String? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -570,6 +609,10 @@ class GenerationOrchestrator(
                             thinkingLevel = config.thinkingLevel
                         )
                         if (startedRunId != null) {
+                            // Register for durable cancel FIRST — addPendingRun below
+                            // suspends, and a user cancel landing in that gap would
+                            // otherwise stop only the relay, leaking the background run.
+                            activeRunIds[responseMessageId] = startedRunId
                             // Add this run to the conversation's pending set (one entry
                             // per vendor) for reload rediscovery ("assistant is mid-run");
                             // best-effort. Carries the deterministic responseMessageId +
@@ -578,7 +621,6 @@ class GenerationOrchestrator(
                             pendingRunEntry = entry
                             runCatching { conversationService.addPendingRun(customerId, activeConversationId, entry) }
                                 .onFailure { logger.warn("Failed to persist pending run {} on conversation {}: {}", startedRunId, activeConversationId, it.message) }
-                            activeRunIds[responseMessageId] = startedRunId  // for durable cancel
                             runsClient.streamRun(startedRunId)
                         } else {
                             logger.warn("Durable run start failed for conversation {} — falling back to stateless stream", activeConversationId)
@@ -728,10 +770,18 @@ class GenerationOrchestrator(
                 }
             }
         }
-        activeGenerations[responseMessageId] = ActiveGeneration(customerId, generationJob)
+        val activeGeneration = ActiveGeneration(customerId, responseMessageId, generationJob)
+        activeGenerations[responseMessageId] = activeGeneration
+        clientGenerationId?.takeIf { it.isNotBlank() }?.let { activeGenerations[it] = activeGeneration }
         generationJob.invokeOnCompletion {
             activeGenerations.remove(responseMessageId)
+            clientGenerationId?.let { activeGenerations.remove(it) }
             activeRunIds.remove(responseMessageId)
+        }
+        // A Stop that raced ahead of this registration was parked — honor it now.
+        if (consumePreCancel(customerId, clientGenerationId) || consumePreCancel(customerId, responseMessageId)) {
+            logger.info("Generation {} was pre-cancelled before registration — cancelling now", responseMessageId)
+            generationJob.cancel(kotlinx.coroutines.CancellationException("Cancelled by user"))
         }
         val flow = chunkChannel.consumeAsFlow()
 
