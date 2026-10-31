@@ -87,3 +87,10 @@ jest.mock('@auth0/auth0-react', () => ({
 // react-markdown/@uiw/@codemirror mocks removed: those packages moved into
 // @genflowly/component-library, whose published bundle is plain CJS (no ESM
 // parse issues) and is mocked per-test where needed.
+
+// react-query batches state notifications on a macrotask scheduler, which
+// `await act(...)` never flushes — queries would resolve but components
+// wouldn't re-render inside tests. A synchronous scheduler keeps the
+// pre-react-query test timing semantics.
+import { notifyManager } from '@tanstack/react-query'
+notifyManager.setScheduler((cb) => cb())

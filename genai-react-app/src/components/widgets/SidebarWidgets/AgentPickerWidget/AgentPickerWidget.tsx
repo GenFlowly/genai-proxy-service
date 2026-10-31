@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { customerAgentsCache } from '../../../../services/defaultsCacheService'
+import { useCustomerAgents } from '../../../../hooks/queries/useCustomerAgents'
 import { saveAIConfigPreferences } from '../../../../services/saveAIConfigService'
 import { useToast } from '../../../../context/ToastContext'
 import { Agent, agentCategory, effectiveDefaultAgentId } from '../../../../models/agents.models'
@@ -22,39 +22,21 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
     const { t } = useTranslation()
     const { ai, auth } = useSidebarWidget()
     const { selectedAgentId, setSelectedAgentId } = ai
-    const { getAccessTokenSilently, customerId, isAuthenticated } = auth
+    const { getAccessTokenSilently } = auth
     const { showToast } = useToast()
 
-    const [agents, setAgents] = useState<Agent[]>([])
-    const [loadFailed, setLoadFailed] = useState(false)
+    // Shared query (one /agents request per login at most): the cached copy
+    // paints instantly; other consumers reuse the same data.
+    const { data: agentsData, isError } = useCustomerAgents()
 
     // Only conversation agents belong here: the category filter keeps
     // memory/title/instruction agents out, and the requestType filter
     // additionally drops mapped internal agents (belt and braces).
-    const toPickerAgents = (list: Agent[] | undefined) =>
-        (list || []).filter(a => !a.requestType && agentCategory(a) === 'CONVERSATION')
-
-    const fetchAgents = useCallback(async () => {
-        if (!isAuthenticated || !customerId) return
-        // Shared with the Defaults-page prefetch (customerAgentsCache): the
-        // cached copy paints instantly and concurrent mounts share one request
-        // instead of issuing a second /agents call per login.
-        const cached = customerAgentsCache.getCached(customerId)
-        if (cached) setAgents(toPickerAgents(cached.agents))
-        try {
-            const token = await getAccessTokenSilently()
-            const response = await customerAgentsCache.fetch(token, customerId)
-            setAgents(toPickerAgents(response.agents))
-            setLoadFailed(false)
-        } catch (err) {
-            console.error('Failed to fetch agents:', err)
-            if (!cached) setLoadFailed(true)
-        }
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
-
-    useEffect(() => {
-        fetchAgents()
-    }, [fetchAgents])
+    const agents = useMemo(
+        () => (agentsData?.agents || []).filter(a => !a.requestType && agentCategory(a) === 'CONVERSATION'),
+        [agentsData]
+    )
+    const loadFailed = isError && !agentsData
 
     // The ONE default agent: the user's pick when set, else their own default
     // graph, else the System default (fresh users with no created agents).

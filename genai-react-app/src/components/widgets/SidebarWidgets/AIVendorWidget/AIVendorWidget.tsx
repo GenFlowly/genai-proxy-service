@@ -1,11 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useToast } from '../../../../context/ToastContext'
-import { getTextGenerationModels } from '../../../../services/getTextGenerationModelsService'
-import {
-    GetTextGenerationModelsResponse,
-    AIVendorModelList,
-} from '../../../../models/getTextGenerationModels.models'
+import { useTextGenerationModels } from '../../../../hooks/queries/useTextGenerationModels'
 
 import { APIKeyStatus } from '../../../../models/storeCustomerVendorAPIKeys.models'
 
@@ -39,7 +35,10 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
             .map(s => s.aiVendor)
     ), [aiVendorAPIKeyStatusList])
 
-    const [aiVendorModels, setAiVendorModels] = useState<AIVendorModelList[]>([])
+    // Shared query (dedups with VendorModelSelect/AISettings): paints from the
+    // last known list, skips the round trip entirely when no vendor has a key.
+    const { data: modelsData, refetch } = useTextGenerationModels(vendors)
+    const aiVendorModels = modelsData ?? []
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
 
@@ -60,85 +59,13 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
     // Backend preference → config sync now lives in AIContext, so model
     // selections exist even before this widget first mounts (mobile).
 
-    // --- Fetch models (with bypass option for refresh) ---
-    const fetchModels = useCallback(
-        async (forceRefresh = false) => {
-            if (!isAuthenticated || !customerId) return
-            // No valid keys → the server can only answer with an empty list;
-            // skip the round trip entirely.
-            if (vendors.length === 0) {
-                setAiVendorModels([])
-                return
-            }
-
-            let cachedData: AIVendorModelList[] | null = null
-
-            // If not forcing refresh, check cache first
-            if (!forceRefresh) {
-                const cachedModels = localStorage.getItem(`${customerId}_ai_vendor_models`)
-                if (cachedModels) {
-                    try {
-                        const parsed = JSON.parse(cachedModels)
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            console.log('Using cached AI models (initial load)')
-                            setAiVendorModels(parsed)
-                            cachedData = parsed
-                        }
-                    } catch (e) {
-                        console.error('Failed to parse cached ai vendor models', e)
-                    }
-                }
-            }
-
-            try {
-                const token = await getAccessTokenSilently()
-                const response: GetTextGenerationModelsResponse =
-                    await getTextGenerationModels(
-                        token,
-                        customerId,
-                        { aiVendor: vendors }
-                    )
-
-                const newData = response.aiVendorModelList || []
-
-                // Compare with cache/current state to determine if update is needed
-                // Simple JSON stringify comparison is sufficient here as structure is simple
-                const isDifferent = JSON.stringify(newData) !== JSON.stringify(cachedData)
-
-                if (isDifferent) {
-                    console.log('Remote models differ from cache, updating...')
-                    setAiVendorModels(newData)
-
-                    // Cache the fresh models
-                    if (customerId && newData.length > 0) {
-                        localStorage.setItem(`${customerId}_ai_vendor_models`, JSON.stringify(newData))
-                    }
-                } else {
-                    console.log('Remote models are identical to cache, skipping update.')
-                }
-            } catch (err) {
-                console.error('Failed to fetch AI models:', err)
-                // On error, let existing state persist
-            }
-        },
-        [isAuthenticated, customerId, getAccessTokenSilently, vendors]
-    )
-
-    // --- Load cached models immediately and refresh if needed ---
-    // Combined logic to avoid race conditions and double-setting state
-    useEffect(() => {
-        if (!isAuthenticated || !customerId) return
-        fetchModels(false)
-    }, [isAuthenticated, customerId, fetchModels])
-
-    // --- Refresh handler ---
     const handleRefresh = async () => {
         if (!customerId) return
 
         try {
             setIsRefreshing(true)
             resetConfig()
-            await fetchModels(true)
+            await refetch()
         } finally {
             setIsRefreshing(false)
         }

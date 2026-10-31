@@ -10,6 +10,15 @@ import {
     UpdateAgentResponse,
 } from '../models/agents.models'
 import { fetchWithRetry } from '../utils/apiUtils'
+import { queryClient } from '../queryClient'
+import { CUSTOMER_AGENTS_QUERY_KEY } from '../hooks/queries/queryKeys'
+
+// The agents list is served from a version-gated cache that only refreshes at
+// the next /onboard sync — every successful mutation must invalidate it here
+// so same-session consumers (picker, Defaults page) see the change.
+function invalidateAgentsQuery(): void {
+    void queryClient.invalidateQueries({ queryKey: [CUSTOMER_AGENTS_QUERY_KEY] })
+}
 
 export async function getCustomerAgents(token: string): Promise<GetCustomerAgentsResponse> {
     const response = await fetchWithRetry(endpoints.getCustomerAgents, {
@@ -61,6 +70,7 @@ export async function createGraphAgent(
         throw new Error(body?.error ?? `Create graph agent failed: ${response.status} ${response.statusText}`)
     }
 
+    invalidateAgentsQuery()
     return (await response.json()) as CreateGraphAgentResponse
 }
 
@@ -83,6 +93,7 @@ export async function updateAgent(
         throw new Error(body?.error ?? `Update agent failed: ${response.status} ${response.statusText}`)
     }
 
+    invalidateAgentsQuery()
     return (await response.json()) as UpdateAgentResponse
 }
 
@@ -105,5 +116,6 @@ export async function forkAgent(token: string, graphId: string): Promise<ForkAge
         throw new Error(body?.error ?? `Fork agent failed: ${response.status} ${response.statusText}`)
     }
 
+    invalidateAgentsQuery()
     return (await response.json()) as ForkAgentResponse
 }

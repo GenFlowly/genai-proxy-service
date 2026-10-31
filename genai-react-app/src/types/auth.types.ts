@@ -1,5 +1,5 @@
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
-import { OnboardCustomerResponse } from '../models/onboardUser.models'
+import { CacheVersions, OnboardCustomerResponse } from '../models/onboardUser.models'
 import { StoreCustomerVectorDBConfigResponse, VectorDBConfigStatusValue } from '../models/storeCustomerVectorDBConfig.models'
 import { InstructionResponse } from '../models/instruction.models'
 
@@ -57,6 +57,9 @@ export interface AuthContextType {
     updateInstruction: (instruction: InstructionResponse) => void;
     customerName?: string;
     customerPicture?: string;
+    // Server-side mutation counters from the last /onboard sync; null until it
+    // resolves (or when the server couldn't read them — no gating that session)
+    cacheVersions: CacheVersions | null;
 }
 
 export interface AuthProviderProps {

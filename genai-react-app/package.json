@@ -6,6 +6,7 @@
   "dependencies": {
     "@auth0/auth0-react": "^2.11.0",
     "@genflowly/component-library": "^0.1.107",
+    "@tanstack/react-query": "^5.105.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
