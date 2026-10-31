@@ -2,6 +2,7 @@ package com.genflowly.service
 
 import com.genflowly.models.ShareRole
 import com.genflowly.models.api.ConversationSummary
+import com.genflowly.models.api.GetPinnedConversationsResponse
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ShareRepository
 import io.mockk.coEvery
@@ -99,8 +100,9 @@ class ConversationPinTest {
                 updatedAt = null, pinnedAt = "2026-08-30T00:00:00Z"
             )
         )
-        coEvery { conversationRepo.getPinnedConversationsByCustomer(owner) } returns pinned
+        coEvery { conversationRepo.getPinnedConversationsByCustomer(owner, any(), any()) } returns
+            GetPinnedConversationsResponse(conversations = pinned)
 
-        assertEquals(pinned, service.getPinnedConversations(owner))
+        assertEquals(pinned, service.getPinnedConversations(owner).conversations)
     }
 }

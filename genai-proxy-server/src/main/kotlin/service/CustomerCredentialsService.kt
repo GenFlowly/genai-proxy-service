@@ -146,7 +146,6 @@ class CustomerCredentialsService(
         customerProfileRepository.savePreferences(
             customerId = customerId,
             preferredModels = updated,
-            preferredGenerativeMode = null,
             otherPreferences = null
         )
     }

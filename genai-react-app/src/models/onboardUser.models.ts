@@ -7,7 +7,6 @@ export interface OnboardCustomerResponse {
     customerId: string
     aiConfigPreferences: {
         preferredModels?: AIConfig[]
-        preferredGenerativeMode?: string
         /** Preferred conversation agent (graphId); absent = follow the server default */
         preferredAgentId?: string
         /** Legacy single default embedding model name; absent = platform default */

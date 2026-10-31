@@ -1,7 +1,6 @@
 package com.genflowly.service
 
 import com.genflowly.models.api.AIConfigPreferences
-import com.genflowly.models.api.AIMode
 import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.repository.CustomerProfileRepository
 import kotlinx.coroutines.async
@@ -28,7 +27,6 @@ class CustomerProfileService(
     suspend fun savePreferences(
         customerId: String,
         preferredModels: List<AIConfig>?,
-        preferredGenerativeMode: AIMode?,
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
         embeddingModel: String? = null,
@@ -39,7 +37,6 @@ class CustomerProfileService(
         customerProfileRepository.savePreferences(
             customerId,
             preferredModels,
-            preferredGenerativeMode,
             otherPreferences,
             embeddingMode,
             embeddingModel,

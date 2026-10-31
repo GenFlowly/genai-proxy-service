@@ -7,6 +7,7 @@ import com.genflowly.models.ShareRole
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.ForkConversationResponse
 import com.genflowly.models.api.GetCustomerConversationsResponse
+import com.genflowly.models.api.GetPinnedConversationsResponse
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ProjectRepository
 import com.genflowly.repository.ShareRepository
@@ -328,11 +329,13 @@ class ConversationManagementService(
         )
     }
 
-    suspend fun getPinnedConversations(customerId: String): List<ConversationSummary> {
-        return enrichWithProjectNames(
-            conversationRepository.getPinnedConversationsByCustomer(customerId),
-            customerId
-        )
+    suspend fun getPinnedConversations(
+        customerId: String,
+        pageSize: Int = 50,
+        exclusiveStartKey: String? = null
+    ): GetPinnedConversationsResponse {
+        val page = conversationRepository.getPinnedConversationsByCustomer(customerId, pageSize, exclusiveStartKey)
+        return page.copy(conversations = enrichWithProjectNames(page.conversations, customerId))
     }
 
     suspend fun getCustomerConversationsPaginated(

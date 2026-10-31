@@ -70,17 +70,20 @@ export const customerAgentsCache = createCachedResource('customer_agents_cache',
 export const embeddingModelsCache = createCachedResource('embedding_models_cache', getEmbeddingModels)
 
 /**
- * Warm everything the Defaults page reads (request-agent mappings, the
- * customer's agents, the probed embedding-model catalog, and the provider
- * display-name catalog) so the page renders fully populated on first visit.
- * Best-effort: individual failures are swallowed — the page's own load
- * handles errors with the user watching.
+ * Warm what the Defaults page reads (request-agent mappings, the customer's
+ * agents, and the provider display-name catalog) so the page renders
+ * populated on first visit. Best-effort: individual failures are swallowed —
+ * the page's own load handles errors with the user watching.
+ *
+ * The embedding-model catalog is deliberately NOT prefetched: it costs
+ * per-vendor key reads + KMS decrypts server-side, its only consumer is the
+ * Settings → Defaults page (which fetches on mount via embeddingModelsCache),
+ * and the server keeps its own probe cache so that fetch is fast.
  */
 export async function prefetchDefaultsPageData(token: string, customerId: string): Promise<void> {
     await Promise.allSettled([
         requestAgentsCache.fetch(token, customerId),
         customerAgentsCache.fetch(token, customerId),
-        embeddingModelsCache.fetch(token, customerId),
         getProviderCatalog(token),
     ])
 }

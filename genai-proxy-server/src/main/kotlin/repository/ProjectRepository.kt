@@ -9,6 +9,8 @@ import com.genflowly.models.generateProjectId
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
@@ -68,6 +70,42 @@ class ProjectRepository(
         } while (!exclusiveStartKey.isNullOrEmpty())
 
         items.mapNotNull { itemToProject(it) }
+    }
+
+    /**
+     * One page of the customer's projects in the table's native key order
+     * (projectId — the base table has no updatedAt sort, so a paged read
+     * cannot be most-recently-updated-first; callers that need that ordering
+     * use the fetch-all [getProjects]).
+     */
+    suspend fun getProjectsPage(
+        customerId: String,
+        pageSize: Int,
+        exclusiveStartKey: String?
+    ): Pair<List<Project>, String?> = withContext(Dispatchers.IO) {
+        val builder = QueryRequest.builder()
+            .tableName(DynamoDBConstants.CUSTOMER_PROJECTS_TABLE)
+            .keyConditionExpression("$CUSTOMER_ID_KEY = :cid")
+            .expressionAttributeValues(
+                mapOf(":cid" to AttributeValue.builder().s(customerId).build())
+            )
+            .limit(pageSize)
+
+        if (!exclusiveStartKey.isNullOrBlank()) {
+            try {
+                val keyMap: Map<String, String> = Json.decodeFromString(exclusiveStartKey)
+                builder.exclusiveStartKey(keyMap.mapValues { (_, v) -> AttributeValue.builder().s(v).build() })
+            } catch (e: Exception) {
+                logger.warn { "Failed to parse projects exclusiveStartKey, starting from beginning: ${e.message}" }
+            }
+        }
+
+        val response = dynamoDbClient.query(builder.build())
+        val nextPageToken: String? = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+            Json.encodeToString(response.lastEvaluatedKey().mapValues { (_, v) -> v.s() ?: "" })
+        } else null
+
+        response.items().mapNotNull { itemToProject(it) } to nextPageToken
     }
 
     suspend fun getProject(customerId: String, projectId: String): Project? = withContext(Dispatchers.IO) {

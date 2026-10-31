@@ -8,7 +8,6 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
 import com.genflowly.DynamoDBConstants.SUB_PARTITION_KEY
 import com.genflowly.models.api.AIConfigPreferences
-import com.genflowly.models.api.AIMode
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -324,7 +323,6 @@ class CustomerProfileRepository(
     suspend fun savePreferences(
         customerId: String,
         preferredModels: List<AIConfig>?,
-        preferredGenerativeMode: AIMode?,
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
         embeddingModel: String? = null,
@@ -347,12 +345,6 @@ class CustomerProfileRepository(
             updateParts.add("#createdAt = if_not_exists(#createdAt, :createdAt)")
             attrNames["#createdAt"] = "createdAt"
             attrValues[":createdAt"] = AttributeValue.builder().s(now).build()
-
-            if (preferredGenerativeMode != null) {
-                updateParts.add("#preferredGenerativeMode = :preferredGenerativeMode")
-                attrNames["#preferredGenerativeMode"] = "preferredGenerativeMode"
-                attrValues[":preferredGenerativeMode"] = AttributeValue.builder().s(preferredGenerativeMode.name).build()
-            }
 
             if (preferredModels != null) {
                 updateParts.add("#preferredModels = :preferredModels")
@@ -441,12 +433,11 @@ class CustomerProfileRepository(
             val modelsAttr = item["preferredModels"]
             val preferredModels = modelsAttr?.let { attributeValueToAiConfig(it) }
 
-            val modeAttr = item["preferredGenerativeMode"]?.s()
-            val preferredGenerativeMode = modeAttr?.let { AIMode.valueOf(it) }
-
+            // A preferredGenerativeMode attribute may still sit on old rows —
+            // the field was removed end-to-end (never consumed); stale
+            // attributes are simply ignored.
             AIConfigPreferences(
                 preferredModels = preferredModels,
-                preferredGenerativeMode = preferredGenerativeMode,
                 embeddingMode = item["embeddingMode"]?.s(),
                 embeddingModel = item["embeddingModel"]?.s(),
                 embeddingModelConversations = item["embeddingModelConversations"]?.s(),
