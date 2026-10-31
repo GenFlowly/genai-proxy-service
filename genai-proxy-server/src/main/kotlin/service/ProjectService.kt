@@ -24,10 +24,25 @@ class ProjectService(
     suspend fun createProject(customerId: String, name: String): Project =
         projectRepository.createProject(customerId, validateName(name))
 
-    suspend fun getProjects(customerId: String): GetProjectsResponse =
-        GetProjectsResponse(
-            projects = projectRepository.getProjects(customerId).sortedByDescending { it.updatedAt }
-        )
+    /**
+     * Without pageSize: the full list, most recently updated first (what the
+     * sidebar renders). With pageSize: one cursor-paged chunk in projectId
+     * order — the base table has no updatedAt sort key, so a paged read
+     * cannot honor the recency ordering.
+     */
+    suspend fun getProjects(
+        customerId: String,
+        pageSize: Int? = null,
+        exclusiveStartKey: String? = null
+    ): GetProjectsResponse {
+        if (pageSize == null) {
+            return GetProjectsResponse(
+                projects = projectRepository.getProjects(customerId).sortedByDescending { it.updatedAt }
+            )
+        }
+        val (projects, nextKey) = projectRepository.getProjectsPage(customerId, pageSize, exclusiveStartKey)
+        return GetProjectsResponse(projects = projects, lastEvaluatedKey = nextKey)
+    }
 
     suspend fun renameProject(customerId: String, projectId: String, name: String) {
         val renamed = projectRepository.renameProject(customerId, projectId, validateName(name))

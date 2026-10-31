@@ -74,7 +74,18 @@ fun Route.registerProjectRoutes(
         get(Routes.GET_PROJECTS, {
             tags("Projects")
             summary = "List the caller's projects"
-            description = "Every project owned by the caller, most recently updated first."
+            description = "Every project owned by the caller, most recently updated first. " +
+                    "Pass pageSize for cursor-paginated reads (projectId order)."
+            request {
+                queryParameter<Int>("pageSize") {
+                    description = "Page size, 1-100; omit for the full recency-ordered list"
+                    required = false
+                }
+                queryParameter<String>("lastEvaluatedKey") {
+                    description = "Pagination cursor returned by the previous page"
+                    required = false
+                }
+            }
             response {
                 code(HttpStatusCode.OK) {
                     description = "The caller's projects"
@@ -88,7 +99,9 @@ fun Route.registerProjectRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
-                call.respond(HttpStatusCode.OK, projectService.getProjects(customerId))
+                val pageSize = call.request.queryParameters["pageSize"]?.toIntOrNull()?.coerceIn(1, 100)
+                val exclusiveStartKey = call.request.queryParameters["lastEvaluatedKey"]?.takeIf { it.isNotBlank() }
+                call.respond(HttpStatusCode.OK, projectService.getProjects(customerId, pageSize, exclusiveStartKey))
             } catch (e: Exception) {
                 logger.error("Unexpected error listing projects: {}", e.message, e)
                 call.respond(

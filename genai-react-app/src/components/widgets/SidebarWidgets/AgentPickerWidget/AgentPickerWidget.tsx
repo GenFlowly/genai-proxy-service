@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getCustomerAgents } from '../../../../services/agentsService'
+import { customerAgentsCache } from '../../../../services/defaultsCacheService'
 import { saveAIConfigPreferences } from '../../../../services/saveAIConfigService'
 import { useToast } from '../../../../context/ToastContext'
 import { Agent, agentCategory, effectiveDefaultAgentId } from '../../../../models/agents.models'
@@ -28,23 +28,27 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
     const [agents, setAgents] = useState<Agent[]>([])
     const [loadFailed, setLoadFailed] = useState(false)
 
+    // Only conversation agents belong here: the category filter keeps
+    // memory/title/instruction agents out, and the requestType filter
+    // additionally drops mapped internal agents (belt and braces).
+    const toPickerAgents = (list: Agent[] | undefined) =>
+        (list || []).filter(a => !a.requestType && agentCategory(a) === 'CONVERSATION')
+
     const fetchAgents = useCallback(async () => {
         if (!isAuthenticated || !customerId) return
+        // Shared with the Defaults-page prefetch (customerAgentsCache): the
+        // cached copy paints instantly and concurrent mounts share one request
+        // instead of issuing a second /agents call per login.
+        const cached = customerAgentsCache.getCached(customerId)
+        if (cached) setAgents(toPickerAgents(cached.agents))
         try {
             const token = await getAccessTokenSilently()
-            const response = await getCustomerAgents(token)
-            // Only conversation agents belong here: the category filter keeps
-            // memory/title/instruction agents out, and the requestType filter
-            // additionally drops mapped internal agents (belt and braces).
-            setAgents(
-                (response.agents || []).filter(
-                    a => !a.requestType && agentCategory(a) === 'CONVERSATION'
-                )
-            )
+            const response = await customerAgentsCache.fetch(token, customerId)
+            setAgents(toPickerAgents(response.agents))
             setLoadFailed(false)
         } catch (err) {
             console.error('Failed to fetch agents:', err)
-            setLoadFailed(true)
+            if (!cached) setLoadFailed(true)
         }
     }, [isAuthenticated, customerId, getAccessTokenSilently])
 

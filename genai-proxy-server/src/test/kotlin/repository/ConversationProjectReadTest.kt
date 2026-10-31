@@ -95,7 +95,7 @@ class ConversationProjectReadTest {
 
         val pinned = repository.getPinnedConversationsByCustomer(cust)
 
-        assertEquals("PRJ1", pinned.single().projectId)
+        assertEquals("PRJ1", pinned.conversations.single().projectId)
     }
 
     @Test

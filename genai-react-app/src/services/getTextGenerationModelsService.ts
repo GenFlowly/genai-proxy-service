@@ -6,18 +6,6 @@ import {
 } from '../models/getTextGenerationModels.models'
 import { fetchWithRetry } from "../utils/apiUtils";
 
-export function clearModelCache(customerId: string): void {
-    // No-op
-}
-
-export function clearAllModelCache(): void {
-    // No-op
-}
-
-export function getModelCacheStats() {
-    return { count: 0, size: 0 }
-}
-
 export async function getTextGenerationModels(
     token: string,
     customerId: string,

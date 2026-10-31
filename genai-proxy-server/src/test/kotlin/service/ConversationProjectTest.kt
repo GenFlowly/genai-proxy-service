@@ -3,6 +3,7 @@ package com.genflowly.service
 import com.genflowly.models.ShareRole
 import com.genflowly.models.api.ConversationSummary
 import com.genflowly.models.api.GetCustomerConversationsResponse
+import com.genflowly.models.api.GetPinnedConversationsResponse
 import com.genflowly.models.api.Project
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.ProjectRepository
@@ -173,19 +174,19 @@ class ConversationProjectTest {
 
     @Test
     fun `pinned list is enriched the same way`() = runTest {
-        coEvery { conversationRepo.getPinnedConversationsByCustomer(owner) } returns
-            listOf(summary("conv-1", projectId = proj))
+        coEvery { conversationRepo.getPinnedConversationsByCustomer(owner, any(), any()) } returns
+            GetPinnedConversationsResponse(conversations = listOf(summary("conv-1", projectId = proj)))
         coEvery { projectRepo.getProjects(owner) } returns listOf(project())
 
         val pinned = service.getPinnedConversations(owner)
 
-        assertEquals("Research", pinned.single().projectName)
+        assertEquals("Research", pinned.conversations.single().projectName)
     }
 
     @Test
     fun `pinned list without projects skips the projects query`() = runTest {
-        coEvery { conversationRepo.getPinnedConversationsByCustomer(owner) } returns
-            listOf(summary("conv-1"))
+        coEvery { conversationRepo.getPinnedConversationsByCustomer(owner, any(), any()) } returns
+            GetPinnedConversationsResponse(conversations = listOf(summary("conv-1")))
 
         service.getPinnedConversations(owner)
 

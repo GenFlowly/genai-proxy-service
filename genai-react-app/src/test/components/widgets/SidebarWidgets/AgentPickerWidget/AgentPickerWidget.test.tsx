@@ -48,12 +48,16 @@ describe('AgentPickerWidget', () => {
     const mockGetAccessTokenSilently = jest.fn();
     const mockShowToast = jest.fn();
 
-    const setup = (selectedAgentId: string | null = null) => {
+    // customerAgentsCache is module-level state shared across tests, so each
+    // test gets its own customerId by default — a stale envelope from an
+    // earlier test must never paint into the next one.
+    let testSeq = 0;
+    const setup = (selectedAgentId: string | null = null, customerId?: string) => {
         mockUseSidebarWidget.mockReturnValue({
             ai: { selectedAgentId, setSelectedAgentId: mockSetSelectedAgentId },
             auth: {
                 getAccessTokenSilently: mockGetAccessTokenSilently,
-                customerId: 'cust-123',
+                customerId: customerId ?? `cust-${testSeq}`,
                 isAuthenticated: true,
             },
         });
@@ -61,6 +65,7 @@ describe('AgentPickerWidget', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        testSeq += 1;
         mockUseToast.mockReturnValue({ showToast: mockShowToast });
         mockSavePreferences.mockResolvedValue(undefined);
         mockGetAccessTokenSilently.mockResolvedValue('token');
@@ -238,11 +243,27 @@ describe('AgentPickerWidget', () => {
         expect(screen.queryByTestId('agent-collapsed-GRP-OWN')).not.toBeInTheDocument();
     });
 
-    it('shows an error message when loading fails', async () => {
+    it('shows an error message when loading fails with no cached copy', async () => {
         mockGetCustomerAgents.mockRejectedValue(new Error('boom'));
 
         render(<AgentPickerWidget />);
 
         expect(await screen.findByText('Could not load agents')).toBeInTheDocument();
+    });
+
+    it('keeps showing the cached agents when the refresh fails', async () => {
+        setup(null, 'cust-cached-fail');
+        mockGetCustomerAgents.mockResolvedValue({
+            agents: [agent({ graphId: 'GRP-SYS', name: 'Default Smart Agent', isSystem: true, isDefault: true })],
+        });
+        const { unmount } = render(<AgentPickerWidget />);
+        await screen.findByTestId('agent-option-GRP-SYS');
+        unmount();
+
+        mockGetCustomerAgents.mockRejectedValue(new Error('boom'));
+        render(<AgentPickerWidget />);
+
+        expect(await screen.findByTestId('agent-option-GRP-SYS')).toBeInTheDocument();
+        expect(screen.queryByText('Could not load agents')).not.toBeInTheDocument();
     });
 });
