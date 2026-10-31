@@ -24,6 +24,7 @@ import subprocess
 import sys
 import unittest
 import zlib
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from botocore.exceptions import ClientError
@@ -1820,9 +1821,11 @@ class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
             llm_model="claude-test", stream=False, agentic=False,
         )
         failure = UnsupportedImageError("The attached file isn't a supported image (detected: SVG).")
+        # Only the streaming branch reads the raw request (is_disconnected polling).
+        http_request = SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
         with patch.object(llm_node_module, "image_for_llm", AsyncMock(side_effect=failure)):
             with self.assertRaises(HTTPException) as ctx:
-                await retrieve_route.retrieve(req)
+                await retrieve_route.retrieve(req, http_request)
         self.assertEqual(ctx.exception.status_code, 422)
         self.assertEqual(ctx.exception.detail, {"error_type": "attachment_error", "message": str(failure)})
 

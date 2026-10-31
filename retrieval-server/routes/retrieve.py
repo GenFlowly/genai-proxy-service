@@ -4,7 +4,7 @@ import re
 import time
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from langgraph.graph import END, StateGraph
 
@@ -229,7 +229,7 @@ def _resolve_graph(customer_id: str, graph_id: str | None = None) -> tuple:
 
 
 @router.post("/retrieve")
-async def retrieve(req: RetrieveRequest):
+async def retrieve(req: RetrieveRequest, request: Request):
     # Anchor for the "thinking" duration: request receipt → first generated token
     request_start = time.monotonic()
     creds_keys = list(req.llm_credentials.keys())
@@ -270,7 +270,9 @@ async def retrieve(req: RetrieveRequest):
     if req.stream:
         logger.info("Returning StreamingResponse for customer=%s", req.customer_id)
         return StreamingResponse(
-            stream_response(state, graph=graph, node_type_map=node_type_map, node_name_map=node_name_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start, structured_output=bool(req.response_schema), builtin_tool_names=set(builtin_tools)),
+            # should_stop: a user cancel reaches here as the proxy dropping this
+            # connection — poll for it so the remaining graph steps are skipped.
+            stream_response(state, graph=graph, node_type_map=node_type_map, node_name_map=node_name_map, streaming_nodes=streaming_nodes, recursion_limit=max_iterations, request_start=request_start, structured_output=bool(req.response_schema), builtin_tool_names=set(builtin_tools), should_stop=request.is_disconnected),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
