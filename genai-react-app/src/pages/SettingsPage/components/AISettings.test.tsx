@@ -6,7 +6,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { storeCustomerVendorApiKey, storeCustomerVendorConfig } from '../../../services/storeCustomerVendorApiKeysService';
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService';
-import { getProviderCatalog } from '../../../services/providerCatalogService';
+import { fetchProviderCatalog } from '../../../services/providerCatalogService';
+import { withQueryClient } from '../../../test/utils/queryWrapper';
 import { AIVendor } from '../../../constants/vendors';
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models';
 
@@ -15,14 +16,18 @@ jest.mock('../../../context/AuthContext');
 jest.mock('../../../context/ToastContext');
 jest.mock('../../../services/storeCustomerVendorApiKeysService');
 jest.mock('../../../services/getTextGenerationModelsService');
-jest.mock('../../../services/providerCatalogService');
+jest.mock('../../../services/providerCatalogService', () => ({
+    ...jest.requireActual('../../../services/providerCatalogService'),
+    fetchProviderCatalog: jest.fn(),
+    getCachedProviderCatalog: jest.fn(() => null),
+}));
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseToast = useToast as jest.Mock;
 const mockStoreCustomerVendorApiKey = storeCustomerVendorApiKey as jest.Mock;
 const mockStoreCustomerVendorConfig = storeCustomerVendorConfig as jest.Mock;
 const mockGetTextGenerationModels = getTextGenerationModels as jest.Mock;
-const mockGetProviderCatalog = getProviderCatalog as jest.Mock;
+const mockGetProviderCatalog = fetchProviderCatalog as jest.Mock;
 
 describe('AISettings', () => {
     const mockUpdateVendorApiKeyStatus = jest.fn();
@@ -74,7 +79,7 @@ describe('AISettings', () => {
     });
 
     test('hides vendors without keys behind the add-vendor dropdown', async () => {
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
 
         expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
         // No keys set → no cards, every supported vendor is offered in the dropdown
@@ -93,7 +98,7 @@ describe('AISettings', () => {
     test('vendors with a saved key show as cards and leave the dropdown', async () => {
         mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
 
         expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-status-pill`)).toHaveTextContent('Key set');
         const dropdown = screen.getByTestId('add-vendor-select');
@@ -106,7 +111,7 @@ describe('AISettings', () => {
     });
 
     test('a long-tail catalog vendor can be added and lists its catalog models', async () => {
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
 
         const dropdown = screen.getByTestId('add-vendor-select');
         await waitFor(() => expect(dropdown).toHaveTextContent('Groq'));
@@ -120,7 +125,7 @@ describe('AISettings', () => {
     test('shows model/priority config only for vendors with a valid key', () => {
         mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
 
         expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-status-pill`)).toHaveTextContent('Key set');
         expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-config`)).toBeInTheDocument();
@@ -140,7 +145,7 @@ describe('AISettings', () => {
             },
         });
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
         await userEvent.selectOptions(screen.getByTestId('add-vendor-select'), AIVendor.OPENAI);
         await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'test-key');
         await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
@@ -168,7 +173,7 @@ describe('AISettings', () => {
             },
         });
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
         await userEvent.selectOptions(screen.getByTestId('add-vendor-select'), AIVendor.OPENAI);
         await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'bad-key');
         await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
@@ -183,7 +188,7 @@ describe('AISettings', () => {
     test('shows a login message when saving unauthenticated', async () => {
         mockUseAuth.mockReturnValue(authValue({ customerId: null, isAuthenticated: false }));
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
         await userEvent.selectOptions(screen.getByTestId('add-vendor-select'), AIVendor.OPENAI);
         await userEvent.type(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-key-input`), 'test-key');
         await userEvent.click(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-key`));
@@ -198,7 +203,7 @@ describe('AISettings', () => {
         mockStoreCustomerVendorConfig.mockResolvedValue(undefined);
         mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
 
         const saveConfig = screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-config`);
         // Prefilled with saved values → not dirty → disabled
@@ -237,7 +242,7 @@ describe('AISettings', () => {
             aiVendorAPIKeyStatusList: [validOpenAIStatus],
         }));
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
         const saveConfig = await screen.findByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-save-config`);
         await screen.findByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-model-option-gpt-5`);
         fireEvent.change(screen.getByTestId(`ai-settings-vendors-${AIVendor.OPENAI}-model`), {
@@ -269,7 +274,7 @@ describe('AISettings', () => {
             },
         }));
 
-        render(<AISettings />);
+        render(withQueryClient(<AISettings />));
 
         // validOpenAIStatus says gpt-5-mini, but preferredModels wins
         await waitFor(() => {

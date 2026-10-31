@@ -22,6 +22,7 @@ import {
     WebSource,
 } from '../models/conversation.models'
 import { applyThinkingStep } from '../utils/thinkingStepUtils'
+import { customerKey, StorageSuffix } from '../utils/storageKeys'
 import { AttachmentRef } from '../models/attachment.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
 import { forkConversation as forkConversationApi } from '../services/conversationHistoryService'
@@ -542,7 +543,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         if (customerId) {
             // Clear all prompt editor content for this user from localStorage
             Object.keys(localStorage).forEach(key => {
-                if (key.startsWith(`${customerId}_prompt_editor_content_`)) {
+                if (key.startsWith(customerKey(customerId, StorageSuffix.promptEditorContentPrefix))) {
                     localStorage.removeItem(key)
                 }
             })

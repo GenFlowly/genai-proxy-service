@@ -49,16 +49,17 @@ jest.mock('@auth0/auth0-react', () => ({
 import { useAuth } from '../context/AuthContext'
 import { useAuth0 } from '@auth0/auth0-react'
 import AppContent from '../AppContent'
+import { withQueryClient } from './utils/queryWrapper'
 
 const mockUseAuth = useAuth as jest.Mock
 const mockUseAuth0 = useAuth0 as jest.Mock
 
 function renderAt(path: string) {
-    return render(
+    return render(withQueryClient(
         <MemoryRouter initialEntries={[path]}>
             <AppContent />
         </MemoryRouter>
-    )
+    ))
 }
 
 describe('AppContent', () => {
@@ -74,11 +75,11 @@ describe('AppContent', () => {
 
     test('shows loading indicator while auth is loading', () => {
         mockUseAuth.mockReturnValue({ isLoading: true })
-        render(
+        render(withQueryClient(
             <MemoryRouter>
                 <AppContent />
             </MemoryRouter>
-        )
+        ))
         expect(screen.getByText('Loading...')).toBeInTheDocument()
     })
 

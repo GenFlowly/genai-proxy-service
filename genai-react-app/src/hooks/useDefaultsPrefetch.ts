@@ -1,23 +1,17 @@
-import { useEffect } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { prefetchDefaultsPageData } from '../services/defaultsCacheService'
+import { useCustomerAgents } from './queries/useCustomerAgents'
+import { useProviderCatalog } from './queries/useProviderCatalog'
+import { useRequestAgents } from './queries/useRequestAgents'
 
 /**
- * Fire-and-forget warm-up of the Settings → Defaults page caches as soon as
- * the session is authenticated, so the page renders populated on first visit.
- * The embedding-model catalog is excluded — it is fetched only when the
- * Settings page itself mounts (see prefetchDefaultsPageData).
+ * Login-time warm-up of what the chat page and Settings → Defaults read:
+ * mounting these shared queries at AppContent keeps them alive for the whole
+ * session, so pages render populated on first visit. The version-gated
+ * members cost zero network calls when their /onboard counter is unchanged.
+ * The embedding-model catalog is deliberately excluded — Settings-only, it
+ * costs per-vendor key reads + KMS decrypts server-side.
  */
 export function useDefaultsPrefetch(): void {
-    const { isAuthenticated, customerId, getAccessTokenSilently } = useAuth()
-
-    useEffect(() => {
-        if (!isAuthenticated || !customerId) return
-        void (async () => {
-            try {
-                const token = await getAccessTokenSilently()
-                await prefetchDefaultsPageData(token, customerId)
-            } catch { /* best-effort — the page loads normally without the warm-up */ }
-        })()
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
+    useProviderCatalog()
+    useRequestAgents()
+    useCustomerAgents()
 }

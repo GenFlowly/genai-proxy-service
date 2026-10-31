@@ -1,106 +1,75 @@
 import {
     customerAgentsCache,
     embeddingModelsCache,
-    prefetchDefaultsPageData,
     requestAgentsCache,
 } from './defaultsCacheService';
-import { getRequestAgents } from './requestAgentsService';
-import { getCustomerAgents } from './agentsService';
-import { getEmbeddingModels } from './embeddingKeysService';
-import { getProviderCatalog } from './providerCatalogService';
-
-jest.mock('./requestAgentsService');
-jest.mock('./agentsService');
-jest.mock('./embeddingKeysService');
-jest.mock('./providerCatalogService');
-
-const mockGetRequestAgents = getRequestAgents as jest.Mock;
-const mockGetCustomerAgents = getCustomerAgents as jest.Mock;
-const mockGetEmbeddingModels = getEmbeddingModels as jest.Mock;
-const mockGetProviderCatalog = getProviderCatalog as jest.Mock;
 
 // The module keeps a memory cache across tests, so each test uses its own
 // customerId — a mismatched id always reads as a miss.
-describe('defaultsCacheService', () => {
+describe('defaultsCacheService (SeededCache)', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
         localStorage.clear();
     });
 
-    test('fetch stores the response and getCached serves it for the same customer only', async () => {
-        const data = { entries: [{ requestType: 'CONVERSATION_TITLE' }] };
-        mockGetRequestAgents.mockResolvedValue(data);
+    test('save stores a versioned envelope under a per-customer key and getEnvelope serves it for the same customer only', () => {
+        const data = { entries: [{ requestType: 'CONVERSATION_TITLE' }] } as any;
+        requestAgentsCache.save('CU_A', data, 7);
 
-        await expect(requestAgentsCache.fetch('tok', 'CU_A')).resolves.toEqual(data);
-
-        expect(requestAgentsCache.getCached('CU_A')).toEqual(data);
-        expect(requestAgentsCache.getCached('CU_SOMEONE_ELSE')).toBeNull();
-        expect(JSON.parse(localStorage.getItem('request_agents_cache')!)).toEqual({
+        expect(requestAgentsCache.getEnvelope('CU_A')).toEqual({
             customerId: 'CU_A',
+            version: 7,
+            data,
+        });
+        expect(requestAgentsCache.getEnvelope('CU_SOMEONE_ELSE')).toBeNull();
+        expect(JSON.parse(localStorage.getItem('CU_A_request_agents_cache')!)).toEqual({
+            customerId: 'CU_A',
+            version: 7,
             data,
         });
     });
 
-    test('getCached falls back to a previous session copy in localStorage', () => {
+    test('getEnvelope falls back to a previous session copy in localStorage', () => {
         localStorage.setItem(
-            'customer_agents_cache',
-            JSON.stringify({ customerId: 'CU_LS', data: { agents: [{ graphId: 'G1' }] } })
+            'CU_LS_customer_agents_cache',
+            JSON.stringify({ customerId: 'CU_LS', version: 3, data: { agents: [{ graphId: 'G1' }] } })
         );
 
-        expect(customerAgentsCache.getCached('CU_LS')).toEqual({ agents: [{ graphId: 'G1' }] });
-    });
-
-    test('getCached survives a corrupt localStorage entry', () => {
-        localStorage.setItem('customer_agents_cache', 'not json');
-        expect(customerAgentsCache.getCached('CU_CORRUPT')).toBeNull();
-    });
-
-    test('concurrent fetches for the same customer share one request', async () => {
-        let resolveProbe: (value: unknown) => void = () => undefined;
-        mockGetEmbeddingModels.mockReturnValue(new Promise(resolve => { resolveProbe = resolve; }));
-
-        const first = embeddingModelsCache.fetch('tok', 'CU_D');
-        const second = embeddingModelsCache.fetch('tok', 'CU_D');
-        expect(mockGetEmbeddingModels).toHaveBeenCalledTimes(1);
-
-        resolveProbe({ vendorModels: [] });
-        await expect(first).resolves.toEqual({ vendorModels: [] });
-        await expect(second).resolves.toEqual({ vendorModels: [] });
-    });
-
-    test('a failed fetch leaves the cache untouched and a retry fetches again', async () => {
-        mockGetEmbeddingModels.mockRejectedValueOnce(new Error('down'));
-        await expect(embeddingModelsCache.fetch('tok', 'CU_F')).rejects.toThrow('down');
-        expect(embeddingModelsCache.getCached('CU_F')).toBeNull();
-
-        mockGetEmbeddingModels.mockResolvedValueOnce({ vendorModels: [{ vendor: 'VOYAGE', models: [] }] });
-        await embeddingModelsCache.fetch('tok', 'CU_F');
-        expect(embeddingModelsCache.getCached('CU_F')).toEqual({
-            vendorModels: [{ vendor: 'VOYAGE', models: [] }],
+        expect(customerAgentsCache.getEnvelope('CU_LS')).toEqual({
+            customerId: 'CU_LS',
+            version: 3,
+            data: { agents: [{ graphId: 'G1' }] },
         });
     });
 
-    test('prefetchDefaultsPageData warms every cache and swallows individual failures', async () => {
-        mockGetRequestAgents.mockRejectedValue(new Error('down'));
-        mockGetCustomerAgents.mockResolvedValue({ agents: [] });
-        mockGetProviderCatalog.mockResolvedValue({ providers: [] });
+    test('pre-versioning envelopes normalize to version null (never satisfy a version match)', () => {
+        localStorage.setItem(
+            'CU_OLD_customer_agents_cache',
+            JSON.stringify({ customerId: 'CU_OLD', data: { agents: [] } })
+        );
 
-        await prefetchDefaultsPageData('tok', 'CU_P');
-
-        expect(mockGetRequestAgents).toHaveBeenCalledWith('tok');
-        expect(mockGetCustomerAgents).toHaveBeenCalledWith('tok');
-        expect(mockGetProviderCatalog).toHaveBeenCalledWith('tok');
-        expect(customerAgentsCache.getCached('CU_P')).toEqual({ agents: [] });
-        expect(requestAgentsCache.getCached('CU_P')).toBeNull();
+        expect(customerAgentsCache.getEnvelope('CU_OLD')?.version).toBeNull();
     });
 
-    test('prefetchDefaultsPageData does not fetch the embedding-model catalog', async () => {
-        mockGetRequestAgents.mockResolvedValue({ entries: [] });
-        mockGetCustomerAgents.mockResolvedValue({ agents: [] });
-        mockGetProviderCatalog.mockResolvedValue({ providers: [] });
+    test('getEnvelope survives a corrupt localStorage entry', () => {
+        localStorage.setItem('CU_CORRUPT_customer_agents_cache', 'not json');
+        expect(customerAgentsCache.getEnvelope('CU_CORRUPT')).toBeNull();
+    });
 
-        await prefetchDefaultsPageData('tok', 'CU_P');
+    test('an envelope stored under another customer id never leaks across customers', () => {
+        localStorage.setItem(
+            'CU_X_embedding_models_cache',
+            JSON.stringify({ customerId: 'CU_OTHER', version: 1, data: { vendorModels: [] } })
+        );
 
-        expect(mockGetEmbeddingModels).not.toHaveBeenCalled();
+        expect(embeddingModelsCache.getEnvelope('CU_X')).toBeNull();
+    });
+
+    test('save with a null version round-trips (version gating off)', () => {
+        embeddingModelsCache.save('CU_NULLV', { vendorModels: [] } as any, null);
+        expect(embeddingModelsCache.getEnvelope('CU_NULLV')).toEqual({
+            customerId: 'CU_NULLV',
+            version: null,
+            data: { vendorModels: [] },
+        });
     });
 });

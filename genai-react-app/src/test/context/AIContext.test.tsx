@@ -9,8 +9,12 @@ import { AIVendor } from '../../constants/vendors';
 import AIVendorWidget from '../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget';
 import { getTextGenerationModels } from '../../services/getTextGenerationModelsService';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient } from '../utils/queryWrapper';
 import { APIKeyStatus } from '../../models/storeCustomerVendorAPIKeys.models';
 import { mockModelsResponse } from '../fixtures/aiConfig';
+
+let testQueryClient: QueryClient;
 
 // Mock Services
 jest.mock('../../services/getTextGenerationModelsService'); // ...
@@ -42,6 +46,7 @@ jest.mock('@genflowly/component-library', () => ({
 
 const customRender = (ui: React.ReactElement) => {
     return render(
+        <QueryClientProvider client={testQueryClient}>
         <MemoryRouter>
             <ToastProvider>
                 <LayoutProvider>
@@ -55,6 +60,7 @@ const customRender = (ui: React.ReactElement) => {
                 </LayoutProvider>
             </ToastProvider>
         </MemoryRouter>
+        </QueryClientProvider>
     );
 };
 
@@ -62,6 +68,7 @@ describe('AIContext UI Integration', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         localStorage.clear();
+        testQueryClient = createTestQueryClient();
 
         mockUseAuth.mockReturnValue({
             isAuthenticated: true,
@@ -241,6 +248,7 @@ describe('AIContext UI Integration', () => {
     test('Later preference updates do not overwrite active session selections', async () => {
         const base = mockUseAuth();
         const makeTree = () => (
+            <QueryClientProvider client={testQueryClient}>
             <MemoryRouter>
                 <ToastProvider>
                     <LayoutProvider>
@@ -254,6 +262,7 @@ describe('AIContext UI Integration', () => {
                     </LayoutProvider>
                 </ToastProvider>
             </MemoryRouter>
+            </QueryClientProvider>
         );
         mockUseAuth.mockReturnValue({
             ...base,

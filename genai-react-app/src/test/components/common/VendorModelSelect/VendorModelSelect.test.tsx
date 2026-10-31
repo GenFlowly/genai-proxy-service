@@ -6,6 +6,7 @@ import { useAuth } from '../../../../context/AuthContext';
 import { getTextGenerationModels } from '../../../../services/getTextGenerationModelsService';
 import { AIVendor } from '../../../../constants/vendors';
 import { APIKeyStatus } from '../../../../models/storeCustomerVendorAPIKeys.models';
+import { withQueryClient } from '../../../utils/queryWrapper';
 import '@testing-library/jest-dom';
 
 jest.mock('../../../../context/AuthContext', () => ({
@@ -51,7 +52,7 @@ describe('VendorModelSelect Component', () => {
 
 
     test('renders all vendor buttons and shows status hint for disabled vendors', async () => {
-        render(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />));
 
         expect(screen.getByTestId('vendor-select-CLAUDE')).toBeInTheDocument();
         expect(screen.getByTestId('vendor-select-OPENAI')).toBeInTheDocument();
@@ -61,7 +62,7 @@ describe('VendorModelSelect Component', () => {
     });
 
     test('fetches models on mount and caches in localStorage', async () => {
-        render(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />));
 
         await waitFor(() => {
             expect(mockGetModels).toHaveBeenCalledWith('mock-token', 'customer-123', { aiVendor: Object.values(AIVendor) });
@@ -70,18 +71,23 @@ describe('VendorModelSelect Component', () => {
         expect(localStorage.getItem('customer-123_ai_vendor_models')).not.toBeNull();
     });
 
-    test('loads models from localStorage if available', async () => {
-        localStorage.setItem('customer-123_ai_vendor_models', JSON.stringify(mockModelsResponse.aiVendorModelList));
+    test('paints models from localStorage immediately while revalidating', async () => {
+        localStorage.setItem('customer-123_ai_vendor_models', JSON.stringify([
+            { aiVendor: AIVendor.CLAUDE, modelsList: ['cached-model'] },
+        ]));
 
-        render(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={AIVendor.CLAUDE} model="cached-model" onChange={mockOnChange} />));
 
+        // The cached copy renders synchronously (placeholder data)…
+        expect(screen.getByTestId('agent-model-select')).toBeInTheDocument();
+        // …and a revalidating fetch still fires (stale-while-revalidate).
         await waitFor(() => {
-            expect(mockGetModels).not.toHaveBeenCalled();
+            expect(mockGetModels).toHaveBeenCalled();
         });
     });
 
     test('calls onChange with vendor and first model when an enabled vendor is clicked', async () => {
-        render(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />));
 
         await waitFor(() => {
             expect(mockGetModels).toHaveBeenCalled();
@@ -94,7 +100,7 @@ describe('VendorModelSelect Component', () => {
     });
 
     test('does not call onChange when a disabled vendor is clicked', async () => {
-        render(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />));
 
         const openAIBtn = screen.getByTestId('vendor-select-OPENAI');
         await userEvent.click(openAIBtn);
@@ -103,7 +109,7 @@ describe('VendorModelSelect Component', () => {
     });
 
     test('deselects vendor when clicking the currently active vendor', async () => {
-        render(<VendorModelSelect vendor={AIVendor.CLAUDE} model="claude-3-5-sonnet" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={AIVendor.CLAUDE} model="claude-3-5-sonnet" onChange={mockOnChange} />));
 
         const claudeBtn = screen.getByTestId('vendor-select-CLAUDE');
         await userEvent.click(claudeBtn);
@@ -114,7 +120,7 @@ describe('VendorModelSelect Component', () => {
     test('renders model select dropdown when vendor is selected and enabled', async () => {
         localStorage.setItem('customer-123_ai_vendor_models', JSON.stringify(mockModelsResponse.aiVendorModelList));
 
-        render(<VendorModelSelect vendor={AIVendor.CLAUDE} model="claude-3-5-sonnet" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={AIVendor.CLAUDE} model="claude-3-5-sonnet" onChange={mockOnChange} />));
 
         const select = await screen.findByTestId('agent-model-select');
         expect(select).toBeInTheDocument();
@@ -125,11 +131,11 @@ describe('VendorModelSelect Component', () => {
     });
 
     test('shows "No models available" when vendor has no models', async () => {
-        localStorage.setItem('customer-123_ai_vendor_models', JSON.stringify([
-            { aiVendor: AIVendor.CLAUDE, modelsList: [] }
-        ]));
+        mockGetModels.mockResolvedValue({
+            aiVendorModelList: [{ aiVendor: AIVendor.CLAUDE, modelsList: [] }],
+        });
 
-        render(<VendorModelSelect vendor={AIVendor.CLAUDE} model="" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={AIVendor.CLAUDE} model="" onChange={mockOnChange} />));
 
         expect(await screen.findByText('No models available')).toBeInTheDocument();
     });
@@ -140,7 +146,7 @@ describe('VendorModelSelect Component', () => {
             isAuthenticated: false
         });
 
-        render(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />);
+        render(withQueryClient(<VendorModelSelect vendor={null} model="" onChange={mockOnChange} />));
 
         expect(mockGetModels).not.toHaveBeenCalled();
     });

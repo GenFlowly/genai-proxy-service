@@ -10,18 +10,17 @@ import {
     deleteRequestAgentMapping,
     putRequestAgentMapping,
 } from '../../../services/requestAgentsService';
+import { getRequestAgents } from '../../../services/requestAgentsService';
+import { getCustomerAgents } from '../../../services/agentsService';
 import { customerAgentsCache, requestAgentsCache } from '../../../services/defaultsCacheService';
+import { withQueryClient } from '../../../test/utils/queryWrapper';
 
 jest.mock('../../../context/AuthContext');
 jest.mock('../../../context/AIContext');
 jest.mock('../../../context/ToastContext');
 jest.mock('../../../services/saveAIConfigService');
 jest.mock('../../../services/requestAgentsService');
-// The component reads through the cache layer, not the raw services
-jest.mock('../../../services/defaultsCacheService', () => ({
-    requestAgentsCache: { getCached: jest.fn(), fetch: jest.fn() },
-    customerAgentsCache: { getCached: jest.fn(), fetch: jest.fn() },
-}));
+jest.mock('../../../services/agentsService');
 // The sibling section has its own test suite
 jest.mock('./EmbeddingModelDefaults', () => ({
     EmbeddingModelDefaults: () => <div data-testid="embedding-defaults-section" />,
@@ -51,10 +50,8 @@ jest.mock('@genflowly/component-library', () => ({
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseAI = useAI as jest.Mock;
 const mockUseToast = useToast as jest.Mock;
-const mockAgentsCached = customerAgentsCache.getCached as jest.Mock;
-const mockAgentsFetch = customerAgentsCache.fetch as jest.Mock;
-const mockActionsCached = requestAgentsCache.getCached as jest.Mock;
-const mockActionsFetch = requestAgentsCache.fetch as jest.Mock;
+const mockAgentsFetch = getCustomerAgents as jest.Mock;
+const mockActionsFetch = getRequestAgents as jest.Mock;
 const mockPutRequestAgentMapping = putRequestAgentMapping as jest.Mock;
 const mockDeleteRequestAgentMapping = deleteRequestAgentMapping as jest.Mock;
 const mockSavePreferences = saveAIConfigPreferences as jest.Mock;
@@ -111,21 +108,29 @@ describe('DefaultsSettings', () => {
     const mockGetAccessTokenSilently = jest.fn();
     const mockSetSelectedAgentId = jest.fn();
 
+    // The seeded caches keep module-level per-customer memory, so each test
+    // uses its own customerId — a stale envelope never bleeds across tests.
+    let testSeq = 0;
+    let customerId = 'cust-0';
+
     beforeEach(() => {
         jest.clearAllMocks();
+        localStorage.clear();
+        testSeq += 1;
+        customerId = `cust-${testSeq}`;
         mockGetAccessTokenSilently.mockResolvedValue('test-token');
         mockUseToast.mockReturnValue({ showToast: mockShowToast });
         mockUseAuth.mockReturnValue({
-            customerId: 'cust-1',
+            customerId,
             isAuthenticated: true,
+            isOnboarding: false,
+            cacheVersions: null,
             getAccessTokenSilently: mockGetAccessTokenSilently,
         });
         mockUseAI.mockReturnValue({
             selectedAgentId: null,
             setSelectedAgentId: mockSetSelectedAgentId,
         });
-        mockActionsCached.mockReturnValue(null);
-        mockAgentsCached.mockReturnValue(null);
         mockActionsFetch.mockResolvedValue(actionsResponse);
         mockAgentsFetch.mockResolvedValue(agentsResponse);
         mockPutRequestAgentMapping.mockResolvedValue(undefined);
@@ -134,7 +139,7 @@ describe('DefaultsSettings', () => {
     });
 
     async function renderLoaded() {
-        render(<DefaultsSettings />);
+        render(withQueryClient(<DefaultsSettings />));
         await waitFor(() =>
             expect(screen.getByTestId('default-agent-TITLE')).toBeInTheDocument()
         );
@@ -329,17 +334,17 @@ describe('DefaultsSettings', () => {
 
     test('shows an error toast when loading fails with no cache to fall back on', async () => {
         mockActionsFetch.mockRejectedValueOnce(new Error('boom'));
-        render(<DefaultsSettings />);
+        render(withQueryClient(<DefaultsSettings />));
         await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('boom'));
     });
 
     test('renders instantly from cached data while the server refresh is pending', async () => {
-        mockActionsCached.mockReturnValue(actionsResponse);
-        mockAgentsCached.mockReturnValue(agentsResponse);
+        requestAgentsCache.save(customerId, actionsResponse as any, null);
+        customerAgentsCache.save(customerId, agentsResponse as any, null);
         mockActionsFetch.mockReturnValue(new Promise(() => undefined));
         mockAgentsFetch.mockReturnValue(new Promise(() => undefined));
 
-        render(<DefaultsSettings />);
+        render(withQueryClient(<DefaultsSettings />));
 
         expect(await screen.findByTestId('default-agent-TITLE')).toBeInTheDocument();
         expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
@@ -347,13 +352,13 @@ describe('DefaultsSettings', () => {
     });
 
     test('an unchanged background refresh does not reset an in-progress edit', async () => {
-        mockActionsCached.mockReturnValue(actionsResponse);
-        mockAgentsCached.mockReturnValue(agentsResponse);
+        requestAgentsCache.save(customerId, actionsResponse as any, null);
+        customerAgentsCache.save(customerId, agentsResponse as any, null);
         let resolveActions: (value: unknown) => void = () => undefined;
         mockActionsFetch.mockReturnValue(new Promise(resolve => { resolveActions = resolve; }));
         mockAgentsFetch.mockResolvedValue(JSON.parse(JSON.stringify(agentsResponse)));
 
-        render(<DefaultsSettings />);
+        render(withQueryClient(<DefaultsSettings />));
         await userEvent.selectOptions(await screen.findByTestId('default-agent-TITLE'), 'GRP1');
 
         resolveActions(JSON.parse(JSON.stringify(actionsResponse)));
@@ -363,12 +368,12 @@ describe('DefaultsSettings', () => {
     });
 
     test('a failed refresh keeps the cached data without an error toast', async () => {
-        mockActionsCached.mockReturnValue(actionsResponse);
-        mockAgentsCached.mockReturnValue(agentsResponse);
+        requestAgentsCache.save(customerId, actionsResponse as any, null);
+        customerAgentsCache.save(customerId, agentsResponse as any, null);
         mockActionsFetch.mockRejectedValue(new Error('offline'));
         mockAgentsFetch.mockRejectedValue(new Error('offline'));
 
-        render(<DefaultsSettings />);
+        render(withQueryClient(<DefaultsSettings />));
 
         expect(await screen.findByTestId('default-agent-TITLE')).toBeInTheDocument();
         await waitFor(() => expect(mockActionsFetch).toHaveBeenCalled());

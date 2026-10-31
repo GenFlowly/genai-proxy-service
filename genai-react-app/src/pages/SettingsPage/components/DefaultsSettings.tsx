@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InputSelectWithHint, PillButton } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
@@ -11,7 +11,9 @@ import {
     deleteRequestAgentMapping,
     putRequestAgentMapping,
 } from '../../../services/requestAgentsService'
-import { customerAgentsCache, requestAgentsCache } from '../../../services/defaultsCacheService'
+import { useCustomerAgents, CUSTOMER_AGENTS_QUERY_KEY } from '../../../hooks/queries/useCustomerAgents'
+import { useRequestAgents, REQUEST_AGENTS_QUERY_KEY } from '../../../hooks/queries/useRequestAgents'
+import { queryClient } from '../../../queryClient'
 import {
     Agent,
     GetCustomerAgentsResponse,
@@ -93,8 +95,13 @@ export function DefaultsSettings(): React.ReactElement {
     const [selected, setSelected] = useState<Record<string, string>>({})
     const [conversationAgentId, setConversationAgentId] = useState('')
     const [savedConversationAgentId, setSavedConversationAgentId] = useState('')
-    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+
+    // Shared queries: cached copies render immediately (placeholder data) and
+    // version gating skips the refetch when nothing changed server-side.
+    const { data: actionsData, isError: actionsError, error: actionsErrorObj } = useRequestAgents()
+    const { data: agentsData, isError: agentsError, error: agentsErrorObj } = useCustomerAgents()
+    const loading = !actionsData || !agentsData
 
     const applyData = useCallback(
         (actionsResponse: GetCustomerRequestAgentsResponse, agentsResponse: GetCustomerAgentsResponse) => {
@@ -119,45 +126,27 @@ export function DefaultsSettings(): React.ReactElement {
         []
     )
 
-    const load = useCallback(async () => {
-        if (!isAuthenticated || !customerId) return
-        // Last known data (this or a previous session) renders immediately;
-        // the server fetch below revalidates it.
-        const cachedActions = requestAgentsCache.getCached(customerId)
-        const cachedAgents = customerAgentsCache.getCached(customerId)
-        const seeded = cachedActions && cachedAgents
-        if (seeded) {
-            applyData(cachedActions, cachedAgents)
-            setLoading(false)
-        } else {
-            setLoading(true)
-        }
-        try {
-            const token = await getAccessTokenSilently()
-            const [actionsResponse, agentsResponse] = await Promise.all([
-                requestAgentsCache.fetch(token, customerId),
-                customerAgentsCache.fetch(token, customerId),
-            ])
-            // An unchanged refresh is not re-applied: applying rebuilds the
-            // dropdown selections and would discard an in-progress edit.
-            if (
-                seeded &&
-                JSON.stringify([actionsResponse, agentsResponse]) ===
-                    JSON.stringify([cachedActions, cachedAgents])
-            ) return
-            applyData(actionsResponse, agentsResponse)
-        } catch (error: any) {
-            console.error('Failed to load defaults:', error)
-            // With cached data already on screen a failed refresh is non-fatal
-            if (!seeded) showToast(error?.message || t('settingsPage.defaultAgents.loadErrorToast'))
-        } finally {
-            setLoading(false)
-        }
-    }, [isAuthenticated, customerId, getAccessTokenSilently, applyData, showToast, t])
-
+    // An unchanged refresh is not re-applied: applying rebuilds the dropdown
+    // selections and would discard an in-progress edit. Identity is not enough
+    // (a refetch landing over placeholder data is a new object even when its
+    // content is identical), so compare content.
+    const lastAppliedRef = useRef('')
     useEffect(() => {
-        void load()
-    }, [load])
+        if (!actionsData || !agentsData) return
+        const signature = JSON.stringify([actionsData, agentsData])
+        if (signature === lastAppliedRef.current) return
+        lastAppliedRef.current = signature
+        applyData(actionsData, agentsData)
+    }, [actionsData, agentsData, applyData])
+
+    // With cached data already on screen a failed refresh is non-fatal
+    useEffect(() => {
+        if ((actionsError || agentsError) && loading) {
+            const message = (actionsErrorObj as Error | null)?.message
+                || (agentsErrorObj as Error | null)?.message
+            showToast(message || t('settingsPage.defaultAgents.loadErrorToast'))
+        }
+    }, [actionsError, agentsError, actionsErrorObj, agentsErrorObj, loading, showToast, t])
 
     // Prefill the Conversation Agent row once agents are in: the user's pick
     // when set, else their own default graph, else the System default.
@@ -247,7 +236,13 @@ export function DefaultsSettings(): React.ReactElement {
                 setSavedConversationAgentId(conversationAgentId)
             }
             showToast(t('settingsPage.defaultAgents.savedToast'))
-            await load()
+            // Mapping writes also retag agents server-side (requestType /
+            // category), so both version-gated caches must refresh now rather
+            // than at the next /onboard sync.
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: [REQUEST_AGENTS_QUERY_KEY] }),
+                queryClient.invalidateQueries({ queryKey: [CUSTOMER_AGENTS_QUERY_KEY] }),
+            ])
         } catch (error: any) {
             console.error('Failed to save defaults:', error)
             showToast(error?.message || t('settingsPage.defaultAgents.saveErrorToast'))
