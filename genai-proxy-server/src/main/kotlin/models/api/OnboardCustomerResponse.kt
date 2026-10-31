@@ -13,6 +13,20 @@ data class OnboardCustomerResponse(
     val customerPicture: String?,
     val customerInstructions: List<InstructionResponse>?,
     val vectorDBConfigStatusList: List<VectorDBConfigStatus> = emptyList(),
-    val onboardingCompleted: Boolean = true
+    val onboardingCompleted: Boolean = true,
+    /**
+     * Monotonic per-resource counters bumped on every server-side mutation
+     * (customer + SYSTEM scope combined). The client skips refetching a
+     * resource whose counter matches the one its cache was written at.
+     * Null = versions unavailable this response; the client must refetch.
+     */
+    val cacheVersions: CacheVersions? = null
+)
+
+@Serializable
+data class CacheVersions(
+    val agents: Long = 0,
+    val requestAgents: Long = 0,
+    val projects: Long = 0,
 )
 

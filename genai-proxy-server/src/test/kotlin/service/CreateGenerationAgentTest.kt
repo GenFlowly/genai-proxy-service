@@ -22,7 +22,8 @@ class CreateGenerationAgentTest {
     private val graphRepo = mockk<GraphRepository>(relaxed = true)
     private val instructionRepo = mockk<InstructionRepository>()
     private val requestAgentMapRepo = mockk<com.genflowly.repository.RequestAgentMapRepository>(relaxed = true)
-    private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo)
+    private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
+    private val service = GraphService(graphRepo, instructionRepo, requestAgentMapRepo, cacheVersions)
 
     private val instruction = Instruction(
         id = "INS1", creator = "CU1", name = "Prompt", instructions = "Do {{x}}", version = 2

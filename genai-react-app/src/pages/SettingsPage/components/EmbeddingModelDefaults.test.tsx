@@ -4,22 +4,23 @@ import userEvent from '@testing-library/user-event';
 import { EmbeddingModelDefaults } from './EmbeddingModelDefaults';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import { EmbeddingVendor } from '../../../services/embeddingKeysService';
+import { EmbeddingVendor, getEmbeddingModels } from '../../../services/embeddingKeysService';
 import { embeddingModelsCache } from '../../../services/defaultsCacheService';
 import { saveAIConfigPreferences } from '../../../services/saveAIConfigService';
+import { withQueryClient } from '../../../test/utils/queryWrapper';
 
 jest.mock('../../../context/AuthContext');
 jest.mock('../../../context/ToastContext');
-// The component reads the model catalog through the cache layer
-jest.mock('../../../services/defaultsCacheService', () => ({
-    embeddingModelsCache: { getCached: jest.fn(), fetch: jest.fn() },
+// The component reads the model catalog through useEmbeddingModels → service
+jest.mock('../../../services/embeddingKeysService', () => ({
+    ...jest.requireActual('../../../services/embeddingKeysService'),
+    getEmbeddingModels: jest.fn(),
 }));
 jest.mock('../../../services/saveAIConfigService');
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseToast = useToast as jest.Mock;
-const mockModelsCached = embeddingModelsCache.getCached as jest.Mock;
-const mockModelsFetch = embeddingModelsCache.fetch as jest.Mock;
+const mockModelsFetch = getEmbeddingModels as jest.Mock;
 const mockSavePreferences = saveAIConfigPreferences as jest.Mock;
 
 describe('EmbeddingModelDefaults', () => {
@@ -27,17 +28,19 @@ describe('EmbeddingModelDefaults', () => {
     const mockShowToast = jest.fn();
 
     const authValue = (overrides: object = {}) => ({
-        customerId: 'cust-123',
+        customerId: `cust-${testSeq}`,
         isAuthenticated: true,
         getAccessTokenSilently: mockGetAccessTokenSilently,
         aiConfigPreferences: null,
         ...overrides,
     });
 
+    let testSeq = 0;
     beforeEach(() => {
         jest.clearAllMocks();
+        localStorage.clear();
+        testSeq += 1;
         mockGetAccessTokenSilently.mockResolvedValue('test-token');
-        mockModelsCached.mockReturnValue(null);
         mockModelsFetch.mockResolvedValue({ vendorModels: [] });
         mockUseAuth.mockReturnValue(authValue());
         mockUseToast.mockReturnValue({ showToast: mockShowToast });
@@ -52,8 +55,8 @@ describe('EmbeddingModelDefaults', () => {
         });
         mockSavePreferences.mockResolvedValue(undefined);
 
-        render(<EmbeddingModelDefaults />);
-        await waitFor(() => expect(mockModelsFetch).toHaveBeenCalledWith('test-token', 'cust-123'));
+        render(withQueryClient(<EmbeddingModelDefaults />));
+        await waitFor(() => expect(mockModelsFetch).toHaveBeenCalledWith('test-token'));
 
         // Conversations: Voyage → voyage-4-large
         await userEvent.selectOptions(
@@ -89,7 +92,7 @@ describe('EmbeddingModelDefaults', () => {
             ],
         });
 
-        render(<EmbeddingModelDefaults />);
+        render(withQueryClient(<EmbeddingModelDefaults />));
         await waitFor(() => expect(mockModelsFetch).toHaveBeenCalled());
 
         await userEvent.selectOptions(
@@ -115,7 +118,7 @@ describe('EmbeddingModelDefaults', () => {
             ],
         });
 
-        render(<EmbeddingModelDefaults />);
+        render(withQueryClient(<EmbeddingModelDefaults />));
 
         await waitFor(() => {
             // conversations falls back to the legacy single preference
@@ -127,12 +130,12 @@ describe('EmbeddingModelDefaults', () => {
     });
 
     test('renders the cached model list instantly while the refresh is pending', async () => {
-        mockModelsCached.mockReturnValue({
+        embeddingModelsCache.save(`cust-${testSeq}`, {
             vendorModels: [{ vendor: EmbeddingVendor.VOYAGE, models: ['voyage-4'] }],
-        });
+        } as any, null);
         mockModelsFetch.mockReturnValue(new Promise(() => undefined));
 
-        render(<EmbeddingModelDefaults />);
+        render(withQueryClient(<EmbeddingModelDefaults />));
 
         await userEvent.selectOptions(
             screen.getByTestId('embedding-vendor-select-conversations'), EmbeddingVendor.VOYAGE);
@@ -143,7 +146,7 @@ describe('EmbeddingModelDefaults', () => {
     });
 
     test('shows the no-models hint when no provider has a key', async () => {
-        render(<EmbeddingModelDefaults />);
+        render(withQueryClient(<EmbeddingModelDefaults />));
 
         await waitFor(() => expect(mockModelsFetch).toHaveBeenCalled());
         expect(
@@ -157,7 +160,7 @@ describe('EmbeddingModelDefaults', () => {
         });
         mockSavePreferences.mockRejectedValueOnce(new Error('save failed'));
 
-        render(<EmbeddingModelDefaults />);
+        render(withQueryClient(<EmbeddingModelDefaults />));
         await waitFor(() => expect(mockModelsFetch).toHaveBeenCalled());
 
         await userEvent.selectOptions(

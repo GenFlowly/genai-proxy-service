@@ -177,6 +177,8 @@ fun appModule(): Module = module {
     single { InstructionRepository(get(), get()) }
     single { GraphRepository(get(), get()) }
     single { RequestAgentMapRepository(get(), get()) }
+    single { com.genflowly.repository.CacheVersionRepository(get()) }
+    single { com.genflowly.service.CacheVersionService(get()) }
 
     single { SharedUsersResolver(get(), get()) }
     single {
@@ -196,20 +198,20 @@ fun appModule(): Module = module {
         )
     }
     single { com.genflowly.service.VendorAllowlistService(get()) }
-    single { GraphService(get(), get(), get()) }
+    single { GraphService(get(), get(), get(), get()) }
     single { com.genflowly.repository.NodePresetRepository(get(), get()) }
     single { com.genflowly.service.NodePresetService(get(), get()) }
     single { com.genflowly.service.RequestAgentSeeds() }
-    single { com.genflowly.service.RequestAgentSeeder(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.RequestAgentSeeder(get(), get(), get(), get(), get(), get(), get()) }
     single { AgentResolutionService(get(), get(), get()) }
     single { GenerationAgentExecutor(get(), get(), get(), get(), get()) }
-    single { RequestAgentMapAdminService(get(), get(), get()) }
-    single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get()) }
-    single { CustomerProfileService(get(), get(), get(), get()) }
+    single { RequestAgentMapAdminService(get(), get(), get(), get()) }
+    single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get(), get()) }
+    single { CustomerProfileService(get(), get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get(), get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { com.genflowly.service.ProjectService(get(), get()) }
+    single { com.genflowly.service.ProjectService(get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
     single {

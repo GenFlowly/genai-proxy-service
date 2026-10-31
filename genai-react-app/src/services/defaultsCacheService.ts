@@ -1,89 +1,61 @@
-import { getCustomerAgents } from './agentsService'
-import { getEmbeddingModels } from './embeddingKeysService'
-import { getRequestAgents } from './requestAgentsService'
-import { getProviderCatalog } from './providerCatalogService'
+import { GetCustomerAgentsResponse } from '../models/agents.models'
+import { GetEmbeddingModelsResponse } from './embeddingKeysService'
+import { GetCustomerRequestAgentsResponse } from './requestAgentsService'
+import { customerKey, StorageSuffix } from '../utils/storageKeys'
 
 /**
- * Cached reads for the Settings → Defaults page, in the providerCatalogService
- * mold (memory + localStorage, shared in-flight request). Unlike the provider
- * catalog this data is per-customer and user-mutable, so the cache is only a
- * render seed: getCached() shows the last known state instantly, and every
- * fetch() still goes to the server and refreshes the cache — stale data never
- * outlives one revalidation.
+ * localStorage seed envelopes for the react-query hooks in hooks/queries/*:
+ * the last server response per customer, stamped with the cache version it
+ * was fetched at. A hook serves the envelope WITHOUT a network call when its
+ * version matches the counter from /onboard, paints it as placeholder data
+ * while refetching otherwise. Fetching, dedup and in-flight sharing live in
+ * react-query — this module only persists.
  */
-export interface CachedResource<T> {
-    /** Last stored response for this customer (memory, else localStorage), or null. */
-    getCached(customerId: string): T | null
-    /** Fetch from the server and refresh the cache; concurrent callers share one request. */
-    fetch(token: string, customerId: string): Promise<T>
-}
-
-/** The stored shape carries the owning customer so another login never sees it. */
-interface Envelope<T> {
+export interface Envelope<T> {
     customerId: string
+    /** Cache version the data was fetched at; null = fetched without version gating. */
+    version: number | null
     data: T
 }
 
-function createCachedResource<T>(
-    storageKey: string,
-    fetcher: (token: string) => Promise<T>
-): CachedResource<T> {
+export interface SeededCache<T> {
+    getEnvelope(customerId: string): Envelope<T> | null
+    save(customerId: string, data: T, version: number | null): void
+}
+
+function createSeededCache<T>(suffix: string): SeededCache<T> {
     let memory: Envelope<T> | null = null
-    let inFlight: { customerId: string; promise: Promise<T> } | null = null
+
+    // Entries written before keys were per-customer lived under the bare
+    // suffix; logout now clears all of localStorage, but an upgraded session
+    // that never logs out would carry the orphan forever.
+    try { localStorage.removeItem(suffix) } catch { /* ignore */ }
 
     return {
-        getCached(customerId: string): T | null {
-            if (memory?.customerId === customerId) return memory.data
+        getEnvelope(customerId: string): Envelope<T> | null {
+            if (memory?.customerId === customerId) return memory
             try {
-                const stored = localStorage.getItem(storageKey)
+                const stored = localStorage.getItem(customerKey(customerId, suffix))
                 if (stored) {
                     const parsed = JSON.parse(stored) as Envelope<T>
                     if (parsed.customerId === customerId) {
-                        memory = parsed
-                        return parsed.data
+                        // Pre-versioning envelopes lack the field — normalize to
+                        // null so they never satisfy a version match.
+                        memory = { ...parsed, version: parsed.version ?? null }
+                        return memory
                     }
                 }
             } catch { /* corrupt cache — treat as empty */ }
             return null
         },
 
-        async fetch(token: string, customerId: string): Promise<T> {
-            if (inFlight?.customerId === customerId) return inFlight.promise
-            const promise = (async () => {
-                const data = await fetcher(token)
-                memory = { customerId, data }
-                try { localStorage.setItem(storageKey, JSON.stringify(memory)) } catch { /* quota */ }
-                return data
-            })()
-            inFlight = { customerId, promise }
-            try {
-                return await promise
-            } finally {
-                inFlight = null
-            }
+        save(customerId: string, data: T, version: number | null): void {
+            memory = { customerId, version, data }
+            try { localStorage.setItem(customerKey(customerId, suffix), JSON.stringify(memory)) } catch { /* quota */ }
         },
     }
 }
 
-export const requestAgentsCache = createCachedResource('request_agents_cache', getRequestAgents)
-export const customerAgentsCache = createCachedResource('customer_agents_cache', getCustomerAgents)
-export const embeddingModelsCache = createCachedResource('embedding_models_cache', getEmbeddingModels)
-
-/**
- * Warm what the Defaults page reads (request-agent mappings, the customer's
- * agents, and the provider display-name catalog) so the page renders
- * populated on first visit. Best-effort: individual failures are swallowed —
- * the page's own load handles errors with the user watching.
- *
- * The embedding-model catalog is deliberately NOT prefetched: it costs
- * per-vendor key reads + KMS decrypts server-side, its only consumer is the
- * Settings → Defaults page (which fetches on mount via embeddingModelsCache),
- * and the server keeps its own probe cache so that fetch is fast.
- */
-export async function prefetchDefaultsPageData(token: string, customerId: string): Promise<void> {
-    await Promise.allSettled([
-        requestAgentsCache.fetch(token, customerId),
-        customerAgentsCache.fetch(token, customerId),
-        getProviderCatalog(token),
-    ])
-}
+export const requestAgentsCache = createSeededCache<GetCustomerRequestAgentsResponse>(StorageSuffix.requestAgents)
+export const customerAgentsCache = createSeededCache<GetCustomerAgentsResponse>(StorageSuffix.customerAgents)
+export const embeddingModelsCache = createSeededCache<GetEmbeddingModelsResponse>(StorageSuffix.embeddingModels)

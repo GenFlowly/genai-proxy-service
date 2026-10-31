@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { AIVendor, storedVendorId, catalogIdFor } from '../../../constants/vendors'
 import { storeCustomerVendorApiKey, storeCustomerVendorConfig } from '../../../services/storeCustomerVendorApiKeysService'
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
-import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
-import { AIVendorModelList } from '../../../models/getTextGenerationModels.models'
-import { getProviderCatalog, ProviderInfo } from '../../../services/providerCatalogService'
+import { useProviderCatalog } from '../../../hooks/queries/useProviderCatalog'
+import { useTextGenerationModels } from '../../../hooks/queries/useTextGenerationModels'
 import { InputSelectWithHint, VendorApiKeysManager, VendorApiKeyRowData } from '@genflowly/component-library'
 import { VendorBrandName } from '../../../components/common/BrandName/BrandName'
 import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import styles from './AISettings.module.scss'
+
+const ALL_VENDOR_IDS = Object.values(AIVendor) as string[]
 
 export function AISettings(): React.ReactElement {
     const { t } = useTranslation()
@@ -25,58 +26,17 @@ export function AISettings(): React.ReactElement {
     } = useAuth()
 
     const vendorDisplayName = useVendorDisplayNames()
-    const [vendorModels, setVendorModels] = useState<AIVendorModelList[]>([])
+    // Same query/localStorage seed as AIVendorWidget / VendorModelSelect
+    const { data: modelsData } = useTextGenerationModels(ALL_VENDOR_IDS)
+    const vendorModels = useMemo(() => modelsData ?? [], [modelsData])
     // Vendors without a key stay hidden until picked from the add-vendor
     // dropdown; picking one reveals its card so the key can be entered.
     const [revealedVendors, setRevealedVendors] = useState<string[]>([])
     // BYOK vendor catalog from the backend: every provider the platform can
     // call (native langchain tier + LiteLLM long tail) — any of them works
     // once a key is stored.
-    const [catalog, setCatalog] = useState<ProviderInfo[]>([])
-
-    useEffect(() => {
-        if (!isAuthenticated || !customerId) return
-        let cancelled = false
-        void (async () => {
-            try {
-                const token = await getAccessTokenSilently()
-                const response = await getProviderCatalog(token)
-                if (!cancelled) setCatalog(response.providers)
-            } catch (err) {
-                console.error('AISettings: failed to fetch provider catalog', err)
-            }
-        })()
-        return () => { cancelled = true }
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
-
-    const fetchModels = useCallback(async () => {
-        if (!isAuthenticated || !customerId) return
-        // Same localStorage cache as AIVendorWidget / VendorModelSelect
-        const cacheKey = `${customerId}_ai_vendor_models`
-        const cached = localStorage.getItem(cacheKey)
-        if (cached) {
-            try {
-                const parsed = JSON.parse(cached)
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setVendorModels(parsed)
-                    return
-                }
-            } catch { /* ignore malformed cache */ }
-        }
-        try {
-            const token = await getAccessTokenSilently()
-            const response = await getTextGenerationModels(token, customerId, { aiVendor: Object.values(AIVendor) })
-            const data = response.aiVendorModelList || []
-            setVendorModels(data)
-            if (data.length > 0) localStorage.setItem(cacheKey, JSON.stringify(data))
-        } catch (err) {
-            console.error('AISettings: failed to fetch models', err)
-        }
-    }, [isAuthenticated, customerId, getAccessTokenSilently])
-
-    useEffect(() => {
-        fetchModels()
-    }, [fetchModels])
+    const { data: catalogData } = useProviderCatalog()
+    const catalog = useMemo(() => catalogData?.providers ?? [], [catalogData])
 
     const isKeySet = useCallback((vendor: string) => {
         const status = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)

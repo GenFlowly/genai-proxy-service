@@ -9,6 +9,7 @@ import com.genflowly.models.RequestType
 import com.genflowly.models.api.GetRequestAgentMapResponse
 import com.genflowly.models.api.PutRequestAgentMapRequest
 import com.genflowly.models.api.RequestAgentMapStatus
+import com.genflowly.repository.CacheVersionRepository
 import com.genflowly.repository.GraphRepository
 import com.genflowly.repository.RequestAgentMapRepository
 import mu.KotlinLogging
@@ -24,7 +25,8 @@ private val logger = KotlinLogging.logger {}
 class RequestAgentMapAdminService(
     private val requestAgentMapRepository: RequestAgentMapRepository,
     private val graphRepository: GraphRepository,
-    private val agentResolutionService: AgentResolutionService
+    private val agentResolutionService: AgentResolutionService,
+    private val cacheVersionService: CacheVersionService
 ) {
 
     /**
@@ -113,6 +115,7 @@ class RequestAgentMapAdminService(
             )
         )
         agentResolutionService.invalidate(requestType)
+        cacheVersionService.bumpSystem(CacheVersionRepository.Resource.REQUEST_AGENTS)
         logger.info { "Admin $adminCustomerId mapped $requestType → ${request.graphId} ('${request.mapKey}')" }
     }
 
@@ -130,6 +133,7 @@ class RequestAgentMapAdminService(
             existing.copy(enabled = false, updatedBy = adminCustomerId)
         )
         agentResolutionService.invalidate(requestType)
+        cacheVersionService.bumpSystem(CacheVersionRepository.Resource.REQUEST_AGENTS)
         logger.info { "Admin $adminCustomerId disabled the ${requestType.name} mapping" }
     }
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { withQueryClient } from '../../../test/utils/queryWrapper';
 import { EmbeddingKeysSettings } from './EmbeddingKeysSettings';
 import { useAuth } from '../../../context/AuthContext';
 import {
@@ -60,7 +61,7 @@ describe('EmbeddingKeysSettings', () => {
     });
 
     test('renders OpenAI and Voyage rows, both unset by default', async () => {
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
 
         expect(screen.getByText('Embedding Model API Keys')).toBeInTheDocument();
         await waitFor(() => expect(mockGetEmbeddingKeys).toHaveBeenCalled());
@@ -76,7 +77,7 @@ describe('EmbeddingKeysSettings', () => {
             ],
         });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
 
         await waitFor(() =>
             expect(screen.getByTestId('embedding-keys-OPENAI-status-pill')).toHaveTextContent('Key set')
@@ -97,7 +98,7 @@ describe('EmbeddingKeysSettings', () => {
             ],
         });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
 
         await waitFor(() =>
             expect(screen.getByTestId('embedding-key-problem-OPENAI')).toHaveTextContent(
@@ -115,7 +116,7 @@ describe('EmbeddingKeysSettings', () => {
             ],
         });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
 
         await waitFor(() =>
             expect(screen.getByTestId('embedding-keys-VOYAGE-status-pill')).toHaveTextContent('Key set')
@@ -132,7 +133,7 @@ describe('EmbeddingKeysSettings', () => {
             },
         });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
         await userEvent.type(screen.getByTestId('embedding-keys-VOYAGE-key-input'), 'pa-test');
         await userEvent.click(screen.getByTestId('embedding-keys-VOYAGE-save-key'));
 
@@ -146,7 +147,7 @@ describe('EmbeddingKeysSettings', () => {
     test('saves the OpenAI key through the shared vendor endpoint and updates the auth context', async () => {
         mockStoreCustomerVendorApiKey.mockResolvedValue({ apiKeyStatus: validOpenAIStatus });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
         await userEvent.type(screen.getByTestId('embedding-keys-OPENAI-key-input'), 'sk-test');
         await userEvent.click(screen.getByTestId('embedding-keys-OPENAI-save-key'));
 
@@ -163,7 +164,7 @@ describe('EmbeddingKeysSettings', () => {
     });
 
     test('renders the optional Hugging Face token row, unset by default', async () => {
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
 
         await waitFor(() => expect(mockGetEmbeddingKeys).toHaveBeenCalled());
         expect(screen.getByTestId('hf-token-HUGGINGFACE-status-pill')).toHaveTextContent('Not set');
@@ -181,7 +182,7 @@ describe('EmbeddingKeysSettings', () => {
             },
         });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
         await userEvent.type(screen.getByTestId('hf-token-HUGGINGFACE-key-input'), 'hf_test');
         await userEvent.click(screen.getByTestId('hf-token-HUGGINGFACE-save-key'));
 
@@ -202,7 +203,7 @@ describe('EmbeddingKeysSettings', () => {
         });
         mockDeleteEmbeddingKey.mockResolvedValue(undefined);
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
         await waitFor(() =>
             expect(screen.getByTestId('hf-token-HUGGINGFACE-status-pill')).toHaveTextContent('Key set')
         );
@@ -222,7 +223,7 @@ describe('EmbeddingKeysSettings', () => {
             ],
         });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
         await waitFor(() =>
             expect(screen.getByTestId('embedding-keys-VOYAGE-status-pill')).toHaveTextContent('Key set')
         );
@@ -240,7 +241,7 @@ describe('EmbeddingKeysSettings', () => {
             },
         });
 
-        render(<EmbeddingKeysSettings />);
+        render(withQueryClient(<EmbeddingKeysSettings />));
         await userEvent.type(screen.getByTestId('embedding-keys-VOYAGE-key-input'), 'bad-key');
         await userEvent.click(screen.getByTestId('embedding-keys-VOYAGE-save-key'));
 

@@ -23,67 +23,41 @@ export interface ProviderCatalogResponse {
     providers: ProviderInfo[]
 }
 
+// Platform-wide catalog, identical for every customer — one of the few
+// deliberately global localStorage keys (see utils/storageKeys.ts). Session
+// caching, dedup and once-per-session semantics live in useProviderCatalog;
+// this module only fetches and persists.
 const CATALOG_STORAGE_KEY = 'provider_catalog_cache'
 
-let catalogCache: ProviderCatalogResponse | null = null
-let fetchedThisSession = false
-let inFlight: Promise<ProviderCatalogResponse> | null = null
-const listeners = new Set<() => void>()
+let memoryCache: ProviderCatalogResponse | null = null
 
-export function subscribeProviderCatalog(listener: () => void): () => void {
-    listeners.add(listener)
-    return () => listeners.delete(listener)
-}
-
-/**
- * Last known catalog: this session's fetch, else the previous session's
- * copy from localStorage (refreshed once the session's fetch lands). Null
- * only before the very first successful fetch on this browser.
- */
+/** Last known catalog from a previous session (memory, else localStorage). */
 export function getCachedProviderCatalog(): ProviderCatalogResponse | null {
-    if (catalogCache) return catalogCache
+    if (memoryCache) return memoryCache
     try {
         const stored = localStorage.getItem(CATALOG_STORAGE_KEY)
-        if (stored) catalogCache = JSON.parse(stored) as ProviderCatalogResponse
+        if (stored) memoryCache = JSON.parse(stored) as ProviderCatalogResponse
     } catch { /* ignore corrupt cache */ }
-    return catalogCache
+    return memoryCache
 }
 
-/**
- * BYOK vendor catalog: every provider the platform can call. Static per
- * backend deploy, so one successful fetch per session refreshes the cache;
- * concurrent callers share the in-flight request.
- */
-export async function getProviderCatalog(token: string): Promise<ProviderCatalogResponse> {
-    if (fetchedThisSession && catalogCache) return catalogCache
-    if (inFlight) return inFlight
+export function saveProviderCatalog(catalog: ProviderCatalogResponse): void {
+    memoryCache = catalog
+    try { localStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(catalog)) } catch { /* quota */ }
+}
 
-    inFlight = (async () => {
-        const response = await fetchWithRetry(endpoints.getProviders, {
-            method: HttpMethod.GET,
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-            },
-        })
+export async function fetchProviderCatalog(token: string): Promise<ProviderCatalogResponse> {
+    const response = await fetchWithRetry(endpoints.getProviders, {
+        method: HttpMethod.GET,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    })
 
-        if (!response.ok) {
-            throw new Error(`Get provider catalog failed: ${response.status} ${response.statusText}`)
-        }
-
-        const parsed = (await response.json()) as ProviderCatalogResponse
-        if (parsed.providers.length > 0) {
-            catalogCache = parsed
-            fetchedThisSession = true
-            try { localStorage.setItem(CATALOG_STORAGE_KEY, JSON.stringify(parsed)) } catch { /* quota */ }
-            listeners.forEach(l => l())
-        }
-        return parsed
-    })()
-
-    try {
-        return await inFlight
-    } finally {
-        inFlight = null
+    if (!response.ok) {
+        throw new Error(`Get provider catalog failed: ${response.status} ${response.statusText}`)
     }
+
+    return (await response.json()) as ProviderCatalogResponse
 }

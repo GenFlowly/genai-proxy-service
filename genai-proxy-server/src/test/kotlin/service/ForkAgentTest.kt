@@ -37,7 +37,8 @@ class ForkAgentTest {
     private val graphRepo = mockk<GraphRepository>(relaxed = true)
     private val instructionRepo = mockk<InstructionRepository>(relaxed = true)
     private val mapRepo = mockk<RequestAgentMapRepository>(relaxed = true)
-    private val service = GraphService(graphRepo, instructionRepo, mapRepo)
+    private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
+    private val service = GraphService(graphRepo, instructionRepo, mapRepo, cacheVersions)
 
     private fun av(s: String): AttributeValue = AttributeValue.builder().s(s).build()
 

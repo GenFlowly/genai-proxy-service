@@ -10,21 +10,24 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { AuthContextType, User } from '../types/auth.types'
 import { onboardCustomer } from '../services/onboardUserService'
 import { completeOnboarding as completeOnboardingRequest } from '../services/userService'
-import { OnboardCustomerResponse } from '../models/onboardUser.models'
+import { CacheVersions, OnboardCustomerResponse } from '../models/onboardUser.models'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { InstructionResponse } from '../models/instruction.models'
 import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVectorDBConfig.models'
 import { clearHistoryCache } from '../components/widgets/ConversationHistoryWidget/historyCache'
 import { clearNotesCache } from '../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache'
 import { clearRecentInstructionsCache } from '../components/common/InstructionPickerModal/recentInstructionsCache'
+import { customerKey, StorageSuffix } from '../utils/storageKeys'
+import { queryClient } from '../queryClient'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 // Stale-while-revalidate caches: the last known server data per customer is
 // shown immediately on reload, then overwritten when the background /onboard
 // sync answers. Only display data belongs here — never auth state.
-const vendorKeysCacheKey = (customerId: string) => `${customerId}_vendor_api_key_statuses`
-const instructionsCacheKey = (customerId: string) => `${customerId}_instructions`
+const vendorKeysCacheKey = (customerId: string) => customerKey(customerId, StorageSuffix.vendorApiKeyStatuses)
+const instructionsCacheKey = (customerId: string) => customerKey(customerId, StorageSuffix.instructions)
+const aiPreferencesKey = (customerId: string) => customerKey(customerId, StorageSuffix.aiPreferences)
 
 function readCache<T>(key: string): T | null {
     try {
@@ -71,6 +74,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
     const [customerName, setCustomerName] = useState<string | undefined>(undefined)
     const [customerPicture, setCustomerPicture] = useState<string | undefined>(undefined)
+    // Version gating stays off (null) until the /onboard sync delivers real
+    // counters — a cache must never be trusted on the strength of a guess.
+    const [cacheVersions, setCacheVersions] = useState<CacheVersions | null>(null)
     const [isInternalLoading, setIsInternalLoading] = useState(true)
     const [isInstructionsLoaded, setIsInstructionsLoaded] = useState(false)
     // Deferred re-attempt for a failed background onboard: bumping the counter
@@ -89,7 +95,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     useEffect(() => {
         if (customerId) {
             localStorage.setItem('customerId', customerId)
-            const cachedPrefs = localStorage.getItem(`${customerId}_ai_preferences`)
+            const cachedPrefs = localStorage.getItem(aiPreferencesKey(customerId))
             if (cachedPrefs) {
                 try {
                     setAiConfigPreferences(JSON.parse(cachedPrefs))
@@ -109,31 +115,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     }, [customerId])
 
     const logout = useCallback(({ returnTo, localOnly }: { returnTo: string; localOnly?: boolean }): void => {
-        // Every per-customer localStorage entry (preferences, instructions,
-        // vendor key statuses, model lists, system prompt, prompt drafts, …)
-        // is keyed `${customerId}_…` — wipe them all so no user data survives
-        // the session on this machine
-        const departingCustomerId = localStorage.getItem('customerId')
-        if (departingCustomerId) {
-            try {
-                Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith(`${departingCustomerId}_`)) {
-                        localStorage.removeItem(key)
-                    }
-                })
-            } catch (e) {
-                console.warn('Failed to clear per-customer caches on logout', e)
-            }
+        // Wipe ALL of localStorage so no user data survives the session on
+        // this machine — a `${customerId}_` prefix sweep proved leaky
+        // (unprefixed cache keys survived it). The Auth0 SDK's localstorage
+        // token cache goes too; safe because auth0Logout ends the session
+        // right after. The device-level theme preference is the one
+        // deliberate survivor.
+        const theme = localStorage.getItem('theme')
+        // Module-level caches hold the departing customer's data in memory,
+        // out of localStorage.clear()'s reach.
+        clearHistoryCache()
+        clearNotesCache()
+        clearRecentInstructionsCache()
+        try {
+            localStorage.clear()
+        } catch (e) {
+            console.warn('Failed to clear localStorage on logout', e)
         }
+        if (theme) {
+            try { localStorage.setItem('theme', theme) } catch { /* best-effort */ }
+        }
+        // The react-query cache holds the same per-customer data in memory
+        queryClient.clear()
         setCustomerId(null)
         setAiVendorAPIKeyStatusList([])
         setAiConfigPreferences(null)
         setCustomerInstructions([])
-        setVectorDBConfigStatusList([]) // Clear vectorDBConfigStatusList on logout
-        localStorage.removeItem('customerId')
-        clearHistoryCache() // Cached conversation list is user data — never carry across accounts
-        clearNotesCache() // Same for the cached saved-notes list
-        clearRecentInstructionsCache() // Same for the cached recently-used instructions
+        setVectorDBConfigStatusList([])
+        setCacheVersions(null)
 
         auth0Logout({
             logoutParams: { returnTo },
@@ -205,7 +214,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             setAiConfigPreferences(onboardData.aiConfigPreferences || null);
                             if (onboardData.customerId) {
                                 localStorage.setItem(
-                                    `${onboardData.customerId}_ai_preferences`,
+                                    aiPreferencesKey(onboardData.customerId),
                                     JSON.stringify(onboardData.aiConfigPreferences)
                                 )
                             }
@@ -213,6 +222,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                         if (onboardData.vectorDBConfigStatusList) {
                             setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
                         }
+                        setCacheVersions(prev => {
+                            const fresh = onboardData.cacheVersions ?? null
+                            return JSON.stringify(prev) === JSON.stringify(fresh) ? prev : fresh
+                        })
                         setOnboardingCompleted(onboardData.onboardingCompleted)
                     }
                     onboardFailedRef.current = false
@@ -356,7 +369,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         setAiConfigPreferences(prev => {
             const next = { ...(prev ?? {}), ...partial }
             if (customerId) {
-                localStorage.setItem(`${customerId}_ai_preferences`, JSON.stringify(next))
+                localStorage.setItem(aiPreferencesKey(customerId), JSON.stringify(next))
             }
             return next
         })
@@ -424,6 +437,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         updateInstruction,
         customerName,
         customerPicture,
+        cacheVersions,
     }
 
     return (
