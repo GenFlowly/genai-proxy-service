@@ -36,6 +36,41 @@ export const getCustomerConversations = async (
     return response.json();
 };
 
+/**
+ * One page of a project's conversations, most recently updated first —
+ * served by the sparse projectIndex GSI, so a project's full membership is
+ * readable without touching the recents/pinned lists. A page can come back
+ * shorter than pageSize (the server drops archived members after the index
+ * read); follow lastEvaluatedKey, not the page length.
+ */
+export const getProjectConversations = async (
+    token: string,
+    projectId: string,
+    pageSize: number = 50,
+    lastEvaluatedKey?: string | null
+): Promise<GetCustomerConversationsResponse> => {
+    const params = new URLSearchParams({ projectId, pageSize: String(pageSize) });
+    if (lastEvaluatedKey) {
+        params.set('lastEvaluatedKey', lastEvaluatedKey);
+    }
+
+    const response = await fetchWithRetry(
+        `${endpoints.getProjectConversations}?${params.toString()}`,
+        {
+            method: HttpMethod.GET,
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch project conversations: ${response.statusText}`);
+    }
+
+    return response.json();
+};
+
 export const getPinnedConversations = async (
     token: string
 ): Promise<GetPinnedConversationsResponse> => {

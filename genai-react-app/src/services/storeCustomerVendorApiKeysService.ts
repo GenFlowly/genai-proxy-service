@@ -11,6 +11,7 @@ import {
  * Stores or updates a vendor API key.
  */
 import { fetchWithRetry } from "../utils/apiUtils";
+import { getAiPreferences, mergeAiPreferences } from '../stores/aiPreferencesStore'
 
 export async function storeCustomerVendorApiKey(
     token: string,
@@ -53,4 +54,22 @@ export async function storeCustomerVendorConfig(
     if (!response.ok) {
         throw new Error(`Failed to save config for ${payload.aiVendor}: ${response.statusText}`)
     }
+
+    // The server mirrors this config into preferredModels — write through to
+    // the local preferences mirror here, with the successful call, so every
+    // surface (sidebar AI-config widget, AIContext seeding) reflects it this
+    // session without waiting for the next /onboard sync.
+    const current = getAiPreferences()?.preferredModels ?? []
+    const existing = current.find(m => m.aiVendor === payload.aiVendor)
+    mergeAiPreferences({
+        preferredModels: [
+            ...current.filter(m => m.aiVendor !== payload.aiVendor),
+            {
+                ...existing,
+                aiVendor: payload.aiVendor,
+                model: payload.model,
+                thinkingLevel: payload.thinkingLevel || undefined,
+            },
+        ],
+    })
 }

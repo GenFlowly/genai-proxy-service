@@ -11,6 +11,7 @@ import {
     pinConversation,
     unpinConversation,
     getProjects,
+    getProjectConversations,
     createProject,
     assignConversationToProject,
     unassignConversationFromProject,
@@ -38,6 +39,7 @@ const mockGetAccessTokenSilently = jest.fn().mockResolvedValue('mock-token')
 const mockGetCustomerConversations = getCustomerConversations as jest.Mock
 const mockGetPinnedConversations = getPinnedConversations as jest.Mock
 const mockGetProjects = getProjects as jest.Mock
+const mockGetProjectConversations = getProjectConversations as jest.Mock
 const mockCreateProject = createProject as jest.Mock
 const mockAssignToProject = assignConversationToProject as jest.Mock
 const mockUnassignFromProject = unassignConversationFromProject as jest.Mock
@@ -80,6 +82,7 @@ describe('ConversationHistoryComponent', () => {
         })
         mockGetPinnedConversations.mockResolvedValue({ conversations: [] })
         mockGetProjects.mockResolvedValue({ projects: [] })
+        mockGetProjectConversations.mockResolvedValue({ conversations: [], lastEvaluatedKey: null })
     })
 
     test('renders Recents heading once conversations load', async () => {
@@ -650,14 +653,24 @@ describe('ConversationHistoryComponent', () => {
         ]
 
         test('groups project conversations under a collapsible project entry', async () => {
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-1', name: 'Project One', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
             mockGetCustomerConversations.mockResolvedValue({
                 conversations: [...projectConversations, ...defaultConversations],
                 lastEvaluatedKey: null,
             })
-            mockGetPinnedConversations.mockResolvedValue({
+            // Members come from the project's own endpoint (projectIndex-backed),
+            // fetched lazily when the project expands — never derived from the
+            // recents/pinned pages
+            mockGetProjectConversations.mockResolvedValue({
                 conversations: [
-                    { conversationId: 'conv-p3', title: 'Pinned project chat', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z', projectId: 'proj-1', projectName: 'Project One' },
+                    { conversationId: 'conv-p3', title: 'Pinned project chat', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z', projectId: 'proj-1' },
+                    ...projectConversations,
                 ],
+                lastEvaluatedKey: null,
             })
 
             render(<ConversationHistoryComponent />)
@@ -667,43 +680,57 @@ describe('ConversationHistoryComponent', () => {
             })
 
             // The project renders as a collapsed row named after the project;
-            // its conversations stay hidden until it is expanded
+            // nothing is fetched for it and nothing shows until it is expanded
             const projectRow = screen.getByTestId('conv-history-project-proj-1')
             expect(projectRow).toHaveAttribute('aria-expanded', 'false')
+            expect(mockGetProjectConversations).not.toHaveBeenCalled()
             expect(screen.getByText('Project One')).toBeInTheDocument()
             expect(screen.queryByTestId('conv-history-item-conv-p1')).not.toBeInTheDocument()
-            // Non-project conversations stay in the global Recents section
+            // Non-project conversations stay in the global Recents section;
+            // assigned ones are excluded from it (they render in their project)
             expect(screen.getByText('Recents')).toBeInTheDocument()
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
-            // The only pinned conversation belongs to the project, so there is
-            // no global Pinned section
             expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
 
             fireEvent.click(projectRow)
 
             expect(projectRow).toHaveAttribute('aria-expanded', 'true')
-            // Project subsections: Pinned then Recent, holding its conversations
+            // Expanding fires the lazy members fetch; subsections fill in
+            await waitFor(() => {
+                expect(mockGetProjectConversations).toHaveBeenCalledWith('mock-token', 'proj-1', 50, null)
+            })
+            expect(await screen.findByTestId('conv-history-item-conv-p3')).toBeInTheDocument()
             expect(screen.getByText('Pinned')).toBeInTheDocument()
             expect(screen.getByText('Recent')).toBeInTheDocument()
-            expect(screen.getByTestId('conv-history-item-conv-p3')).toBeInTheDocument()
             expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
             expect(screen.getByTestId('conv-history-item-conv-p2')).toBeInTheDocument()
         })
 
-        test('project holding the active conversation starts expanded', async () => {
+        test('project holding the active conversation starts expanded with its members loaded', async () => {
             setupMocks({ activeId: 'conv-p1' })
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-1', name: 'Project One', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
             mockGetCustomerConversations.mockResolvedValue({
                 conversations: [...projectConversations, ...defaultConversations],
+                lastEvaluatedKey: null,
+            })
+            mockGetProjectConversations.mockResolvedValue({
+                conversations: projectConversations,
                 lastEvaluatedKey: null,
             })
 
             render(<ConversationHistoryComponent />)
 
+            // The active conversation's project auto-expands and auto-loads
+            // without any user toggle (deep link / refresh case)
             await waitFor(() => {
-                expect(screen.getByTestId('conv-history-project-proj-1')).toBeInTheDocument()
+                expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
             })
             expect(screen.getByTestId('conv-history-project-proj-1')).toHaveAttribute('aria-expanded', 'true')
-            expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+            expect(mockGetProjectConversations).toHaveBeenCalledWith('mock-token', 'proj-1', 50, null)
         })
 
         test('Projects section renders above the global Pinned and Recents sections', async () => {
@@ -747,7 +774,7 @@ describe('ConversationHistoryComponent', () => {
             expect(createBtn).toHaveAttribute('aria-label', 'New project')
         })
 
-        test('lists a project from the API as a collapsed entry even when empty', async () => {
+        test('an unloaded project is expandable; expanding an empty one settles chevron-less', async () => {
             mockGetProjects.mockResolvedValue({
                 projects: [
                     { projectId: 'proj-9', name: 'Empty One', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
@@ -760,11 +787,22 @@ describe('ConversationHistoryComponent', () => {
                 expect(screen.getByTestId('conv-history-project-proj-9')).toBeInTheDocument()
             })
             expect(screen.getByText('Empty One')).toBeInTheDocument()
-            // Nothing to expand yet: the row renders without a chevron or
-            // expand semantics until a conversation lands in the project
+            // Members are unknown until fetched, so the row must be expandable
+            // (expanding is what triggers the lazy fetch)
             const row = screen.getByTestId('conv-history-project-proj-9')
-            expect(row).not.toHaveAttribute('aria-expanded')
-            expect(row.querySelector('svg')).toBeNull()
+            expect(row).toHaveAttribute('aria-expanded', 'false')
+            expect(mockGetProjectConversations).not.toHaveBeenCalled()
+
+            fireEvent.click(row)
+
+            await waitFor(() => {
+                expect(mockGetProjectConversations).toHaveBeenCalledWith('mock-token', 'proj-9', 50, null)
+            })
+            // Fetched and genuinely empty: the subsections vanish and the row
+            // settles into the chevron-less empty-project rendering
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-proj-9')).not.toHaveAttribute('aria-expanded')
+            })
         })
 
         test('creates a project from the sidebar', async () => {
@@ -830,6 +868,10 @@ describe('ConversationHistoryComponent', () => {
                     { projectId: 'proj-1', name: 'Project One', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
                 ],
             })
+            mockGetProjectConversations.mockResolvedValue({
+                conversations: projectConversations,
+                lastEvaluatedKey: null,
+            })
             mockUnassignFromProject.mockResolvedValue(undefined)
 
             render(<ConversationHistoryComponent />)
@@ -873,11 +915,17 @@ describe('ConversationHistoryComponent', () => {
             fireEvent.click(btn)
 
             expect(mockStartConversationInProject).toHaveBeenCalledWith('proj-1')
-            // The empty project row stays chevron-less (nothing to expand
-            // yet); the force-expanded state is recorded so the upcoming
-            // conversation renders visible once the first message creates it
-            // (covered by the born-in-project test below)
-            expect(screen.getByTestId('conv-history-project-proj-1')).not.toHaveAttribute('aria-expanded')
+            // The action also triggers the lazy members fetch; the project
+            // resolves to genuinely empty and settles chevron-less. The
+            // force-expanded state is recorded so the upcoming conversation
+            // renders visible once the first message creates it (covered by
+            // the born-in-project test below)
+            await waitFor(() => {
+                expect(mockGetProjectConversations).toHaveBeenCalledWith('mock-token', 'proj-1', 50, null)
+            })
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-proj-1')).not.toHaveAttribute('aria-expanded')
+            })
         })
 
         test('a conversation born in a project groups under it when its title arrives', async () => {

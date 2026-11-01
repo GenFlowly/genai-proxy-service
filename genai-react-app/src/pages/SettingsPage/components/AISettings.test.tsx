@@ -229,12 +229,11 @@ describe('AISettings', () => {
                 priority: 1,
                 thinkingLevel: null,
             });
-            // The model default is mirrored into the shared preferredModels
-            // so the sidebar AI-config widget picks it up this session.
-            expect(mockUpdateAiConfigPreferences).toHaveBeenCalledWith({
-                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5', thinkingLevel: undefined }],
-            });
         });
+        // The preferredModels mirror is storeCustomerVendorConfig's own
+        // write-through (covered in its service test) — the page must not
+        // mirror it ad hoc.
+        expect(mockUpdateAiConfigPreferences).not.toHaveBeenCalled();
     });
 
     test('reasoning effort rides the vendor-config save', async () => {
@@ -259,9 +258,6 @@ describe('AISettings', () => {
                 model: 'gpt-5',
                 priority: 1,
                 thinkingLevel: 'low',
-            });
-            expect(mockUpdateAiConfigPreferences).toHaveBeenCalledWith({
-                preferredModels: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5', thinkingLevel: 'low' }],
             });
         });
     });

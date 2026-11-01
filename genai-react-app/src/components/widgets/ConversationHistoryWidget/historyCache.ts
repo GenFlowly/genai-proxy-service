@@ -8,6 +8,10 @@ export interface HistoryCacheState {
     lastKey: string | null
     hasMore: boolean
     projects: Project[]
+    // Per-project member lists from GET /projects/conversations, keyed by
+    // projectId — fetched lazily when a project expands, cached so the next
+    // session paints the expanded project instantly
+    projectItems: Record<string, ConversationSummary[]>
 }
 
 const store = createCustomerCache<HistoryCacheState>(StorageSuffix.conversationHistory, parsed => {
@@ -20,6 +24,9 @@ const store = createCustomerCache<HistoryCacheState>(StorageSuffix.conversationH
         lastKey: p.lastKey ?? null,
         hasMore: !!p.hasMore,
         projects: Array.isArray(p.projects) ? p.projects : [],
+        projectItems: p.projectItems && typeof p.projectItems === 'object' && !Array.isArray(p.projectItems)
+            ? p.projectItems
+            : {},
     }
 })
 

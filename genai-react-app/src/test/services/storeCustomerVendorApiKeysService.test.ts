@@ -47,3 +47,41 @@ describe('storeCustomerVendorApiKeysService', () => {
             .rejects.toThrow('Failed to save key for OpenAI: Bad Request');
     });
 });
+
+describe('storeCustomerVendorConfig write-through', () => {
+    const { storeCustomerVendorConfig } = require('../../services/storeCustomerVendorApiKeysService');
+    const {
+        setAiPreferencesCustomer,
+        mergeAiPreferences,
+        getAiPreferences,
+    } = require('../../stores/aiPreferencesStore');
+
+    test('mirrors the saved config into preferredModels on success', async () => {
+        setAiPreferencesCustomer('CU_WT_CFG');
+        mergeAiPreferences({ preferredModels: [{ aiVendor: 'CLAUDE', model: 'claude-x' }] });
+        (fetchWithRetry as jest.Mock).mockResolvedValue({ ok: true });
+
+        await storeCustomerVendorConfig('test-token', {
+            aiVendor: 'OPENAI',
+            model: 'gpt-5',
+            priority: 1,
+            thinkingLevel: 'low',
+        });
+
+        expect(getAiPreferences()?.preferredModels).toEqual([
+            { aiVendor: 'CLAUDE', model: 'claude-x' },
+            { aiVendor: 'OPENAI', model: 'gpt-5', thinkingLevel: 'low' },
+        ]);
+    });
+
+    test('does not mirror when the save fails', async () => {
+        setAiPreferencesCustomer('CU_WT_CFG_FAIL');
+        (fetchWithRetry as jest.Mock).mockResolvedValue({ ok: false, statusText: 'nope' });
+
+        await expect(
+            storeCustomerVendorConfig('test-token', { aiVendor: 'OPENAI', model: 'gpt-5', priority: 1 })
+        ).rejects.toThrow();
+
+        expect(getAiPreferences()?.preferredModels).toBeUndefined();
+    });
+});

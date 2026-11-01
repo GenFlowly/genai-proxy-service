@@ -2,8 +2,25 @@ import { NotesModel } from '../models/encoding.models'
 import { HttpMethod } from '../constants/http'
 
 import { config } from '../config/env'
+import {
+    loadNotesCache,
+    saveNotesCache,
+} from '../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache'
 
 const API_URL = `${config.backend.baseUrl}/api/v1/notes`;
+
+/**
+ * Write-through into the cached saved-notes list, together with the
+ * successful mutation — call sites never mirror it ad hoc. Only an existing
+ * cache is patched: fabricating a list from one note would paint it as the
+ * customer's complete set on the next mount.
+ */
+function patchNotesCache(patch: (cached: SavedNote[]) => SavedNote[]): void {
+    const customerId = localStorage.getItem('customerId')
+    if (!customerId) return
+    const cached = loadNotesCache(customerId)
+    if (cached) saveNotesCache(customerId, patch(cached))
+}
 
 export interface SavedNote {
     noteKey: string
@@ -80,6 +97,33 @@ export async function saveNote(
     } catch {
         // Tolerate empty response bodies
     }
+
+    if (note.noteKey) {
+        const noteKey = note.noteKey
+        const now = new Date().toISOString()
+        const effectiveTitle = title ?? note.title ?? ''
+        patchNotesCache(cached => {
+            const exists = cached.some(n => n.noteKey === noteKey)
+            if (exists) {
+                return cached.map(n =>
+                    n.noteKey === noteKey
+                        ? { ...n, noteValue: note.noteValue, title: effectiveTitle, updatedAt: now }
+                        : n
+                )
+            }
+            return [
+                {
+                    noteKey,
+                    noteValue: note.noteValue,
+                    title: effectiveTitle,
+                    createdAt: note.createdAt || now,
+                    updatedAt: now,
+                },
+                ...cached,
+            ]
+        })
+    }
+
     return { title }
 }
 
@@ -94,4 +138,6 @@ export async function deleteNote(token: string, noteKey: string): Promise<void> 
     if (!response.ok) {
         throw new Error(`Failed to delete note: ${response.status} ${response.statusText}`)
     }
+
+    patchNotesCache(cached => cached.filter(n => n.noteKey !== noteKey))
 }
