@@ -18,7 +18,7 @@ import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVect
 import { clearHistoryCache } from '../components/widgets/ConversationHistoryWidget/historyCache'
 import { clearNotesCache } from '../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache'
 import { clearRecentInstructionsCache } from '../components/common/InstructionPickerModal/recentInstructionsCache'
-import { customerKey, StorageSuffix } from '../utils/storageKeys'
+import { customerKey } from '../utils/storageKeys'
 import { queryClient } from '../queryClient'
 import {
     getAiPreferences,
@@ -37,34 +37,14 @@ import {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-// Stale-while-revalidate cache: the last known server data per customer is
-// shown immediately on reload, then overwritten when the background /onboard
-// sync answers. Only display data belongs here — never auth state.
-// (Preferences and instructions live in their own module stores so mutation
-// services can write through to them.)
-const vendorKeysCacheKey = (customerId: string) => customerKey(customerId, StorageSuffix.vendorApiKeyStatuses)
-
-function readCache<T>(key: string): T | null {
-    try {
-        const raw = localStorage.getItem(key)
-        return raw ? (JSON.parse(raw) as T) : null
-    } catch {
-        return null
-    }
-}
+// Preferences and instructions live in their own module stores so mutation
+// services can write through to them. Vendor key statuses are deliberately
+// NOT persisted (credential-adjacent — see utils/storageKeys.ts): they live
+// in React state only and repopulate from each /onboard sync.
 
 // Delay before a failed background onboard is re-attempted (also re-attempted
 // sooner if the tab regains visibility)
 const ONBOARD_RETRY_DELAY_MS = 45_000
-
-function writeCache(key: string, value: unknown): void {
-    try {
-        localStorage.setItem(key, JSON.stringify(value))
-    } catch (e) {
-        // Best-effort (e.g. quota exceeded) — next load just starts empty
-        console.warn(`Failed to write cache '${key}'`, e)
-    }
-}
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }): React.ReactElement => {
     const {
@@ -114,8 +94,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
             localStorage.setItem('customerId', customerId)
             setAiPreferencesCustomer(customerId)
             setInstructionsCustomer(customerId)
-            const cachedVendorStatuses = readCache<AIVendorAPIKeyStatus[]>(vendorKeysCacheKey(customerId))
-            if (cachedVendorStatuses) setAiVendorAPIKeyStatusList(cachedVendorStatuses)
+            // Vendor statuses were persisted here before the no-credential-caching
+            // rule; logout clears all of localStorage, but an upgraded session that
+            // never logs out would carry the orphan forever.
+            try { localStorage.removeItem(customerKey(customerId, 'vendor_api_key_statuses')) } catch { /* ignore */ }
         } else {
             localStorage.removeItem('customerId')
             setAiPreferencesCustomer(null)
@@ -206,9 +188,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             setAiVendorAPIKeyStatusList(prev =>
                                 JSON.stringify(prev) === JSON.stringify(freshStatuses) ? prev : freshStatuses
                             )
-                            if (onboardData.customerId) {
-                                writeCache(vendorKeysCacheKey(onboardData.customerId), freshStatuses)
-                            }
                         }
                         if (onboardData.customerInstructions) {
                             replaceInstructions(onboardData.customerId ?? null, onboardData.customerInstructions)
@@ -339,7 +318,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
             } else {
                 updated = [...prev, status]
             }
-            if (customerId) writeCache(vendorKeysCacheKey(customerId), updated)
             return updated
         })
     }

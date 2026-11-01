@@ -4,6 +4,8 @@
  * key living in a hook file would complete an import cycle.
  */
 export const CUSTOMER_AGENTS_QUERY_KEY = 'customerAgents'
+export const AGENT_DETAIL_QUERY_KEY = 'agentDetail'
+export const PROFILE_QUERY_KEY = 'profile'
 export const REQUEST_AGENTS_QUERY_KEY = 'requestAgents'
 export const EMBEDDING_MODELS_QUERY_KEY = 'embeddingModels'
 export const PROVIDER_CATALOG_QUERY_KEY = 'providerCatalog'

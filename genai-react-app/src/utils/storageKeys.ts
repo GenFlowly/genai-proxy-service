@@ -5,6 +5,11 @@
  * Logout wipes ALL of localStorage regardless (AuthContext.logout) — this
  * convention is defense-in-depth, not the cleanup mechanism.
  *
+ * NEVER persist credentials or credential-adjacent data to localStorage:
+ * vendor API keys, key STATUSES, Zilliz/vector-DB config, Tavily/tool
+ * credentials, embedding keys. Those live in React state only and repopulate
+ * from the server each session.
+ *
  * Deliberately global keys, exempt from the convention (no user data):
  * - 'customerId'               — owner marker for the active session
  * - 'theme'                    — device display preference; the one logout survivor
@@ -25,8 +30,8 @@ export function customerKey(customerId: string, suffix: string): string {
 
 export const StorageSuffix = {
     aiPreferences: 'ai_preferences',
-    vendorApiKeyStatuses: 'vendor_api_key_statuses',
     instructions: 'instructions',
+    profile: 'profile_cache_v1',
     systemPrompt: 'system_prompt',
     selectedInstructionId: 'selected_instruction_id',
     selectedAgentId: 'selected_agent_id',
