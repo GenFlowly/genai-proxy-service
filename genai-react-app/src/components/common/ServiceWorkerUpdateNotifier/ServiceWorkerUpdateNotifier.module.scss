@@ -1,0 +1,18 @@
+@import '../../../styles/themes.scss';
+
+.banner {
+  position: fixed;
+  left: 50%;
+  bottom: $spacing-xl;
+  transform: translateX(-50%);
+  z-index: 1100; // above navbar (1000)
+  display: flex;
+  align-items: center;
+  gap: $spacing-lg;
+  padding: $spacing-md $spacing-lg;
+  background-color: $color-background-secondary;
+  border: 1px solid $color-border;
+  border-radius: 0.5rem;
+  box-shadow: $shadow-lg;
+  color: $color-text-primary;
+}
