@@ -138,6 +138,8 @@ object Routes {
     // params (same metrics rationale as pin/unpin above).
     const val CREATE_PROJECT = "$API_V1/project"
     const val GET_PROJECTS = "$API_V1/projects"
+    // Flat path with ?projectId= (same metrics rationale as pin/unpin above)
+    const val GET_PROJECT_CONVERSATIONS = "$API_V1/projects/conversations"
     const val RENAME_PROJECT = "$API_V1/project/rename"
     const val DELETE_PROJECT = "$API_V1/project"
     const val SEARCH = "$API_V1/search"
@@ -310,7 +312,7 @@ fun Application.configureRouting(
         registerForkConversationRoutes(customerProfileService, conversationManagementService)
         registerGetPinnedConversationsRoutes(customerProfileService, conversationManagementService)
         registerAssignConversationProjectRoutes(customerProfileService, conversationManagementService)
-        registerProjectRoutes(projectService, customerProfileService)
+        registerProjectRoutes(projectService, customerProfileService, conversationManagementService)
         registerSearchRoutes(customerProfileService, unifiedSearchService)
         registerGetCustomerAgentsRoutes(graphService, customerProfileService)
         registerCreateAgentRoutes(graphService, customerProfileService)
