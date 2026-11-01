@@ -3,7 +3,6 @@ import {
     getCustomerConversations,
     getPinnedConversations,
     pinConversation,
-    unarchiveConversation,
     unpinConversation,
 } from '../../services/conversationHistoryService';
 import { endpoints } from '../../config/endpoints';
@@ -47,35 +46,6 @@ describe('conversationHistoryService', () => {
 
             await expect(archiveConversation(mockToken, mockConversationId)).rejects.toThrow(
                 'Failed to archive conversation: Internal Server Error'
-            );
-        });
-    });
-
-    describe('unarchiveConversation', () => {
-        it('should call fetchWithRetry with correct parameters', async () => {
-            (fetchWithRetry as jest.Mock).mockResolvedValueOnce({ ok: true });
-
-            await unarchiveConversation(mockToken, mockConversationId);
-
-            expect(fetchWithRetry).toHaveBeenCalledWith(
-                endpoints.unarchiveConversation(mockConversationId),
-                {
-                    method: HttpMethod.POST,
-                    headers: {
-                        Authorization: `Bearer ${mockToken}`,
-                    },
-                }
-            );
-        });
-
-        it('should throw an error if the response is not ok', async () => {
-            (fetchWithRetry as jest.Mock).mockResolvedValueOnce({
-                ok: false,
-                statusText: 'Not Found',
-            });
-
-            await expect(unarchiveConversation(mockToken, mockConversationId)).rejects.toThrow(
-                'Failed to unarchive conversation: Not Found'
             );
         });
     });

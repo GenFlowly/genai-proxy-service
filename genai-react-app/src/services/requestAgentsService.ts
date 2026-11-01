@@ -1,6 +1,16 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { fetchWithRetry } from '../utils/apiUtils'
+import { queryClient } from '../queryClient'
+import { CUSTOMER_AGENTS_QUERY_KEY, REQUEST_AGENTS_QUERY_KEY } from '../hooks/queries/queryKeys'
+
+// Mapping writes also retag agents server-side (requestType / category), so
+// BOTH version-gated caches must refresh now rather than at the next /onboard
+// sync. Lives here so no call site can forget it.
+function invalidateMappingQueries(): void {
+    void queryClient.invalidateQueries({ queryKey: [REQUEST_AGENTS_QUERY_KEY] })
+    void queryClient.invalidateQueries({ queryKey: [CUSTOMER_AGENTS_QUERY_KEY] })
+}
 
 // Mirrors genai-proxy-server models/api/RequestAgentMapModels.kt (customer DTOs)
 
@@ -64,6 +74,8 @@ export async function putRequestAgentMapping(
         const detail = await response.json().catch(() => null)
         throw new Error(detail?.error || `Save mapping failed: ${response.status} ${response.statusText}`)
     }
+
+    invalidateMappingQueries()
 }
 
 /** Remove this account's override — the action reverts to the platform default. */
@@ -78,4 +90,6 @@ export async function deleteRequestAgentMapping(token: string, requestType: stri
     if (!response.ok && response.status !== 404) {
         throw new Error(`Remove mapping failed: ${response.status} ${response.statusText}`)
     }
+
+    invalidateMappingQueries()
 }

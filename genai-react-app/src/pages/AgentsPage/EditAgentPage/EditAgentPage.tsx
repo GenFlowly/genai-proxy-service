@@ -6,7 +6,7 @@ import i18n from '../../../i18n'
 import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
 import { useAuth } from '../../../context/AuthContext'
-import { forkAgent, getAgent, updateAgent } from '../../../services/agentsService'
+import { forkAgent, getAgent, getCachedAgent, updateAgent } from '../../../services/agentsService'
 import { createInstruction, getCustomerInstructions } from '../../../services/instructionService'
 import {
     AGENT_CATEGORIES,
@@ -469,30 +469,42 @@ export default function EditAgentPage() {
         setRightSidebarExpanded(false)
     }, [setLeftSidebarExpanded, setRightSidebarExpanded])
 
-    // Load the agent via the dedicated GET /agents/{graphId} endpoint
+    // Load the agent: paint the session-cached copy instantly, then
+    // revalidate via GET /agents/{graphId} (which refreshes the cache).
+    // Identical fresh content never re-seeds, so typing between the cached
+    // paint and the revalidation landing is never clobbered.
     useEffect(() => {
         if (!graphId) return
         let cancelled = false
+
+        const seed = (found: Agent) => {
+            setAgent(found)
+            setName(found.name)
+            setMaxIterations(found.maxIterations)
+            setCategory(agentCategory(found))
+            const names: Record<string, string> = {}
+            const configs: Record<string, string> = {}
+            found.nodes.forEach(n => {
+                names[n.nodeId] = n.name
+                configs[n.nodeId] = tryPrettyJson(n.config)
+            })
+            setNodePatchNames(names)
+            setNodePatchConfigs(configs)
+        }
+
+        const cached = getCachedAgent(graphId)
+        if (cached) seed(cached)
 
         const load = async () => {
             try {
                 const token = await getAccessTokenSilently()
                 const found = await getAgent(token, graphId)
                 if (cancelled) return
-                setAgent(found)
-                setName(found.name)
-                setMaxIterations(found.maxIterations)
-                setCategory(agentCategory(found))
-                const names: Record<string, string> = {}
-                const configs: Record<string, string> = {}
-                found.nodes.forEach(n => {
-                    names[n.nodeId] = n.name
-                    configs[n.nodeId] = tryPrettyJson(n.config)
-                })
-                setNodePatchNames(names)
-                setNodePatchConfigs(configs)
+                if (!cached || JSON.stringify(cached) !== JSON.stringify(found)) seed(found)
             } catch (err: any) {
-                if (!cancelled) setLoadError(err.message ?? t('agentsPage.editAgentPage.loadFailed'))
+                // Stale-on-error: keep showing the cached copy when the
+                // revalidation fails; error out only with nothing to show.
+                if (!cancelled && !cached) setLoadError(err.message ?? t('agentsPage.editAgentPage.loadFailed'))
             }
         }
         load()
