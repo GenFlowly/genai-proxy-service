@@ -30,14 +30,16 @@ describe('getTextGenerationModelsService', () => {
         const result = await getTextGenerationModels(mockToken, mockCustomerId, mockRequest);
 
         // Assert
-        expect(mockFetchWithRetry).toHaveBeenCalledWith(endpoints.getTextGenerationModels, {
-            method: HttpMethod.POST,
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${mockToken}`,
-            },
-            body: JSON.stringify(mockRequest),
-        });
+        expect(mockFetchWithRetry).toHaveBeenCalledWith(
+            `${endpoints.getTextGenerationModels}?vendors=${encodeURIComponent(mockRequest.aiVendor.join(','))}`,
+            {
+                method: HttpMethod.GET,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${mockToken}`,
+                },
+            }
+        );
 
         expect(result).toEqual(mockModelsResponse);
         expect(result.aiVendorModelList).toHaveLength(3);
