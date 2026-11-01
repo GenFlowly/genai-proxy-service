@@ -3,6 +3,41 @@ import { HttpMethod } from "../constants/http";
 import { fetchWithRetry } from "../utils/apiUtils";
 import { SearchUserResponse, CustomerProfileResponse } from "../models/user.models";
 import i18n from "../i18n";
+import { queryClient } from "../queryClient";
+import { PROFILE_QUERY_KEY } from "../hooks/queries/queryKeys";
+import { createCustomerCache } from "../utils/customerListCache";
+import { StorageSuffix } from "../utils/storageKeys";
+
+// SWR seed for the profile (username, name, email, picture, discoverability):
+// paints instantly on the next session while the fresh fetch is in flight.
+// No credential-adjacent data lives here.
+const profileCache = createCustomerCache<CustomerProfileResponse>(StorageSuffix.profile, parsed => {
+    const p = parsed as CustomerProfileResponse | null;
+    return p && typeof p.customerId === "string" ? p : null;
+});
+
+/** Last known profile from a previous session, for instant paint. */
+export function loadCachedProfile(customerId: string | null): CustomerProfileResponse | null {
+    return profileCache.load(customerId);
+}
+
+export function saveCachedProfile(profile: CustomerProfileResponse): void {
+    profileCache.save(profile.customerId, profile);
+}
+
+// Profile mutations write through here — every consumer of useProfile sees
+// the change and the next session paints it, without waiting for a refetch.
+function patchProfileCache(partial: Partial<CustomerProfileResponse>): void {
+    queryClient.setQueriesData<CustomerProfileResponse | null>(
+        { queryKey: [PROFILE_QUERY_KEY] },
+        (old: CustomerProfileResponse | null | undefined) => {
+            if (!old) return old;
+            const next = { ...old, ...partial };
+            profileCache.save(next.customerId, next);
+            return next;
+        }
+    );
+}
 
 export async function searchUserByUsername(token: string, username: string): Promise<SearchUserResponse[]> {
     try {
@@ -65,6 +100,7 @@ export async function updateUsername(token: string, username: string): Promise<b
             throw new Error(i18n.t("errors.user.updateUsernameFailed", { status: response.status, statusText: response.statusText }));
         }
 
+        patchProfileCache({ username });
         return true;
     } catch (error) {
         console.error("Error updating username:", error);
@@ -87,6 +123,7 @@ export async function updateDiscoverability(token: string, isDiscoverable: boole
             throw new Error(`Update Discoverability failed: ${response.status} ${response.statusText}`);
         }
 
+        patchProfileCache({ isDiscoverable });
         return true;
     } catch (error) {
         console.error("Error updating discoverability:", error);
