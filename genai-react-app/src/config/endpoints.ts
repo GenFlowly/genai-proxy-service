@@ -5,7 +5,6 @@ const API_PREFIX = '/api/v1';
 
 export const endpoints = {
     onboardCustomer: `${BASE}${API_PREFIX}/onboard`,
-    getCustomerProfile: `${BASE}${API_PREFIX}/customer/profile`,
     storeCustomerVendorApiKey: `${BASE}${API_PREFIX}/store-api-key`,
     storeCustomerVendorConfig: `${BASE}${API_PREFIX}/store-vendor-config`,
     getEmbeddingKeys: `${BASE}${API_PREFIX}/embedding-keys`,
@@ -21,7 +20,6 @@ export const endpoints = {
         `${BASE}${API_PREFIX}/runs/${encodeURIComponent(runId)}/stream?conversationId=${encodeURIComponent(conversationId)}&fromSeq=${fromSeq}`,
     resumeRun: (runId: string, conversationId: string) =>
         `${BASE}${API_PREFIX}/runs/${encodeURIComponent(runId)}/resume?conversationId=${encodeURIComponent(conversationId)}`,
-    batchGenerateText: `${BASE}${API_PREFIX}/batch-generate-text`,
     getTextGenerationModels: `${BASE}${API_PREFIX}/models`,
     getProviders: `${BASE}${API_PREFIX}/providers`,
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,
@@ -34,7 +32,6 @@ export const endpoints = {
     conversationSharedUsers: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/shared?conversationId=${encodeURIComponent(conversationId)}`,
     getCustomerConversations: `${BASE}${API_PREFIX}/conversations`,
     deleteConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/${conversationId}`,
-    unarchiveConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/unarchive?conversationId=${encodeURIComponent(conversationId)}`,
     getPinnedConversations: `${BASE}${API_PREFIX}/conversations/pinned`,
     pinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/pin?conversationId=${encodeURIComponent(conversationId)}`,
     unpinConversation: (conversationId: string) => `${BASE}${API_PREFIX}/conversation/unpin?conversationId=${encodeURIComponent(conversationId)}`,

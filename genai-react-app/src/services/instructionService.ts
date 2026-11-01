@@ -87,29 +87,6 @@ export async function createInstruction(
 
 // ... (existing code)
 
-export async function getInstructionVersion(
-    token: string,
-    instructionId: string,
-    version: number
-): Promise<InstructionResponse> {
-    // Route: /api/v1/instruction/version?instructionId=xx&version=n
-    const url = `${endpoints.createInstruction}/version?instructionId=${encodeURIComponent(instructionId)}&version=${version}`
-
-    const response = await fetchWithRetry(url, {
-        method: HttpMethod.GET,
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-        },
-    })
-
-    if (!response.ok) {
-        throw new Error(`Get Instruction Version failed: ${response.status} ${response.statusText}`)
-    }
-
-    return (await response.json()) as InstructionResponse
-}
-
 export async function shareInstruction(
     token: string,
     instructionId: string,

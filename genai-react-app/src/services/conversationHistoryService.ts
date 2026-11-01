@@ -240,22 +240,3 @@ export const archiveConversation = async (
         throw new Error(`Failed to archive conversation: ${response.statusText}`);
     }
 };
-
-export const unarchiveConversation = async (
-    token: string,
-    conversationId: string
-): Promise<void> => {
-    const response = await fetchWithRetry(
-        endpoints.unarchiveConversation(conversationId),
-        {
-            method: HttpMethod.POST,
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        }
-    );
-
-    if (!response.ok) {
-        throw new Error(`Failed to unarchive conversation: ${response.statusText}`);
-    }
-};
