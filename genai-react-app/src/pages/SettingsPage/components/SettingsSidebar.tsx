@@ -26,11 +26,11 @@ interface SettingsNavItem {
 }
 
 interface SettingsSidebarProps {
-    // Renders the menu as a full page (mobile) instead of a side column
-    fullPage?: boolean
+    /** Called after navigating to a section — closes the mobile menu overlay. */
+    onNavigate?: () => void
 }
 
-export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {}): React.ReactElement {
+export function SettingsSidebar({ onNavigate }: SettingsSidebarProps = {}): React.ReactElement {
     const { t } = useTranslation()
     const { logout } = useAuth()
     const navigate = useNavigate()
@@ -137,17 +137,20 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
             setExpandedOverride(prev => ({ ...prev, [item.key]: false }))
         } else {
             setExpandedOverride(prev => ({ ...prev, [item.key]: true }))
-            // Desktop: opening a section from outside also takes you to its first
-            // page — the sidebar stays visible alongside the content. On the mobile
-            // full-page menu we must NOT navigate: this menu is its own page, so
-            // routing to a child would leave the menu before the submenu can show.
-            // There, tapping the parent just expands it; the user then taps a child.
-            if (!fullPage && !isInSection(item)) navigate(item.children[0].path)
+            // Opening a section from outside also takes you to its first page.
+            // On the mobile hamburger menu this also closes the overlay via
+            // onNavigate; reopening it shows the section already expanded
+            // (isExpanded defaults to isInSection) so a different child is one
+            // more tap away.
+            if (!isInSection(item)) {
+                navigate(item.children[0].path)
+                onNavigate?.()
+            }
         }
     }
 
     return (
-        <aside className={`${styles.sidebar} ${fullPage ? styles.fullPage : ''}`}>
+        <aside className={styles.sidebar}>
             <div className={styles.header}>
                 <h2>{t('settingsPage.settingsSidebar.title')}</h2>
             </div>
@@ -179,7 +182,7 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                                             // 'ai' and 'usage'), so matching activeTab alone would
                                             // cross-highlight siblings of the same name in another section.
                                             className={`${styles.childButton} ${isInSection(item) && activeTab === child.key ? styles.active : ''}`}
-                                            onClick={() => navigate(child.path)}
+                                            onClick={() => { navigate(child.path); onNavigate?.() }}
                                         >
                                             <span>{child.label}</span>
                                         </button>
@@ -191,7 +194,7 @@ export function SettingsSidebar({ fullPage = false }: SettingsSidebarProps = {})
                         <button
                             key={item.key}
                             className={`${styles.tabButton} ${activeTab === item.key ? styles.active : ''}`}
-                            onClick={() => navigate(item.path)}
+                            onClick={() => { navigate(item.path); onNavigate?.() }}
                         >
                             <Icon src={item.icon} size={20} className={styles.icon} />
                             <span>{item.label}</span>

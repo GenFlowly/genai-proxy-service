@@ -155,10 +155,9 @@ describe('ConnectorsSettings', () => {
         mockStoreCredentials.mockResolvedValue({})
     })
 
-    test('renders the header and the empty state', async () => {
+    test('renders the empty state', async () => {
         render(<ConnectorsSettings />)
 
-        expect(screen.getByText('Connectors')).toBeInTheDocument()
         await waitFor(() => {
             expect(screen.getByText('Nothing connected yet.')).toBeInTheDocument()
         })

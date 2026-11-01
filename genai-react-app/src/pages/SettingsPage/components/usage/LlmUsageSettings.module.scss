@@ -7,26 +7,6 @@
     gap: 2rem;
 }
 
-.headerBlock {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-
-    .title {
-        font-size: 1.5rem;
-        font-weight: 600;
-        color: $color-text-primary;
-        margin: 0;
-        letter-spacing: -0.01em;
-    }
-
-    .subtitle {
-        font-size: 0.95rem;
-        color: $color-text-muted;
-        margin: 0;
-    }
-}
-
 .statusText {
     font-size: 0.9rem;
     color: $color-text-muted;
@@ -82,6 +62,14 @@
     font-weight: 600;
     color: $color-text-primary;
     margin: 0;
+}
+
+// Horizontal-scroll safety net for narrow containers — matches the
+// TextContainer .tableScroll convention rather than relying on a parent's
+// overflow-x:hidden to do nothing and clip columns instead.
+.tableScroll {
+    max-width: 100%;
+    overflow-x: auto;
 }
 
 // The breakdown is tabular data, not a chart — a plain table is the WCAG

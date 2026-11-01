@@ -138,10 +138,6 @@ export function AISettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.aiSettings.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.aiSettings.subtitle')}</p>
-            </div>
             <div className={styles.form}>
                 <VendorApiKeysManager
                     rows={rows}

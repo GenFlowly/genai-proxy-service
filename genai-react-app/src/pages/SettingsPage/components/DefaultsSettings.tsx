@@ -245,11 +245,6 @@ export function DefaultsSettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.defaultAgents.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.defaultAgents.subtitle')}</p>
-            </div>
-
             {loading ? (
                 <p className={styles.emptyHint}>{t('settingsPage.defaultAgents.loading')}</p>
             ) : (

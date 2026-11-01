@@ -47,11 +47,6 @@ export function VectorDbUsageSettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.vectorDbUsageSettings.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.vectorDbUsageSettings.subtitle')}</p>
-            </div>
-
             <DateRangePicker
                 value={range}
                 onChange={setRange}
@@ -81,6 +76,7 @@ export function VectorDbUsageSettings(): React.ReactElement {
                             <h3 className={styles.breakdownTitle}>
                                 {t('settingsPage.vectorDbUsageSettings.byOperation')}
                             </h3>
+                            <div className={styles.tableScroll}>
                             <table className={styles.table}>
                                 <thead>
                                     <tr>
@@ -99,6 +95,7 @@ export function VectorDbUsageSettings(): React.ReactElement {
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     ) : (
                         <p className={styles.statusText} data-testid="vector-db-usage-empty">

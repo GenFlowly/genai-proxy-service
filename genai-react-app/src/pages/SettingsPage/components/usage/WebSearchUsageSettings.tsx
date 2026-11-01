@@ -47,11 +47,6 @@ export function WebSearchUsageSettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.webSearchUsageSettings.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.webSearchUsageSettings.subtitle')}</p>
-            </div>
-
             <DateRangePicker
                 value={range}
                 onChange={setRange}
@@ -88,6 +83,7 @@ export function WebSearchUsageSettings(): React.ReactElement {
                             <h3 className={styles.breakdownTitle}>
                                 {t('settingsPage.webSearchUsageSettings.byDepth')}
                             </h3>
+                            <div className={styles.tableScroll}>
                             <table className={styles.table}>
                                 <thead>
                                     <tr>
@@ -108,6 +104,7 @@ export function WebSearchUsageSettings(): React.ReactElement {
                                     ))}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     ) : (
                         <p className={styles.statusText} data-testid="web-search-usage-empty">

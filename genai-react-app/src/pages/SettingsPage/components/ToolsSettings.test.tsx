@@ -162,10 +162,9 @@ describe('ToolsSettings', () => {
         mockCredentialStatuses.mockResolvedValue({ toolCredentialStatuses: [] })
     })
 
-    test('renders the header and the empty state', async () => {
+    test('renders the empty state', async () => {
         render(<ToolsSettings />)
 
-        expect(screen.getByText('Tools')).toBeInTheDocument()
         await waitFor(() => {
             expect(screen.getByText('No tools yet.')).toBeInTheDocument()
         })
