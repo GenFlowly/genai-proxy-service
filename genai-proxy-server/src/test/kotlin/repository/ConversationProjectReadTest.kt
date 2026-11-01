@@ -14,6 +14,8 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemResponse
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryResponse
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -129,5 +131,75 @@ class ConversationProjectReadTest {
 
         assertEquals("PRJ1", requests[0].item()[DynamoDBConstants.PROJECT_ID_KEY]?.s())
         assertFalse(requests[1].item().containsKey(DynamoDBConstants.PROJECT_ID_KEY))
+    }
+
+    @Test
+    fun `project listing queries the projectIndex newest-first and drops archived members`() = runTest {
+        var capturedQuery: QueryRequest? = null
+        every { client.query(any<QueryRequest>()) } answers {
+            val req = firstArg<QueryRequest>()
+            if (req.indexName() == DynamoDBConstants.CONVERSATION_PROJECT_GSI_KEY) {
+                capturedQuery = req
+                QueryResponse.builder()
+                    .items(
+                        listOf(
+                            mapOf(
+                                DynamoDBConstants.CUSTOMER_ID_KEY to s(cust),
+                                DynamoDBConstants.CONVERSATION_ID_KEY to s("conv-new"),
+                                DynamoDBConstants.PROJECT_ID_KEY to s("PRJ1"),
+                                "updatedAt" to s("2026-11-01T00:00:00Z")
+                            ),
+                            mapOf(
+                                DynamoDBConstants.CUSTOMER_ID_KEY to s(cust),
+                                DynamoDBConstants.CONVERSATION_ID_KEY to s("conv-archived"),
+                                DynamoDBConstants.PROJECT_ID_KEY to s("PRJ1"),
+                                "updatedAt" to s("2026-10-01T00:00:00Z")
+                            )
+                        )
+                    )
+                    .build()
+            } else {
+                QueryResponse.builder().items(emptyList()).build()
+            }
+        }
+        every { client.batchGetItem(any<BatchGetItemRequest>()) } returns
+            BatchGetItemResponse.builder()
+                .responses(
+                    mapOf(
+                        DynamoDBConstants.CONVERSATION_TABLE to listOf(
+                            conversationItem("conv-new", projectId = "PRJ1") +
+                                mapOf("vendors" to AttributeValue.builder().ss("OPENAI").build()),
+                            conversationItem("conv-archived", projectId = "PRJ1") +
+                                mapOf(DynamoDBConstants.ARCHIVED_AT_KEY to s("2026-10-02T00:00:00Z"))
+                        )
+                    )
+                )
+                .build()
+
+        val page = repository.getConversationsByProject(cust, "PRJ1")
+
+        assertEquals(DynamoDBConstants.CONVERSATION_PROJECT_GSI_KEY, capturedQuery?.indexName())
+        assertEquals(false, capturedQuery?.scanIndexForward())
+        // Ownership guard rides every projectIndex read
+        assertEquals(cust, capturedQuery?.expressionAttributeValues()?.get(":cid")?.s())
+        assertEquals(listOf("conv-new"), page.conversations.map { it.conversationId })
+        assertEquals("PRJ1", page.conversations.single().projectId)
+        assertEquals(listOf("OPENAI"), page.conversations.single().vendors)
+        assertNull(page.lastEvaluatedKey)
+    }
+
+    @Test
+    fun `assigning a project bumps updatedAt in the same write`() = runTest {
+        var captured: UpdateItemRequest? = null
+        every { client.updateItem(any<UpdateItemRequest>()) } answers {
+            captured = firstArg<UpdateItemRequest>()
+            UpdateItemResponse.builder().build()
+        }
+
+        repository.setConversationProject("conv-1", cust, "PRJ1")
+
+        val expr = captured?.updateExpression() ?: ""
+        assertEquals(true, expr.contains("#ua = :now"))
+        assertEquals("updatedAt", captured?.expressionAttributeNames()?.get("#ua"))
     }
 }

@@ -6,7 +6,9 @@ import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GetProjectsResponse
 import com.genflowly.models.api.Project
 import com.genflowly.models.api.RenameProjectRequest
+import com.genflowly.models.api.GetCustomerConversationsResponse
 import com.genflowly.models.api.StatusResponse
+import com.genflowly.service.ConversationManagementService
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.ProjectNotFoundException
 import com.genflowly.service.ProjectService
@@ -25,7 +27,8 @@ private val logger = LoggerFactory.getLogger("ProjectActivity")
 
 fun Route.registerProjectRoutes(
     projectService: ProjectService,
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    conversationManagementService: ConversationManagementService
 ) {
     authenticate("auth0", "apiKey") {
         post(Routes.CREATE_PROJECT, {
@@ -64,6 +67,70 @@ fun Route.registerProjectRoutes(
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid project name")))
             } catch (e: Exception) {
                 logger.error("Unexpected error creating project: {}", e.message, e)
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    mapOf("error" to "Internal server error: ${e.message}")
+                )
+            }
+        }
+
+        get(Routes.GET_PROJECT_CONVERSATIONS, {
+            tags("Projects")
+            summary = "List a project's conversations"
+            description = "One page of the project's conversations, most recently updated first, " +
+                    "read via the sparse projectIndex GSI. A page can come back shorter than " +
+                    "pageSize (archived members are dropped after the index read) — follow " +
+                    "lastEvaluatedKey, not the page length, to know when the project is exhausted."
+            request {
+                queryParameter<String>("projectId") {
+                    description = "Project whose conversations to list"
+                    required = true
+                }
+                queryParameter<Int>("pageSize") {
+                    description = "Page size, 1-50 (default 50)"
+                    required = false
+                }
+                queryParameter<String>("lastEvaluatedKey") {
+                    description = "Pagination cursor returned by the previous page"
+                    required = false
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "One page of the project's conversations plus the cursor for the next page"
+                    body<GetCustomerConversationsResponse>()
+                }
+                code(HttpStatusCode.BadRequest) {
+                    description = "Missing projectId"
+                    body<ErrorResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
+            try {
+                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val projectId = call.request.queryParameters["projectId"]?.takeIf { it.isNotBlank() }
+                if (projectId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "projectId is required"))
+                    return@get
+                }
+                val pageSize = (call.request.queryParameters["pageSize"]?.toIntOrNull() ?: 50).coerceIn(1, 50)
+                val exclusiveStartKey = call.request.queryParameters["lastEvaluatedKey"]?.takeIf { it.isNotBlank() }
+
+                call.respond(
+                    HttpStatusCode.OK,
+                    conversationManagementService.getProjectConversations(
+                        customerId = customerId,
+                        projectId = projectId,
+                        pageSize = pageSize,
+                        exclusiveStartKey = exclusiveStartKey
+                    )
+                )
+            } catch (e: Exception) {
+                logger.error("Unexpected error listing project conversations: {}", e.message, e)
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     mapOf("error" to "Internal server error: ${e.message}")

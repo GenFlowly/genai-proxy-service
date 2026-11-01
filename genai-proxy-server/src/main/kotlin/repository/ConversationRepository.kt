@@ -449,6 +449,11 @@ class ConversationRepository(
     /**
      * Puts the conversation into a project. SET overwrites any previous
      * assignment, so this is also the "move between projects" write.
+     *
+     * updatedAt is bumped in the same write: it is the projectIndex sort key,
+     * so a fresh assignment sorts to the top of its project's list (and
+     * surfaces in recents). Unassignment deliberately does NOT bump — the
+     * project-delete sweep unassigns in bulk and must not flood recents.
      */
     suspend fun setConversationProject(
         conversationId: String,
@@ -463,11 +468,14 @@ class ConversationRepository(
                         CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                     ))
-                    .updateExpression("SET #pid = :pid")
+                    .updateExpression("SET #pid = :pid, #ua = :now")
                     // Guard against creating a phantom row for a conversation that doesn't exist
                     .conditionExpression("attribute_exists($CONVERSATION_ID_KEY)")
-                    .expressionAttributeNames(mapOf("#pid" to PROJECT_ID_KEY))
-                    .expressionAttributeValues(mapOf(":pid" to AttributeValue.builder().s(projectId).build()))
+                    .expressionAttributeNames(mapOf("#pid" to PROJECT_ID_KEY, "#ua" to "updatedAt"))
+                    .expressionAttributeValues(mapOf(
+                        ":pid" to AttributeValue.builder().s(projectId).build(),
+                        ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
+                    ))
                     .build()
             )
             logger.info("Assigned conversation $conversationId to project $projectId for customer $customerId")
@@ -761,6 +769,99 @@ class ConversationRepository(
             logger.warn("Failed to backfill vendors for conversation $conversationId: ${e.message}")
         }
         return vendors
+    }
+
+    /**
+     * One page of the project's conversations, most recently updated first.
+     *
+     * Queries the sparse [CONVERSATION_PROJECT_GSI_KEY] index (PK=projectId,
+     * SK=updatedAt) — read cost scales with the project's membership, never
+     * the customer's whole partition. The index is KEYS_ONLY, so one
+     * BatchGetItem on the base table fills in the summary fields; archived
+     * rows are dropped at that step (the index carries no archivedAt), which
+     * can shrink a page below pageSize without meaning the project is
+     * exhausted — callers follow [lastEvaluatedKey], not the page length.
+     */
+    suspend fun getConversationsByProject(
+        customerId: String,
+        projectId: String,
+        pageSize: Int = 50,
+        exclusiveStartKey: String? = null
+    ): GetCustomerConversationsResponse = withContext(Dispatchers.IO) {
+        val queryBuilder = QueryRequest.builder()
+            .tableName(CONVERSATION_TABLE)
+            .indexName(CONVERSATION_PROJECT_GSI_KEY)
+            .keyConditionExpression("#pid = :pid")
+            // Ownership guard — projectIds are globally unique, but a crafted
+            // id must never read another customer's rows.
+            .filterExpression("#cid = :cid")
+            .expressionAttributeNames(mapOf(
+                "#pid" to PROJECT_ID_KEY,
+                "#cid" to CUSTOMER_ID_KEY
+            ))
+            .expressionAttributeValues(mapOf(
+                ":pid" to AttributeValue.builder().s(projectId).build(),
+                ":cid" to AttributeValue.builder().s(customerId).build()
+            ))
+            .scanIndexForward(false) // most recently updated first
+            .limit(pageSize)
+
+        if (!exclusiveStartKey.isNullOrBlank()) {
+            try {
+                val keyMap: Map<String, String> = Json.decodeFromString(exclusiveStartKey)
+                queryBuilder.exclusiveStartKey(keyMap.mapValues { (_, v) -> AttributeValue.builder().s(v).build() })
+            } catch (e: Exception) {
+                logger.warn("Failed to parse project-conversations exclusiveStartKey, starting from beginning: ${e.message}")
+            }
+        }
+
+        val response = dynamoDbClient.query(queryBuilder.build())
+
+        val pageConversationIds = response.items().mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
+        val baseRowByConversation: Map<String, Map<String, AttributeValue>> =
+            if (pageConversationIds.isEmpty()) emptyMap()
+            else dynamoDbClient.batchGetWithRetry(
+                tableName = CONVERSATION_TABLE,
+                keys = pageConversationIds.map {
+                    mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(it).build()
+                    )
+                },
+                // "title" is a DynamoDB reserved word — alias it
+                projectionExpression = "$CONVERSATION_ID_KEY, #t, createdAt, updatedAt, #aa, #pa, #parent, #v",
+                expressionAttributeNames = mapOf(
+                    "#t" to "title",
+                    "#aa" to ARCHIVED_AT_KEY,
+                    "#pa" to PINNED_AT_KEY,
+                    "#parent" to PARENT_CONVERSATION_ID_KEY,
+                    "#v" to VENDORS_KEY
+                )
+            ).mapNotNull { item ->
+                item[CONVERSATION_ID_KEY]?.s()?.let { it to item }
+            }.toMap()
+
+        // Iterate the index page (not the batch result) to keep the sort order
+        val conversations = pageConversationIds.mapNotNull { convId ->
+            val baseRow = baseRowByConversation[convId] ?: return@mapNotNull null
+            if (baseRow[ARCHIVED_AT_KEY]?.s() != null) return@mapNotNull null
+            ConversationSummary(
+                conversationId = convId,
+                title = baseRow["title"]?.s(),
+                createdAt = baseRow["createdAt"]?.s(),
+                updatedAt = baseRow["updatedAt"]?.s(),
+                pinnedAt = baseRow[PINNED_AT_KEY]?.s(),
+                vendors = resolveVendors(customerId, convId, baseRow[VENDORS_KEY]),
+                projectId = projectId,
+                parentConversationId = baseRow[PARENT_CONVERSATION_ID_KEY]?.s()
+            )
+        }
+
+        val nextPageToken: String? = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
+            Json.encodeToString(response.lastEvaluatedKey().mapValues { (_, v) -> v.s() ?: "" })
+        } else null
+
+        GetCustomerConversationsResponse(conversations = conversations, lastEvaluatedKey = nextPageToken)
     }
 
     /**
