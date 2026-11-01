@@ -21,7 +21,7 @@ import com.genflowly.repository.GraphRepository
 import com.genflowly.DynamoDBConstants.SYSTEM_GRAPH_OWNER
 import com.genflowly.di.AppScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import com.genflowly.models.AIConfig
 import com.genflowly.models.AttachmentRef
@@ -783,7 +783,11 @@ class GenerationOrchestrator(
             logger.info("Generation {} was pre-cancelled before registration — cancelling now", responseMessageId)
             generationJob.cancel(kotlinx.coroutines.CancellationException("Cancelled by user"))
         }
-        val flow = chunkChannel.consumeAsFlow()
+        // receiveAsFlow, not consumeAsFlow: the latter cancels chunkChannel
+        // when the collector (the HTTP relay) disconnects, which propagates
+        // back into generationJob's chunkChannel.send() and kills generation
+        // itself — defeating the AppScope decoupling above.
+        val flow = chunkChannel.receiveAsFlow()
 
         return StreamExecutionResult(
             activeConversationId,
