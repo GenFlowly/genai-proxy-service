@@ -24,11 +24,46 @@ fun Route.registerGetTextGenerationModelsRoutes(
 ) {
 
     authenticate("auth0", "apiKey") {
-        post(Routes.GET_TEXT_GENERATION_MODELS, {
+        get(Routes.GET_TEXT_GENERATION_MODELS, {
             tags("Generation")
             summary = "List available text-generation models"
             description = "Returns the models available to the customer for the requested AI " +
                     "vendors, based on the API keys the customer has stored."
+            request {
+                queryParameter<String>("vendors") {
+                    description = "Comma-separated AI vendors to list models for"
+                    required = true
+                }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Models grouped by AI vendor"
+                    body<GetTextGenerationModelsResponse>()
+                }
+            }
+        }) {
+            val vendors = call.request.queryParameters["vendors"]
+                ?.split(',')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.map { com.genflowly.models.AIVendor.of(it) }
+                .orEmpty()
+
+            val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+
+            call.respond(
+                GetTextGenerationModelsResponse(
+                    aiVendorModelList = aiModelsService.getModelsForVendors(vendors, customerId)
+                )
+            )
+        }
+
+        // Legacy body-based variant of the read above. The frontend moved to
+        // the GET form; delete this once no deployed client sends it.
+        post(Routes.GET_TEXT_GENERATION_MODELS, {
+            tags("Generation")
+            summary = "List available text-generation models (deprecated POST form)"
+            description = "Deprecated: use GET /models?vendors=a,b. Same response."
             request {
                 body<GetTextGenerationModelsRequest> {
                     description = "AI vendors to list models for"
@@ -43,22 +78,13 @@ fun Route.registerGetTextGenerationModelsRoutes(
             }
         }) {
             val request = call.receive<GetTextGenerationModelsRequest>()
-            
-            // Extract customerId from JWT token
-            val customerId = call.requireAuthenticatedCustomerId(
-                customerProfileService
-            )
+            val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
 
-            val aiVendorModelList = aiModelsService.getModelsForVendors(
-                request.aiVendor,
-                customerId
+            call.respond(
+                GetTextGenerationModelsResponse(
+                    aiVendorModelList = aiModelsService.getModelsForVendors(request.aiVendor, customerId)
+                )
             )
-
-            val response = GetTextGenerationModelsResponse(
-                aiVendorModelList = aiVendorModelList
-            )
-
-            call.respond(response)
         }
 
         get(Routes.PROVIDERS, {
