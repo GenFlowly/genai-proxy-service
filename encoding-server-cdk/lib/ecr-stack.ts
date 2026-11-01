@@ -28,35 +28,35 @@ export class EcrStack extends cdk.Stack {
         this.ingestionRepo = new Repository(this, 'IngestionLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-ingestion-repo`,
             removalPolicy: removalPolicy,
-            lifecycleRules: [{ maxImageCount: 5 }],
+            lifecycleRules: [{ maxImageCount: 1 }],
         });
 
         // Parse and Chunk Lambda Repository
         this.parseAndChunkRepo = new Repository(this, 'ParseAndChunkLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-parse-and-chunk-repo`,
             removalPolicy: removalPolicy,
-            lifecycleRules: [{ maxImageCount: 5 }],
+            lifecycleRules: [{ maxImageCount: 1 }],
         });
 
         // Store Embeddings Lambda Repository
         this.storeEmbeddingsRepo = new Repository(this, 'StoreEmbeddingsLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-store-embeddings-repo`,
             removalPolicy: removalPolicy,
-            lifecycleRules: [{ maxImageCount: 5 }],
+            lifecycleRules: [{ maxImageCount: 1 }],
         });
 
         // Create-and-Store Lambda Repository (merged embed+store step)
         this.createAndStoreRepo = new Repository(this, 'CreateAndStoreLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-and-store-repo`,
             removalPolicy: removalPolicy,
-            lifecycleRules: [{ maxImageCount: 5 }],
+            lifecycleRules: [{ maxImageCount: 1 }],
         });
 
         // Create Collections Lambda Repository
         this.createCollectionsRepo = new Repository(this, 'CreateCollectionsLambdaRepo', {
             repositoryName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-create-collections-repo`,
             removalPolicy: removalPolicy,
-            lifecycleRules: [{ maxImageCount: 5 }],
+            lifecycleRules: [{ maxImageCount: 1 }],
         });
 
         // Outputs
