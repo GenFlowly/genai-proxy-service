@@ -348,3 +348,39 @@ Caveat: `i18n.t` evaluated **at module load** (e.g. in a top-level constant) res
    ```
 
 Missing keys automatically fall back to English, so a partially translated language file is safe to ship.
+
+# Mutations Write Their Own Caches (Write-Through at the Service Layer)
+
+A mutation service that has a client-side cache for the data it mutates MUST
+update that cache itself, in the same function, right after the successful
+API call. Call sites never mirror the change ad hoc — a forgotten mirror is
+how "saved it, but a reload shows the old value" bugs happen (that exact bug
+shipped four times with `saveAIConfigPreferences` alone).
+
+## Where the caches live
+
+- **AI config preferences** — `src/stores/aiPreferencesStore.ts`, a module-level
+  `useSyncExternalStore`-subscribable store persisted at
+  `${customerId}_ai_preferences`. Written through by `saveAIConfigPreferences`
+  and `storeCustomerVendorConfig`; consumed by AuthContext (which just
+  subscribes and re-exposes it as `aiConfigPreferences`).
+- **Instructions** — `src/stores/instructionsStore.ts`, same pattern, persisted
+  at `${customerId}_instructions`. Written through by `createInstruction`
+  (upsert) and `deleteInstruction` (remove all versions).
+- **Saved notes** — the `notesCache` module next to SavedNotesWidget. Written
+  through by `saveNote` / `deleteNote`; an absent cache is never fabricated
+  from a single mutation (it would paint as the complete list).
+
+## Rules
+
+1. Adding a mutation endpoint whose data has a local cache? Put the cache
+   update in the service function, guarded on the response being OK. Add a
+   write-through test in the service's test file (success updates the cache,
+   failure leaves it untouched).
+2. Components read via context/hooks as usual; they must not call
+   `updateAiConfigPreferences` / `updateInstruction` after a service call
+   that already writes through. Those context functions remain only for
+   local-only adjustments with no service call behind them.
+3. For react-query-backed resources (agents, request-agents), the equivalent
+   rule is invalidating the query key after the mutation — see
+   `src/hooks/queries/queryKeys.ts`.

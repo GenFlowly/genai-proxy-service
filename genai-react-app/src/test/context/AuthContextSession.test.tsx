@@ -281,7 +281,10 @@ describe('AuthContext session handling', () => {
 
     test('updateInstruction adds a new version and updates an existing one', async () => {
         renderWithProvider()
-        await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('READY'))
+        // Wait out the onboard sync: the customer switch it triggers reloads
+        // the instruction store from the (empty) cache, which would wipe an
+        // update clicked before it — mutations only happen post-auth anyway.
+        await waitFor(() => expect(screen.getByTestId('strict-auth')).toHaveTextContent('AUTHED'))
 
         fireEvent.click(screen.getByTestId('upd-inst-new'))
         expect(screen.getByTestId('inst-count')).toHaveTextContent('1')

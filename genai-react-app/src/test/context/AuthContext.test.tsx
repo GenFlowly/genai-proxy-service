@@ -211,7 +211,6 @@ describe('AuthContext Integration with Navbar', () => {
 });
 
 test('Handles corrupted localStorage for AI preferences gracefully', () => {
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
     // Mock default Auth0 state to avoid crash
     mockUseAuth0.mockReturnValue({
         isLoading: false,
@@ -227,18 +226,19 @@ test('Handles corrupted localStorage for AI preferences gracefully', () => {
         return null;
     });
 
-    render(
-        <MemoryRouter>
-            <LayoutProvider>
-                <AuthProvider>
-                    <Navbar />
-                </AuthProvider>
-            </LayoutProvider>
-        </MemoryRouter>
-    );
-
-    expect(consoleSpy).toHaveBeenCalledWith('Failed to parse cached ai preferences', expect.any(Error));
-    consoleSpy.mockRestore();
+    // A corrupt cached entry must not crash the render — the preferences
+    // store swallows it and starts empty until /onboard refills.
+    expect(() =>
+        render(
+            <MemoryRouter>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <Navbar />
+                    </AuthProvider>
+                </LayoutProvider>
+            </MemoryRouter>
+        )
+    ).not.toThrow();
 });
 
 test('entitlements.canShare is false when unauthenticated', () => {

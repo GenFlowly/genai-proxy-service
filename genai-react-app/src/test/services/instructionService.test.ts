@@ -223,3 +223,31 @@ describe('instructionService', () => {
 // trigger coverage run
 // trigger coverage
 // Trigger coverage run
+
+describe('instructionService write-through', () => {
+    const { setInstructionsCustomer, getInstructions } = require('../../stores/instructionsStore');
+    const mockFetch = fetchWithRetry as jest.Mock;
+
+    test('createInstruction upserts the new version into the instruction store', async () => {
+        setInstructionsCustomer('CU_WT_INST');
+        const created = { id: 'inst-wt', version: 1, name: 'WT', instructions: 'do x' };
+        mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue(created) });
+
+        await createInstruction('tok', { instruction: 'do x', instructionName: 'WT' });
+
+        expect(getInstructions()[0]).toEqual(created);
+    });
+
+    test('deleteInstruction drops every version from the instruction store', async () => {
+        setInstructionsCustomer('CU_WT_INST_DEL');
+        const created = { id: 'inst-gone', version: 1, name: 'Gone', instructions: 'x' };
+        mockFetch.mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue(created) });
+        await createInstruction('tok', { instruction: 'x', instructionName: 'Gone' });
+
+        mockFetch.mockResolvedValue({ ok: true });
+        const { deleteInstruction } = require('../../services/instructionService');
+        await deleteInstruction('tok', 'inst-gone');
+
+        expect(getInstructions().some((i: any) => i.id === 'inst-gone')).toBe(false);
+    });
+});

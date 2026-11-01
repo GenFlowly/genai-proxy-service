@@ -22,7 +22,6 @@ export function AISettings(): React.ReactElement {
         updateVendorApiKeyStatus,
         aiVendorAPIKeyStatusList,
         aiConfigPreferences,
-        updateAiConfigPreferences,
     } = useAuth()
 
     const vendorDisplayName = useVendorDisplayNames()
@@ -123,8 +122,8 @@ export function AISettings(): React.ReactElement {
     ) => {
         requireAuth()
         const token = await getAccessTokenSilently()
-        // The server mirrors the config into preferredModels; mirror it locally
-        // too so the sidebar AI-config widget reflects it this session.
+        // storeCustomerVendorConfig writes through to the preferences store
+        // itself, so no local preferredModels mirroring here.
         await storeCustomerVendorConfig(token, { aiVendor: vendor, model, priority, thinkingLevel })
         const vendorStatus = aiVendorAPIKeyStatusList.find(s => s.aiVendor === vendor)
         if (vendorStatus) {
@@ -135,19 +134,6 @@ export function AISettings(): React.ReactElement {
                 thinkingLevel: thinkingLevel || null,
             })
         }
-        const current = aiConfigPreferences?.preferredModels ?? []
-        const existing = current.find(m => m.aiVendor === vendor)
-        updateAiConfigPreferences({
-            preferredModels: [
-                ...current.filter(m => m.aiVendor !== vendor),
-                {
-                    ...existing,
-                    aiVendor: vendor as AIVendor,
-                    model,
-                    thinkingLevel: thinkingLevel || undefined,
-                },
-            ],
-        })
     }
 
     return (

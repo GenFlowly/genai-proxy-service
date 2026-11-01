@@ -28,7 +28,7 @@ export default function InstructionDetailPage() {
     const { instructionId } = useParams<{ instructionId: string }>();
     const navigate = useNavigate();
     const { getAccessTokenSilently } = useAuth0();
-    const { customerInstructions, refreshInstructions, updateInstruction, isAuthenticated, isInstructionsLoaded, loginWithRedirect, entitlements } = useAuth();
+    const { customerInstructions, refreshInstructions, isAuthenticated, isInstructionsLoaded, loginWithRedirect, entitlements } = useAuth();
 
     const isNew = instructionId === 'new';
 
@@ -111,7 +111,9 @@ export default function InstructionDetailPage() {
             });
 
             if (response.id) {
-                updateInstruction(response);
+                // createInstruction already wrote the new version through to
+                // the instruction store; the refetch picks up server-side
+                // derivations (category/icon backfill).
                 refreshInstructions();
                 setSelectedVersion(null); // Jump back to the latest version
                 if (isNew || response.id !== instructionId) { // Handles branching
