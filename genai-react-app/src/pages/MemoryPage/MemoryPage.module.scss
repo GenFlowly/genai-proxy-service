@@ -24,7 +24,7 @@
     gap: $widget-gap;
     padding: $widget-gap;
 
-    @include respond-to-mobile {
+    @include respond-to-tablet {
         background-color: $background-gray;
         gap: 0;
         padding: 0;
@@ -42,8 +42,12 @@
     background-color: $color-background;
     padding-top: 2rem;
     padding-bottom: 3rem;
-    padding-right: 3.5rem;
-    /* Reserve space for collapsed RightSidebar */
+    padding-right: 3.5rem; // Reserve space for the collapsed RightSidebar's 56px strip (desktop only)
+
+    @include respond-to-tablet {
+        // RightSidebar fully unmounts below this width — nothing to clear
+        padding-right: 0;
+    }
 }
 
 .formContainer {

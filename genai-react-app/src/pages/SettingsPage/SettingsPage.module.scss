@@ -59,5 +59,8 @@
 
   @include respond-to-tablet {
     padding: $settings-page-padding-y 1.25rem;
+    // Rest below the fixed MobileHeader overlay, same convention as
+    // CenterSection/AgentsPage .main
+    padding-top: $mobile-header-height;
   }
 }

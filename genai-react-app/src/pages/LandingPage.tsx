@@ -13,7 +13,7 @@ import { useLayout } from '../context/LayoutContext'
 
 import { getPageConfig } from '../config/PageWidgetConfig'
 import { usePageTitle } from '../hooks/usePageTitle'
-import { useWindowSize } from '../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../hooks/useResponsiveBreakpoints'
 
 // Persisted width is stored in rem so it stays relative to the root font size
 const HISTORY_WIDTH_STORAGE_KEY = 'conversation_history_width_rem'
@@ -24,13 +24,12 @@ function LandingPageContent() {
     usePageTitle()
     const config = getPageConfig('CHAT_PAGE')
     const { isHistoryWidgetExpanded } = useLayout()
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
+    const { isNarrow } = useResponsiveBreakpoints()
 
     return (
         <div className={styles.layout}>
-            {/* On mobile, history is a dedicated page (/history) instead of a sidebar widget */}
-            {!isMobile && isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
+            {/* Below isNarrow, history lives in the mobile header's menu overlay instead of a squeezed sidebar */}
+            {!isNarrow && isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
                 <ResizableSidebar
                     storageKey={HISTORY_WIDTH_STORAGE_KEY}
                     // The split's two stacked cards are the visible panels;
@@ -59,8 +58,7 @@ export default function LandingPage() {
         setHistoryWidgetExpanded 
     } = useLayout()
     const location = useLocation()
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
+    const { isNarrow } = useResponsiveBreakpoints()
 
     // Orchestrate Sidebar and History states based on active conversation
     useEffect(() => {
@@ -73,12 +71,12 @@ export default function LandingPage() {
             setLeftSidebarExpanded(false)
         } else {
             // No conversation (New Chat): right expanded (desktop), left fully minimized/hidden, history expanded (desktop)
-            setRightSidebarExpanded(!isMobile)
+            setRightSidebarExpanded(!isNarrow)
             setLeftSidebarMinimized(true)
             setLeftSidebarExpanded(false)
-            setHistoryWidgetExpanded(!isMobile)
+            setHistoryWidgetExpanded(!isNarrow)
         }
-    }, [contextId, setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, setHistoryWidgetExpanded, isMobile])
+    }, [contextId, setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, setHistoryWidgetExpanded, isNarrow])
 
     // 📱 The app never scrolls the window (each page scrolls internally),
     // but iOS Safari force-scrolls the window when the keyboard opens, and
@@ -125,9 +123,9 @@ export default function LandingPage() {
 
     return (
         <div className={styles.page}>
-            {/* 📱 Mobile: no navbar — ConversationHeader renders a transparent
+            {/* Below isNarrow: no navbar — ConversationHeader renders a transparent
                 overlay (MobileHeader) over the full-screen content instead */}
-            {!isMobile && <Navbar />}
+            {!isNarrow && <Navbar />}
             <ConversationHeader />
             <LandingPageContent />
         </div>

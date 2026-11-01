@@ -355,11 +355,6 @@ export function ConnectorsSettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.connectorsSettings.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.connectorsSettings.subtitle')}</p>
-            </div>
-
             <div className={styles.listSection}>
                 <div className={styles.listHeader}>
                     <h3 className={styles.listTitle}>{t('settingsPage.connectorsSettings.yourConnectors')}</h3>

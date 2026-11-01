@@ -48,37 +48,34 @@ export function EmbeddingUsageSettings(): React.ReactElement {
     const hasRows = !!summary && summary.byVendor.length > 0
 
     const renderRows = (rows: UsageByDim[], showModel: boolean) => (
-        <table className={styles.table}>
-            <thead>
-                <tr>
-                    <th>{t('settingsPage.usageCommon.vendor')}</th>
-                    {showModel && <th>{t('settingsPage.usageCommon.model')}</th>}
-                    <th className={styles.numeric}>{t('settingsPage.usageCommon.totalCost')}</th>
-                    <th className={styles.numeric}>{t('settingsPage.usageCommon.tokens')}</th>
-                    <th className={styles.numeric}>{t('settingsPage.usageCommon.requests')}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows.map(row => (
-                    <tr key={`${row.vendor}-${row.model ?? ''}`}>
-                        <td>{row.vendor}</td>
-                        {showModel && <td>{row.model}</td>}
-                        <td className={styles.numeric}>{formatUsd(row.costUsd)}</td>
-                        <td className={styles.numeric}>{formatCount(row.totalTokens ?? 0)}</td>
-                        <td className={styles.numeric}>{formatCount(row.requestCount)}</td>
+        <div className={styles.tableScroll}>
+            <table className={styles.table}>
+                <thead>
+                    <tr>
+                        <th>{t('settingsPage.usageCommon.vendor')}</th>
+                        {showModel && <th>{t('settingsPage.usageCommon.model')}</th>}
+                        <th className={styles.numeric}>{t('settingsPage.usageCommon.totalCost')}</th>
+                        <th className={styles.numeric}>{t('settingsPage.usageCommon.tokens')}</th>
+                        <th className={styles.numeric}>{t('settingsPage.usageCommon.requests')}</th>
                     </tr>
-                ))}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {rows.map(row => (
+                        <tr key={`${row.vendor}-${row.model ?? ''}`}>
+                            <td>{row.vendor}</td>
+                            {showModel && <td>{row.model}</td>}
+                            <td className={styles.numeric}>{formatUsd(row.costUsd)}</td>
+                            <td className={styles.numeric}>{formatCount(row.totalTokens ?? 0)}</td>
+                            <td className={styles.numeric}>{formatCount(row.requestCount)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     )
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.embeddingUsageSettings.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.embeddingUsageSettings.subtitle')}</p>
-            </div>
-
             <DateRangePicker
                 value={range}
                 onChange={setRange}

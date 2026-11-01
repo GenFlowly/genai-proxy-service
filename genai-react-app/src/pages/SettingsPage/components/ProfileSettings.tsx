@@ -77,11 +77,6 @@ export function ProfileSettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.profileSettings.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.profileSettings.subtitle')}</p>
-            </div>
-            
             <div className={styles.form}>
                 
                 {message && (

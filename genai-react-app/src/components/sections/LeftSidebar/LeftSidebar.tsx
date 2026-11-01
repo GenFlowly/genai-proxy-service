@@ -2,7 +2,7 @@ import React from 'react'
 import { useLayout } from '../../../context/LayoutContext'
 import styles from './LeftSidebar.module.scss'
 import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
-import { useWindowSize } from '../../../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
 
 interface LeftSidebarProps {
     widgetIds: string[]
@@ -14,11 +14,10 @@ export default function LeftSidebar({ widgetIds, 'data-testid': testId }: LeftSi
     const collapsed = !isLeftSidebarExpanded
     const widgets = useWidgetResolver(widgetIds)
 
-    const { width } = useWindowSize()
-    const isMobile = width <= 768 // our standard mobile breakpoint
+    const { isNarrow } = useResponsiveBreakpoints()
 
-    if (isMobile) {
-        return null; // LeftSidebar widgets are not shown on mobile, the global mobile menu takes over
+    if (isNarrow) {
+        return null; // LeftSidebar widgets aren't shown below isNarrow — the global mobile menu takes over
     }
 
     return (

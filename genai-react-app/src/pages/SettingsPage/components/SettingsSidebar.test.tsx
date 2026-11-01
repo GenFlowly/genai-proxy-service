@@ -75,22 +75,10 @@ describe('SettingsSidebar', () => {
         expect(profileTab).toHaveClass('active');
     });
 
-    test('desktop: clicking a parent section navigates to its first child', async () => {
+    test('clicking a parent section expands it and navigates to its first child', async () => {
         render(
             <MemoryRouter initialEntries={['/settings/profile']}>
                 <SettingsSidebar />
-            </MemoryRouter>
-        );
-
-        await userEvent.click(screen.getByText('AI Settings'));
-
-        expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/llm-keys');
-    });
-
-    test('mobile full page: tapping a parent expands the submenu without navigating', async () => {
-        render(
-            <MemoryRouter initialEntries={['/settings']}>
-                <SettingsSidebar fullPage />
             </MemoryRouter>
         );
 
@@ -99,23 +87,24 @@ describe('SettingsSidebar', () => {
 
         await userEvent.click(screen.getByText('AI Settings'));
 
-        // Submenu expands in place, and we stay on the menu page (no navigation)
+        expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/llm-keys');
+        // Submenu is now expanded in place (so a different child is one tap away)
         expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
         expect(screen.getByText('Embedding Model API Keys')).toBeInTheDocument();
         expect(screen.getByText('Vector DB Connection')).toBeInTheDocument();
-        expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    test('mobile full page: tapping a child navigates to its page', async () => {
+    test('tapping a child navigates to its page and calls onNavigate', async () => {
+        const onNavigate = jest.fn();
         render(
-            <MemoryRouter initialEntries={['/settings']}>
-                <SettingsSidebar fullPage />
+            <MemoryRouter initialEntries={['/settings/ai']}>
+                <SettingsSidebar onNavigate={onNavigate} />
             </MemoryRouter>
         );
 
-        await userEvent.click(screen.getByText('AI Settings'));
         await userEvent.click(screen.getByText('Vector DB Connection'));
 
         expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/vector-db');
+        expect(onNavigate).toHaveBeenCalled();
     });
 });

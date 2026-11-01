@@ -63,7 +63,6 @@ describe('EmbeddingKeysSettings', () => {
     test('renders OpenAI and Voyage rows, both unset by default', async () => {
         render(withQueryClient(<EmbeddingKeysSettings />));
 
-        expect(screen.getByText('Embedding Model API Keys')).toBeInTheDocument();
         await waitFor(() => expect(mockGetEmbeddingKeys).toHaveBeenCalled());
         expect(screen.getByTestId('embedding-keys-OPENAI-status-pill')).toHaveTextContent('Not set');
         expect(screen.getByTestId('embedding-keys-VOYAGE-status-pill')).toHaveTextContent('Not set');
