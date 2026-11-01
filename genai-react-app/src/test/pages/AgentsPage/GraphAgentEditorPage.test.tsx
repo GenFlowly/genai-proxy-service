@@ -64,6 +64,7 @@ jest.mock('react-router-dom', () => ({
 
 jest.mock('../../../services/agentsService', () => ({
     getAgent: jest.fn(),
+    getCachedAgent: jest.fn(() => null),
     createGraphAgent: jest.fn(),
     updateAgent: jest.fn(),
     forkAgent: jest.fn(),

@@ -11,13 +11,15 @@ export async function getTextGenerationModels(
     customerId: string,
     request: GetTextGenerationModelsRequest
 ): Promise<GetTextGenerationModelsResponse> {
-    const response = await fetchWithRetry(endpoints.getTextGenerationModels, {
-        method: HttpMethod.POST,
+    // Pure read: vendors travel as a query param. The backend keeps a
+    // deprecated POST-with-body variant until no deployed client sends it.
+    const url = `${endpoints.getTextGenerationModels}?vendors=${encodeURIComponent(request.aiVendor.join(','))}`
+    const response = await fetchWithRetry(url, {
+        method: HttpMethod.GET,
         headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(request),
     })
 
     if (!response.ok) {

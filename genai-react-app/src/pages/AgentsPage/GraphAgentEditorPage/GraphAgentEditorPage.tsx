@@ -9,7 +9,7 @@ import EditAgentPage from '../EditAgentPage/EditAgentPage'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
-import { createGraphAgent, forkAgent, getAgent, updateAgent } from '../../../services/agentsService'
+import { createGraphAgent, forkAgent, getAgent, getCachedAgent, updateAgent } from '../../../services/agentsService'
 import { getCustomerInstructions } from '../../../services/instructionService'
 import { getNodePresets } from '../../../services/nodePresetsService'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
@@ -155,20 +155,29 @@ export default function GraphAgentEditorPage() {
         setRightSidebarExpanded(false)
     }, [setLeftSidebarExpanded, setRightSidebarExpanded])
 
-    // Load the agent (existing graphs only) — desktop editor path
+    // Load the agent (existing graphs only) — desktop editor path. Paints the
+    // session-cached copy instantly, then revalidates; identical fresh content
+    // never resets the canvas, and a failed revalidation keeps the cached view.
     useEffect(() => {
         if (isNew || !graphId || !isDesktop) return
         let cancelled = false
+
+        const cached = getCachedAgent(graphId)
+        if (cached) {
+            setAgent(cached)
+            setLoadError(null)
+        }
+
         const load = async () => {
             try {
                 const token = await getAccessTokenSilently()
                 const found = await getAgent(token, graphId)
                 if (!cancelled) {
-                    setAgent(found)
+                    if (!cached || JSON.stringify(cached) !== JSON.stringify(found)) setAgent(found)
                     setLoadError(null)
                 }
             } catch (err: any) {
-                if (!cancelled) setLoadError(err?.message ?? t('agentsPage.graphEditorPage.loadFailed'))
+                if (!cancelled && !cached) setLoadError(err?.message ?? t('agentsPage.graphEditorPage.loadFailed'))
             }
         }
         load()
