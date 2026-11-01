@@ -2,6 +2,15 @@ import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { fetchWithRetry } from '../utils/apiUtils'
 import { APIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
+import { queryClient } from '../queryClient'
+import { EMBEDDING_MODELS_QUERY_KEY } from '../hooks/queries/queryKeys'
+
+// The probed embedding-model catalog is derived from which keys exist — any
+// key change makes it stale, so mutations invalidate it here, never at the
+// call site.
+function invalidateEmbeddingModelsQuery(): void {
+    void queryClient.invalidateQueries({ queryKey: [EMBEDDING_MODELS_QUERY_KEY] })
+}
 
 // Mirrors genai-proxy-server models/api/EmbeddingKeyModels.kt
 
@@ -100,6 +109,7 @@ export async function storeEmbeddingKey(
         throw new Error(`Store embedding key failed: ${response.status} ${response.statusText}`)
     }
 
+    invalidateEmbeddingModelsQuery()
     return (await response.json()) as StoreEmbeddingKeyResponse
 }
 
@@ -119,4 +129,6 @@ export async function deleteEmbeddingKey(token: string, vendor: EmbeddingVendor)
     if (!response.ok) {
         throw new Error(`Delete embedding key failed: ${response.status} ${response.statusText}`)
     }
+
+    invalidateEmbeddingModelsQuery()
 }

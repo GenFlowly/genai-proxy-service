@@ -71,8 +71,10 @@ describe('AuthContext session handling', () => {
         ;mockOnboardCustomer.mockResolvedValue({ customerId: 'cust-1' })
     })
 
-    test('hydrates vendor statuses and instructions from cache before onboarding resolves', async () => {
+    test('hydrates instructions from cache before onboarding resolves; vendor statuses never persist', async () => {
         localStorage.setItem('customerId', 'cust-1')
+        // Legacy entry from before the no-credential-caching rule — must never
+        // hydrate state and must be swept away.
         localStorage.setItem(
             'cust-1_vendor_api_key_statuses',
             JSON.stringify([{ aiVendor: 'OPENAI', isAPIKeyValid: true }])
@@ -88,21 +90,23 @@ describe('AuthContext session handling', () => {
 
         renderWithProvider()
 
-        // Cached copies are visible while /onboard is still in flight
-        await waitFor(() => expect(screen.getByTestId('vendor-count')).toHaveTextContent('1'))
-        expect(screen.getByTestId('inst-count')).toHaveTextContent('2')
+        // Cached instructions are visible while /onboard is still in flight;
+        // vendor statuses stay empty (credential-adjacent — never cached)
+        await waitFor(() => expect(screen.getByTestId('inst-count')).toHaveTextContent('2'))
+        expect(screen.getByTestId('vendor-count')).toHaveTextContent('0')
+        expect(localStorage.getItem('cust-1_vendor_api_key_statuses')).toBeNull()
 
-        // Server truth replaces the cached copies and updates the cache
+        // Server truth populates vendor statuses (state only) and refreshes instructions
         await act(async () => {
             resolveOnboard!({
                 customerId: 'cust-1',
-                aiVendorAPIKeyStatusList: [],
+                aiVendorAPIKeyStatusList: [{ aiVendor: 'OPENAI', isAPIKeyValid: true }],
                 customerInstructions: [{ id: 'i1', version: 2, name: 'fresh' }],
             })
         })
-        expect(screen.getByTestId('vendor-count')).toHaveTextContent('0')
+        expect(screen.getByTestId('vendor-count')).toHaveTextContent('1')
         expect(screen.getByTestId('inst-count')).toHaveTextContent('1')
-        expect(JSON.parse(localStorage.getItem('cust-1_vendor_api_key_statuses')!)).toEqual([])
+        expect(localStorage.getItem('cust-1_vendor_api_key_statuses')).toBeNull()
         expect(JSON.parse(localStorage.getItem('cust-1_instructions')!)).toEqual([
             { id: 'i1', version: 2, name: 'fresh' },
         ])
@@ -114,9 +118,9 @@ describe('AuthContext session handling', () => {
         await waitFor(() => expect(screen.getByTestId('strict-auth')).toHaveTextContent('AUTHED'))
 
         fireEvent.click(screen.getByTestId('upd-vendor-new'))
-        expect(JSON.parse(localStorage.getItem('cust-1_vendor_api_key_statuses')!)).toEqual([
-            { aiVendor: 'OPENAI', isAPIKeyValid: true },
-        ])
+        // Vendor statuses update React state only — never localStorage
+        expect(screen.getByTestId('vendor-count')).toHaveTextContent('1')
+        expect(localStorage.getItem('cust-1_vendor_api_key_statuses')).toBeNull()
 
         fireEvent.click(screen.getByTestId('upd-inst-new'))
         expect(JSON.parse(localStorage.getItem('cust-1_instructions')!)).toEqual([

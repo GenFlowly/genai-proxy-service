@@ -11,9 +11,8 @@ import {
     deleteRequestAgentMapping,
     putRequestAgentMapping,
 } from '../../../services/requestAgentsService'
-import { useCustomerAgents, CUSTOMER_AGENTS_QUERY_KEY } from '../../../hooks/queries/useCustomerAgents'
-import { useRequestAgents, REQUEST_AGENTS_QUERY_KEY } from '../../../hooks/queries/useRequestAgents'
-import { queryClient } from '../../../queryClient'
+import { useCustomerAgents } from '../../../hooks/queries/useCustomerAgents'
+import { useRequestAgents } from '../../../hooks/queries/useRequestAgents'
 import {
     Agent,
     GetCustomerAgentsResponse,
@@ -236,13 +235,6 @@ export function DefaultsSettings(): React.ReactElement {
                 setSavedConversationAgentId(conversationAgentId)
             }
             showToast(t('settingsPage.defaultAgents.savedToast'))
-            // Mapping writes also retag agents server-side (requestType /
-            // category), so both version-gated caches must refresh now rather
-            // than at the next /onboard sync.
-            await Promise.all([
-                queryClient.invalidateQueries({ queryKey: [REQUEST_AGENTS_QUERY_KEY] }),
-                queryClient.invalidateQueries({ queryKey: [CUSTOMER_AGENTS_QUERY_KEY] }),
-            ])
         } catch (error: any) {
             console.error('Failed to save defaults:', error)
             showToast(error?.message || t('settingsPage.defaultAgents.saveErrorToast'))
