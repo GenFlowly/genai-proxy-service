@@ -77,3 +77,36 @@ describe('saveAIConfigService', () => {
             .rejects.toThrow("Unsupported embedding model(s): embeddingModelConversations='voyage-multimodal-3.5'.");
     });
 });
+
+describe('saveAIConfigService write-through', () => {
+    const { setAiPreferencesCustomer, getAiPreferences } = require('../../stores/aiPreferencesStore');
+
+    test('merges the saved preferences into the local store on success', async () => {
+        setAiPreferencesCustomer('CU_WT_SAVE');
+        mockFetchWithRetry.mockResolvedValue({ ok: true });
+
+        await saveAIConfigPreferences('tok', {
+            aiConfigPreferences: { preferredAgentId: 'GRP9' },
+        });
+
+        expect(getAiPreferences()?.preferredAgentId).toBe('GRP9');
+        expect(JSON.parse(localStorage.getItem('CU_WT_SAVE_ai_preferences')!)).toMatchObject({
+            preferredAgentId: 'GRP9',
+        });
+    });
+
+    test('leaves the local store untouched when the save fails', async () => {
+        setAiPreferencesCustomer('CU_WT_FAIL');
+        mockFetchWithRetry.mockResolvedValue({
+            ok: false,
+            statusText: 'Bad Request',
+            json: jest.fn().mockResolvedValue({}),
+        });
+
+        await expect(
+            saveAIConfigPreferences('tok', { aiConfigPreferences: { preferredAgentId: 'GRP9' } })
+        ).rejects.toThrow();
+
+        expect(getAiPreferences()?.preferredAgentId).toBeUndefined();
+    });
+});

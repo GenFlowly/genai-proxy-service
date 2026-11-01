@@ -165,3 +165,58 @@ describe('saveNotesService', () => {
         );
     });
 });
+
+describe('saveNotesService write-through', () => {
+    const {
+        loadNotesCache,
+        saveNotesCache,
+        clearNotesCache,
+    } = require('../../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache');
+    const { saveNote, deleteNote } = require('../../services/saveNotesService');
+
+    beforeEach(() => {
+        global.fetch = jest.fn();
+        clearNotesCache();
+    });
+
+    test('saveNote upserts into an existing notes cache', async () => {
+        localStorage.setItem('customerId', 'CU_WT_NOTE');
+        saveNotesCache('CU_WT_NOTE', [
+            { noteKey: 'k1', noteValue: 'old', title: 'Old', createdAt: 't0', updatedAt: 't0' },
+        ]);
+        (global.fetch as jest.Mock).mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({ title: 'New Title' }),
+        });
+
+        await saveNote({ noteKey: 'k1', noteValue: 'new', createdAt: 't0', client: 'c' }, 'tok');
+
+        const cached = loadNotesCache('CU_WT_NOTE');
+        expect(cached).toHaveLength(1);
+        expect(cached[0]).toMatchObject({ noteKey: 'k1', noteValue: 'new', title: 'New Title' });
+    });
+
+    test('saveNote does not fabricate a cache when none exists', async () => {
+        localStorage.setItem('customerId', 'CU_WT_NOCACHE');
+        (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+        await saveNote({ noteKey: 'k9', noteValue: 'v', createdAt: 't0', client: 'c' }, 'tok');
+
+        expect(loadNotesCache('CU_WT_NOCACHE')).toBeNull();
+    });
+
+    test('deleteNote removes the note from the cache', async () => {
+        localStorage.setItem('customerId', 'CU_WT_DEL');
+        saveNotesCache('CU_WT_DEL', [
+            { noteKey: 'k1', noteValue: 'a', title: 'A', createdAt: 't0', updatedAt: 't0' },
+            { noteKey: 'k2', noteValue: 'b', title: 'B', createdAt: 't0', updatedAt: 't0' },
+        ]);
+        (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+        await deleteNote('tok', 'k1');
+
+        expect(loadNotesCache('CU_WT_DEL')).toEqual([
+            { noteKey: 'k2', noteValue: 'b', title: 'B', createdAt: 't0', updatedAt: 't0' },
+        ]);
+    });
+});

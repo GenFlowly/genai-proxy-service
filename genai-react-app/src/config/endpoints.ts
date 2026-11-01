@@ -41,6 +41,7 @@ export const endpoints = {
     forkConversation: (conversationId: string, messageId: string) =>
         `${BASE}${API_PREFIX}/conversation/fork?conversationId=${encodeURIComponent(conversationId)}&messageId=${encodeURIComponent(messageId)}`,
     getProjects: `${BASE}${API_PREFIX}/projects`,
+    getProjectConversations: `${BASE}${API_PREFIX}/projects/conversations`,
     createProject: `${BASE}${API_PREFIX}/project`,
     assignConversationProject: (conversationId: string, projectId: string) =>
         `${BASE}${API_PREFIX}/conversation/assign-project?conversationId=${encodeURIComponent(conversationId)}&projectId=${encodeURIComponent(projectId)}`,

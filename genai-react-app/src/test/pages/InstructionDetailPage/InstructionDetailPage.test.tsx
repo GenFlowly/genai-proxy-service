@@ -166,7 +166,8 @@ describe('InstructionDetailPage', () => {
                 instructionName: 'New Name',
                 existingInstructionId: undefined
             });
-            expect(mockUpdate).toHaveBeenCalled();
+            // The local-list upsert is createInstruction's own write-through
+            // (covered in the service test) — the page only refetches.
             expect(mockRefresh).toHaveBeenCalled();
         });
     });

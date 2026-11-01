@@ -2,6 +2,7 @@ import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { AIConfig } from '../context/AIContext'
 import { fetchWithRetry } from "../utils/apiUtils";
+import { mergeAiPreferences } from '../stores/aiPreferencesStore'
 
 export interface SaveAIConfigPreferencesRequest {
     aiConfigPreferences: {
@@ -45,4 +46,9 @@ export async function saveAIConfigPreferences(
             serverError || `Failed to save AI config preferences: ${response.statusText}`
         )
     }
+
+    // Write-through: the local preferences mirror updates HERE, together with
+    // the successful API call — never at individual call sites, where it gets
+    // forgotten (and then a reload paints the pre-save value).
+    mergeAiPreferences(payload.aiConfigPreferences)
 }
