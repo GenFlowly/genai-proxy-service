@@ -1,7 +1,18 @@
+import React from 'react'
+import { RectangleButton } from '@genflowly/component-library'
 import { useServiceWorkerUpdate } from '../../../hooks/useServiceWorkerUpdate'
+import styles from './ServiceWorkerUpdateNotifier.module.scss'
 
-/** Renders nothing; must sit inside ToastProvider so the update toast has somewhere to go. */
-export default function ServiceWorkerUpdateNotifier(): null {
-    useServiceWorkerUpdate()
-    return null
+/** Banner prompting the user to apply an already-downloaded app update. */
+export default function ServiceWorkerUpdateNotifier(): React.ReactElement | null {
+    const { updateAvailable, applyUpdate } = useServiceWorkerUpdate()
+
+    if (!updateAvailable) return null
+
+    return (
+        <div className={styles.banner} role="status" data-testid="sw-update-banner">
+            <span>A new version of AI Proxy is available.</span>
+            <RectangleButton label="Refresh" onClick={applyUpdate} data-testid="sw-update-refresh" />
+        </div>
+    )
 }

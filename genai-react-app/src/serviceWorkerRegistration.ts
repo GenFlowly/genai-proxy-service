@@ -17,6 +17,9 @@ type Config = {
 /** Dispatched on `window` when a new service worker has finished installing and is waiting to activate. */
 export const SW_UPDATE_AVAILABLE_EVENT = 'sw-update-available'
 
+/** Event detail carries the registration so listeners can reach `registration.waiting`. */
+export type SwUpdateAvailableEvent = CustomEvent<ServiceWorkerRegistration>
+
 export function register(config?: Config) {
     if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) {
         return
