@@ -27,7 +27,9 @@ reportWebVitals();
 // precaching starts on first visit; the update-available toast is wired up
 // later in AppContent, once ToastProvider exists.
 serviceWorkerRegistration.register({
-    onUpdate: () => {
-        window.dispatchEvent(new CustomEvent(serviceWorkerRegistration.SW_UPDATE_AVAILABLE_EVENT));
+    onUpdate: (registration) => {
+        window.dispatchEvent(
+            new CustomEvent(serviceWorkerRegistration.SW_UPDATE_AVAILABLE_EVENT, { detail: registration })
+        );
     },
 });
