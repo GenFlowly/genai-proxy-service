@@ -2,15 +2,14 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfileSettings } from './ProfileSettings';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuth } from '../../../context/AuthContext';
 import { getUserProfile, updateUsername, updateDiscoverability } from '../../../services/userService';
+import { withQueryClient } from '../../../test/utils/queryWrapper';
 
-jest.mock('@auth0/auth0-react', () => ({
-    useAuth0: jest.fn()
-}));
+jest.mock('../../../context/AuthContext');
 jest.mock('../../../services/userService');
 
-const mockUseAuth0 = useAuth0 as jest.Mock;
+const mockUseAuth = useAuth as jest.Mock;
 const mockGetUserProfile = getUserProfile as jest.Mock;
 const mockUpdateUsername = updateUsername as jest.Mock;
 const mockUpdateDiscoverability = updateDiscoverability as jest.Mock;
@@ -21,20 +20,22 @@ describe('ProfileSettings', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockGetAccessTokenSilently.mockResolvedValue('test-token');
-        mockUseAuth0.mockReturnValue({
-            getAccessTokenSilently: mockGetAccessTokenSilently
+        mockUseAuth.mockReturnValue({
+            getAccessTokenSilently: mockGetAccessTokenSilently,
+            isAuthenticated: true,
+            customerId: 'cust-1',
         });
     });
 
     test('renders loading state initially', () => {
         mockGetUserProfile.mockReturnValue(new Promise(() => {})); // pending promise
-        render(<ProfileSettings />);
+        render(withQueryClient(<ProfileSettings />));
         expect(screen.getByText('Loading profile...')).toBeInTheDocument();
     });
 
     test('renders error state when profile fails to load', async () => {
         mockGetUserProfile.mockRejectedValue(new Error('Failed'));
-        render(<ProfileSettings />);
+        render(withQueryClient(<ProfileSettings />));
         await waitFor(() => {
             expect(screen.getByText('Failed to load profile data.')).toBeInTheDocument();
         });
@@ -49,7 +50,7 @@ describe('ProfileSettings', () => {
             picture: 'http://example.com/pic.jpg'
         });
 
-        render(<ProfileSettings />);
+        render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
             expect(screen.getByText('Profile Settings')).toBeInTheDocument();
@@ -69,7 +70,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateUsername.mockResolvedValue(undefined);
 
-        render(<ProfileSettings />);
+        render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
             expect(screen.getByText('Profile Settings')).toBeInTheDocument();
@@ -96,7 +97,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateUsername.mockRejectedValue(new Error('Username taken'));
 
-        render(<ProfileSettings />);
+        render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
             expect(screen.getByText('Profile Settings')).toBeInTheDocument();
@@ -124,7 +125,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateDiscoverability.mockResolvedValue(true);
 
-        render(<ProfileSettings />);
+        render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
             expect(screen.getByText('Profile Settings')).toBeInTheDocument();
@@ -148,7 +149,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateDiscoverability.mockResolvedValue(false); // indicates failure
 
-        render(<ProfileSettings />);
+        render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
             expect(screen.getByText('Profile Settings')).toBeInTheDocument();

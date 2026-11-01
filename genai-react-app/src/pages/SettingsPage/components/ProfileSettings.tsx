@@ -1,53 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuth } from '../../../context/AuthContext';
 import { PillButton } from '@genflowly/component-library';
-import { getUserProfile, updateUsername, updateDiscoverability } from '../../../services/userService';
-import { CustomerProfileResponse } from '../../../models/user.models';
+import { updateUsername, updateDiscoverability } from '../../../services/userService';
+import { useProfile } from '../../../hooks/queries/useProfile';
 import styles from './ProfileSettings.module.scss';
 
 export function ProfileSettings(): React.ReactElement {
     const { t } = useTranslation();
-    const { getAccessTokenSilently } = useAuth0();
-    const [profile, setProfile] = useState<CustomerProfileResponse | null>(null);
+    const { getAccessTokenSilently } = useAuth();
+    const { data: profile, isLoading } = useProfile();
     const [usernameInput, setUsernameInput] = useState('');
     const [isDiscoverable, setIsDiscoverable] = useState(false);
-    
-    const [isLoading, setIsLoading] = useState(true);
+
     const [isSavingUsername, setIsSavingUsername] = useState(false);
     const [isSavingDiscoverability, setIsSavingDiscoverability] = useState(false);
-    
+
     const [message, setMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
 
+    // Seed the editable fields from the profile once per distinct server
+    // content — a background revalidation returning the same values must not
+    // clobber in-progress typing.
+    const seededRef = useRef<string | null>(null);
     useEffect(() => {
-        const loadProfile = async () => {
-            try {
-                const token = await getAccessTokenSilently();
-                const data = await getUserProfile(token);
-                if (data) {
-                    setProfile(data);
-                    setUsernameInput(data.username || '');
-                    setIsDiscoverable(data.isDiscoverable);
-                }
-            } catch (err) {
-                console.error("Failed to load profile", err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        
-        loadProfile();
-    }, [getAccessTokenSilently]);
+        if (!profile) return;
+        const signature = JSON.stringify([profile.username, profile.isDiscoverable]);
+        if (seededRef.current === signature) return;
+        seededRef.current = signature;
+        setUsernameInput(profile.username || '');
+        setIsDiscoverable(profile.isDiscoverable);
+    }, [profile]);
 
     const handleSaveUsername = async () => {
         if (!usernameInput || usernameInput === profile?.username) return;
-        
+
         setIsSavingUsername(true);
         setMessage(null);
         try {
             const token = await getAccessTokenSilently();
             await updateUsername(token, usernameInput);
-            setProfile(prev => prev ? { ...prev, username: usernameInput } : null);
             setMessage({ text: t('settingsPage.profileSettings.usernameUpdatedMessage'), type: 'success' });
         } catch (err: any) {
             setMessage({ text: err.message || t('settingsPage.profileSettings.usernameUpdateFailedMessage'), type: 'error' });
@@ -65,9 +56,7 @@ export function ProfileSettings(): React.ReactElement {
         try {
             const token = await getAccessTokenSilently();
             const success = await updateDiscoverability(token, checked);
-            if (success) {
-                setProfile(prev => prev ? { ...prev, isDiscoverable: checked } : null);
-            } else {
+            if (!success) {
                 throw new Error(t('settingsPage.profileSettings.discoverabilityUpdateFailedMessage'));
             }
         } catch (err: any) {
@@ -78,7 +67,7 @@ export function ProfileSettings(): React.ReactElement {
         }
     };
 
-    if (isLoading) {
+    if (isLoading && !profile) {
         return <div className={styles.card}>{t('settingsPage.profileSettings.loadingProfile')}</div>;
     }
 
