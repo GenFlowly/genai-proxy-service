@@ -21,6 +21,12 @@ export interface Envelope<T> {
 export interface SeededCache<T> {
     getEnvelope(customerId: string): Envelope<T> | null
     save(customerId: string, data: T, version: number | null): void
+    /**
+     * Patch the loaded envelope's data in place (version unchanged), for
+     * mutation write-through. No-op when no envelope has been loaded this
+     * session — there is nothing meaningful to patch.
+     */
+    patchData(updater: (data: T) => T): void
 }
 
 function createSeededCache<T>(suffix: string): SeededCache<T> {
@@ -52,6 +58,12 @@ function createSeededCache<T>(suffix: string): SeededCache<T> {
         save(customerId: string, data: T, version: number | null): void {
             memory = { customerId, version, data }
             try { localStorage.setItem(customerKey(customerId, suffix), JSON.stringify(memory)) } catch { /* quota */ }
+        },
+
+        patchData(updater: (data: T) => T): void {
+            if (!memory) return
+            memory = { ...memory, data: updater(memory.data) }
+            try { localStorage.setItem(customerKey(memory.customerId, suffix), JSON.stringify(memory)) } catch { /* quota */ }
         },
     }
 }
