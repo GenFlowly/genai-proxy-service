@@ -5,6 +5,7 @@ import React, {
     useEffect,
     useRef,
     useState,
+    useSyncExternalStore,
 } from 'react'
 import { useAuth0 } from '@auth0/auth0-react'
 import { AuthContextType, User } from '../types/auth.types'
@@ -19,15 +20,29 @@ import { clearNotesCache } from '../components/widgets/SidebarWidgets/SavedNotes
 import { clearRecentInstructionsCache } from '../components/common/InstructionPickerModal/recentInstructionsCache'
 import { customerKey, StorageSuffix } from '../utils/storageKeys'
 import { queryClient } from '../queryClient'
+import {
+    getAiPreferences,
+    mergeAiPreferences,
+    replaceAiPreferences,
+    setAiPreferencesCustomer,
+    subscribeAiPreferences,
+} from '../stores/aiPreferencesStore'
+import {
+    getInstructions,
+    replaceInstructions,
+    setInstructionsCustomer,
+    subscribeInstructions,
+    upsertInstruction,
+} from '../stores/instructionsStore'
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-// Stale-while-revalidate caches: the last known server data per customer is
+// Stale-while-revalidate cache: the last known server data per customer is
 // shown immediately on reload, then overwritten when the background /onboard
 // sync answers. Only display data belongs here — never auth state.
+// (Preferences and instructions live in their own module stores so mutation
+// services can write through to them.)
 const vendorKeysCacheKey = (customerId: string) => customerKey(customerId, StorageSuffix.vendorApiKeyStatuses)
-const instructionsCacheKey = (customerId: string) => customerKey(customerId, StorageSuffix.instructions)
-const aiPreferencesKey = (customerId: string) => customerKey(customerId, StorageSuffix.aiPreferences)
 
 function readCache<T>(key: string): T | null {
     try {
@@ -70,8 +85,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     // setup wizard gate in AppContent — distinct from isOnboarding below, which
     // means "the /onboard sync call itself is in flight"
     const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
-    const [aiConfigPreferences, setAiConfigPreferences] = useState<OnboardCustomerResponse['aiConfigPreferences'] | null>(null);
-    const [customerInstructions, setCustomerInstructions] = useState<InstructionResponse[]>([])
+    // Preferences and instructions live in module stores (not React state) so
+    // mutation services write through to them; this context just subscribes.
+    const aiConfigPreferences = useSyncExternalStore(subscribeAiPreferences, getAiPreferences)
+    const customerInstructions = useSyncExternalStore(subscribeInstructions, getInstructions)
     const [customerName, setCustomerName] = useState<string | undefined>(undefined)
     const [customerPicture, setCustomerPicture] = useState<string | undefined>(undefined)
     // Version gating stays off (null) until the /onboard sync delivers real
@@ -95,22 +112,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     useEffect(() => {
         if (customerId) {
             localStorage.setItem('customerId', customerId)
-            const cachedPrefs = localStorage.getItem(aiPreferencesKey(customerId))
-            if (cachedPrefs) {
-                try {
-                    setAiConfigPreferences(JSON.parse(cachedPrefs))
-                } catch (e) {
-                    console.error('Failed to parse cached ai preferences', e)
-                }
-            }
+            setAiPreferencesCustomer(customerId)
+            setInstructionsCustomer(customerId)
             const cachedVendorStatuses = readCache<AIVendorAPIKeyStatus[]>(vendorKeysCacheKey(customerId))
             if (cachedVendorStatuses) setAiVendorAPIKeyStatusList(cachedVendorStatuses)
-            const cachedInstructions = readCache<InstructionResponse[]>(instructionsCacheKey(customerId))
-            if (cachedInstructions) setCustomerInstructions(cachedInstructions)
         } else {
             localStorage.removeItem('customerId')
-            setAiConfigPreferences(null)
-            setCustomerInstructions([])
+            setAiPreferencesCustomer(null)
+            setInstructionsCustomer(null)
         }
     }, [customerId])
 
@@ -139,8 +148,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         queryClient.clear()
         setCustomerId(null)
         setAiVendorAPIKeyStatusList([])
-        setAiConfigPreferences(null)
-        setCustomerInstructions([])
+        setAiPreferencesCustomer(null)
+        setInstructionsCustomer(null)
         setVectorDBConfigStatusList([])
         setCacheVersions(null)
 
@@ -202,22 +211,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             }
                         }
                         if (onboardData.customerInstructions) {
-                            setCustomerInstructions(onboardData.customerInstructions)
-                            if (onboardData.customerId) {
-                                writeCache(instructionsCacheKey(onboardData.customerId), onboardData.customerInstructions)
-                            }
+                            replaceInstructions(onboardData.customerId ?? null, onboardData.customerInstructions)
                         }
                         if (onboardData.customerName) setCustomerName(onboardData.customerName)
                         if (onboardData.customerPicture) setCustomerPicture(onboardData.customerPicture)
 
-                        if (onboardData.aiConfigPreferences) {
-                            setAiConfigPreferences(onboardData.aiConfigPreferences || null);
-                            if (onboardData.customerId) {
-                                localStorage.setItem(
-                                    aiPreferencesKey(onboardData.customerId),
-                                    JSON.stringify(onboardData.aiConfigPreferences)
-                                )
-                            }
+                        if (onboardData.aiConfigPreferences && onboardData.customerId) {
+                            replaceAiPreferences(onboardData.customerId, onboardData.aiConfigPreferences)
                         }
                         if (onboardData.vectorDBConfigStatusList) {
                             setVectorDBConfigStatusList(onboardData.vectorDBConfigStatusList);
@@ -315,8 +315,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
             }
             const { getCustomerInstructions } = await import('../services/instructionService')
             const response = await getCustomerInstructions(token)
-            setCustomerInstructions(response.instructions)
-            if (customerId) writeCache(instructionsCacheKey(customerId), response.instructions)
+            replaceInstructions(customerId, response.instructions)
         } catch (error) {
             console.error('Failed to refresh instructions', error)
         } finally {
@@ -324,23 +323,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         }
     }, [isAuthenticated, auth0User, getAccessTokenSilently, customerId])
 
+    // Thin delegation kept for existing consumers — the store is the source
+    // of truth, and instructionService writes through to it on its own.
     const updateInstruction = (instruction: InstructionResponse) => {
-        setCustomerInstructions(prev => {
-            // Check if this specific version already exists
-            const index = prev.findIndex(item => item.id === instruction.id && item.version === instruction.version)
-
-            let newList: InstructionResponse[]
-            if (index !== -1) {
-                // Update existing version entry
-                newList = [...prev]
-                newList[index] = instruction
-            } else {
-                // Add new version (prepend)
-                newList = [instruction, ...prev]
-            }
-            if (customerId) writeCache(instructionsCacheKey(customerId), newList)
-            return newList
-        })
+        upsertInstruction(instruction)
     }
 
     const updateVendorApiKeyStatus = (status: AIVendorAPIKeyStatus) => {
@@ -359,20 +345,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     }
 
     /**
-     * Merge a partial update into the in-session AI config preferences (and
-     * the localStorage copy) so surfaces that saved preferences server-side
-     * are reflected everywhere without waiting for the next /onboard sync.
+     * Thin delegation kept for existing consumers. Mutation services write
+     * through to the preferences store themselves — reach for this only for
+     * local-only adjustments that have no service call.
      */
     const updateAiConfigPreferences = (
         partial: Partial<NonNullable<OnboardCustomerResponse['aiConfigPreferences']>>
     ) => {
-        setAiConfigPreferences(prev => {
-            const next = { ...(prev ?? {}), ...partial }
-            if (customerId) {
-                localStorage.setItem(aiPreferencesKey(customerId), JSON.stringify(next))
-            }
-            return next
-        })
+        mergeAiPreferences(partial)
     }
 
     // Not optimistic: callers (the onboarding wizard) keep showing the current

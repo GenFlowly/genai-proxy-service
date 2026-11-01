@@ -348,6 +348,20 @@ class ConversationManagementService(
     }
 
     /**
+     * One page of the project's conversations via the sparse projectIndex —
+     * the ONLY sanctioned read path for "conversations in project X" (never
+     * filter-after-read on the customer partition). No projectName
+     * enrichment: the caller is rendering inside the project it asked about.
+     */
+    suspend fun getProjectConversations(
+        customerId: String,
+        projectId: String,
+        pageSize: Int = 50,
+        exclusiveStartKey: String? = null
+    ): GetCustomerConversationsResponse =
+        conversationRepository.getConversationsByProject(customerId, projectId, pageSize, exclusiveStartKey)
+
+    /**
      * Resolves projectName at read time (names are never denormalized onto
      * conversations, so a rename is immediately visible). One partition Query,
      * and only when the page references a project at all. A dangling projectId

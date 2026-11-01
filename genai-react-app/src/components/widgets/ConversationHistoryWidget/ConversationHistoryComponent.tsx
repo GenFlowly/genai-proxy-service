@@ -11,6 +11,7 @@ import {
     pinConversation,
     unpinConversation,
     getProjects,
+    getProjectConversations,
     createProject,
     assignConversationToProject,
     unassignConversationFromProject,
@@ -27,6 +28,8 @@ import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProj
 import { formatServerDateTime, formatServerTime, parseServerDate } from '../../../utils/timeUtils'
 
 const PAGE_SIZE = 15
+// Page size for a project's own member list (GET /projects/conversations)
+const PROJECT_PAGE_SIZE = 50
 
 // Top (Projects) pane's share of the sidebar height, persisted as a fraction
 // so both panes keep scaling together when the sidebar resizes
@@ -67,6 +70,13 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
     const [hasMore, setHasMore] = useState(!!cached?.hasMore)
     const [error, setError] = useState(false)
     const [projects, setProjects] = useState<Project[]>(cached?.projects ?? [])
+    // A project's member list comes from its OWN endpoint (projectIndex-backed),
+    // fetched when the project expands — never derived from the recents/pinned
+    // pages, which only ever hold a sliver of a project's membership
+    const [projectItems, setProjectItems] = useState<Record<string, ConversationSummary[]>>(cached?.projectItems ?? {})
+    const [projectCursors, setProjectCursors] = useState<Record<string, string | null>>({})
+    // Projects already fetched this mount — the cached copy paints meanwhile
+    const loadedProjectsRef = React.useRef<Set<string>>(new Set())
 
     // Project dialogs: the create form, and the conversation a
     // "Move to project" picker is currently open for
@@ -146,6 +156,105 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
         }
     }, [isAuthenticated, getAccessTokenSilently])
 
+    // Conversations assigned to a project THIS session, keyed by projectId.
+    // A members fetch landing right after an assignment can predate the
+    // projectIndex GSI catching up — these must survive a replacing fetch
+    // until the server page confirms them (then the mark clears).
+    const optimisticMembersRef = React.useRef<Map<string, ConversationSummary[]>>(new Map())
+
+    const fetchProjectConversations = useCallback(async (projectId: string, startKey?: string | null) => {
+        if (!isAuthenticated) return
+        try {
+            const token = await getAccessTokenSilently()
+            const resp = await getProjectConversations(token, projectId, PROJECT_PAGE_SIZE, startKey)
+            // Read the payload BEFORE setState: a malformed response must blow
+            // up here inside the catch, not later inside React's updater
+            const fetched = resp.conversations
+            const nextCursor = resp.lastEvaluatedKey
+            hasLoadedRef.current = true
+            const pending = optimisticMembersRef.current.get(projectId) ?? []
+            const confirmed = new Set(fetched.map(c => c.conversationId))
+            const stillPending = pending.filter(c => !confirmed.has(c.conversationId))
+            if (stillPending.length !== pending.length) {
+                optimisticMembersRef.current.set(projectId, stillPending)
+            }
+            setProjectItems(prev => {
+                const existing = prev[projectId] ?? []
+                const merged = startKey
+                    ? [...existing, ...fetched.filter(c => !existing.some(e => e.conversationId === c.conversationId))]
+                    : [...stillPending, ...fetched]
+                return { ...prev, [projectId]: merged }
+            })
+            setProjectCursors(prev => ({ ...prev, [projectId]: nextCursor }))
+        } catch {
+            // Keep the cached members; a failed project refresh must not take
+            // down the sidebar
+        }
+    }, [isAuthenticated, getAccessTokenSilently])
+
+    // Fetch a project's members at most once per mount; expanding it again
+    // reuses the loaded list (mutations keep it patched locally)
+    const ensureProjectLoaded = useCallback((projectId: string) => {
+        if (loadedProjectsRef.current.has(projectId)) return
+        loadedProjectsRef.current.add(projectId)
+        fetchProjectConversations(projectId, null)
+    }, [fetchProjectConversations])
+
+    // Local write-throughs for the per-project member lists, so mutations made
+    // in the sidebar show up under the right project without a refetch.
+    // Unloaded projects simply get the change when their fetch runs.
+
+    const removeFromProjectItems = useCallback((convId: string) => {
+        optimisticMembersRef.current.forEach((list, pid) => {
+            optimisticMembersRef.current.set(pid, list.filter(c => c.conversationId !== convId))
+        })
+        setProjectItems(prev => {
+            let changed = false
+            const next: Record<string, ConversationSummary[]> = {}
+            for (const [pid, list] of Object.entries(prev)) {
+                const filtered = list.filter(c => c.conversationId !== convId)
+                if (filtered.length !== list.length) changed = true
+                next[pid] = filtered
+            }
+            return changed ? next : prev
+        })
+    }, [])
+
+    const upsertIntoProjectItems = useCallback((projectId: string, conv: ConversationSummary) => {
+        optimisticMembersRef.current.forEach((list, pid) => {
+            optimisticMembersRef.current.set(pid, list.filter(c => c.conversationId !== conv.conversationId))
+        })
+        optimisticMembersRef.current.set(projectId, [
+            conv,
+            ...(optimisticMembersRef.current.get(projectId) ?? []),
+        ])
+        setProjectItems(prev => {
+            const without = Object.fromEntries(
+                Object.entries(prev).map(([pid, list]) => [
+                    pid,
+                    list.filter(c => c.conversationId !== conv.conversationId),
+                ])
+            )
+            return { ...without, [projectId]: [conv, ...(without[projectId] ?? [])] }
+        })
+    }, [])
+
+    const patchProjectItemsEntry = useCallback((convId: string, patch: (c: ConversationSummary) => ConversationSummary) =>
+        setProjectItems(prev => {
+            let changed = false
+            const next = Object.fromEntries(
+                Object.entries(prev).map(([pid, list]) => [
+                    pid,
+                    list.map(c => {
+                        if (c.conversationId !== convId) return c
+                        changed = true
+                        return patch(c)
+                    }),
+                ])
+            )
+            return changed ? next : prev
+        }), [])
+
     // Load first page on mount / auth change (background refresh when cached)
     useEffect(() => {
         fetchPage(null)
@@ -153,12 +262,49 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
         fetchProjects()
     }, [fetchPage, fetchPinned, fetchProjects])
 
+    // The active conversation's project, resolved from whatever list already
+    // carries it (recents page, pinned) — members may not be fetched yet, and
+    // that project must still auto-expand and load on a deep link
+    const activeProjectId = useMemo(() => {
+        if (!activeId) return null
+        const match = [...pinned, ...items].find(c => c.conversationId === activeId)
+        return match?.projectId ?? null
+    }, [activeId, pinned, items])
+
+    // Projects that render expanded (session toggle memory, or they hold the
+    // active conversation) need their members without waiting for a manual
+    // re-toggle; everything else stays lazy — zero per-project requests at
+    // login
+    useEffect(() => {
+        for (const project of projects) {
+            const members = projectItems[project.projectId] ?? []
+            const containsActive = !!activeId && (
+                project.projectId === activeProjectId ||
+                members.some(c => c.conversationId === activeId)
+            )
+            if (getExpandedProject(project.projectId) ?? containsActive) {
+                ensureProjectLoaded(project.projectId)
+                // The active conversation's project must open on its own (deep
+                // link / refresh), but the group reads defaultExpanded only on
+                // mount — record the expansion and remount it via the epoch.
+                // Only when the user never toggled it: their collapse wins.
+                if (containsActive && getExpandedProject(project.projectId) === undefined) {
+                    setExpandedProject(project.projectId, true)
+                    setExpandEpochs(prev => ({
+                        ...prev,
+                        [project.projectId]: (prev[project.projectId] ?? 0) + 1,
+                    }))
+                }
+            }
+        }
+    }, [projects, projectItems, activeId, activeProjectId, ensureProjectLoaded])
+
     // Mirror every loaded/mutated state (fetch, archive, pin, title patch) to
     // the cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
-        saveHistoryCache(customerId, { items, pinned, lastKey, hasMore, projects })
-    }, [customerId, items, pinned, lastKey, hasMore, projects])
+        saveHistoryCache(customerId, { items, pinned, lastKey, hasMore, projects, projectItems })
+    }, [customerId, items, pinned, lastKey, hasMore, projects, projectItems])
 
     // Patch title in list when the active conversation gets a generated title
     useEffect(() => {
@@ -193,7 +339,29 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
             next[idx] = { ...next[idx], title: conversationTitle }
             return next
         })
-    }, [conversationId, conversationTitle, pendingProjectId, projects])
+        // Project member lists carry their own copy of the summary
+        patchProjectItemsEntry(conversationId, c =>
+            c.title === conversationTitle ? c : { ...c, title: conversationTitle }
+        )
+        // A conversation born inside a project (message+ on the project row)
+        // joins its project's member list the moment it gets a title
+        if (pendingProjectId) {
+            setProjectItems(prev => {
+                const list = prev[pendingProjectId] ?? []
+                if (list.some(c => c.conversationId === conversationId)) return prev
+                return {
+                    ...prev,
+                    [pendingProjectId]: [{
+                        conversationId,
+                        title: conversationTitle,
+                        createdAt: null,
+                        updatedAt: null,
+                        projectId: pendingProjectId,
+                    }, ...list],
+                }
+            })
+        }
+    }, [conversationId, conversationTitle, pendingProjectId, projects, patchProjectItemsEntry])
 
     // Insert a fork the moment it is created (ConversationContext announces it
     // right before navigating there): the list is only fetched on mount, and
@@ -220,10 +388,13 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
             if (summary.pinnedAt) {
                 setPinned(prev => [summary, ...prev.filter(c => c.conversationId !== summary.conversationId)])
             }
+            if (summary.projectId) {
+                upsertIntoProjectItems(summary.projectId, summary)
+            }
         }
         window.addEventListener(CONVERSATION_FORKED_EVENT, onForked)
         return () => window.removeEventListener(CONVERSATION_FORKED_EVENT, onForked)
-    }, [projects])
+    }, [projects, upsertIntoProjectItems])
 
     const handleLoadMore = () => fetchPage(lastKey)
 
@@ -238,8 +409,10 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
             const token = await getAccessTokenSilently()
             await archiveConversation(token, convId)
             setItems(prev => prev.filter(c => c.conversationId !== convId))
-            // The pinned endpoint excludes archived conversations, so drop it locally too
+            // The pinned and project endpoints exclude archived conversations,
+            // so drop it from those local lists too
             setPinned(prev => prev.filter(c => c.conversationId !== convId))
+            removeFromProjectItems(convId)
             // If the archived conversation is currently active, navigate away
             if (convId === activeId) {
                 navigate('/chat')
@@ -257,6 +430,8 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
             { ...conv, pinnedAt: new Date().toISOString() },
             ...prev.filter(c => c.conversationId !== conv.conversationId),
         ])
+        // A project member moves to its project's Pinned subsection
+        patchProjectItemsEntry(conv.conversationId, c => ({ ...c, pinnedAt: new Date().toISOString() }))
         try {
             const token = await getAccessTokenSilently()
             await pinConversation(token, conv.conversationId)
@@ -264,6 +439,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
         } catch (err) {
             console.error('Failed to pin conversation:', err)
             setPinned(prev => prev.filter(c => c.conversationId !== conv.conversationId))
+            patchProjectItemsEntry(conv.conversationId, c => ({ ...c, pinnedAt: undefined }))
             showToast(t('conversation.conversationHistory.pinFailed'))
         }
     }
@@ -280,6 +456,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                 (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '')
             )
         })
+        patchProjectItemsEntry(conv.conversationId, c => ({ ...c, pinnedAt: undefined }))
         try {
             const token = await getAccessTokenSilently()
             await unpinConversation(token, conv.conversationId)
@@ -287,17 +464,20 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
         } catch (err) {
             console.error('Failed to unpin conversation:', err)
             setPinned(previousPinned)
+            patchProjectItemsEntry(conv.conversationId, c => ({ ...c, pinnedAt: conv.pinnedAt }))
             showToast(t('conversation.conversationHistory.unpinFailed'))
         }
     }
 
     // ─── Projects ────────────────────────────────────────────────────────────
 
-    const applyProjectLocally = (convId: string, projectId: string | null, projectName: string | null) => {
+    const applyProjectLocally = (conv: ConversationSummary, projectId: string | null, projectName: string | null) => {
         const patch = (c: ConversationSummary) =>
-            c.conversationId === convId ? { ...c, projectId, projectName } : c
+            c.conversationId === conv.conversationId ? { ...c, projectId, projectName } : c
         setItems(prev => prev.map(patch))
         setPinned(prev => prev.map(patch))
+        if (projectId) upsertIntoProjectItems(projectId, { ...conv, projectId, projectName })
+        else removeFromProjectItems(conv.conversationId)
     }
 
     const handleCreateProject = async () => {
@@ -326,15 +506,18 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
         const previous = { projectId: conv.projectId ?? null, projectName: conv.projectName ?? null }
         // Optimistic: regroup immediately; assign overwrites any previous
         // assignment server-side, so this is also the move-between-projects path
-        applyProjectLocally(conv.conversationId, project.projectId, project.name)
+        applyProjectLocally(conv, project.projectId, project.name)
         setExpandedProject(project.projectId, true)
         try {
             const token = await getAccessTokenSilently()
             await assignConversationToProject(token, conv.conversationId, project.projectId)
+            // No immediate members refetch: the projectIndex GSI may not have
+            // caught up yet and would clobber the optimistic entry. The real
+            // membership loads on the next expand.
             showToast(t('conversation.conversationHistory.movedToProject', { name: project.name }))
         } catch (err) {
             console.error('Failed to move conversation to project:', err)
-            applyProjectLocally(conv.conversationId, previous.projectId, previous.projectName)
+            applyProjectLocally(conv, previous.projectId, previous.projectName)
             showToast(t('conversation.conversationHistory.moveToProjectFailed'))
         }
     }
@@ -342,14 +525,14 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
     const handleRemoveFromProject = async (conv: ConversationSummary) => {
         setMoveTarget(null)
         const previous = { projectId: conv.projectId ?? null, projectName: conv.projectName ?? null }
-        applyProjectLocally(conv.conversationId, null, null)
+        applyProjectLocally(conv, null, null)
         try {
             const token = await getAccessTokenSilently()
             await unassignConversationFromProject(token, conv.conversationId)
             showToast(t('conversation.conversationHistory.removedFromProject'))
         } catch (err) {
             console.error('Failed to remove conversation from project:', err)
-            applyProjectLocally(conv.conversationId, previous.projectId, previous.projectName)
+            applyProjectLocally(conv, previous.projectId, previous.projectName)
             showToast(t('conversation.conversationHistory.removeFromProjectFailed'))
         }
     }
@@ -362,37 +545,31 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
         [items, pinnedIds]
     )
 
-    // Conversations carrying a projectId group under their project's entry in
-    // the Projects section; the rest fall through to the global sections.
-    // Projects keep first-appearance order (pinned before recent, each list
-    // already sorted by the server)
+    // A project's members come from its own projectIndex-backed fetch
+    // (projectItems), NOT from bucketing the loaded recents/pinned pages —
+    // those pages only ever hold a sliver of a project's membership, which is
+    // why projects used to render empty after a reload. Assigned
+    // conversations are excluded from the global sections; one with a
+    // dangling projectId (its project just deleted elsewhere) falls through
+    // to the global sections rather than disappearing.
     const { projectBuckets, globalPinned, globalRecent } = useMemo(() => {
-        const buckets = new Map<string, ProjectBucket>()
-        // Every project the user owns gets an entry up front, so freshly
-        // created and empty projects are visible; conversations fill them in
-        for (const project of projects) {
-            buckets.set(project.projectId, { id: project.projectId, name: project.name, pinned: [], recent: [] })
-        }
-        const bucketFor = (conv: ConversationSummary, projectId: string) => {
-            let bucket = buckets.get(projectId)
-            if (!bucket) {
-                bucket = { id: projectId, name: conv.projectName?.trim() || projectId, pinned: [], recent: [] }
-                buckets.set(projectId, bucket)
+        const projectBuckets: ProjectBucket[] = projects.map(project => {
+            const members = projectItems[project.projectId] ?? []
+            return {
+                id: project.projectId,
+                name: project.name,
+                pinned: members.filter(c => c.pinnedAt),
+                recent: members.filter(c => !c.pinnedAt),
             }
-            return bucket
+        })
+        const projectIds = new Set(projects.map(p => p.projectId))
+        const inProject = (c: ConversationSummary) => !!c.projectId && projectIds.has(c.projectId)
+        return {
+            projectBuckets,
+            globalPinned: pinned.filter(c => !inProject(c)),
+            globalRecent: recentItems.filter(c => !inProject(c)),
         }
-        const globalPinned: ConversationSummary[] = []
-        const globalRecent: ConversationSummary[] = []
-        for (const conv of pinned) {
-            if (conv.projectId) bucketFor(conv, conv.projectId).pinned.push(conv)
-            else globalPinned.push(conv)
-        }
-        for (const conv of recentItems) {
-            if (conv.projectId) bucketFor(conv, conv.projectId).recent.push(conv)
-            else globalRecent.push(conv)
-        }
-        return { projectBuckets: Array.from(buckets.values()), globalPinned, globalRecent }
-    }, [pinned, recentItems, projects])
+    }, [pinned, recentItems, projects, projectItems])
 
     const isToday = (value: string) => {
         const d = parseServerDate(value)
@@ -497,6 +674,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
     // first message; keep the project open so it is visible once it appears
     const handleNewConversationInProject = (project: ProjectBucket) => {
         setExpandedProject(project.id, true)
+        ensureProjectLoaded(project.id)
         setExpandEpochs(prev => ({ ...prev, [project.id]: (prev[project.id] ?? 0) + 1 }))
         startConversationInProject?.(project.id)
     }
@@ -506,13 +684,44 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
             !!activeId &&
             [...project.pinned, ...project.recent].some(c => c.conversationId === activeId)
         const expandEpoch = expandEpochs[project.id]
+        // Older members stream in on demand: the endpoint pages at
+        // PROJECT_PAGE_SIZE, so a trailing row fetches the next page while a
+        // cursor remains
+        const loadMoreCursor = projectCursors[project.id]
+        const loadMoreRow: SidebarListItem[] = loadMoreCursor
+            ? [{
+                id: `project-${project.id}-load-more`,
+                label: t('conversation.conversationHistory.loadMore'),
+                onSelect: () => fetchProjectConversations(project.id, loadMoreCursor),
+                testId: `conv-history-project-load-more-${project.id}`,
+            }]
+            : []
+        // A project whose members were never fetched (or cached) must still be
+        // expandable — the library only renders expand semantics when there is
+        // something inside, and expanding is exactly what triggers the lazy
+        // fetch. A placeholder row fills the gap until the first page lands;
+        // a fetched-and-empty project legitimately renders chevron-less.
+        const membersKnown = projectItems[project.id] !== undefined
+        const loadingRow: SidebarListItem[] = !membersKnown
+            ? [{
+                id: `project-${project.id}-loading`,
+                label: t('conversation.conversationHistory.loading'),
+                onSelect: () => ensureProjectLoaded(project.id),
+                testId: `conv-history-project-loading-${project.id}`,
+            }]
+            : []
         return {
             id: expandEpoch ? `project-${project.id}-x${expandEpoch}` : `project-${project.id}`,
             label: project.name,
             collapsible: true,
             defaultExpanded: getExpandedProject(project.id) ?? containsActive,
             icon: <Icon src={ICONS.FOLDER} size={14} aria-hidden={true} />,
-            onToggle: expanded => setExpandedProject(project.id, expanded),
+            onToggle: expanded => {
+                setExpandedProject(project.id, expanded)
+                // Lazy load: a project's members are first fetched the moment
+                // the user opens it, so the login burst stays project-free
+                if (expanded) ensureProjectLoaded(project.id)
+            },
             testId: `conv-history-project-${project.id}`,
             actions: [
                 {
@@ -536,11 +745,11 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                         items: toTreeRows(project.pinned, true),
                     }]
                     : []),
-                ...(project.recent.length > 0
+                ...(project.recent.length > 0 || loadMoreRow.length > 0 || loadingRow.length > 0
                     ? [{
                         id: `project-${project.id}-recent`,
                         label: t('conversation.conversationHistory.recent'),
-                        items: toTreeRows(project.recent, false),
+                        items: [...toTreeRows(project.recent, false), ...loadMoreRow, ...loadingRow],
                     }]
                     : []),
             ],

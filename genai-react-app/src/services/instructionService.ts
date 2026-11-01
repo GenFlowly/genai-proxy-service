@@ -8,6 +8,7 @@ import {
 
 import { fetchWithRetry } from "../utils/apiUtils";
 import { SearchUserResponse } from "../models/user.models";
+import { removeInstruction, upsertInstruction } from "../stores/instructionsStore";
 
 export async function getCustomerInstructions(token: string): Promise<GetCustomerInstructionListResponse> {
     const response = await fetchWithRetry(endpoints.getCustomerInstructions, {
@@ -75,7 +76,11 @@ export async function createInstruction(
         throw new Error(`Create Instruction failed: ${response.status} ${response.statusText}`)
     }
 
-    return (await response.json()) as InstructionResponse
+    const created = (await response.json()) as InstructionResponse
+    // Write-through: the local instruction list updates here, with the
+    // successful call — call sites never mirror it ad hoc.
+    upsertInstruction(created)
+    return created
 }
 
 
@@ -158,6 +163,8 @@ export async function deleteInstruction(
     if (!response.ok) {
         throw new Error(`Delete Instruction failed: ${response.status} ${response.statusText}`)
     }
+
+    removeInstruction(instructionId)
 }
 
 export async function getInstructionSharedUsers(

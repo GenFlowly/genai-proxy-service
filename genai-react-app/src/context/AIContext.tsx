@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
 import { InstructionResponse } from '../models/instruction.models'
 import { useAuth } from './AuthContext'
 import { customerKey, StorageSuffix } from '../utils/storageKeys'
@@ -51,6 +51,11 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     const [agentPrefSeeded, setAgentPrefSeeded] = useState(false)
     const [isSystemPromptLoaded, setIsSystemPromptLoaded] = useState<boolean>(false)
     const [loadedPreferencesSignature, setLoadedPreferencesSignature] = useState<string>('')
+    // True once the USER changed a selection this session (via the public
+    // setters below). Config content seeded from preferences by this provider
+    // itself never sets it — so a fresh server value can overwrite a seed that
+    // came from a stale localStorage paint, but never a pick the user made.
+    const userMadeSelectionRef = useRef(false)
 
     // 🔹 Restore from localStorage
     useEffect(() => {
@@ -117,30 +122,41 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
         const currentSignature = JSON.stringify(aiConfigPreferences.preferredModels)
         if (currentSignature === loadedPreferencesSignature) return
 
-        // Don't overwrite selections the user already made this session
-        const hasActiveSelection = config.some(c => c.model && c.model.trim() !== '')
-        if (!hasActiveSelection) {
-            aiConfigPreferences.preferredModels.forEach(pref => {
-                if (pref.aiVendor && pref.model) {
-                    setSelectedModelForAIVendor(pref.aiVendor, pref.model)
+        // Overwrite unless the USER made a selection this session. A non-empty
+        // config alone is not enough: on reload the stale localStorage paint
+        // seeds the config first, and that seed must lose to the fresh
+        // /onboard value arriving moments later — only an actual user pick wins.
+        if (!userMadeSelectionRef.current) {
+            setConfig(prevConfigs => {
+                const next = [...prevConfigs]
+                aiConfigPreferences.preferredModels!.forEach(pref => {
+                    if (!pref.aiVendor || !pref.model) return
                     // Settings-page saves predating thinkingLevel in
                     // preferredModels only stored it on the vendor key item,
                     // so fall back to the key-status list (as AISettings does)
                     const thinkingLevel = pref.thinkingLevel
                         ?? aiVendorAPIKeyStatusList
                             .find(s => s.aiVendor === pref.aiVendor)?.thinkingLevel
-                    if (thinkingLevel) {
-                        setThinkingLevelForAIVendor(pref.aiVendor, thinkingLevel)
+                    const index = next.findIndex(c => c.aiVendor === pref.aiVendor)
+                    const base = index !== -1 ? next[index] : { aiVendor: pref.aiVendor, model: '' }
+                    const entry: AIConfig = {
+                        ...base,
+                        model: pref.model,
+                        ...(thinkingLevel ? { thinkingLevel } : {}),
                     }
-                }
+                    if (index !== -1) next[index] = entry
+                    else next.push(entry)
+                })
+                return next
             })
         }
         setLoadedPreferencesSignature(currentSignature)
-    }, [aiConfigPreferences, loadedPreferencesSignature, config, aiVendorAPIKeyStatusList])
+    }, [aiConfigPreferences, loadedPreferencesSignature, aiVendorAPIKeyStatusList])
 
     // 🔹 Update or insert vendor+model config safely
     const setSelectedModelForAIVendor = (aiVendor: string, model: string) => {
         if (!aiVendor) return // skip invalid vendor
+        userMadeSelectionRef.current = true
         setConfig(prevConfigs => {
             const existingIndex = prevConfigs.findIndex(c => c.aiVendor === aiVendor)
 
@@ -169,6 +185,7 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
     // Only meaningful once the vendor has a config entry (a model selected).
     const setThinkingLevelForAIVendor = (aiVendor: string, thinkingLevel: string) => {
         if (!aiVendor) return
+        userMadeSelectionRef.current = true
         setConfig(prevConfigs =>
             prevConfigs.map(c =>
                 c.aiVendor === aiVendor
@@ -182,6 +199,9 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
 
     const resetConfig = () => {
         try {
+            // An explicit reset returns the session to "nothing picked" — the
+            // next preferences sync may seed again, same as a fresh load.
+            userMadeSelectionRef.current = false
             setConfig([])
         } catch (e) {
             console.error('Failed to reset config:', e)
