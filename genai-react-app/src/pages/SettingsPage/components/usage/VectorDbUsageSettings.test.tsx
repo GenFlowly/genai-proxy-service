@@ -22,12 +22,11 @@ describe('VectorDbUsageSettings', () => {
         })
     })
 
-    test('renders the title, date picker, and a "not tracked yet" state when the endpoint 404s', async () => {
+    test('renders the date picker and a "not tracked yet" state when the endpoint 404s', async () => {
         mockGetVectorDbUsage.mockResolvedValue(null)
 
         render(<VectorDbUsageSettings />)
 
-        expect(screen.getByText('Vector DB Usage')).toBeInTheDocument()
         expect(screen.getByTestId('vector-db-usage-date-range')).toBeInTheDocument()
         await waitFor(() =>
             expect(screen.getByTestId('vector-db-usage-not-tracked-yet')).toBeInTheDocument()

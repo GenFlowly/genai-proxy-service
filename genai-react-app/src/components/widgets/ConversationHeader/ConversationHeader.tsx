@@ -9,7 +9,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { useAI } from '../../../context/AIContext'
 import { useConversation } from '../../../context/ConversationContext'
 import { useLayout } from '../../../context/LayoutContext'
-import { useWindowSize } from '../../../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
 import MobileHeader, { MobileHeaderMenuItem } from '../MobileHeader/MobileHeader'
 import { NAV_ITEMS } from '../NavbarMenuWidget/NavbarMenu'
 import ConversationHistoryComponent from '../ConversationHistoryWidget/ConversationHistoryComponent'
@@ -30,8 +30,7 @@ export default function ConversationHeader(): React.ReactElement | null {
     const { entitlements, customerInstructions } = useAuth()
     const { selectedInstructionId, setSelectedInstructionId, setSystemPrompt } = useAI()
     const { toggleRightSidebar, setLeftSidebarExpanded } = useLayout()
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
+    const { isNarrow } = useResponsiveBreakpoints()
     const [isPickerOpen, setPickerOpen] = useState(false)
 
     // Latest version of the instruction loaded into this conversation
@@ -106,9 +105,9 @@ export default function ConversationHeader(): React.ReactElement | null {
         </>
     )
 
-    // 📱 Mobile: no navbar/header band — a transparent overlay on the
+    // Below isNarrow: no navbar/header band — a transparent overlay on the
     // full-screen content carries the title, instruction and page actions
-    if (isMobile) {
+    if (isNarrow) {
         const menuItems: MobileHeaderMenuItem[] = [
             {
                 label: t('conversation.conversationHeader.newChat'),

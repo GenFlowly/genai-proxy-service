@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Trans, useTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
-import { config } from '../../../config/env'
 import { PillButton } from '@genflowly/component-library'
 import { InputTextWithHint } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
@@ -113,17 +112,6 @@ export function DeveloperSettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.developerSettings.title')}</h2>
-                <p className={styles.subtitle}>
-                    <Trans i18nKey="settingsPage.developerSettings.subtitle">
-                        Create API keys to call the API from your own code instead of logging in.
-                        Send a key on every request as <code className={styles.inlineCode}>Authorization: Bearer gfy_...</code> — see
-                        the <a href={`${config.backend.baseUrl}/docs`} target="_blank" rel="noreferrer">API docs</a> for details.
-                    </Trans>
-                </p>
-            </div>
-
             <div className={styles.createSection}>
                 <div className={styles.inputsGroup}>
                     <InputTextWithHint

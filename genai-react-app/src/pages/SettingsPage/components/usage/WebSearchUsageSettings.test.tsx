@@ -22,12 +22,11 @@ describe('WebSearchUsageSettings', () => {
         })
     })
 
-    test('renders the title, date picker, and a "not tracked yet" state when the endpoint 404s', async () => {
+    test('renders the date picker and a "not tracked yet" state when the endpoint 404s', async () => {
         mockGetWebSearchUsage.mockResolvedValue(null)
 
         render(<WebSearchUsageSettings />)
 
-        expect(screen.getByText('Web Search Usage')).toBeInTheDocument()
         expect(screen.getByTestId('web-search-usage-date-range')).toBeInTheDocument()
         await waitFor(() =>
             expect(screen.getByTestId('web-search-usage-not-tracked-yet')).toBeInTheDocument()

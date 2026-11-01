@@ -585,9 +585,7 @@
             "overwriteApiKey": "Overwrite API Key",
             "save": "Save",
             "saveErrorToast": "Error saving API key.",
-            "savingLabel": "Saving...",
-            "subtitle": "Configure your API keys to enable various AI models across the platform.",
-            "title": "LLM API Keys"
+            "savingLabel": "Saving..."
         },
         "developerSettings": {
             "copiedToast": "API key copied to clipboard.",
@@ -613,8 +611,6 @@
             "revokedToast": "API key revoked.",
             "revokingLabel": "Revoking...",
             "savedMyKey": "I've saved my key",
-            "subtitle": "Create API keys to call the API from your own code instead of logging in. Send a key on every request as <1>Authorization: Bearer gfy_...</1> — see the <3>API docs</3> for details.",
-            "title": "Developer",
             "yourApiKeys": "Your API keys"
         },
         "profileSettings": {
@@ -629,8 +625,6 @@
             "privacy": "Privacy",
             "profilePictureAlt": "Profile",
             "savingLabel": "Saving...",
-            "subtitle": "Manage your personal information and preferences.",
-            "title": "Profile Settings",
             "updateUsername": "Update Username",
             "usernamePlaceholder": "e.g. johndoe-1234",
             "usernameSection": "Username",
@@ -639,8 +633,6 @@
             "yourUsername": "Your Username"
         },
         "settingsPage": {
-            "breadcrumbMenu": "Menu",
-            "breadcrumbSettings": "Settings",
             "sectionAi": "AI Settings",
             "sectionAiModelKeys": "LLM API Keys",
             "sectionAiEmbeddingKeys": "Embedding Model API Keys",
@@ -675,8 +667,6 @@
             "usageWebSearch": "Web Search"
         },
         "embeddingKeysSettings": {
-            "title": "Embedding Model API Keys",
-            "subtitle": "Bring your own keys for the embedding models that index and search your data. The OpenAI key is shared with the LLM API Keys page — one key serves both. Default embedding models are chosen on the Defaults page.",
             "voyageLabel": "Voyage AI",
             "huggingFaceLabel": "Hugging Face token",
             "huggingFaceNote": "Optional: authenticates the tokenizer downloads Voyage embedding models fetch from Hugging Face, avoiding anonymous rate limits.",
@@ -700,10 +690,6 @@
             "saveErrorToast": "Failed to save default embedding model",
             "loginFirstToast": "Please log in first"
         },
-        "vectorDbSettings": {
-            "title": "Vector DB Connection",
-            "subtitle": "Connect your own vector database and storage used for retrieval."
-        },
         "usageCommon": {
             "dateRangeLast7Days": "Last 7 days",
             "dateRangeLast30Days": "Last 30 days",
@@ -725,19 +711,13 @@
             "estimateDisclaimer": "Estimated cost — calculated from your operation volume at an admin-set rate, not a real bill from your provider."
         },
         "llmUsageSettings": {
-            "title": "LLM Model Usage",
-            "subtitle": "Cost and usage across your own LLM API keys for the selected date range.",
             "empty": "No LLM usage recorded for this date range.",
             "trackedSinceNote": "Usage tracking started recently — a range spanning that date will look like a ramp-up, not a real increase in cost."
         },
         "embeddingUsageSettings": {
-            "title": "Embedding Model Usage",
-            "subtitle": "Cost and usage for embedding calls made with your own keys.",
             "empty": "No embedding usage recorded for this date range."
         },
         "vectorDbUsageSettings": {
-            "title": "Vector DB Usage",
-            "subtitle": "Operation volume for your vector database — Zilliz prices by data size and compute, not a figure we can estimate here.",
             "noCostNote": "No cost shown — your vector database provider bills by data size and compute, not by operation count, so a dollar estimate here wouldn't reflect your real bill.",
             "byOperation": "By operation",
             "operation": "Operation",
@@ -745,16 +725,12 @@
             "empty": "No vector DB usage recorded for this date range."
         },
         "webSearchUsageSettings": {
-            "title": "Web Search Usage",
-            "subtitle": "An estimated cost for web search tool calls, based on an admin-configurable rate card — not a real bill from your provider.",
             "byDepth": "By search depth",
             "searchDepth": "Search depth",
             "credits": "Credits",
             "empty": "No web search usage recorded for this date range."
         },
         "defaultAgents": {
-            "title": "Default Agents",
-            "subtitle": "Choose which agent powers each built-in action, and which agent handles new conversations. Leave an action on the platform default to use the standard behavior.",
             "titleAgent": "Title Agent",
             "learnAboutMeAgent": "Learn about Me Agent",
             "instructionPersonaAgent": "Instruction Persona Agent",
@@ -893,11 +869,9 @@
             "status_active": "On",
             "status_disabled": "Off",
             "status_draft": "Draft",
-            "subtitle": "Let your assistants call your own APIs. Describe a tool once — what it does, what it takes, and which call to make — then dry run it before you turn it on.",
             "testValuesHelp": "The values a dry run calls with. They are only used for the test.",
             "testValuesNone": "This tool takes no arguments, so a dry run needs no test values.",
             "testValuesTitle": "Dry run",
-            "title": "Tools",
             "transformModeHint": "Give the assistant",
             "transformMode_json": "The whole response, as formatted JSON",
             "transformMode_json_path": "One value from the response",
@@ -986,8 +960,6 @@
             "specUrlHelp": "Paste the link to the API's OpenAPI or Swagger description. We read it and show you what it offers — nothing is created until you say so.",
             "specUrlHint": "Address of the API description",
             "specUrlPlaceholder": "https://api.example.com/openapi.json",
-            "subtitle": "Connect something once and get a set of tools from it. You always see what it offers, and decide what your assistants are told about, before anything is added.",
-            "title": "Connectors",
             "toolCount_one": "1 tool",
             "toolCount_other": "{{count}} tools",
             "yourConnectors": "What you have connected"

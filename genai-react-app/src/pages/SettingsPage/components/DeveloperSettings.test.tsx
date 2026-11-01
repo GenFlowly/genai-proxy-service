@@ -52,10 +52,9 @@ describe('DeveloperSettings', () => {
         mockList.mockResolvedValue({ keys: [] })
     })
 
-    test('renders header and empty state', async () => {
+    test('renders empty state', async () => {
         render(<DeveloperSettings />)
 
-        expect(screen.getByText('Developer')).toBeInTheDocument()
         await waitFor(() => {
             expect(screen.getByText('No API keys yet.')).toBeInTheDocument()
         })

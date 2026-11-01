@@ -668,11 +668,6 @@ export function ToolsSettings(): React.ReactElement {
 
     return (
         <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.toolsSettings.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.toolsSettings.subtitle')}</p>
-            </div>
-
             <div className={styles.listSection}>
                 <div className={styles.listHeader}>
                     <h3 className={styles.listTitle}>{t('settingsPage.toolsSettings.builtInTitle')}</h3>

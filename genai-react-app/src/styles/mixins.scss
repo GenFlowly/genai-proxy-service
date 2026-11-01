@@ -26,7 +26,10 @@
     min-width: 30rem;
     max-width: $message-card-max-width;
 
-    @include respond-to-tablet {
+    // Keyed to the card's own container, not the viewport — a card squeezed
+    // narrow by a sidebar relaxes its min-width even when the browser window
+    // itself is still wide.
+    @container (max-width: #{$breakpoint-tablet}) {
         min-width: 0;
         width: calc(100% - 1rem) !important;
         max-width: 100% !important;
@@ -295,7 +298,12 @@
     }
 }
 
-// HOST CONTAINER for TextEditor to ensure consistent width/centering
+// HOST CONTAINER for TextEditor to ensure consistent width/centering. Its
+// @container queries resolve against the nearest ancestor that sets
+// container-type (e.g. CenterSection's .scrollContainer) — NOT set here,
+// since this element also hosts the editor's position:absolute mobile
+// docking, and container-type's implied layout containment would hijack
+// the containing block for that positioned descendant.
 @mixin text-editor-container {
     width: 100%;
     display: flex;
@@ -311,7 +319,7 @@
 
     background-color: $color-request-container-background; // Match the chat background
 
-    @include respond-to-tablet {
+    @container (max-width: #{$breakpoint-tablet}) {
         width: 100% !important;
         max-width: 100% !important;
         padding-left: 0 !important;

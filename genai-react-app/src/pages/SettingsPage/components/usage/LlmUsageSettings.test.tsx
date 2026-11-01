@@ -38,7 +38,6 @@ describe('LlmUsageSettings', () => {
 
         render(<LlmUsageSettings />)
 
-        expect(screen.getByText('LLM Model Usage')).toBeInTheDocument()
         await waitFor(() => expect(mockGetLlmUsage).toHaveBeenCalled())
 
         expect(screen.getByTestId('llm-usage-total-cost')).toHaveTextContent('$12.35')

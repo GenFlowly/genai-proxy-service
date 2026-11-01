@@ -16,6 +16,10 @@
 .scrollContainer {
   flex: 1 1 auto;
   min-width: 0;
+  // The @container root message cards / the text editor measure against —
+  // reacts to this column's real width (post-sidebar-squeeze), not the
+  // full viewport
+  container-type: inline-size;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -54,19 +58,23 @@
   }
 }
 
-/* 📱 Responsive layout */
-@include respond-to-mobile {
+/* Responsive layout: matches isNarrow (1024px) — wherever MobileHeader
+   takes over the chrome, the content below needs the same full-bleed
+   treatment, not just on true phone widths. */
+@include respond-to-tablet {
   .centerSection {
     padding: 0;
-    border-radius: 0; // Full-bleed on mobile
+    border-radius: 0; // Full-bleed below isNarrow
   }
 
   .contentWrapper {
     gap: 0;
-    // No bottom padding on mobile: the page is sized to the visual viewport
-    // (--vvh), which already excludes the browser's bottom bar / keyboard.
-    // Padding here would make a fresh chat (header inset + full-height
-    // editor) overflow the scrollport and scroll under the MobileHeader.
+    // No bottom padding below isNarrow: on a touch device the page is sized
+    // to the visual viewport (--vvh), which already excludes the browser's
+    // bottom bar / keyboard; on a non-touch narrow window --vvh is simply
+    // unset and this is a no-op either way. Padding here would make a fresh
+    // chat (header inset + full-height editor) overflow the scrollport and
+    // scroll under the MobileHeader.
     padding-bottom: 0;
     // Rest below the fixed MobileHeader overlay: the first message / editor /
     // new-chat input start under the header, but because this padding is

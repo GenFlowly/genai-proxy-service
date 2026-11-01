@@ -19,7 +19,7 @@ import type { SidebarListGroup } from '@genflowly/component-library'
 import styles from './AgentsPage.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
-import { useWindowSize } from '../../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { forkAgent, getCustomerAgents } from '../../services/agentsService'
@@ -27,7 +27,7 @@ import { AGENT_CATEGORIES, Agent, agentCategory, effectiveDefaultAgentId } from 
 import { useAI } from '../../context/AIContext'
 import { formatServerDateTime } from '../../utils/timeUtils'
 import { ICONS } from '../../constants/icons'
-import AgentsCategoryNav, {
+import {
     CATEGORY_ICONS,
     CATEGORY_LABEL_KEYS,
     CategoryFilter,
@@ -204,8 +204,7 @@ export default function AgentsPage() {
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const { getAccessTokenSilently } = useAuth()
     const { showToast } = useToast()
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
+    const { isNarrow } = useResponsiveBreakpoints()
     usePageTitle()
 
     const [agents, setAgents] = useState<Agent[]>([])
@@ -296,8 +295,8 @@ export default function AgentsPage() {
         <div className={styles.page}>
             {/* Standard page skeleton: header band on top, then a canvas row of
                 [resizable left sidebar | transparent main] */}
-            {isMobile ? (
-                // 📱 No navbar — a transparent overlay header floats over the
+            {isNarrow ? (
+                // Below isNarrow: a transparent overlay header floats over the
                 // full-screen content; Create agent lives in its menu
                 <MobileHeader
                     title={t('agentsPage.agentsPage.title')}
@@ -340,7 +339,7 @@ export default function AgentsPage() {
             )}
 
             <div className={styles.layout}>
-                {!isMobile && (
+                {!isNarrow && (
                     <ResizableSidebar
                         storageKey="agentsCategorySidebarWidth"
                         minWidth={180}
@@ -361,11 +360,6 @@ export default function AgentsPage() {
                 )}
 
                 <ScrollArea className={styles.main}>
-                    {/* 📱 Categories as a chip row above the tiles */}
-                    {isMobile && !loading && !error && agents.length > 0 && (
-                        <AgentsCategoryNav agents={agents} selected={category} onSelect={setCategory} />
-                    )}
-
                     {loading && (
                         <div className={styles.stateContainer}>
                             <div className={styles.spinner} aria-label={t('agentsPage.agentsPage.loadingAriaLabel')} />
