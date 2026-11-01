@@ -1,19 +1,35 @@
-import { useEffect } from 'react'
-import { useToast } from '../context/ToastContext'
-import { SW_UPDATE_AVAILABLE_EVENT } from '../serviceWorkerRegistration'
+import { useCallback, useEffect, useState } from 'react'
+import { SW_UPDATE_AVAILABLE_EVENT, SwUpdateAvailableEvent } from '../serviceWorkerRegistration'
 
 /**
- * Toasts the user once the service worker registered in index.tsx reports a
- * new version is installed. Does NOT auto-activate the new worker (no
- * skipWaiting/reload) — an unannounced reload mid-chat is worse than asking
- * the user to refresh when convenient.
+ * Tracks the service worker registered in index.tsx and exposes a way to
+ * actually complete a pending update: postMessage SKIP_WAITING to the
+ * waiting worker, then reload once it takes control. Nothing happens until
+ * `applyUpdate` is called — an unannounced reload mid-chat is worse than
+ * asking the user to confirm first.
  */
 export function useServiceWorkerUpdate() {
-    const { showToast } = useToast()
+    const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null)
 
     useEffect(() => {
-        const handleUpdate = () => showToast('A new version of AI Proxy is available. Refresh to update.')
+        const handleUpdate = (event: Event) => {
+            setRegistration((event as SwUpdateAvailableEvent).detail ?? null)
+        }
         window.addEventListener(SW_UPDATE_AVAILABLE_EVENT, handleUpdate)
         return () => window.removeEventListener(SW_UPDATE_AVAILABLE_EVENT, handleUpdate)
-    }, [showToast])
+    }, [])
+
+    useEffect(() => {
+        if (!registration || !('serviceWorker' in navigator)) return
+
+        const onControllerChange = () => window.location.reload()
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+        return () => navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+    }, [registration])
+
+    const applyUpdate = useCallback(() => {
+        registration?.waiting?.postMessage({ type: 'SKIP_WAITING' })
+    }, [registration])
+
+    return { updateAvailable: registration?.waiting != null, applyUpdate }
 }
