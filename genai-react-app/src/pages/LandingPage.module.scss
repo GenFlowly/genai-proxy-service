@@ -34,8 +34,8 @@
   gap: $widget-gap;
   padding: $widget-gap;
 
-  @include respond-to-mobile {
-    // Widgets are full-screen overlays/pages on mobile — no floating panels
+  @include respond-to-tablet {
+    // Widgets are full-screen overlays/pages below isNarrow — no floating panels
     background-color: $background-gray;
     gap: 0;
     padding: 0;

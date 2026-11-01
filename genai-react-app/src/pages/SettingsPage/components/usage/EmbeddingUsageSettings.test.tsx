@@ -22,12 +22,11 @@ describe('EmbeddingUsageSettings', () => {
         })
     })
 
-    test('renders the title, date picker, and a "not tracked yet" state when the endpoint 404s', async () => {
+    test('renders the date picker and a "not tracked yet" state when the endpoint 404s', async () => {
         mockGetEmbeddingUsage.mockResolvedValue(null)
 
         render(<EmbeddingUsageSettings />)
 
-        expect(screen.getByText('Embedding Model Usage')).toBeInTheDocument()
         expect(screen.getByTestId('embedding-usage-date-range')).toBeInTheDocument()
         await waitFor(() =>
             expect(screen.getByTestId('embedding-usage-not-tracked-yet')).toBeInTheDocument()

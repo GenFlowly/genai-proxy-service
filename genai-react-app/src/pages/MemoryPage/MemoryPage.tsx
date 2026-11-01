@@ -9,7 +9,7 @@ import styles from './MemoryPage.module.scss'
 import { getPageConfig } from '../../config/PageWidgetConfig'
 import { useLayout } from '../../context/LayoutContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
-import { useWindowSize } from '../../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import { NotesProvider } from '../../context/NotesContext'
 
 // Persisted width is stored in rem so it stays relative to the root font size
@@ -18,8 +18,7 @@ const SAVED_NOTES_WIDTH_STORAGE_KEY = 'saved_notes_width_rem'
 export default function MemoryPage() {
     const config = getPageConfig('MEMORY_PAGE')
     const { setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized } = useLayout()
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
+    const { isNarrow } = useResponsiveBreakpoints()
     usePageTitle()
 
     useEffect(() => {
@@ -27,20 +26,20 @@ export default function MemoryPage() {
         // Un-minimize as well: the chat page hides the left sidebar via the
         // minimized flag (width 0), which would otherwise persist here
         setLeftSidebarMinimized(false)
-        // On mobile "expanded" means the full-screen menu overlay — keep it closed
-        setLeftSidebarExpanded(!isMobile)
-    }, [setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, isMobile])
+        // Below isNarrow "expanded" means the full-screen menu overlay — keep it closed
+        setLeftSidebarExpanded(!isNarrow)
+    }, [setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, isNarrow])
 
     return (
         <NotesProvider>
             <div className={styles.page}>
-                {/* 📱 Mobile: no navbar — NotesHeader renders a transparent
+                {/* Below isNarrow: no navbar — NotesHeader renders a transparent
                     overlay (MobileHeader) over the full-screen editor instead */}
-                {!isMobile && <Navbar />}
+                {!isNarrow && <Navbar />}
                 <NotesHeader />
                 <div className={styles.layout}>
                     {/* Saved notes mirror the chat page's conversation-history panel */}
-                    {!isMobile && (
+                    {!isNarrow && (
                         <ResizableSidebar
                             storageKey={SAVED_NOTES_WIDTH_STORAGE_KEY}
                             data-testid="saved-notes-sidebar"

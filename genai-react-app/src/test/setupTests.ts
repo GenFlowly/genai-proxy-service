@@ -10,6 +10,14 @@ global.TextDecoder = TextDecoder;
 
 console.log('!!! SETUP TESTS RUNNING !!!');
 
+// jsdom's default viewport is 1024x768 — exactly at the isNarrow breakpoint
+// (useResponsiveBreakpoints), which flips every page into mobile/narrow
+// chrome unless a test opts in to a width. Default to a comfortably-desktop
+// size instead; tests that need mobile/narrow override window.innerWidth
+// explicitly (see LayoutContext.test.tsx).
+Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1280 });
+Object.defineProperty(window, 'innerHeight', { writable: true, configurable: true, value: 800 });
+
 // Mock matchMedia
 window.matchMedia = (query) => ({
     matches: false,

@@ -53,7 +53,7 @@ describe('ProfileSettings', () => {
         render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
-            expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+            expect(screen.getByText('Personal Details')).toBeInTheDocument();
         });
 
         expect(screen.getByDisplayValue('johndoe')).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('ProfileSettings', () => {
         render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
-            expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+            expect(screen.getByText('Personal Details')).toBeInTheDocument();
         });
 
         const usernameInput = screen.getByDisplayValue('johndoe');
@@ -100,7 +100,7 @@ describe('ProfileSettings', () => {
         render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
-            expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+            expect(screen.getByText('Personal Details')).toBeInTheDocument();
         });
 
         const usernameInput = screen.getByDisplayValue('johndoe');
@@ -128,7 +128,7 @@ describe('ProfileSettings', () => {
         render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
-            expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+            expect(screen.getByText('Personal Details')).toBeInTheDocument();
         });
 
         const checkbox = screen.getByRole('checkbox');
@@ -152,7 +152,7 @@ describe('ProfileSettings', () => {
         render(withQueryClient(<ProfileSettings />));
         
         await waitFor(() => {
-            expect(screen.getByText('Profile Settings')).toBeInTheDocument();
+            expect(screen.getByText('Personal Details')).toBeInTheDocument();
         });
 
         const checkbox = screen.getByRole('checkbox');

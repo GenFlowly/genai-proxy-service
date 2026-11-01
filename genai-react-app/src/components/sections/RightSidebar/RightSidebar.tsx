@@ -6,7 +6,7 @@ import { ICONS } from '../../../constants/icons'
 import styles from './RightSidebar.module.scss'
 import { MobileFullPageModal } from '@genflowly/component-library'
 import { useWidgetResolver } from '../../../hooks/useWidgetResolver'
-import { useWindowSize } from '../../../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
 
 interface RightSidebarProps {
     widgetIds: string[]
@@ -18,16 +18,15 @@ export default function RightSidebar({ widgetIds, 'data-testid': testId }: Right
     const { isRightSidebarExpanded, toggleRightSidebar } = useLayout()
     const collapsed = !isRightSidebarExpanded
     const widgets = useWidgetResolver(widgetIds)
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
+    const { isNarrow } = useResponsiveBreakpoints()
 
     const widgetContent = widgets.map(widget => (
         <widget.component key={widget.id} />
     ))
 
-    // 📱 Mobile: the sidebar is a full-screen modal on the same page,
+    // Below isNarrow: the sidebar is a full-screen modal on the same page,
     // so widgets keep access to the page's contexts and state.
-    if (isMobile) {
+    if (isNarrow) {
         if (collapsed) return null
         return (
             <MobileFullPageModal onClose={toggleRightSidebar} data-testid={testId}>

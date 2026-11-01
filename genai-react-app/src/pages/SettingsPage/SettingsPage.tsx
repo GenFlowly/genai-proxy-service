@@ -1,8 +1,8 @@
 import React from 'react'
 import Navbar from '../../components/navbar/Navbar'
+import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
 import styles from './SettingsPage.module.scss'
 import { SettingsSidebar } from './components/SettingsSidebar'
-import SettingsMenuPage from './SettingsMenuPage'
 import { ProfileSettings } from './components/ProfileSettings'
 import { AISettings } from './components/AISettings'
 import { EmbeddingKeysSettings } from './components/EmbeddingKeysSettings'
@@ -16,11 +16,11 @@ import { ToolsSettings } from './components/ToolsSettings'
 import { ConnectorsSettings } from './components/ConnectorsSettings'
 import { DeveloperSettings } from './components/DeveloperSettings'
 import { usePageTitle } from '../../hooks/usePageTitle'
-import { useWindowSize } from '../../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import { useLayout } from '../../context/LayoutContext'
-import { Breadcrumbs, BreadcrumbItem, ResizableSidebar, ScrollArea } from '@genflowly/component-library'
+import { ResizableSidebar, ScrollArea } from '@genflowly/component-library'
 
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 const SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY = 'settings_sidebar_width_rem'
@@ -51,58 +51,49 @@ const SECTION_LABEL_KEYS: Record<string, string> = {
 export default function SettingsPage(): React.ReactElement {
     const { t } = useTranslation()
     usePageTitle()
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
-    // Matches the SCSS tablet breakpoint (1024px), where the layout stacks
-    // into a column and horizontal drag-resizing stops making sense
-    const isTablet = width <= 1024
-    const navigate = useNavigate()
+    // isNarrow matches the SCSS tablet breakpoint (1024px) — below it there's
+    // no room for a persistent sidebar, so the whole menu/content split
+    // becomes the same full-page takeover true mobile already uses.
+    const { isNarrow } = useResponsiveBreakpoints()
     const location = useLocation()
     const { setLeftSidebarExpanded } = useLayout()
 
-    // Breadcrumbs (mobile only): Menu > Settings [> Section]
-    // Checked as the last-two-segment form first (e.g. 'usage/vector-db')
-    // so sub-pages that share a leaf segment name across parent sections
-    // (AI's and Usage's 'vector-db') each resolve to their own label.
+    // Below isNarrow, the MobileHeader title is the active section's own
+    // label — checked as the last-two-segment form first (e.g.
+    // 'usage/vector-db') so sub-pages that share a leaf segment name across
+    // parent sections (AI's and Usage's 'vector-db') each resolve correctly.
     const pathSegments = location.pathname.split('/').filter(Boolean)
     const sectionKey =
         SECTION_LABEL_KEYS[pathSegments.slice(-2).join('/')] ??
         SECTION_LABEL_KEYS[pathSegments[pathSegments.length - 1] || '']
-    const breadcrumbItems: BreadcrumbItem[] = [
-        // "Menu" reopens the mobile menu overlay
-        { label: t('settingsPage.settingsPage.breadcrumbMenu'), onClick: () => setLeftSidebarExpanded(true) },
-        { label: t('settingsPage.settingsPage.breadcrumbSettings'), onClick: () => navigate('/settings') },
-        ...(sectionKey ? [{ label: t(sectionKey), onClick: () => navigate(location.pathname) }] : []),
-    ]
+    const sectionTitle = sectionKey ? t(sectionKey) : t('settingsPage.settingsSidebar.title')
 
     return (
         <div className={styles.page}>
-            <Navbar />
+            {!isNarrow && <Navbar />}
+            {isNarrow && (
+                <MobileHeader
+                    title={sectionTitle}
+                    menuTitle={t('settingsPage.settingsSidebar.title')}
+                    menuContent={<SettingsSidebar onNavigate={() => setLeftSidebarExpanded(false)} />}
+                />
+            )}
             <div className={styles.layout}>
-                {/* On mobile the menu is its own page (/settings); the sidebar column is desktop-only.
-                    On tablet the layout stacks vertically, so the sidebar renders plain (no resize). */}
-                {!isMobile && (
-                    isTablet ? (
+                {!isNarrow && (
+                    <ResizableSidebar
+                        storageKey={SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY}
+                        defaultWidth={260}
+                        minWidth={200}
+                        data-testid="settings-sidebar-panel"
+                        handleTestId="settings-sidebar-resize-handle"
+                    >
                         <SettingsSidebar />
-                    ) : (
-                        <ResizableSidebar
-                            storageKey={SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY}
-                            defaultWidth={260}
-                            minWidth={200}
-                            data-testid="settings-sidebar-panel"
-                            handleTestId="settings-sidebar-resize-handle"
-                        >
-                            <SettingsSidebar />
-                        </ResizableSidebar>
-                    )
+                    </ResizableSidebar>
                 )}
                 <ScrollArea className={styles.content}>
                     <div className={styles.contentInner}>
-                        {isMobile && <Breadcrumbs items={breadcrumbItems} />}
                         <Routes>
-                            {/* Mobile: /settings shows the menu as a full page.
-                                Desktop: /settings redirects to the first section. */}
-                            <Route path="/" element={isMobile ? <SettingsMenuPage /> : <Navigate to="profile" replace />} />
+                            <Route path="/" element={<Navigate to="profile" replace />} />
                             <Route path="profile" element={<ProfileSettings />} />
                             {/* AI is a parent section: its sub-pages live under /settings/ai/* */}
                             <Route path="ai" element={<Navigate to="/settings/ai/llm-keys" replace />} />

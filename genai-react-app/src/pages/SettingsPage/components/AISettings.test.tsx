@@ -81,7 +81,6 @@ describe('AISettings', () => {
     test('hides vendors without keys behind the add-vendor dropdown', async () => {
         render(withQueryClient(<AISettings />));
 
-        expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
         // No keys set → no cards, every supported vendor is offered in the dropdown
         (Object.values(AIVendor) as AIVendor[]).forEach(vendor => {
             expect(screen.queryByTestId(`ai-settings-vendors-${vendor}-status-pill`)).not.toBeInTheDocument();
