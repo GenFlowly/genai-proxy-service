@@ -14,14 +14,13 @@ import {
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/navbar/Navbar';
 import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader';
-import { useWindowSize } from '../../hooks/useWindowSize';
+import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints';
 
 export default function InstructionsPage() {
     const { t } = useTranslation();
     const { customerInstructions, refreshInstructions, user } = useAuth();
     const navigate = useNavigate();
-    const { width } = useWindowSize();
-    const isMobile = width <= 768;
+    const { isMobile } = useResponsiveBreakpoints();
     const [search, setSearch] = useState('');
 
     useEffect(() => {
