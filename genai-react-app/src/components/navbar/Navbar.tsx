@@ -11,7 +11,7 @@ import logo from '../../assets/icons/logo.png'
 import { UserAvatarButton } from '@genflowly/component-library'
 import { NavbarMenu } from '../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../common/ThemeToggle/ThemeToggle'
-import { useWindowSize } from '../../hooks/useWindowSize'
+import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import { MobileMenuContent } from '../sections/LeftSidebar/MobileMenuContent'
 
 export default function Navbar(): React.ReactElement {
@@ -20,8 +20,7 @@ export default function Navbar(): React.ReactElement {
     const { toggleLeftSidebar, toggleRightSidebar, isLeftSidebarExpanded } = useLayout()
     const navigate = useNavigate()
     const location = useLocation()
-    const { width } = useWindowSize()
-    const isMobile = width <= 768
+    const { isMobile } = useResponsiveBreakpoints()
     // The right sidebar (AI settings) only exists on the chat page
     const isChatPage = location.pathname === '/' || location.pathname.startsWith('/chat')
 

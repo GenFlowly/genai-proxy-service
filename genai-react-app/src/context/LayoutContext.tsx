@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react'
 import { LayoutContextType } from '../models/layout.models'
+import { MOBILE_BREAKPOINT } from '../constants/breakpoints'
 
 /* ---------- Context ---------- */
 
@@ -9,10 +10,10 @@ const LayoutContext = createContext<LayoutContextType | undefined>(undefined)
 
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
     const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false)
-    // Default to collapsed on mobile (< 768px), expanded on desktop
+    // Default to collapsed on mobile, expanded on desktop
     const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(() => {
         if (typeof window !== 'undefined') {
-            return window.innerWidth > 768
+            return window.innerWidth > MOBILE_BREAKPOINT
         }
         return true
     })
