@@ -12,6 +12,8 @@ import {
  */
 import { fetchWithRetry } from "../utils/apiUtils";
 import { getAiPreferences, mergeAiPreferences } from '../stores/aiPreferencesStore'
+import { queryClient } from '../queryClient'
+import { TEXT_GEN_MODELS_QUERY_KEY } from '../hooks/queries/queryKeys'
 
 export async function storeCustomerVendorApiKey(
     token: string,
@@ -30,7 +32,13 @@ export async function storeCustomerVendorApiKey(
         throw new Error(`Failed to save key for ${payload.aiVendor}: ${response.statusText}`)
     }
 
-    return await response.json()
+    const result: StoreCustomerVendorApiKeyResponse = await response.json()
+    // The model lists are key-scoped, so a new key makes them stale. Invalidated
+    // here, never at the call site.
+    if (result.apiKeyStatus?.updateSuccessful) {
+        void queryClient.invalidateQueries({ queryKey: [TEXT_GEN_MODELS_QUERY_KEY] })
+    }
+    return result
 }
 
 /**

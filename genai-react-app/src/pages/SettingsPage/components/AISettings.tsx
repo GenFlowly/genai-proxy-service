@@ -77,10 +77,12 @@ export function AISettings(): React.ReactElement {
                 ?.find(m => m.aiVendor === vendor)
             const preferred = preferredEntry?.model
             // Legacy vendors keep the live key-scoped model fetch; the long
-            // tail lists models from the provider catalog.
-            const models = vendorModels.find(vm => vm.aiVendor === vendor)?.modelsList
-                ?? provider?.models.map(m => m.name)
-                ?? []
+            // tail lists models from the provider catalog, as does a legacy
+            // vendor while its live list is empty (a key was only just saved).
+            const liveModels = vendorModels.find(vm => vm.aiVendor === vendor)?.modelsList
+            const models = liveModels?.length
+                ? liveModels
+                : provider?.models.map(m => m.name) ?? []
             return {
                 vendor,
                 label: <VendorBrandName vendorId={vendor} className={styles.vendorBrand} />,

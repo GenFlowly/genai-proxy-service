@@ -281,6 +281,11 @@
     @media (max-width: 600px) {
         flex-direction: column;
         align-items: stretch;
+
+        // A zero flex basis in a column would collapse the field's fixed height
+        > *:last-child {
+            flex: none;
+        }
     }
 }
 
