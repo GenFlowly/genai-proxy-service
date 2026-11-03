@@ -16,7 +16,7 @@ import kotlinx.serialization.json.contentOrNull
  * conversation — the owner reading a share recipient's turn, a share
  * recipient, a PUBLIC-link visitor, a logged-out reader — may only learn how
  * many memories were applied. The step's `detail` line already says exactly
- * that ("Applied N core memori(es); recalled M related to this message"), so
+ * that ("Applied N core memories; recalled M related to this message"), so
  * redaction removes the content-bearing keys and keeps the counts.
  */
 object MemoryRedaction {

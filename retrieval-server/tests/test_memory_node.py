@@ -339,7 +339,7 @@ class MemoryThinkingStepTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["detail"],
-            "Applied 2 core memori(es); recalled 1 related to this message",
+            "Applied 2 core memories; recalled 1 related to this message",
         )
         # Labeled split for clients that render the two groups
         self.assertEqual(
@@ -374,13 +374,13 @@ class MemoryThinkingStepTests(unittest.TestCase):
             "MEMORY",
             {"memories_block": block, "scratch": {"memory_stats": {"core": 1, "recalled": 0}}},
         )
-        self.assertEqual(payload["detail"], "Applied 1 core memori(es)")
+        self.assertEqual(payload["detail"], "Applied 1 core memory")
         self.assertEqual(payload["items"], ["Core fact A."])
 
     def test_falls_back_to_line_count_without_stats(self):
         block = "## What you know about this user\nintro:\n- Core fact A."
         payload = _step_done_payload("MEMORY", {"memories_block": block})
-        self.assertEqual(payload["detail"], "Applied 1 learned memori(es)")
+        self.assertEqual(payload["detail"], "Applied 1 learned memory")
 
     def test_empty_update_reads_as_no_memories(self):
         payload = _step_done_payload("MEMORY", {})
