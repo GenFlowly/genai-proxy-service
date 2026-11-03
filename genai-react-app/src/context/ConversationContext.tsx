@@ -235,11 +235,11 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     const recoverPersistedResponse = async (
         token: string,
         conversationId: string,
-        responseMessageId: string
+        responseMessageId: string,
+        maxAttempts = 36
     ): Promise<Message | null> => {
         const POLL_INTERVAL_MS = 5000
-        const MAX_ATTEMPTS = 36
-        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
             await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
             try {
                 const data = await getConversation(token, conversationId)
@@ -428,11 +428,13 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         patch(m => ({ ...m, isLoading: true, text: '' }))
                         let acc = ''
                         let gotContent = false
+                        let runFailed = false
                         const finish = async () => {
                             if (!synthetic) {
                                 // Run finished before we reconnected → poll for the
                                 // persisted message so we never leave an empty card.
-                                if (!gotContent) {
+                                // A failed run saved nothing to wait for.
+                                if (!gotContent && !runFailed) {
                                     try {
                                         const recovered = await recoverPersistedResponse(token, data.conversationId, targetId)
                                         if (recovered) patch(m => ({
@@ -469,8 +471,13 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
                             onGeneratedAttachments: (ga) => patch(m => ({ ...m, generatedAttachments: [...(m.generatedAttachments ?? []), ...ga] })),
                             onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
-                        }).catch(e => console.warn('Reattach to pending run failed', e))
-                            .finally(finish)
+                        }).catch(e => {
+                            console.warn('Reattach to pending run failed', e)
+                            if (e instanceof StreamGenerationError) {
+                                runFailed = true
+                                patch(m => ({ ...m, error: e.message }))
+                            }
+                        }).finally(finish)
                     }
 
                     if (pendingRuns.length > 0) {
@@ -1051,11 +1058,16 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                     // (backgrounded mobile app). When the server-side response
                     // id is already known (metadata arrived before the drop),
                     // poll for the persisted message instead of failing the turn.
-                    if (currentMsgId !== msgId) {
+                    // A StreamGenerationError is the server's final word, so nothing
+                    // more is coming: it saves a response only when text streamed,
+                    // and one look is enough to pick up that copy's usage and sources.
+                    const isFinal = err instanceof StreamGenerationError
+                    if (currentMsgId !== msgId && (!isFinal || accumulatedText)) {
                         const recovered = await recoverPersistedResponse(
                             token,
                             explicitConversationId || conversationIdRef.current,
-                            currentMsgId
+                            currentMsgId,
+                            isFinal ? 1 : undefined
                         )
                         if (recovered) {
                             setConversationBlockList(prev => prev.map(block => {
