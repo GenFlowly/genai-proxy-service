@@ -288,11 +288,15 @@ describe('generateTextStreamService', () => {
         });
 
         const onDelta = jest.fn();
-        await expect(generateTextStream(
+        const error = await generateTextStream(
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
             onDelta
-        )).rejects.toThrow('Rate limit exceeded');
+        ).catch(e => e);
+
+        // The server's own report of a failure, not a lost connection
+        expect(error).toBeInstanceOf(StreamGenerationError);
+        expect(error.message).toBe('Rate limit exceeded');
 
         // The text streamed before the failure was still delivered
         expect(onDelta).toHaveBeenCalledWith('partial ');
