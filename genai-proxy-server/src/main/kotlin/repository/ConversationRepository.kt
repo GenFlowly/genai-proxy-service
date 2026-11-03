@@ -70,6 +70,12 @@ data class ConversationAttributes(
 )
 
 /**
+ * Most reads behind one listing page. Past it the page comes back short with its key,
+ * so a long run of archived rows can't hold a request open.
+ */
+private const val MAX_LISTING_QUERIES_PER_PAGE = 20
+
+/**
  * Data access for the Conversation and Message tables.
  */
 class ConversationRepository(
@@ -592,36 +598,47 @@ class ConversationRepository(
         pageSize: Int = 10,
         exclusiveStartKey: String? = null
     ): GetCustomerConversationsResponse = withContext(Dispatchers.IO) {
-        val queryBuilder = QueryRequest.builder()
-            .tableName(CONVERSATION_TABLE)
-            .indexName(CONVERSATION_CUSTOMER_UPDATED_GSI_KEY)
-            .keyConditionExpression("#cid = :cid")
-            .filterExpression("attribute_not_exists(#aa)")
-            .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY, "#aa" to ARCHIVED_AT_KEY))
-            .expressionAttributeValues(mapOf(
-                ":cid" to AttributeValue.builder().s(customerId).build()
-            ))
-            .scanIndexForward(false) // newest first (descending by sort key)
-            .limit(pageSize)
-
         // Resume from prior page if a continuation token was supplied
+        var startKey: Map<String, AttributeValue>? = null
         if (!exclusiveStartKey.isNullOrBlank()) {
             try {
                 val keyMap: Map<String, String> = Json.decodeFromString(exclusiveStartKey)
-                val startKey = keyMap.mapValues { (_, v) -> AttributeValue.builder().s(v).build() }
-                queryBuilder.exclusiveStartKey(startKey)
+                startKey = keyMap.mapValues { (_, v) -> AttributeValue.builder().s(v).build() }
             } catch (e: Exception) {
                 logger.warn("Failed to parse exclusiveStartKey, starting from beginning: ${e.message}")
             }
         }
 
-        val response = dynamoDbClient.query(queryBuilder.build())
+        // DynamoDB applies Limit before the archived filter, so one read can come back
+        // short or empty with more behind it. Asking only for the rows still missing
+        // keeps LastEvaluatedKey on the last row returned.
+        val items = mutableListOf<Map<String, AttributeValue>>()
+        var queries = 0
+        do {
+            val queryBuilder = QueryRequest.builder()
+                .tableName(CONVERSATION_TABLE)
+                .indexName(CONVERSATION_CUSTOMER_UPDATED_GSI_KEY)
+                .keyConditionExpression("#cid = :cid")
+                .filterExpression("attribute_not_exists(#aa)")
+                .expressionAttributeNames(mapOf("#cid" to CUSTOMER_ID_KEY, "#aa" to ARCHIVED_AT_KEY))
+                .expressionAttributeValues(mapOf(
+                    ":cid" to AttributeValue.builder().s(customerId).build()
+                ))
+                .scanIndexForward(false) // newest first (descending by sort key)
+                .limit(pageSize - items.size)
+            startKey?.let { queryBuilder.exclusiveStartKey(it) }
+
+            val response = dynamoDbClient.query(queryBuilder.build())
+            items += response.items()
+            startKey = response.lastEvaluatedKey().takeIf { response.hasLastEvaluatedKey() && it.isNotEmpty() }
+            queries++
+        } while (items.size < pageSize && startKey != null && queries < MAX_LISTING_QUERIES_PER_PAGE)
 
         // The listing GSI's INCLUDE projection carries neither projectId,
         // parentConversationId, pinnedAt nor vendors, and changing a GSI
         // projection means replacing the index. One BatchGetItem on the base
         // table per page (≤50 keys) fills the gap instead.
-        val pageConversationIds = response.items().mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
+        val pageConversationIds = items.mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
         val baseRowByConversation: Map<String, Map<String, AttributeValue>> =
             if (pageConversationIds.isEmpty()) emptyMap()
             else dynamoDbClient.batchGetWithRetry(
@@ -643,7 +660,7 @@ class ConversationRepository(
                 item[CONVERSATION_ID_KEY]?.s()?.let { it to item }
             }.toMap()
 
-        val conversations = response.items().mapNotNull { item ->
+        val conversations = items.mapNotNull { item ->
             val convId    = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
             val title     = item["title"]?.s()
             val createdAt = item["createdAt"]?.s()
@@ -663,10 +680,9 @@ class ConversationRepository(
         }
 
         // Serialise LastEvaluatedKey as a simple JSON string so it is safe to round-trip through the API
-        val nextPageToken: String? = if (response.hasLastEvaluatedKey() && response.lastEvaluatedKey().isNotEmpty()) {
-            val encoded = response.lastEvaluatedKey().mapValues { (_, v) -> v.s() ?: "" }
-            Json.encodeToString(encoded)
-        } else null
+        val nextPageToken: String? = startKey?.let { key ->
+            Json.encodeToString(key.mapValues { (_, v) -> v.s() ?: "" })
+        }
 
         GetCustomerConversationsResponse(conversations = conversations, lastEvaluatedKey = nextPageToken)
     }
