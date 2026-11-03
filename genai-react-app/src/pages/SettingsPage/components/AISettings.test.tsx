@@ -121,6 +121,18 @@ describe('AISettings', () => {
         expect(screen.getByText('Groq')).toBeInTheDocument();
     });
 
+    test('a keyed vendor whose live list is still empty offers its catalog models', async () => {
+        mockUseAuth.mockReturnValue(authValue({
+            aiVendorAPIKeyStatusList: [{ ...validOpenAIStatus, aiVendor: AIVendor.GEMINI }],
+        }));
+
+        render(withQueryClient(<AISettings />));
+
+        await waitFor(() =>
+            expect(screen.getByTestId(`ai-settings-vendors-${AIVendor.GEMINI}-model`)).toHaveTextContent('gemini-2.5-pro')
+        );
+    });
+
     test('shows model/priority config only for vendors with a valid key', () => {
         mockUseAuth.mockReturnValue(authValue({ aiVendorAPIKeyStatusList: [validOpenAIStatus] }));
 

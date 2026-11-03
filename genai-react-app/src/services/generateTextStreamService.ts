@@ -160,7 +160,7 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
             // appending it to the generated text.
             const errorMatch = trimmed.match(/^\[Error: ([\s\S]*)\]$/);
             if (errorMatch) {
-                throw new Error(errorMatch[1] || 'Stream failed');
+                throw new StreamGenerationError(errorMatch[1] || 'Stream failed');
             }
             // Other raw content (legacy format) still flows through as text
             cb.onDelta(line);

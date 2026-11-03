@@ -1,6 +1,8 @@
 import { storeCustomerVendorApiKey } from '../../services/storeCustomerVendorApiKeysService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { endpoints } from '../../config/endpoints';
+import { queryClient } from '../../queryClient';
+import { TEXT_GEN_MODELS_QUERY_KEY } from '../../hooks/queries/queryKeys';
 
 jest.mock('../../utils/apiUtils');
 
@@ -13,7 +15,7 @@ describe('storeCustomerVendorApiKeysService', () => {
     });
 
     test('successfully stores vendor api key', async () => {
-        const mockResponse = { aiVendorAPIKeyStatus: { aiVendor: 'OpenAI', status: 'valid' } };
+        const mockResponse = { apiKeyStatus: { aiVendor: 'OpenAI', status: 'valid' } };
         const mockFetchWithRetry = fetchWithRetry as jest.Mock;
         mockFetchWithRetry.mockResolvedValue({
             ok: true,
@@ -45,6 +47,33 @@ describe('storeCustomerVendorApiKeysService', () => {
 
         await expect(storeCustomerVendorApiKey(mockToken, mockRequest))
             .rejects.toThrow('Failed to save key for OpenAI: Bad Request');
+    });
+
+    describe('model lists', () => {
+        const respondWith = (updateSuccessful: boolean) => {
+            (fetchWithRetry as jest.Mock).mockResolvedValue({
+                ok: true,
+                json: jest.fn().mockResolvedValue({ apiKeyStatus: { aiVendor: 'OpenAI', updateSuccessful } }),
+            });
+        };
+
+        test('a saved key makes them stale', async () => {
+            const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+            respondWith(true);
+
+            await storeCustomerVendorApiKey(mockToken, mockRequest);
+
+            expect(invalidate).toHaveBeenCalledWith({ queryKey: [TEXT_GEN_MODELS_QUERY_KEY] });
+        });
+
+        test('a rejected key leaves them alone', async () => {
+            const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+            respondWith(false);
+
+            await storeCustomerVendorApiKey(mockToken, mockRequest);
+
+            expect(invalidate).not.toHaveBeenCalled();
+        });
     });
 });
 
