@@ -134,6 +134,10 @@ def _stop_reason_of(output) -> str:
     return reason.lower() if isinstance(reason, str) else ""
 
 
+def _applied_memories(count: int, kind: str) -> str:
+    return f"Applied {count} {kind} {'memory' if count == 1 else 'memories'}"
+
+
 def _fmt_tool_call(call: dict) -> str:
     """Human-readable call signature for the thinking panel, e.g.
     web_search(query="...", topic="news") — generic over any tool's args, not
@@ -191,7 +195,7 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
             recalled_count = stats.get("recalled", 0)
             parts = []
             if core_count:
-                parts.append(f"Applied {core_count} core memori(es)")
+                parts.append(_applied_memories(core_count, "core"))
             if recalled_count:
                 parts.append(f"recalled {recalled_count} related to this message")
             payload["detail"] = "; ".join(parts) if parts else "No stored memories to apply"
@@ -205,7 +209,7 @@ def _step_done_payload(node_type: str, output: dict) -> dict:
             payload["items"] = recalled_items + core_items
         else:
             payload["detail"] = (
-                f"Applied {len(memories)} learned memori(es)" if memories else "No stored memories to apply"
+                _applied_memories(len(memories), "learned") if memories else "No stored memories to apply"
             )
             payload["items"] = memories
     else:
