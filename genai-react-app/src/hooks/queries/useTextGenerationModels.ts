@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../context/AuthContext'
 import { getTextGenerationModels } from '../../services/getTextGenerationModelsService'
 import { AIVendorModelList } from '../../models/getTextGenerationModels.models'
@@ -30,6 +31,7 @@ function readModelsSeed(customerId: string | null): AIVendorModelList[] | undefi
 export function useTextGenerationModels(vendors: string[]) {
     const { isAuthenticated, customerId, getAccessTokenSilently } = useAuth()
     const sortedVendors = [...vendors].sort()
+    const queryClient = useQueryClient()
 
     const query = useQuery<AIVendorModelList[]>({
         queryKey: [TEXT_GEN_MODELS_QUERY_KEY, customerId, sortedVendors],
@@ -47,9 +49,21 @@ export function useTextGenerationModels(vendors: string[]) {
         placeholderData: () => readModelsSeed(customerId),
         enabled: isAuthenticated && !!customerId && vendors.length > 0,
     })
-    // Stale-on-error: a failed refresh keeps the last known model lists
+    // Refresh: forgets every cached list, in memory and on disk, then asks the
+    // vendors again. Which model is selected is separate and stays as it is.
+    const clearAndRefetch = useCallback(async () => {
+        if (customerId) {
+            try {
+                localStorage.removeItem(customerKey(customerId, StorageSuffix.aiVendorModels))
+            } catch { /* storage unavailable */ }
+        }
+        await queryClient.resetQueries({ queryKey: [TEXT_GEN_MODELS_QUERY_KEY] })
+    }, [customerId, queryClient])
+
+    // Stale-on-error: a failed background fetch keeps the last known model lists
     return {
         ...query,
         data: query.data ?? readModelsSeed(customerId),
+        clearAndRefetch,
     }
 }

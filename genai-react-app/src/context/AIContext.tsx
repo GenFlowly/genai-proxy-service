@@ -19,7 +19,6 @@ interface AIContextType {
     config: AIConfig[]
     setSelectedModelForAIVendor: (aiVendor: string, model: string) => void
     setThinkingLevelForAIVendor: (aiVendor: string, thinkingLevel: string) => void
-    resetConfig: () => void
     activeBlockId: string
     setActiveBlockId: (id: string) => void
     supplementalText: string
@@ -197,24 +196,12 @@ export const AIProvider = ({ children }: { children: ReactNode }) => {
 
 
 
-    const resetConfig = () => {
-        try {
-            // An explicit reset returns the session to "nothing picked" — the
-            // next preferences sync may seed again, same as a fresh load.
-            userMadeSelectionRef.current = false
-            setConfig([])
-        } catch (e) {
-            console.error('Failed to reset config:', e)
-        }
-    }
-
     return (
         <AIContext.Provider
             value={{
                 config,
                 setSelectedModelForAIVendor,
                 setThinkingLevelForAIVendor,
-                resetConfig,
                 activeBlockId,
                 setActiveBlockId,
                 supplementalText,
@@ -243,7 +230,6 @@ export const useAI = (): AIContextType => {
             config: [],
             setSelectedModelForAIVendor: () => { },
             setThinkingLevelForAIVendor: () => { },
-            resetConfig: () => { },
             activeBlockId: '',
             setActiveBlockId: () => { },
             supplementalText: '',

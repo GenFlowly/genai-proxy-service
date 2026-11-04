@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from './context/AuthContext'
 import { useDefaultsPrefetch } from './hooks/useDefaultsPrefetch'
+import { useTapOutsideEndsEditing } from './hooks/useTapOutsideEndsEditing'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
@@ -24,6 +25,7 @@ export default function AppContent(): React.ReactElement {
     const { t } = useTranslation()
     const { isLoading, isOnboarding, isAuthenticated, onboardingCompleted, completeOnboarding } = useAuth()
     useDefaultsPrefetch()
+    useTapOutsideEndsEditing()
 
     if (isLoading) return <div>{t("layout.appContent.loading")}</div>
 
