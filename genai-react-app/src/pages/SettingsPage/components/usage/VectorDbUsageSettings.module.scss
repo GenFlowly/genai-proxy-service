@@ -1,4 +1,7 @@
 @import '../../../../styles/themes.scss';
+@import './usageTable.scss';
+
+@include usage-table;
 
 .container {
     display: flex;
@@ -37,38 +40,3 @@
     margin: 0;
 }
 
-// Horizontal-scroll safety net for narrow containers — matches the
-// TextContainer .tableScroll convention rather than relying on a parent's
-// overflow-x:hidden to do nothing and clip columns instead.
-.tableScroll {
-    max-width: 100%;
-    overflow-x: auto;
-}
-
-.table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
-
-    th,
-    td {
-        text-align: left;
-        padding: 0.6rem 0.75rem;
-        border-bottom: 1px solid $color-border;
-    }
-
-    th {
-        color: $color-text-muted;
-        font-weight: 500;
-        font-size: 0.8rem;
-    }
-
-    td {
-        color: $color-text-primary;
-    }
-}
-
-.numeric {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
