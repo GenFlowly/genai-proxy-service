@@ -175,7 +175,7 @@ describe('AIContext UI Integration', () => {
         expect(getTextGenerationModels).toHaveBeenCalledTimes(2);
     });
 
-    test('resetConfig clears selection on refresh', async () => {
+    test('refresh keeps the selected model and reloads the list', async () => {
         await act(async () => {
             customRender(<AIVendorWidget />);
         });
@@ -193,10 +193,9 @@ describe('AIContext UI Integration', () => {
             fireEvent.click(refreshBtn);
         });
 
-        // 3. Verify Selection Cleared
-        // resetConfig() clears config, so isActive becomes false.
-        // The dropdown should be removed.
-        expect(select).not.toBeInTheDocument();
+        // 3. The selection is unrelated to the list and survives it
+        expect(await screen.findByTestId('model-select-OPENAI')).toBeInTheDocument();
+        expect(getTextGenerationModels).toHaveBeenCalledTimes(2);
     });
 
     test('Seeds thinking level from preferredModels preferences', async () => {
@@ -315,7 +314,6 @@ describe('AIContext UI Integration', () => {
         // The fallback setters are no-ops and must not throw
         api.setSelectedModelForAIVendor('OPENAI', 'gpt-5');
         api.setThinkingLevelForAIVendor('OPENAI', 'high');
-        api.resetConfig();
         api.setActiveBlockId('block-1');
         api.setSupplementalText('text');
         api.setSystemPrompt('prompt');
