@@ -393,6 +393,41 @@ describe('AgentsPage Component', () => {
             // picking something in the mobile menu dismisses it immediately
             expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(false);
         });
+
+        test('shows the cards only: no Create agent, Fork or fork hint', async () => {
+            const systemAgent = { ...mockAgent, graphId: 'sys-1', name: 'Shared Default', isDefault: false, isSystem: true };
+            (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+                agents: [mockAgent, systemAgent],
+            });
+            renderPage();
+            await waitFor(() => expect(screen.getByText('Shared Default')).toBeInTheDocument());
+
+            expect(screen.queryByTestId('create-agent-button')).not.toBeInTheDocument();
+            expect(screen.queryByRole('button', { name: /fork agent shared default/i })).not.toBeInTheDocument();
+            expect(screen.queryByText(/Fork it to get your own editable copy/)).not.toBeInTheDocument();
+        });
+
+        test('opening a card still goes to the agent page, which shows the desktop notice', async () => {
+            (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
+            renderPage();
+            await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
+
+            await userEvent.click(screen.getByText('Default Graph'));
+            expect(mockNavigate).toHaveBeenCalledWith(`/agents/${mockAgent.graphId}`);
+        });
+
+        test('at tablet width (menu header, editor available) Create agent and Fork stay', async () => {
+            (useWindowSize as jest.Mock).mockReturnValue({ width: 950 });
+            const systemAgent = { ...mockAgent, graphId: 'sys-1', name: 'Shared Default', isDefault: false, isSystem: true };
+            (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+                agents: [mockAgent, systemAgent],
+            });
+            renderPage();
+            await waitFor(() => expect(screen.getByText('Shared Default')).toBeInTheDocument());
+
+            expect(screen.getByTestId('create-agent-button')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /fork agent shared default/i })).toBeInTheDocument();
+        });
     });
 
     test('"Created by me" chip hides System agents', async () => {

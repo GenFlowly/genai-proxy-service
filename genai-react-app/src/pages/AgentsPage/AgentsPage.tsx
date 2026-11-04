@@ -26,6 +26,7 @@ import { forkAgent, getCustomerAgents } from '../../services/agentsService'
 import { AGENT_CATEGORIES, Agent, agentCategory, effectiveDefaultAgentId } from '../../models/agents.models'
 import { useAI } from '../../context/AIContext'
 import { formatServerDateTime } from '../../utils/timeUtils'
+import { AGENT_EDITOR_MIN_WIDTH } from '../../constants/breakpoints'
 import { ICONS } from '../../constants/icons'
 import {
     CATEGORY_ICONS,
@@ -62,9 +63,11 @@ interface AgentCardProps {
     /** System agents are read-only; Fork creates an editable copy. */
     onFork: (agent: Agent) => void
     forking: boolean
+    /** False on small screens, where a fork couldn't be opened. */
+    canFork: boolean
 }
 
-function AgentCard({ agent, isEffectiveDefault, onOpen, onFork, forking }: AgentCardProps) {
+function AgentCard({ agent, isEffectiveDefault, onOpen, onFork, forking, canFork }: AgentCardProps) {
     const { t } = useTranslation()
     const [expanded, setExpanded] = useState(false)
 
@@ -105,7 +108,7 @@ function AgentCard({ agent, isEffectiveDefault, onOpen, onFork, forking }: Agent
                     {agent.isSystem && (
                         <span className={styles.systemBadge}>{t('agentsPage.agentCard.systemBadge')}</span>
                     )}
-                    {agent.isSystem && (
+                    {agent.isSystem && canFork && (
                         <button
                             type="button"
                             className={styles.editBtn}
@@ -123,7 +126,7 @@ function AgentCard({ agent, isEffectiveDefault, onOpen, onFork, forking }: Agent
             </div>
 
             {/* System agents are shared and read-only — forking creates an editable copy */}
-            {agent.isSystem && (
+            {agent.isSystem && canFork && (
                 <p className={styles.systemHint}>{t('agentsPage.agentCard.systemHint')}</p>
             )}
 
@@ -204,7 +207,8 @@ export default function AgentsPage() {
     const { setLeftSidebarExpanded, setRightSidebarExpanded } = useLayout()
     const { getAccessTokenSilently } = useAuth()
     const { showToast } = useToast()
-    const { isNarrow } = useResponsiveBreakpoints()
+    const { isNarrow, width } = useResponsiveBreakpoints()
+    const canChangeAgents = width >= AGENT_EDITOR_MIN_WIDTH
     usePageTitle()
 
     const [agents, setAgents] = useState<Agent[]>([])
@@ -300,13 +304,13 @@ export default function AgentsPage() {
                 // full-screen content; Create agent lives in its menu
                 <MobileHeader
                     title={t('agentsPage.agentsPage.title')}
-                    menuItems={[
+                    menuItems={canChangeAgents ? [
                         {
                             label: t('agentsPage.agentsPage.createAgent'),
                             onClick: () => navigate('/agents/new'),
                             'data-testid': 'create-agent-button',
                         },
-                    ]}
+                    ] : undefined}
                     menuTitle={t('agentsPage.categories.sectionLabel')}
                     menuContent={(
                         <SidebarListPanel
@@ -419,6 +423,7 @@ export default function AgentsPage() {
                                                 onOpen={handleOpen}
                                                 onFork={handleFork}
                                                 forking={forking}
+                                                canFork={canChangeAgents}
                                             />
                                         </GridCol>
                                     ))}
