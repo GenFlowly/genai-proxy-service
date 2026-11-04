@@ -166,7 +166,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                 </div>
 
                 {mode === 'PUBLIC' && (
-                    <div className={styles.publicSection} style={{ padding: '15px 0', borderBottom: '1px solid #eaeaea', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div className={styles.publicSection}>
                         <span>{t('common.shareModal.roleForEveryone')}</span>
                         <select 
                             value={publicRole} 
