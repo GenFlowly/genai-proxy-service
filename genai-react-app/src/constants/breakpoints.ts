@@ -8,3 +8,6 @@ export const MOBILE_BREAKPOINT = 768
  * into a half-visible sidebar.
  */
 export const NARROW_BREAKPOINT = 1024
+
+/** Below this width agents can't be opened or changed, only listed. */
+export const AGENT_EDITOR_MIN_WIDTH = 900

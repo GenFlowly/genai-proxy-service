@@ -34,9 +34,6 @@ jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="nav
 jest.mock('../../../components/widgets/MobileHeader/MobileHeader', () => () => (
     <div data-testid="mobile-header" />
 ));
-jest.mock('../../../pages/AgentsPage/EditAgentPage/EditAgentPage', () => () => (
-    <div data-testid="edit-agent-page" />
-));
 
 jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }));
 
@@ -544,24 +541,55 @@ describe('GraphAgentEditorPage', () => {
         expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    // ── Mobile fallbacks ──────────────────────────────────────────────────────
+    // ── Small screens ─────────────────────────────────────────────────────────
 
-    test('mobile /agents/:graphId renders the form-based EditAgentPage', () => {
+    test('small screen /agents/:graphId shows the desktop notice with the agent link', () => {
         setViewport(false);
         renderAt('/agents/graph-001');
 
-        expect(screen.getByTestId('edit-agent-page')).toBeInTheDocument();
+        expect(screen.getByText('Desktop screen needed')).toBeInTheDocument();
+        expect(screen.getByText(/This agent can only be viewed or edited on a desktop screen/)).toBeInTheDocument();
+        expect(screen.getByTestId('agent-desktop-url')).toHaveTextContent(`${window.location.origin}/agents/graph-001`);
+        expect(screen.getByRole('link', { name: 'Back to Agents' })).toHaveAttribute('href', '/agents');
         expect(screen.queryByTestId('graph-editor')).not.toBeInTheDocument();
         expect(agentsService.getAgent).not.toHaveBeenCalled();
     });
 
-    test('mobile /agents/new shows the larger-screen notice with a link back to /agents', () => {
+    test('small screen /agents/new shows the desktop notice with the create link', () => {
         setViewport(false);
         renderAt('/agents/new');
 
-        expect(screen.getAllByText('Agent creation needs a larger screen').length).toBeGreaterThan(0);
-        expect(screen.getByRole('link', { name: 'Back to Agents' })).toHaveAttribute('href', '/agents');
+        expect(screen.getByText(/Agents can only be created on a desktop screen/)).toBeInTheDocument();
+        expect(screen.getByTestId('agent-desktop-url')).toHaveTextContent(`${window.location.origin}/agents/new`);
         expect(screen.queryByTestId('graph-editor')).not.toBeInTheDocument();
-        expect(screen.queryByTestId('edit-agent-page')).not.toBeInTheDocument();
+    });
+
+    test('Copy puts the link on the clipboard and confirms it', async () => {
+        const writeText = jest.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+        setViewport(false);
+        renderAt('/agents/graph-001');
+
+        await act(async () => {
+            screen.getByRole('button', { name: 'Copy' }).click();
+        });
+
+        expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/agents/graph-001`);
+        expect(screen.getByRole('button', { name: '✓ Copied' })).toBeInTheDocument();
+    });
+
+    test('a failed copy leaves the button as it was', async () => {
+        const writeText = jest.fn().mockRejectedValue(new Error('denied'));
+        Object.assign(navigator, { clipboard: { writeText } });
+        const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+        setViewport(false);
+        renderAt('/agents/graph-001');
+
+        await act(async () => {
+            screen.getByRole('button', { name: 'Copy' }).click();
+        });
+
+        expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+        consoleError.mockRestore();
     });
 });
