@@ -5,7 +5,6 @@ import { DEFAULT_NODE_TYPE_INFOS, GraphEditor, Icon } from '@genflowly/component
 import type { AgentGraph, ConditionOption, InstructionOption, NodeCatalogEntry } from '@genflowly/component-library'
 import Navbar from '../../../components/navbar/Navbar'
 import MobileHeader from '../../../components/widgets/MobileHeader/MobileHeader'
-import EditAgentPage from '../EditAgentPage/EditAgentPage'
 import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { usePageTitle } from '../../../hooks/usePageTitle'
@@ -13,6 +12,7 @@ import { createGraphAgent, forkAgent, getAgent, getCachedAgent, updateAgent } fr
 import { getCustomerInstructions } from '../../../services/instructionService'
 import { getNodePresets } from '../../../services/nodePresetsService'
 import { getTextGenerationModels } from '../../../services/getTextGenerationModelsService'
+import { AGENT_EDITOR_MIN_WIDTH } from '../../../constants/breakpoints'
 import { AIVendor } from '../../../constants/vendors'
 import { ICONS } from '../../../constants/icons'
 import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
@@ -36,7 +36,9 @@ import styles from './GraphAgentEditorPage.module.scss'
 /** Editor-created nodes carry ids with this prefix until the server assigns real ones. */
 const TEMP_NODE_ID_PREFIX = 'new-'
 
-const DESKTOP_MIN_WIDTH_QUERY = '(min-width: 900px)'
+const DESKTOP_MIN_WIDTH_QUERY = `(min-width: ${AGENT_EDITOR_MIN_WIDTH}px)`
+
+const COPIED_LABEL_DURATION_MS = 2000
 
 const INSTRUCTION_PREVIEW_LENGTH = 200
 
@@ -119,12 +121,60 @@ function useIsDesktop(): boolean {
     return isDesktop
 }
 
+// ── DesktopNeededNotice ───────────────────────────────────────────────────────
+
+/** Shown instead of the editor on small screens, with the link to open on a desktop. */
+function DesktopNeededNotice({ graphId }: { graphId?: string }) {
+    const { t } = useTranslation()
+    const [copied, setCopied] = useState(false)
+    const agentsUrl = `${window.location.origin}/agents/`
+    const agentSegment = graphId ?? 'new'
+    const desktopUrl = `${agentsUrl}${agentSegment}`
+
+    useEffect(() => {
+        if (!copied) return
+        const timer = setTimeout(() => setCopied(false), COPIED_LABEL_DURATION_MS)
+        return () => clearTimeout(timer)
+    }, [copied])
+
+    const copyUrl = async () => {
+        try {
+            await navigator.clipboard.writeText(desktopUrl)
+            setCopied(true)
+        } catch (err) {
+            console.error('Failed to copy:', err)
+        }
+    }
+
+    return (
+        <div className={styles.mobilePage}>
+            <MobileHeader title={t('agentsPage.graphEditorPage.desktopNeededTitle')} />
+            <div className={styles.mobileNotice}>
+                <span className={styles.mobileNoticeIcon} aria-hidden="true">🖥️</span>
+                <h1 className={styles.mobileNoticeTitle}>{t('agentsPage.graphEditorPage.desktopNeededTitle')}</h1>
+                <p className={styles.mobileNoticeBody}>
+                    {t(graphId ? 'agentsPage.graphEditorPage.desktopNeededEditBody' : 'agentsPage.graphEditorPage.desktopNeededCreateBody')}
+                </p>
+                <code className={styles.desktopUrl} data-testid="agent-desktop-url">
+                    {agentsUrl}<wbr />{agentSegment}
+                </code>
+                <button type="button" className={styles.copyUrlBtn} onClick={copyUrl}>
+                    {t(copied ? 'common.copyToClipboard.copied' : 'common.copyToClipboard.copy')}
+                </button>
+                <Link to="/agents" className={styles.backLink}>
+                    {t('agentsPage.graphEditorPage.backToAgents')}
+                </Link>
+            </div>
+        </div>
+    )
+}
+
 // ── GraphAgentEditorPage ──────────────────────────────────────────────────────
 
 /**
  * Full-screen visual agent editor. On desktop it renders the library's
- * GraphEditor; on small screens it falls back to the form-based EditAgentPage
- * for existing agents and shows a "needs a larger screen" notice for new ones.
+ * GraphEditor; on small screens agents can't be opened, so it shows a notice
+ * with the link to open on a desktop.
  */
 export default function GraphAgentEditorPage() {
     const { t } = useTranslation()
@@ -384,24 +434,9 @@ export default function GraphAgentEditorPage() {
         window.open('/instructions', '_blank')
     }, [])
 
-    // ── Mobile fallbacks ──────────────────────────────────────────────────────
+    // ── Small screens: notice only ────────────────────────────────────────────
 
-    if (!isDesktop) {
-        if (!isNew) return <EditAgentPage />
-        return (
-            <div className={styles.mobilePage}>
-                <MobileHeader title={t('agentsPage.graphEditorPage.mobileCreateTitle')} />
-                <div className={styles.mobileNotice}>
-                    <span className={styles.mobileNoticeIcon} aria-hidden="true">🖥️</span>
-                    <h1 className={styles.mobileNoticeTitle}>{t('agentsPage.graphEditorPage.mobileCreateTitle')}</h1>
-                    <p className={styles.mobileNoticeBody}>{t('agentsPage.graphEditorPage.mobileCreateBody')}</p>
-                    <Link to="/agents" className={styles.backLink}>
-                        {t('agentsPage.graphEditorPage.backToAgents')}
-                    </Link>
-                </div>
-            </div>
-        )
-    }
+    if (!isDesktop) return <DesktopNeededNotice graphId={isNew ? undefined : graphId} />
 
     // ── Desktop: full-height visual editor ────────────────────────────────────
 
@@ -414,7 +449,7 @@ export default function GraphAgentEditorPage() {
             {isReadOnly && (
                 <div className={styles.systemBanner} role="note">
                     <span aria-hidden="true">ℹ️</span>
-                    <p>{t('agentsPage.editAgentPage.systemBanner')}</p>
+                    <p>{t('agentsPage.graphEditorPage.systemBanner')}</p>
                     <button
                         type="button"
                         className={styles.forkBtn}

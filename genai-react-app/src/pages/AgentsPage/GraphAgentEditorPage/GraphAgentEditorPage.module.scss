@@ -24,7 +24,7 @@
     }
 }
 
-// ── System default agent banner (matches EditAgentPage) ───────────────────────
+// ── System default agent banner ───────────────────────────────────────────────
 
 .systemBanner {
     display: flex;
@@ -159,6 +159,36 @@
     margin: 0;
     max-width: 26rem;
     line-height: 1.5;
+}
+
+.desktopUrl {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 26rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: $color-text-primary;
+    background: $color-background-secondary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    overflow-wrap: anywhere;
+    user-select: all;
+}
+
+.copyUrlBtn {
+    @include interactive-base;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    background: $color-background-secondary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    cursor: pointer;
+
+    &:hover {
+        border-color: $color-border-focus;
+    }
 }
 
 .backLink {
