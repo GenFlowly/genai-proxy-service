@@ -22,7 +22,7 @@ import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/Sideb
 export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid'?: string } = {}): React.ReactElement {
     const { t } = useTranslation()
     const { ai, auth } = useSidebarWidget()
-    const { config, setSelectedModelForAIVendor, setThinkingLevelForAIVendor, resetConfig } = ai
+    const { config, setSelectedModelForAIVendor, setThinkingLevelForAIVendor } = ai
     const { getAccessTokenSilently, customerId, isAuthenticated, aiVendorAPIKeyStatusList } = auth
     const { showToast } = useToast()
 
@@ -37,7 +37,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
 
     // Shared query (dedups with VendorModelSelect/AISettings): paints from the
     // last known list, skips the round trip entirely when no vendor has a key.
-    const { data: modelsData, refetch } = useTextGenerationModels(vendors)
+    const { data: modelsData, clearAndRefetch } = useTextGenerationModels(vendors)
     const aiVendorModels = modelsData ?? []
     const [isRefreshing, setIsRefreshing] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -64,8 +64,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
 
         try {
             setIsRefreshing(true)
-            resetConfig()
-            await refetch()
+            await clearAndRefetch()
         } finally {
             setIsRefreshing(false)
         }
@@ -270,7 +269,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                                 </select>
                             )}
 
-                            {isActive && isEnabled && models.length === 0 && (
+                            {isActive && isEnabled && models.length === 0 && !isRefreshing && (
                                 <span className={styles.errorText}>{t('sidebar.aiVendorWidget.noModelsAvailable')}</span>
                             )}
                         </div>
