@@ -8,9 +8,9 @@ const NON_TYPING_INPUT_TYPES = new Set([
     'button', 'checkbox', 'color', 'file', 'image', 'radio', 'range', 'reset', 'submit',
 ])
 
-// A tap here focuses a field or belongs to one. .cm-editor holds the composer's
-// completion popup, which is outside its contenteditable.
-const KEEPS_KEYBOARD_SELECTOR = 'input, textarea, select, label, [contenteditable="true"], .cm-editor'
+// A tap here focuses a field or belongs to one. .cm-tooltip is the composer's
+// completion popup, which lives under <body>, outside the editor.
+const KEEPS_KEYBOARD_SELECTOR = 'input, textarea, select, label, [contenteditable="true"], .cm-editor, .cm-tooltip'
 
 function isTypingField(element: Element | null): element is HTMLElement {
     if (element instanceof HTMLInputElement) return !NON_TYPING_INPUT_TYPES.has(element.type)
