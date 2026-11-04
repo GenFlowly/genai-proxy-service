@@ -1,5 +1,8 @@
 @import '../../../../styles/themes.scss';
 @import '../../../../styles/mixins.scss';
+@import './usageTable.scss';
+
+@include usage-table;
 
 .container {
     display: flex;
@@ -62,46 +65,6 @@
     font-weight: 600;
     color: $color-text-primary;
     margin: 0;
-}
-
-// Horizontal-scroll safety net for narrow containers — matches the
-// TextContainer .tableScroll convention rather than relying on a parent's
-// overflow-x:hidden to do nothing and clip columns instead.
-.tableScroll {
-    max-width: 100%;
-    overflow-x: auto;
-}
-
-// The breakdown is tabular data, not a chart — a plain table is the WCAG
-// baseline form this skill calls for when no comparison/trend is involved.
-.table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.9rem;
-
-    th,
-    td {
-        text-align: left;
-        padding: 0.6rem 0.75rem;
-        border-bottom: 1px solid $color-border;
-    }
-
-    th {
-        color: $color-text-muted;
-        font-weight: 500;
-        font-size: 0.8rem;
-    }
-
-    td {
-        color: $color-text-primary;
-    }
-}
-
-// Numeric columns align right with tabular figures so digits stay aligned
-// down a column — proportional figures are reserved for the stat tiles above.
-.numeric {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
 }
 
 .trackedSinceNote {
