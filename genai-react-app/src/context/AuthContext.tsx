@@ -30,6 +30,7 @@ import {
 import {
     getInstructions,
     replaceInstructions,
+    seedInstructions,
     setInstructionsCustomer,
     subscribeInstructions,
     upsertInstruction,
@@ -190,7 +191,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             )
                         }
                         if (onboardData.customerInstructions) {
-                            replaceInstructions(onboardData.customerId ?? null, onboardData.customerInstructions)
+                            seedInstructions(onboardData.customerId ?? null, onboardData.customerInstructions)
                         }
                         if (onboardData.customerName) setCustomerName(onboardData.customerName)
                         if (onboardData.customerPicture) setCustomerPicture(onboardData.customerPicture)
@@ -294,7 +295,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
             }
             const { getCustomerInstructions } = await import('../services/instructionService')
             const response = await getCustomerInstructions(token)
-            replaceInstructions(customerId, response.instructions)
+            if (token) replaceInstructions(customerId, response.instructions)
+            else seedInstructions(customerId, response.instructions)
         } catch (error) {
             console.error('Failed to refresh instructions', error)
         } finally {
