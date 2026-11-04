@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AIVendorWidget from '../../../../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget';
 import { useSidebarWidget } from '../../../../../hooks/useSidebarWidget';
 import { useAuth } from '../../../../../context/AuthContext';
@@ -57,7 +57,6 @@ describe('AIVendorWidget', () => {
     const mockShowToast = jest.fn();
 
     const mockSetSelectedModelForAIVendor = jest.fn();
-    const mockResetConfig = jest.fn();
     const mockGetAccessTokenSilently = jest.fn().mockResolvedValue('token');
 
     beforeEach(() => {
@@ -73,7 +72,6 @@ describe('AIVendorWidget', () => {
                     { aiVendor: AIVendor.GEMINI, model: '' }
                 ],
                 setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
-                resetConfig: mockResetConfig
             },
             auth: {
                 getAccessTokenSilently: mockGetAccessTokenSilently,
@@ -129,7 +127,6 @@ describe('AIVendorWidget', () => {
             ai: {
                 config: [],
                 setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
-                resetConfig: mockResetConfig
             },
             auth: {
                 getAccessTokenSilently: mockGetAccessTokenSilently,
@@ -152,7 +149,6 @@ describe('AIVendorWidget', () => {
             ai: {
                 config: [{ aiVendor: AIVendor.OPENAI, model: '' }], // Inactive
                 setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
-                resetConfig: mockResetConfig
             },
             auth: {
                 getAccessTokenSilently: mockGetAccessTokenSilently,
@@ -184,6 +180,33 @@ describe('AIVendorWidget', () => {
         expect(mockSetSelectedModelForAIVendor).toHaveBeenCalledWith(AIVendor.OPENAI, 'gpt-3.5-turbo');
     });
 
+    test('refresh forgets the cached list and keeps the selection', async () => {
+        render(withQueryClient(<AIVendorWidget />));
+        await waitFor(() => expect(mockGetTextGenerationModels).toHaveBeenCalledTimes(1));
+        expect(await screen.findByTestId('model-select-OPENAI')).toBeInTheDocument();
+        localStorage.setItem('cust-123_ai_vendor_models', JSON.stringify([{ aiVendor: 'OPENAI', modelsList: ['stale'] }]));
+        mockSetSelectedModelForAIVendor.mockClear();
+        let finishFetch: (value: unknown) => void = () => {};
+        mockGetTextGenerationModels.mockReturnValueOnce(new Promise(resolve => { finishFetch = resolve; }));
+
+        fireEvent.click(screen.getByTestId('refresh-models-button'));
+
+        // The old list is gone while the new one loads, with no "no models" flash
+        await waitFor(() => expect(mockGetTextGenerationModels).toHaveBeenCalledTimes(2));
+        expect(localStorage.getItem('cust-123_ai_vendor_models')).toBeNull();
+        expect(screen.queryByTestId('model-select-OPENAI')).not.toBeInTheDocument();
+        expect(screen.queryByText('sidebar.aiVendorWidget.noModelsAvailable')).not.toBeInTheDocument();
+
+        await act(async () => {
+            finishFetch({ aiVendorModelList: [{ aiVendor: AIVendor.OPENAI, modelsList: ['gpt-4', 'gpt-new'] }] });
+        });
+
+        const select = await screen.findByTestId('model-select-OPENAI');
+        expect(select).toHaveValue('gpt-4');
+        expect(screen.getByText('gpt-new')).toBeInTheDocument();
+        expect(mockSetSelectedModelForAIVendor).not.toHaveBeenCalled();
+    });
+
     test('refreshes models on button click', async () => {
         render(withQueryClient(<AIVendorWidget />));
         // A refetch during the initial in-flight fetch is deduped by
@@ -194,7 +217,6 @@ describe('AIVendorWidget', () => {
         fireEvent.click(refreshBtn);
 
         await waitFor(() => {
-            expect(mockResetConfig).toHaveBeenCalled();
             expect(mockGetTextGenerationModels).toHaveBeenCalledTimes(2); // Once on mount, once on click
         });
     });
@@ -208,7 +230,6 @@ describe('AIVendorWidget', () => {
                     { aiVendor: AIVendor.OPENAI, model: 'gpt-4' } // Active selection
                 ],
                 setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
-                resetConfig: mockResetConfig
             },
             auth: {
                 getAccessTokenSilently: mockTokenFn,
