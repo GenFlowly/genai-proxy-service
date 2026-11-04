@@ -17,6 +17,7 @@ const EMPTY: InstructionResponse[] = []
 
 let activeCustomerId: string | null = null
 let instructions: InstructionResponse[] = EMPTY
+let hasAllVersions = false
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -49,6 +50,7 @@ export function setInstructionsCustomer(customerId: string | null): void {
     if (customerId === activeCustomerId) return
     activeCustomerId = customerId
     instructions = EMPTY
+    hasAllVersions = false
     if (customerId) {
         try {
             const raw = localStorage.getItem(customerKey(customerId, StorageSuffix.instructions))
@@ -63,12 +65,28 @@ export function setInstructionsCustomer(customerId: string | null): void {
     emit()
 }
 
-/** Full replace from /onboard or an explicit list refetch. */
-export function replaceInstructions(customerId: string | null, next: InstructionResponse[]): void {
+function write(customerId: string | null, next: InstructionResponse[]): void {
     if (customerId) activeCustomerId = customerId
     instructions = next
     persist()
     emit()
+}
+
+/** Full replace from an explicit, signed-in list refetch, which holds every version. */
+export function replaceInstructions(customerId: string | null, next: InstructionResponse[]): void {
+    hasAllVersions = true
+    write(customerId, next)
+}
+
+/**
+ * The list from /onboard, or one fetched with no session. /onboard holds only
+ * each instruction's newest version and can land before or after the refetch,
+ * so once the refetch has landed this mustn't overwrite it.
+ */
+export function seedInstructions(customerId: string | null, next: InstructionResponse[]): void {
+    if (customerId && customerId !== activeCustomerId) hasAllVersions = false
+    if (hasAllVersions) return
+    write(customerId, next)
 }
 
 /**
