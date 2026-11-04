@@ -16,8 +16,8 @@ const Page = () => {
             <select data-testid="select"><option>One</option></select>
             <div className="cm-editor">
                 <div data-testid="editor" contentEditable suppressContentEditableWarning tabIndex={0}>Text</div>
-                <div className="cm-tooltip"><span data-testid="completion">div</span></div>
             </div>
+            <div className="cm-tooltip"><span data-testid="completion">div</span></div>
         </div>
     )
 }
