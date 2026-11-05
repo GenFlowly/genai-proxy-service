@@ -23,6 +23,7 @@ COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 # Copy application code
 COPY handlers ${LAMBDA_TASK_ROOT}/handlers
 COPY services/content_logging.py ${LAMBDA_TASK_ROOT}/services/content_logging.py
+COPY services/content_source.py ${LAMBDA_TASK_ROOT}/services/content_source.py
 
 # Set the handler
 CMD [ "handlers.parse_and_chunk_lambda.handler" ]

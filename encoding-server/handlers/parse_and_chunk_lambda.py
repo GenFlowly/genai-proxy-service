@@ -11,6 +11,7 @@ from encoding_library.utils.embedding_utils import create_chunks, get_embedding_
 from encoding_library.utils.model_registry import get_chunking_params
 
 from services.content_logging import default_log_level
+from services.content_source import content_sha256, is_source_backed, load_raw_data, to_pointer_state
 
 setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
@@ -24,12 +25,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Parse and Chunk Lambda — first node in the Step Functions V2 pipeline.
     Receives a MemoryRequestInternalState, chunks the text, and returns
     a { "batches": [...] } payload for the downstream Map state.
+
+    For source-backed types (notes, conversations, instructions, memories)
+    the input is a pointer: the text is loaded from its source table and the
+    batches carry only the chunk plan (offset, count, total and a hash of the
+    chunked text), never the chunks. create-and-store reloads and re-chunks.
     """
     try:
         logger.info(f"Received parse-and-chunk request.")
 
         memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
         set_request_id(memory_request_internal_state.request_id)
+
+        source_backed = is_source_backed(memory_request_internal_state.data_type)
+        if source_backed:
+            raw_data = load_raw_data(memory_request_internal_state)
+            if raw_data is None:
+                return {"batches": []}
+            memory_request_internal_state.raw_data = raw_data
 
         processor = ProcessorFactory.get_processor(memory_request_internal_state)
         text_to_encode = processor.get_text_to_encode(memory_request_internal_state)
@@ -62,6 +75,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         )
 
         logger.info(f"Chunked into {len(chunks)} pieces across batch_size={BATCH_SIZE}.")
+
+        if source_backed:
+            # The resolved chunk size/overlap ride in the plan so create-and-store
+            # re-chunks with exactly these values.
+            pointer = to_pointer_state(memory_request_internal_state.to_dict())
+            pointer["chunk_size"] = chunk_size
+            pointer["chunk_overlap"] = chunk_overlap
+            digest = content_sha256(text_to_encode)
+            batches = [
+                {
+                    **pointer,
+                    "chunk_offset": i,
+                    "chunk_count": len(chunks[i:i + BATCH_SIZE]),
+                    "chunk_total": len(chunks),
+                    "content_sha256": digest,
+                }
+                for i in range(0, len(chunks), BATCH_SIZE)
+            ]
+            logger.info(f"Returning {len(batches)} batch plan(s).")
+            return {"batches": batches}
 
         # Strip the heavy text fields after chunking — the full document text is
         # no longer needed downstream and would otherwise blow the 256KB Step

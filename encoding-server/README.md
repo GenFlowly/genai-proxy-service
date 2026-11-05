@@ -58,16 +58,28 @@ API Gateway (JWT auth)
                                              ▼
                             Step Function (state-machine-v2)
                           parse_and_chunk ─▶ Map (concurrency 3):
-                                              create_embeddings ─▶ store_embeddings
-                                                                        ▼
-                                                                  Zilliz/Milvus
+                                              create_and_store
+                                                    ▼
+                                              Zilliz/Milvus
 ```
 
-- `parse_and_chunk` chunks the text and fans out batches of chunks.
-- `create_embeddings` embeds synchronously (local model or provider API).
-- `store_embeddings` writes vectors (`id = {noteKey}_{chunkIndex}`, so
-  re-encodes overwrite instead of duplicating) and, for notes, marks the note
-  synced in the `CustomerNotes` DynamoDB table.
+- `parse_and_chunk` chunks the text and fans out batch plans: each batch's
+  chunk offset and count, the chunk total, the chunk size/overlap used and a
+  hash of the chunked text. It never returns the chunks themselves.
+- `create_and_store` reloads the text, re-chunks it with the plan's values,
+  embeds its slice (local model or provider API) and writes vectors
+  (`id = {noteKey}_{chunkIndex}`, so re-encodes overwrite instead of
+  duplicating). For notes it marks the note synced in the `CustomerNotes`
+  DynamoDB table.
+
+**The pipeline carries ids, not text.** For notes, conversations, instructions
+and memories, the SQS message, the Step Functions input and state, and so the
+dead-letter queue, hold only the record's keys, the customer id, the model and
+the request id. Both steps load the text from the record's DynamoDB table
+(`services/content_source.py`), and only when the record belongs to the
+message's customer. A deleted record embeds nothing. A batch whose record
+changed after planning is skipped, because the save that changed it queued its
+own run. Email has no source table and still carries its text.
 
 Use realtime when content must be searchable immediately. Cost profile: the
 full lambda/Step Functions machinery runs **per document**.
