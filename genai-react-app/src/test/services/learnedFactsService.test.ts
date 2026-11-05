@@ -1,4 +1,4 @@
-import { getLearnedFacts, deleteMemoryFact } from '../../services/learnedFactsService';
+import { getLearnedFacts, deleteMemoryFact, deleteAllMemoryFacts } from '../../services/learnedFactsService';
 
 describe('learnedFactsService', () => {
     const originalFetch = global.fetch;
@@ -99,6 +99,36 @@ describe('learnedFactsService', () => {
 
             await expect(deleteMemoryFact('tok', 'mem-1')).rejects.toThrow(
                 'Failed to delete memory fact: 403'
+            );
+        });
+    });
+
+    describe('deleteAllMemoryFacts', () => {
+        test('DELETEs every memory with bearer auth and returns the count', async () => {
+            mockFetchResponse(200, { status: 'success', deleted: 3 });
+
+            await expect(deleteAllMemoryFacts('tok-123')).resolves.toBe(3);
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                expect.stringMatching(/\/api\/v1\/memories$/),
+                expect.objectContaining({
+                    method: 'DELETE',
+                    headers: expect.objectContaining({ Authorization: 'Bearer tok-123' }),
+                })
+            );
+        });
+
+        test('counts zero when the response has no count', async () => {
+            mockFetchResponse(200, { status: 'success' });
+
+            await expect(deleteAllMemoryFacts('tok')).resolves.toBe(0);
+        });
+
+        test('throws on HTTP errors', async () => {
+            mockFetchResponse(403);
+
+            await expect(deleteAllMemoryFacts('tok')).rejects.toThrow(
+                'Failed to delete learned facts: 403'
             );
         });
     });

@@ -1,6 +1,7 @@
 package com.genflowly.activity.memory
 
 import com.genflowly.Routes
+import com.genflowly.models.api.DeleteAllMemoriesResponse
 import com.genflowly.models.api.DeleteMemoryResponse
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GetMemoriesResponse
@@ -140,6 +141,33 @@ fun Route.registerMemoryRoutes(
             } catch (e: Exception) {
                 logger.error("Error deleting memory", e)
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to delete memory"))
+            }
+        }
+
+        delete(Routes.GET_MEMORIES, {
+            tags("Memories")
+            summary = "Forget all memories"
+            description = "Hard-deletes every memory the assistant learned about the customer, " +
+                    "and their embeddings. Web-app only: requires an Auth0 JWT; not accessible " +
+                    "with a developer API key."
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Memories deleted"
+                    body<DeleteAllMemoriesResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                    body<ErrorResponse>()
+                }
+            }
+        }) {
+            try {
+                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val deleted = memoryService.deleteAllMemories(customerId)
+                call.respond(HttpStatusCode.OK, DeleteAllMemoriesResponse(status = "success", deleted = deleted))
+            } catch (e: Exception) {
+                logger.error("Error deleting all memories", e)
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Failed to delete memories"))
             }
         }
     }

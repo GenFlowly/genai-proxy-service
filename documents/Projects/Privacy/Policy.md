@@ -14,7 +14,7 @@ Unbiase AI ("Unbiase AI", "we", "us") is operated by `[LEGAL ENTITY]`, `[ADDRESS
 
 - **We don't sell your data, show ads, or use your content to train AI models.**
 - **There are no analytics or advertising trackers in our apps.**
-- **Your content goes where you send it.** Messages go to the AI providers you choose. Other services only receive your content if you connect and turn on the features that use them. ⛔R7 ⛔R8 ⛔R9
+- **Your content goes where you send it.** Messages go to the AI providers you choose. Background features such as titles and memory use your primary provider, the one you rank first in Settings. Other services only receive your content if you connect them. Memory is on by default, and you can turn it off in Settings. ⛔R7 ⛔R8 ⛔R9
 - **You stay in control.** You can delete your conversations, notes, memories, API keys and account at any time. ⛔R3 ⛔R4 ⛔R5
 - **Your content is encrypted in transit and at rest, but it is not end-to-end encrypted.** Our servers process it to run the app.
 
@@ -48,9 +48,9 @@ Your relationship with each provider is your own. Its terms and privacy policy a
 |---|---|---|
 | **Send a chat message** | Your message, earlier messages in that conversation, your instruction, attachments, and any memories or notes used for that reply | The AI provider or providers you selected, using your key |
 | **Change provider in a conversation** | The same, including earlier messages and attachments | The newly selected provider |
-| **Start a chat or save an untitled note** | The first message, or up to the first 4,000 characters of the note, to create a title | The provider you are using for that chat, or the background provider you chose in Settings ⛔R9 |
-| **Create or use an instruction** | The instruction's text, to suggest an icon and category | The provider used for background tasks ⛔R9 |
-| **Turn on memory** (off by default ⛔R7) | Excerpts from chats and notes, and your existing memories, to learn and update facts about you. Each memory, and each message you send while memory is on, is also sent for lookup. | The same provider as above, your embedding provider and your vector database |
+| **Start a chat or save an untitled note** | The first message, or up to the first 4,000 characters of the note, to create a title | Your primary provider: the one ranked priority 1 in Settings, or the first one you added if you haven't ranked any ⛔R9 |
+| **Create or use an instruction** | The instruction's text, to suggest an icon and category | Your primary provider ⛔R9 |
+| **Use memory** (on by default, with separate switches for learning from chats, learning from notes, and using what it learned ⛔R7) | Excerpts from chats and notes, and your existing memories, to learn and update facts about you. Each memory, and each message you send while memory is on, is also sent for lookup. | Your primary provider, your embedding provider and your vector database. Memories used in a reply go to the provider you chat with. |
 | **Turn on indexing** (off by default ⛔R8) | Your chats and notes | Your embedding provider and your vector database, where the text is stored in readable form |
 | **Search your content** | Your search words | Your embedding provider and your vector database |
 | **Use an assistant that can search the web**, if you connected a search key | Search terms written by the AI, which may reflect your conversation | Your web search provider (currently Tavily) |
@@ -111,8 +111,8 @@ Your search index lives in **your** vector database, not ours. When you delete s
 ### 1.6 Our commitments in BYOK mode
 
 1. We send your content only to services you have connected, for the purposes described above.
-2. Features that send your content to extra services are off until you turn them on. ⛔R7 ⛔R8
-3. Background tasks stay with the provider you chose. They won't move to another provider unless you allow it. ⛔R9
+2. Memory is on by default. You can turn off learning from chats, learning from notes, and using what it learned, each on its own. Other features that send your content to extra services are off until you turn them on. ⛔R7 ⛔R8
+3. Background tasks run only on your primary provider. If it fails, they don't move to another provider. ⛔R9
 4. We don't use our own provider accounts for your requests.
 5. We don't use your content to train AI models, and we don't sell it.
 
@@ -188,7 +188,8 @@ We don't ask you to provide sensitive information. If you include it in your con
 | Purpose | Legal basis (where applicable) |
 |---|---|
 | Provide the app: run your requests, store and show your content, keep you signed in | Performance of our contract with you |
-| Provide optional features you turn on, such as memory, indexing and web search | Your consent, which you can withdraw in Settings ⛔R7 ⛔R8 |
+| Memory, which is on by default | Our legitimate interest in personalizing your replies. You can object by turning it off in Settings ⛔R7 |
+| Provide optional features you turn on, such as indexing and web search | Your consent, which you can withdraw in Settings ⛔R8 |
 | Keep the service secure and reliable: fix errors, prevent abuse, monitor performance | Our legitimate interest in running a secure service |
 | Show you your usage and costs, and bill you in Paid mode | Performance of our contract |
 | Meet legal obligations | Legal obligation |
@@ -263,7 +264,7 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 |---|---|
 | See your profile and change your username | Settings |
 | Delete a conversation or note | The item's menu ⛔R3 |
-| View and delete memories, or turn memory off | Memory page, Settings ⛔R7 |
+| Delete one learned fact, delete them all, or turn memory off | The facts listed under a reply, and Settings > Defaults > Learned facts ⛔R7 |
 | Turn indexing off and remove indexed data | Settings ⛔R8 |
 | Remove API keys | Settings ⛔R5 |
 | Stop sharing a conversation | Share menu |
@@ -315,15 +316,15 @@ Email: `[PRIVACY EMAIL]`
 
 | Marker | The draft promises | Today | Interim wording if publishing first |
 |---|---|---|---|
-| ⛔R1 | No content in logs | Step Functions logs and history, and the dead-letter queue, hold full text. **Clearing this needs the IDs-only pipeline, not just the logging change.** | "To index your content, our background system temporarily holds its full text, including in workflow history for up to 90 days and in failure queues for up to 14 days." Also narrow the Grafana role, or disclose that Grafana Labs can access these logs. |
+| ⛔R1 | No content in logs | Step Functions logs and history, and the dead-letter queue, hold full text. **Fixed in PR #331, not yet in production.** Once it deploys, only history from earlier runs holds text, for up to 90 days. The Grafana role still needs narrowing. | "To index your content, our background system temporarily holds its full text, including in workflow history for up to 90 days and in failure queues for up to 14 days." Also narrow the Grafana role, or disclose that Grafana Labs can access these logs. |
 | ⛔R2 | Public links reveal only messages and replies | Trace data can reveal note and memory text, and your name and picture are shown | "A public link can also reveal the AI's activity trace, which may include text from your notes, as well as your name and picture." **Fix this rather than publish that sentence.** |
 | ⛔R3 | Real deletion, with Trash | Archive only. Content is kept indefinitely and can still be used in later AI replies. | "You can archive conversations and notes, which hides them. Archived content stays on our servers and may still be retrieved for later replies. To request deletion, contact `[PRIVACY EMAIL]`." You would need to fulfil those requests by hand. |
 | ⛔R4 | Self-service export and account deletion | Neither exists. **Apple requires in-app deletion, so this blocks the iOS release.** | "To delete your account or get a copy of your data, contact `[PRIVACY EMAIL]`." |
 | ⛔R5 | Remove any key | Only tool keys can be removed | "You can replace a stored key, or revoke it with the provider. To remove it from our systems, contact `[PRIVACY EMAIL]`." |
 | ⛔R6 | Nothing is indexed without an embedding provider and vector database | Text enters the pipeline anyway | Delete the sentence, and rely on the R1 interim wording. |
-| ⛔R7 | Memory off by default, with a switch | On by default, no switch | "Memory is on by default. It sends excerpts of your chats and notes to an AI provider and your embedding provider. To turn it off, contact `[PRIVACY EMAIL]`." |
+| ⛔R7 | Memory on by default, with three switches and "Delete all" | On by default, no switch. **Fixed on development, not yet in production.** | "Memory is on by default. It sends excerpts of your chats and notes to an AI provider and your embedding provider. To turn it off, contact `[PRIVACY EMAIL]`." |
 | ⛔R8 | Indexing off by default, with a switch | Always attempted | "If you connect an embedding provider and a vector database, your chats and notes are indexed automatically. There is no setting to turn this off yet." |
-| ⛔R9 | Background tasks stay with your chosen provider | They prefer OpenAI, then any stored key | "Background tasks such as titles and memory may use any provider you've added a key for, even if it isn't the one you chose for that chat." |
+| ⛔R9 | Background tasks run only on your primary provider | They prefer OpenAI, then any stored key. **Fixed on development, not yet in production.** | "Background tasks such as titles and memory may use any provider you've added a key for, even if it isn't the one you chose for that chat." |
 | ⛔R10 | We use "don't store" options | `store` not set for OpenAI | Delete the sentence. |
 | ⛔R11 | Key facts shown when adding a key | Not shown | Delete the sentence. **Keep the Voyage, Google, Tavily and DeepSeek examples.** |
 | ⛔R12 | Permission requested before first use | No consent step. **Apple requires this.** | Remove the sentence. Blocks the iOS release. |
@@ -366,3 +367,4 @@ Add these when the features ship (see section 7.1 of Recommendations.md).
 5. **Legal bases, age limits, transfer safeguards and regional rights.** These are placeholders until you confirm the entity and target markets (Recommendations.md Q1).
 6. **Paid mode.** Section 2 needs review against real vendor contracts, including the abuse-monitoring text in section 2.5.
 7. **Terms of Service.** This policy assumes separate terms will exist. None do today.
+8. **Memory is on by default.** The draft relies on legitimate interests for memory, because consent under GDPR must be opt-in. Confirm that basis, or switch memory to opt-in for users in regions where it doesn't hold.

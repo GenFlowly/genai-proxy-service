@@ -19,3 +19,15 @@ data class CustomerAIProviderConfig(
      */
     val systemKey: Boolean = false
 )
+
+/**
+ * The customer's primary AI provider, the one background tasks run on (see
+ * CustomerCredentialsService.getPrimaryProvider). Carries decrypted key
+ * material — server-side only, never serialized.
+ */
+data class PrimaryAIProvider(
+    val aiVendor: AIVendor,
+    val apiKey: String,
+    /** The model the customer picked for this vendor; null when they never picked one. */
+    val chatModel: String?
+)

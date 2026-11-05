@@ -35,6 +35,8 @@ data class ResolvedAgent(
     val outputFormat: AgentOutputFormat = AgentOutputFormat.TEXT,
     val modelPreference: AIConfig? = null,
     val maxTokens: Int? = null,
+    /** True when the customer pointed this action at their own agent, false for the SYSTEM default. */
+    val customerOverride: Boolean = false,
 )
 
 /**

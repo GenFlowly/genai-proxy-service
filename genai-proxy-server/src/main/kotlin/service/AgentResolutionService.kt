@@ -121,6 +121,7 @@ class AgentResolutionService(
 
         return try {
             buildAgentFromGraph(entry.graphId, requestType, entry.mapKey)
+                .copy(customerOverride = scope != SYSTEM_SCOPE)
         } catch (e: IllegalArgumentException) {
             logger.warn {
                 "Request-agent map entry '${entry.mapKey}' ($scope/$requestType → graph ${entry.graphId}) " +

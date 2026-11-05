@@ -141,6 +141,9 @@ export function AISettings(): React.ReactElement {
     return (
         <div className={styles.container}>
             <div className={styles.form}>
+                <p className={styles.primaryNote} data-testid="ai-settings-primary-note">
+                    {t('settingsPage.aiSettings.primaryProviderNote')}
+                </p>
                 <VendorApiKeysManager
                     rows={rows}
                     onSaveKey={handleSaveKey}

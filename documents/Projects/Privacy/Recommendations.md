@@ -14,13 +14,13 @@ The foundations are better than most apps at this stage. The app has no analytic
 
 However, five problems mean an accurate privacy policy today would read badly, and a flattering one would be false:
 
-| #   | Problem                                                                                                                                                                                                                                                                            | Why it matters                                                                                                        | Fix size                                   |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 1   | **Full chat and note text is stored in production logs and queues.** Step Functions records it for up to 90 days, CloudWatch for 7 days and the dead-letter queue for 14 days. The queue held 381 messages when checked.                                                           | Contradicts the repo's own "no content in production logs" rule. A role set up for Grafana Cloud can read these logs. | Hours for logging, days to remove it fully |
-| 2   | **Public share links can expose private notes and memories.** Agent trace data goes to anonymous viewers with only one step type redacted.                                                                                                                                         | The most direct way a user could be harmed today.                                                                     | Under a day                                |
-| 3   | **Users can't delete things.** There is no delete for conversations or notes, no account deletion, no export, and no way to remove a stored API key. Archived chats can still be fed to AI providers.                                                                              | Required by Apple and by GDPR and CCPA. Most of the deletion code already exists on an unmerged branch.               | 1-2 weeks                                  |
-| 4   | **Data reaches more vendors than the user chose.** Memory is on with no off switch. Saving a note sends it to an AI provider. A chat with Claude can have its title and memory work sent to OpenAI.                                                                                | This is the biggest gap against the goal of "maximum privacy" in BYOK.                                                | Days                                       |
-| 5   | **Provider defaults are not disclosed.** Voyage, the embedding provider the setup wizard recommends, may train on content unless the user opts out, and opting out requires a payment method. OpenAI keeps Responses API state for 30 days because `store` is left at its default. | Users assume BYOK means their data is safe with vendors.                                                              | Days                                       |
+| #   | Problem                                                                                                                                                                                                                                                                            | Why it matters                                                                                                        | Fix size                                   | Status                                                                                                                                                                                                                    |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Full chat and note text is stored in production logs and queues.** Step Functions records it for up to 90 days, CloudWatch for 7 days and the dead-letter queue for 14 days. The queue held 381 messages when checked.                                                           | Contradicts the repo's own "no content in production logs" rule. A role set up for Grafana Cloud can read these logs. | Hours for logging, days to remove it fully | **Fixed in PR #331**, merged but not yet deployed to production. Execution history from earlier runs keeps text for up to 90 days.                                                                                        |
+| 2   | **Public share links can expose private notes and memories.** Agent trace data goes to anonymous viewers with only one step type redacted.                                                                                                                                         | The most direct way a user could be harmed today.                                                                     | Under a day                                | Open                                                                                                                                                                                                                      |
+| 3   | **Users can't delete things.** There is no delete for conversations or notes, no account deletion, no export, and no way to remove a stored API key. Archived chats can still be fed to AI providers.                                                                              | Required by Apple and by GDPR and CCPA. Most of the deletion code already exists on an unmerged branch.               | 1-2 weeks                                  | Open                                                                                                                                                                                                                      |
+| 4   | **Data reaches more vendors than the user chose.** Memory is on with no off switch. Saving a note sends it to an AI provider. A chat with Claude can have its title and memory work sent to OpenAI.                                                                                | This is the biggest gap against the goal of "maximum privacy" in BYOK.                                                | Days                                       | **Fixed on `development`**, live once merged: memory switches (on by default), and background tasks run only on the priority-1 provider. A chat on another vendor still sends its title and memory work to that provider. |
+| 5   | **Provider defaults are not disclosed.** Voyage, the embedding provider the setup wizard recommends, may train on content unless the user opts out, and opting out requires a payment method. OpenAI keeps Responses API state for 30 days because `store` is left at its default. | Users assume BYOK means their data is safe with vendors.                                                              | Days                                       | Open                                                                                                                                                                                                                      |
 
 **Recommended order:** do the config-only fixes in Phase 0 this week, ship the Phase 1 product changes, then publish the policy. Section 8 has the sequence and section 9 lists the decisions I need from you.
 
@@ -121,7 +121,7 @@ Web traffic goes through Cloudflare, which decrypts TLS at its edge and re-encry
 | 7 | Tools, when the model calls them | Search query, tool arguments, knowledge search results | Tavily, embedding provider and Zilliz, your connected endpoints. Scratch files and PDFs go to S3. | `web_search.py:24`, `knowledge_tool.py:136`, `tool_executor.py:39` |
 | 8 | Reply saved | Reply text, reasoning and tool trace ("thinking steps"), sources, tokens, cost | DynamoDB `Message` | `GenerationOrchestrator.kt:694-733` |
 | 9 | Memory extraction, on by default | Last 12 messages (up to 2,000 characters each) and all your stored memories | Background-task provider. New memories go to DynamoDB, the embedding provider and Zilliz. | `MemoryExtractionService.kt:280-287,501-515,569-570` |
-| 10 | Indexing, always attempted | `User: ... Assistant: ...`, up to 30,000 characters per side | API Gateway, Lambda, SQS, Step Functions, embedding provider, Zilliz. Plain text is stored in Zilliz and copied to logs and the queue. | `ExchangeSideEffects.kt:32`, `ConversationIndexingService.kt:55-88`, `conversation_processor.py:86` |
+| 10 | Indexing, always attempted | `User: ... Assistant: ...`, up to 30,000 characters per side | API Gateway, Lambda, SQS, Step Functions, embedding provider, Zilliz. Plain text is stored in Zilliz and copied to logs and the queue. After PR #331, SQS and Step Functions hold IDs only. | `ExchangeSideEffects.kt:32`, `ConversationIndexingService.kt:55-88`, `conversation_processor.py:86` |
 
 ### 2.3 One note
 
@@ -130,7 +130,7 @@ Web traffic goes through Cloudflare, which decrypts TLS at its edge and re-encry
 | 1 | Autosave while typing | Note text and title | DynamoDB `CustomerNotes`. Full body also cached in browser `localStorage`. | `NotesService.kt:84-96`, `notesCache.ts`, `saveNotesService.ts:25-31` |
 | 2 | Editing ends: memory extraction, on by default | Up to 8,000 characters and all stored memories | Background-task provider | `NotesService.kt:100`, `MemoryExtractionService.kt:367-370` |
 | 3 | Title, if untitled and at least 15 characters | First 4,000 characters | Background-task provider | `NotesService.kt:37-50,108-110` |
-| 4a | Indexing, realtime mode (the default) | Full text | API Gateway, Lambda, SQS, Step Functions, embedding provider, Zilliz | `NotesService.kt:143-163`, `note_processor.py:80` |
+| 4a | Indexing, realtime mode (the default) | Full text | API Gateway, Lambda, SQS, Step Functions, embedding provider, Zilliz. After PR #331, SQS and Step Functions hold IDs only. | `NotesService.kt:143-163`, `note_processor.py:80` |
 | 4b | Indexing, batch mode | Full text and chunks | Versioned S3 document kept indefinitely, plus a file uploaded to Voyage | `accumulate_voyage_notes_lambda.py:149,241`, `poll_voyage_batches_lambda.py:227` |
 | 5 | Later chats | Matching chunks | Whichever AI provider serves that chat, when the agent uses `search_knowledge_base` | `knowledge_tool.py:136,191` |
 
@@ -163,6 +163,8 @@ These run on the user's keys without an explicit request:
 2. Otherwise the agent's preferred vendor, if the user has a key for it. The bundled defaults prefer OpenAI (`request-agent-defaults.json:12,20,28`).
 3. Then every other vendor with a stored key, tried in turn until one succeeds.
 
+**After the R9 fix** (on `development`, live once merged): one provider only. That is the priority-1 key, or the first key added when none has a priority, on that vendor's small model (`gpt-5-mini`, `claude-haiku-4-5`, `gemini-2.5-flash`). There is no failover to other keys.
+
 ---
 
 ## 3. Third parties
@@ -175,7 +177,7 @@ These run on the user's keys without an explicit request:
 | **Fly.io** (iad) | API server and AI runtime | **Yes**, in memory, including decrypted keys. Normalized images are cached on local disk (up to 512 MiB). | Live |
 | **Cloudflare** | DNS, static site hosting, router worker. Adds a bot-detection script to pages. | **Yes**, in transit, for web traffic | Live |
 | **Auth0 (Okta)** | Sign-in | No content. Name, email, picture, login metadata. | Live |
-| **Grafana Cloud** | Dashboards and alerts | Metrics carry no content, **but** its CloudWatch role can read logs, which hold content until R1 is fixed | Live: role `GrafanaCloudWatchReadOnly` with `CloudWatchReadOnlyAccess` exists in both accounts |
+| **Grafana Cloud** | Dashboards and alerts | Metrics carry no content, **but** its CloudWatch role can read logs, which hold content until the R1 fix (PR #331) is live and older log streams expire | Live: role `GrafanaCloudWatchReadOnly` with `CloudWatchReadOnlyAccess` exists in both accounts |
 | **Supabase** | Durable agent runs (Postgres) | **Would hold** prompts, history and tool results | `DATABASE_URL` is set only in the development GitHub environment. **Production needs your confirmation** (Q7). |
 | **Sentry** | iOS crash reporting | Not active | Package linked, DSN blank in every stage |
 | **Grafana Loki** | Log shipping | Not active | Scaffolded in `observability/log-shipper/`, not deployed [live] |
@@ -216,7 +218,7 @@ Checked 2026-11-05. These terms change, so re-check before using them in the pro
 
 ## 4. Where data stays
 
-Production state on 2026-11-05. "Target" assumes the recommendations below are done.
+Production state on 2026-11-05. "Target" assumes the recommendations below are done. "Done in PR #331" marks targets that PR reaches once it is deployed.
 
 | Store | Holds | Retention today | Deletion path today | Target |
 |---|---|---|---|---|
@@ -227,10 +229,10 @@ Production state on 2026-11-05. "Target" assumes the recommendations below are d
 | DynamoDB key tables | Encrypted AI, embedding, search, vector DB and tool credentials | Until replaced | **Tool keys only.** No delete for AI keys, Voyage keys or vector DB credentials. | Delete any of them, any time |
 | S3 attachments bucket | Uploads, generated PDFs, agent scratch files | **Forever.** No lifecycle rules. [live] | **None** | Deleted with the conversation. Scratch expires in 7 days. |
 | S3 `customer-documents` | Batch-mode note documents | **Forever, versioned.** [live] | **None** | Deleted with the note, including all versions |
-| Step Functions history | **Full chat and note text** | **90 days** after each run | None | IDs only |
-| CloudWatch Step Functions logs | **Full chat and note text** | **7 days** [live] | None | Errors only, no execution data |
-| SQS dead-letter queue | **Full chat and note text** | **14 days**. 381 messages in production. [live] | None | IDs only |
-| SQS ingestion queue | Full text | Seconds normally, 4 days at most [live] | None | IDs only |
+| Step Functions history | **Full chat and note text** | **90 days** after each run | None | IDs only. **Done in PR #331.** Runs from before it keep their text until they age out. |
+| CloudWatch Step Functions logs | **Full chat and note text** | **7 days** [live] | None | Errors only, no execution data. **Done in PR #331.** |
+| SQS dead-letter queue | **Full chat and note text** | **14 days**. 381 messages in production. [live] | None | IDs only, 7 days. **Done in PR #331.** |
+| SQS ingestion queue | Full text | Seconds normally, 4 days at most [live] | None | IDs only. **Done in PR #331.** |
 | Lambda logs | WARN and above: IDs and error text | **Never expire** [live] | None | 30 days |
 | Your Zilliz cluster | Plain-text chunks and vectors | Until deleted | Notes and memories best-effort. **Conversations never.** | Deleted with the source item |
 | Voyage file storage | Batch input and output | About 30 days [vendor]. We don't delete them. | None | Deleted when the job completes |
@@ -256,11 +258,11 @@ This directly contradicts `genai-proxy-server/development.md`, which says produc
 
 **Where copies end up:**
 
-| Copy | Lifetime | Source |
-|---|---|---|
-| CloudWatch log group | 7 days | `stepfunctions-v2-stack.ts:105` [live] |
-| Step Functions execution history | 90 days, or 30 through an AWS support case | [vendor]. Standard workflows keep this regardless of CloudWatch logging. |
-| Dead-letter queue | 14 days. Failed runs send the original message there. | `stepfunctions-v2-stack.ts:75-79`, `sqs-stack.ts:23` |
+| Copy | Lifetime | Source | After PR #331 |
+|---|---|---|---|
+| CloudWatch log group | 7 days | `stepfunctions-v2-stack.ts:105` [live] | Production logs errors only, without execution data |
+| Step Functions execution history | 90 days, or 30 through an AWS support case | [vendor]. Standard workflows keep this regardless of CloudWatch logging. | IDs only. Runs from before the deploy keep their text until they age out. |
+| Dead-letter queue | 14 days. Failed runs send the original message there. | `stepfunctions-v2-stack.ts:75-79`, `sqs-stack.ts:23` | IDs only, kept 7 days |
 
 The production DLQ held **381 messages** when checked. I read the count only. Each entry is a full original payload by design.
 
@@ -275,7 +277,7 @@ The production DLQ held **381 messages** when checked. I read the count only. Ea
 
 **Effort:** S for steps 1, 2 and 4. M for step 3.
 
-**Status (2026-11-05): steps 1 and 3 are in code. They are uncommitted and not deployed.**
+**Status (2026-11-05): steps 1 and 3 are merged to `main` (PR #331) but not deployed.** No workflow ran for the merge commit, so production still runs the old pipeline.
 
 - **Logging.** Production state-machine logging is `ERROR` with `includeExecutionData: false`. Dev keeps `ALL`.
 - **Ids instead of text.** Notes, conversations, instructions and memories now travel as ids in every stage. Ingest and trigger strip the text, and `parse_and_chunk` returns chunk plans. Both pipeline lambdas reload the text from DynamoDB through `encoding-server/services/content_source.py`, which checks that the record belongs to the message's customer. Messages already queued in the old format are stripped at the trigger.
@@ -406,6 +408,8 @@ Memory is the most sensitive feature in the app: it builds a profile of the user
 
 **Effort:** S to M.
 
+**Status (2026-11-05): fixed on `development`, live once merged.** You decided memory stays **on by default**. Settings > Defaults > Learned facts has three switches (learn from chats, learn from notes, use in replies) and "Delete all learned facts". The server enforces the saved switches and treats a failed read as off. Still open: the same switches in the iOS app.
+
 ### R8. Indexing has no opt-out
 
 **What happens.** Every completed exchange is sent for indexing unconditionally (`ExchangeSideEffects.kt:32`). Notes are sent whenever editing ends. Only the absence of a token stops it.
@@ -426,6 +430,8 @@ Memory is the most sensitive feature in the app: it builds a profile of the user
 4. Allow titles to be turned off in favour of the first few words.
 
 **Effort:** S to M.
+
+**Status (2026-11-05): fixed on `development`, live once merged, in a simpler form you chose.** Every background task runs on the **priority-1 provider** (or the first key added), on its small model, with no failover. A customer's own agent on that vendor keeps its model. The AI Settings page says so. The cost of the simpler form: a chat on a different vendor still sends its first message (title) and recent messages (memory) to the priority-1 provider, so content reaches at most two vendors, both chosen by the user. This replaces items 1 and 2. Item 3 is built without the opt-in, and item 4 was not built.
 
 ### R10. OpenAI keeps Responses API state for 30 days
 
@@ -627,16 +633,16 @@ The principle: **nothing leaves for a vendor the user didn't choose for that pur
 
 | Capability | Today | Target BYOK default |
 |---|---|---|
-| Memory from chats and notes | On, no switch | Off until opted in |
-| Using memories in replies | On, no switch | Off until opted in |
+| Memory from chats and notes | On, no switch. Switches built on `development` | On, with switches (decided) |
+| Using memories in replies | On, no switch. Switch built on `development` | On, with a switch (decided) |
 | Indexing chats and notes | Always attempted | Off until opted in, with a per-conversation exclusion |
-| Titles and other background tasks | Preferred vendor, then any stored key | Same vendor as the chat, no failover |
+| Titles and other background tasks | Preferred vendor, then any stored key. Priority-1 provider only on `development` | Priority-1 provider only, no failover (decided) |
 | Web search | Available once a key is stored | Same, plus a per-chat switch |
 | Thinking steps | Saved in full | Short lifetime, or labels only |
 | Deleting anything | Not possible | Trash for 30 days, or "Delete now" |
 | Removing keys | Tool keys only | All keys |
 | OpenAI `store` | Default (stored 30 days) | `false` |
-| Text in logs and queues | Yes | IDs only |
+| Text in logs and queues | Yes. Fixed in PR #331, live once deployed. | IDs only |
 
 Beyond those defaults, here are the options in order of value for the effort. **My recommendation: ship B1 and B2 right after the P0 work, then B3, and treat B4, B5 and B6 as later differentiators.**
 
@@ -677,7 +683,7 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Action | Item | Effort |
 |---|---|---|
 | Rotate the admin key from git history | R16 | S |
-| Turn off Step Functions execution data, delete existing log streams, narrow the Grafana role | R1 | S |
+| Turn off Step Functions execution data (**done in PR #331**), delete existing log streams, narrow the Grafana role | R1 | S |
 | Open the AWS support case to shorten execution history | R1 | S |
 | Skip indexing when no embedding key or vector DB exists | R6 | S |
 | Allow-list thinking-step fields for non-authors and hide identity | R2 | S |
@@ -690,14 +696,14 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 
 | Action | Item | Effort |
 |---|---|---|
-| Memory switches, default off in BYOK | R7 | S-M |
+| Memory switches, on by default (decided). **Done on `development`.** | R7 | S-M |
 | Indexing switches | R8 | M |
-| Pin background tasks to the chosen provider | R9 | S-M |
+| Pin background tasks to the priority-1 provider. **Done on `development`.** | R9 | S-M |
 | Remove keys | R5 | S |
 | Provider facts, Voyage acknowledgement, delete batch files | R11 | S-M |
 | Real delete with Trash, purge worker, S3 lifecycle, vector purge fix | R3, R18 | M-L |
 | Account deletion and export | R4 | M-L |
-| Send IDs instead of text through the pipeline | R1 step 3 | M |
+| Send IDs instead of text through the pipeline. **Done in PR #331.** | R1 step 3 | M |
 | Close the logging gaps | R19 | S |
 | `/privacy`, `/terms`, consent screen, iOS privacy manifest | R12 | S-M |
 | **Clear the gate in Policy.md, get legal review, publish** | | |
@@ -719,7 +725,7 @@ M1-M10, plus a rewrite of Section 2 of the policy against the vendors actually c
 | # | Question | My recommendation |
 |---|---|---|
 | Q1 | Legal entity, address, privacy contact, governing law, and target markets (EU, UK, California, India)? | Needed to complete the policy. Markets decide whether you need an EU or UK representative. |
-| Q2 | When memory becomes opt-in, what happens for existing users who have memories? | Ask on next login. Keep existing memories but stop using them until the user answers. |
+| Q2 | When memory becomes opt-in, what happens for existing users who have memories? | **Decided 2026-11-05:** memory stays on by default, with switches, so existing users keep it and nobody is asked. |
 | Q3 | When an account is deleted, what happens to conversations shared directly with others? | Delete them too, with public links always revoked. It's simpler and easier to explain. Recipients who forked keep their own copy, and the policy says so. |
 | Q4 | How long should Trash last? | 30 days, plus "Delete now". |
 | Q5 | What should happen to the 381 messages in the production DLQ? | Purge them after R6 ships. The source text is still in DynamoDB, so anything worth indexing can be re-sent later without keeping copies in a queue. |

@@ -124,11 +124,7 @@ class CustomerCredentialsHuggingFaceTest {
         )
         coEvery { kms.decrypt("enc-openai") } returns "sk-key"
 
-        val usable = service.getUsableVendorKeys(cid)
-        assertEquals(setOf(AIVendor.OPENAI), usable.keys)
-
-        val prioritized = service.getPrioritizedProviderConfigs(cid)
-        assertEquals(listOf(AIVendor.OPENAI), prioritized.map { it.aiVendor })
+        assertEquals(AIVendor.OPENAI, service.getPrimaryProvider(cid)?.aiVendor)
     }
 
     @Test

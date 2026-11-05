@@ -32,6 +32,9 @@ data class GetMemoriesResponse(val memories: List<CustomerMemory>)
 @Serializable
 data class DeleteMemoryResponse(val status: String)
 
+@kotlinx.serialization.Serializable
+data class DeleteAllMemoriesResponse(val status: String, val deleted: Int)
+
 /** One fact learned about the user from an exchange (a created memory). */
 @kotlinx.serialization.Serializable
 data class LearnedFactView(val memoryId: String, val text: String)

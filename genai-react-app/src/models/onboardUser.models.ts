@@ -15,6 +15,10 @@ export interface OnboardCustomerResponse {
         embeddingModelConversations?: string
         /** Default embedding model for notes; falls back to embeddingModel */
         embeddingModelNotes?: string
+        /** Memory switches (Settings > Defaults > Learned facts); absent/null = on */
+        memoryLearnFromChats?: boolean | null
+        memoryLearnFromNotes?: boolean | null
+        memoryUseInReplies?: boolean | null
     }
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[]
     customerInstructions?: InstructionResponse[]

@@ -87,4 +87,5 @@ export const endpoints = {
     attachmentUrl: (attachmentId: string) => `${BASE}${API_PREFIX}/attachments/url?attachmentId=${encodeURIComponent(attachmentId)}`,
     getLearnedFacts: (conversationId: string, messageId: string) => `${BASE}${API_PREFIX}/conversation/learned-facts?conversationId=${encodeURIComponent(conversationId)}&messageId=${encodeURIComponent(messageId)}`,
     deleteMemoryFact: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${memoryId}`,
+    deleteAllMemoryFacts: `${BASE}${API_PREFIX}/memories`,
 };

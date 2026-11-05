@@ -21,6 +21,7 @@ import {
 } from '../../../models/agents.models'
 import { ICONS } from '../../../constants/icons'
 import { EmbeddingModelDefaults } from './EmbeddingModelDefaults'
+import { LearnedFactsSettings } from './LearnedFactsSettings'
 import styles from './DefaultsSettings.module.scss'
 
 /**
@@ -75,12 +76,13 @@ function rowMappedGraphId(row: MappingRow): string {
 }
 
 /**
- * The Defaults settings page, in two sections:
+ * The Defaults settings page, in three sections:
  * 1. Default Agents — which agent powers each built-in action (titles,
  *    memory extraction, instruction personas; the action list comes from the
  *    backend RequestType registry, so new actions appear automatically) plus
  *    the Conversation Agent handling new chats (AIConfigPreferences.preferredAgentId).
- * 2. Default embedding models per data category.
+ * 2. Learned facts — the memory switches and "Delete all learned facts".
+ * 3. Default embedding models per data category.
  */
 export function DefaultsSettings(): React.ReactElement {
     const { t } = useTranslation()
@@ -294,6 +296,7 @@ export function DefaultsSettings(): React.ReactElement {
                 </div>
             )}
 
+            <LearnedFactsSettings />
             <EmbeddingModelDefaults />
         </div>
     )
