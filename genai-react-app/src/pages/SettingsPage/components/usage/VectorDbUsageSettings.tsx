@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { DateRangePicker, DateRange } from '@genflowly/component-library'
 import { useAuth } from '../../../../context/AuthContext'
 import { getVectorDbUsage, VectorDbUsageSummary } from '../../../../services/getUsageService'
-import { defaultUsageRange, usageDateRangePresets } from './usageDateRange'
+import { defaultUsageRange, localToday, toUtcUsageRange, usageDateRangePresets } from './usageDateRange'
 import { formatCount } from './usageFormat'
 import { UsageNotTrackedYet } from './UsageNotTrackedYet'
 import styles from './VectorDbUsageSettings.module.scss'
@@ -28,7 +28,7 @@ export function VectorDbUsageSettings(): React.ReactElement {
         setLoading(true)
         try {
             const token = await getAccessTokenSilently()
-            const result = await getVectorDbUsage(token, nextRange)
+            const result = await getVectorDbUsage(token, toUtcUsageRange(nextRange))
             setSummary(result)
         } catch (err) {
             console.error('VectorDbUsageSettings: failed to fetch usage', err)
@@ -51,6 +51,7 @@ export function VectorDbUsageSettings(): React.ReactElement {
                 value={range}
                 onChange={setRange}
                 presets={usageDateRangePresets(t)}
+                maxDate={localToday()}
                 fromLabel={t('settingsPage.usageCommon.dateRangeFrom')}
                 toLabel={t('settingsPage.usageCommon.dateRangeTo')}
                 presetsAriaLabel={t('settingsPage.usageCommon.dateRangePresetsLabel')}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { DateRangePicker, DateRange } from '@genflowly/component-library'
 import { useAuth } from '../../../../context/AuthContext'
 import { getEmbeddingUsage, EmbeddingUsageSummary, UsageByDim } from '../../../../services/getUsageService'
-import { defaultUsageRange, usageDateRangePresets } from './usageDateRange'
+import { defaultUsageRange, localToday, toUtcUsageRange, usageDateRangePresets } from './usageDateRange'
 import { formatUsd, formatCount } from './usageFormat'
 import { UsageNotTrackedYet } from './UsageNotTrackedYet'
 import styles from './EmbeddingUsageSettings.module.scss'
@@ -27,7 +27,7 @@ export function EmbeddingUsageSettings(): React.ReactElement {
         setLoading(true)
         try {
             const token = await getAccessTokenSilently()
-            const result = await getEmbeddingUsage(token, nextRange)
+            const result = await getEmbeddingUsage(token, toUtcUsageRange(nextRange))
             setSummary(result)
         } catch (err) {
             // Any failure reads the same as "not tracked yet" to the customer;
@@ -80,6 +80,7 @@ export function EmbeddingUsageSettings(): React.ReactElement {
                 value={range}
                 onChange={setRange}
                 presets={usageDateRangePresets(t)}
+                maxDate={localToday()}
                 fromLabel={t('settingsPage.usageCommon.dateRangeFrom')}
                 toLabel={t('settingsPage.usageCommon.dateRangeTo')}
                 presetsAriaLabel={t('settingsPage.usageCommon.dateRangePresetsLabel')}
