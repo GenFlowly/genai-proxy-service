@@ -76,7 +76,10 @@ fun Route.registerSaveAIConfigPreferencesRoutes(
                     request.aiConfigPreferences?.embeddingModel,
                     request.aiConfigPreferences?.embeddingModelConversations,
                     request.aiConfigPreferences?.embeddingModelNotes,
-                    request.aiConfigPreferences?.preferredAgentId
+                    request.aiConfigPreferences?.preferredAgentId,
+                    request.aiConfigPreferences?.memoryLearnFromChats,
+                    request.aiConfigPreferences?.memoryLearnFromNotes,
+                    request.aiConfigPreferences?.memoryUseInReplies
                 )
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "success"))            } catch (e: Exception) {

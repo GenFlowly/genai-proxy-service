@@ -59,3 +59,23 @@ export async function deleteMemoryFact(
         throw new Error(`Failed to delete memory fact: ${response.status} ${response.statusText}`);
     }
 }
+
+/**
+ * Delete every fact learned about the user. Resolves to how many were
+ * deleted.
+ */
+export async function deleteAllMemoryFacts(token: string): Promise<number> {
+    const response = await fetchWithRetry(endpoints.deleteAllMemoryFacts, {
+        method: HttpMethod.DELETE,
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to delete learned facts: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return typeof data.deleted === 'number' ? data.deleted : 0;
+}

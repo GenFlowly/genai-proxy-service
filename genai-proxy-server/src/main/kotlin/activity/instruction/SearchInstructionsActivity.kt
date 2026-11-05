@@ -1,7 +1,9 @@
 package com.genflowly.activity.instruction
 
 import com.genflowly.Routes
+import com.genflowly.activity.search.respondSearchFailure
 import com.genflowly.models.api.GetCustomerInstructionListResponse
+import com.genflowly.models.api.SearchErrorResponse
 import com.genflowly.utils.getAuthenticatedCustomerId
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.InstructionService
@@ -41,6 +43,15 @@ fun Route.registerSearchInstructionsRoutes(
                     description = "Instructions matching the query"
                     body<GetCustomerInstructionListResponse>()
                 }
+                code(HttpStatusCode.Conflict) {
+                    description = "Search isn't set up for this customer (code SEARCH_NOT_CONFIGURED); " +
+                            "'reason' names the missing setting: VECTOR_DB_NOT_CONFIGURED or EMBEDDING_KEY_MISSING"
+                    body<SearchErrorResponse>()
+                }
+                code(HttpStatusCode.BadGateway) {
+                    description = "The search backend failed (code SEARCH_UNAVAILABLE)"
+                    body<SearchErrorResponse>()
+                }
                 code(HttpStatusCode.InternalServerError) {
                     description = "Unexpected server error"
                     body<String>()
@@ -54,6 +65,7 @@ fun Route.registerSearchInstructionsRoutes(
                 val response = instructionService.searchInstructions(customerId, query)
                 call.respond(response)
             } catch (e: Exception) {
+                if (call.respondSearchFailure(e)) return@get
                 logger.error("Error searching instructions", e)
                 call.respond(HttpStatusCode.InternalServerError, "Failed to search instructions")
             }

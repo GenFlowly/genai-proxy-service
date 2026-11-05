@@ -328,7 +328,10 @@ class CustomerProfileRepository(
         embeddingModel: String? = null,
         embeddingModelConversations: String? = null,
         embeddingModelNotes: String? = null,
-        preferredAgentId: String? = null
+        preferredAgentId: String? = null,
+        memoryLearnFromChats: Boolean? = null,
+        memoryLearnFromNotes: Boolean? = null,
+        memoryUseInReplies: Boolean? = null
     ) = withContext(Dispatchers.IO) {
         try {
             val now = Instant.now().toString()
@@ -383,6 +386,18 @@ class CustomerProfileRepository(
                 updateParts.add("#embeddingModelNotes = :embeddingModelNotes")
                 attrNames["#embeddingModelNotes"] = "embeddingModelNotes"
                 attrValues[":embeddingModelNotes"] = AttributeValue.builder().s(embeddingModelNotes).build()
+            }
+
+            listOf(
+                MEMORY_LEARN_FROM_CHATS to memoryLearnFromChats,
+                MEMORY_LEARN_FROM_NOTES to memoryLearnFromNotes,
+                MEMORY_USE_IN_REPLIES to memoryUseInReplies,
+            ).forEach { (attribute, value) ->
+                if (value != null) {
+                    updateParts.add("#$attribute = :$attribute")
+                    attrNames["#$attribute"] = attribute
+                    attrValues[":$attribute"] = AttributeValue.builder().bool(value).build()
+                }
             }
 
             // Blank = clear (revert to the default agent), non-blank = set.
@@ -442,20 +457,41 @@ class CustomerProfileRepository(
                 embeddingModel = item["embeddingModel"]?.s(),
                 embeddingModelConversations = item["embeddingModelConversations"]?.s(),
                 embeddingModelNotes = item["embeddingModelNotes"]?.s(),
-                preferredAgentId = item["preferredAgentId"]?.s()
+                preferredAgentId = item["preferredAgentId"]?.s(),
+                memoryLearnFromChats = item[MEMORY_LEARN_FROM_CHATS]?.bool(),
+                memoryLearnFromNotes = item[MEMORY_LEARN_FROM_NOTES]?.bool(),
+                memoryUseInReplies = item[MEMORY_USE_IN_REPLIES]?.bool()
             )
         }
 
-    /** Free-form key/value preferences (e.g. memoryEnabled) — empty map when none stored. */
-    suspend fun getOtherPreferences(customerId: String): Map<String, String> =
+    /**
+     * The memory switches (null = never set) and the legacy master switch
+     * otherPreferences.memoryEnabled, read in one call: generation checks
+     * them on every request.
+     */
+    suspend fun getMemoryPreferences(customerId: String): StoredMemoryPreferences =
         withContext(Dispatchers.IO) {
             val request = GetItemRequest.builder()
                 .tableName(CUSTOMER_PREFERENCES_TABLE)
                 .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
+                .projectionExpression("#chats, #notes, #replies, #other")
+                .expressionAttributeNames(
+                    mapOf(
+                        "#chats" to MEMORY_LEARN_FROM_CHATS,
+                        "#notes" to MEMORY_LEARN_FROM_NOTES,
+                        "#replies" to MEMORY_USE_IN_REPLIES,
+                        "#other" to "otherPreferences",
+                    )
+                )
                 .build()
 
-            val item = dynamoDbClient.getItem(request).item() ?: return@withContext emptyMap()
-            item["otherPreferences"]?.m()?.mapValues { it.value.s() ?: "" } ?: emptyMap()
+            val item = dynamoDbClient.getItem(request).item().orEmpty()
+            StoredMemoryPreferences(
+                learnFromChats = item[MEMORY_LEARN_FROM_CHATS]?.bool(),
+                learnFromNotes = item[MEMORY_LEARN_FROM_NOTES]?.bool(),
+                useInReplies = item[MEMORY_USE_IN_REPLIES]?.bool(),
+                legacyMemoryEnabled = item["otherPreferences"]?.m()?.get("memoryEnabled")?.s()
+            )
         }
 
     // ─── System vendor allowlist ──────────────────────────────────────────────
@@ -489,5 +525,17 @@ class CustomerProfileRepository(
 
     companion object {
         private const val VENDOR_ALLOWLIST_ITEM_ID = "SYSTEM#VENDOR_ALLOWLIST"
+        private const val MEMORY_LEARN_FROM_CHATS = "memoryLearnFromChats"
+        private const val MEMORY_LEARN_FROM_NOTES = "memoryLearnFromNotes"
+        private const val MEMORY_USE_IN_REPLIES = "memoryUseInReplies"
     }
 }
+
+/** Stored memory switches; null means the customer never set that switch. */
+data class StoredMemoryPreferences(
+    val learnFromChats: Boolean? = null,
+    val learnFromNotes: Boolean? = null,
+    val useInReplies: Boolean? = null,
+    /** The legacy otherPreferences.memoryEnabled master switch ("false" = all off). */
+    val legacyMemoryEnabled: String? = null,
+)

@@ -22,6 +22,7 @@ COPY --from=builder /tmp/python ${LAMBDA_TASK_ROOT}
 
 # Copy application code
 COPY handlers/create_and_store_lambda.py ${LAMBDA_TASK_ROOT}/handlers/create_and_store_lambda.py
+COPY handlers/vector_sync_pending.py ${LAMBDA_TASK_ROOT}/handlers/vector_sync_pending.py
 COPY services/content_logging.py ${LAMBDA_TASK_ROOT}/services/content_logging.py
 COPY services/content_source.py ${LAMBDA_TASK_ROOT}/services/content_source.py
 

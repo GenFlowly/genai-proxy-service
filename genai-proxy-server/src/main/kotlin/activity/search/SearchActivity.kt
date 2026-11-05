@@ -2,6 +2,7 @@ package com.genflowly.activity.search
 
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
+import com.genflowly.models.api.SearchErrorResponse
 import com.genflowly.models.api.SearchResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.UnifiedSearchService
@@ -40,6 +41,15 @@ fun Route.registerSearchRoutes(
                     description = "Missing or blank 'q' query parameter"
                     body<ErrorResponse>()
                 }
+                code(HttpStatusCode.Conflict) {
+                    description = "Search isn't set up for this customer (code SEARCH_NOT_CONFIGURED); " +
+                            "'reason' names the missing setting: VECTOR_DB_NOT_CONFIGURED or EMBEDDING_KEY_MISSING"
+                    body<SearchErrorResponse>()
+                }
+                code(HttpStatusCode.BadGateway) {
+                    description = "The search backend failed (code SEARCH_UNAVAILABLE)"
+                    body<SearchErrorResponse>()
+                }
                 code(HttpStatusCode.InternalServerError) {
                     description = "Unexpected server error"
                     body<ErrorResponse>()
@@ -66,6 +76,7 @@ fun Route.registerSearchRoutes(
 
                 call.respond(HttpStatusCode.OK, SearchResponse(results = results))
             } catch (e: Exception) {
+                if (call.respondSearchFailure(e)) return@get
                 logger.error("Unexpected error in Search controller: {}", e.message, e)
                 call.respond(
                     HttpStatusCode.InternalServerError,

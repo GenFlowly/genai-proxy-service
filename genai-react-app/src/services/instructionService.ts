@@ -7,6 +7,7 @@ import {
 } from "../models/instruction.models";
 
 import { fetchWithRetry } from "../utils/apiUtils";
+import { searchErrorFrom } from "./searchError";
 import { SearchUserResponse } from "../models/user.models";
 import { removeInstruction, upsertInstruction } from "../stores/instructionsStore";
 
@@ -37,7 +38,7 @@ export async function searchInstructions(token: string, query: string): Promise<
     })
 
     if (!response.ok) {
-        throw new Error(`Search Instructions failed: ${response.status} ${response.statusText}`)
+        throw await searchErrorFrom(response, 'Search Instructions failed')
     }
 
     return (await response.json()) as GetCustomerInstructionListResponse

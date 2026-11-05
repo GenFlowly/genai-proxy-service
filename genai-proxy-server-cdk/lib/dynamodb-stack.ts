@@ -673,6 +673,40 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // Records saved but not (yet) in the customer's vector DB, one row per
+        // record: PK=customerId, SK="<type>#<key>" (conversation#<assistant
+        // messageId>, notes#<noteKey>, memory#<memoryId>). Search keyword-matches
+        // these so nothing saved is unfindable while its embed is in flight or
+        // after it failed. The row is deleted once the vectors are stored (the
+        // encoding-server store step, or the proxy's own retry). Rows whose
+        // embed is scheduled for a retry carry `retryShard` (constant "RETRY"),
+        // so the sparse index holds exactly the due work, drained by dueAt.
+        const vectorSyncPendingTableProps: CreateTableProps = {
+            tableName: 'VectorSyncPending',
+            partitionKey: {
+                name: 'customerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'itemKey',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'retry-due-index',
+                    partitionKey: {
+                        name: 'retryShard',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'dueAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
         const customerTable = createDefaultDynamoDbTable(this, createCustomerTableProps);
         const customerApiKeyTable = createDefaultDynamoDbTable(this, createCustomerApiKeyTableProps);
         const systemVendorApiKeyTable = createDefaultDynamoDbTable(this, systemVendorApiKeyTableProps);
@@ -702,6 +736,7 @@ export class DynamoDBStack extends cdk.Stack {
         const customerProjectsTable = createDefaultDynamoDbTable(this, customerProjectsTableProps);
         const purgeJobsTable = createDefaultDynamoDbTable(this, purgeJobsTableProps);
         const usageRateCardTable = createDefaultDynamoDbTable(this, usageRateCardTableProps);
+        const vectorSyncPendingTable = createDefaultDynamoDbTable(this, vectorSyncPendingTableProps);
 
         this.dynamoDbTableList.push(
             customerTable, customerApiKeyTable, systemVendorApiKeyTable, aiModelCatalogTable, customerApiUsageTable,
@@ -712,7 +747,7 @@ export class DynamoDBStack extends cdk.Stack {
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
             requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable,
-            purgeJobsTable, usageRateCardTable
+            purgeJobsTable, usageRateCardTable, vectorSyncPendingTable
         );
     }
 }

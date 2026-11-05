@@ -969,6 +969,20 @@ class ConversationRepository(
         return@withContext itemToMessage(item)
     }
 
+    /** Messages by (conversationId, messageId); missing ones are simply absent. */
+    suspend fun getMessages(keys: List<Pair<String, String>>): List<Message> = withContext(Dispatchers.IO) {
+        if (keys.isEmpty()) return@withContext emptyList()
+        dynamoDbClient.batchGetWithRetry(
+            MESSAGE_TABLE,
+            keys.distinct().map { (conversationId, messageId) ->
+                mapOf(
+                    "conversationId" to AttributeValue.builder().s(conversationId).build(),
+                    "messageId" to AttributeValue.builder().s(messageId).build()
+                )
+            }
+        ).mapNotNull { itemToMessage(it) }
+    }
+
     suspend fun getMessagesForConversation(
         conversationId: String
     ): List<Message> = withContext(Dispatchers.IO) {
