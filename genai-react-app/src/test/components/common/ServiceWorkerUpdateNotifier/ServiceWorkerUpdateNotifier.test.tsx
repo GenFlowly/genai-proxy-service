@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, act, fireEvent } from '@testing-library/react'
 import ServiceWorkerUpdateNotifier from '../../../../components/common/ServiceWorkerUpdateNotifier/ServiceWorkerUpdateNotifier'
 import { SW_UPDATE_AVAILABLE_EVENT } from '../../../../serviceWorkerRegistration'
+import { APP_NAME } from '../../../../constants/appName'
 
 function dispatchUpdate(waiting: ServiceWorker | null) {
     const registration = { waiting } as unknown as ServiceWorkerRegistration
@@ -22,7 +23,7 @@ describe('ServiceWorkerUpdateNotifier', () => {
 
         dispatchUpdate({ postMessage } as unknown as ServiceWorker)
 
-        expect(screen.getByText('A new version of AI Proxy is available.')).toBeInTheDocument()
+        expect(screen.getByText(`A new version of ${APP_NAME} is available.`)).toBeInTheDocument()
 
         fireEvent.click(screen.getByTestId('sw-update-refresh'))
 
