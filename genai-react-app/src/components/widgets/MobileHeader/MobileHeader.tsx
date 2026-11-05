@@ -1,9 +1,8 @@
 import React from 'react'
-import { useTranslation } from 'react-i18next'
 import { MobileHeader as BaseMobileHeader, MobileMenu } from '@genflowly/component-library'
 import type { MobileHeaderMenuItem, MobileMenuAction } from '@genflowly/component-library'
 import { useLayout } from '../../../context/LayoutContext'
-import { AppMenuContent } from '../../sections/LeftSidebar/AppMenuContent'
+import { useOpenAppMenu } from '../../../hooks/useAppMenu'
 
 export type { MobileHeaderMenuItem }
 
@@ -20,8 +19,8 @@ interface MobileHeaderProps {
     /** The page's create action, centered in the page-context menu's top bar. */
     menuAction?: MobileMenuAction
     /**
-     * Page-context content of the menu (conversation history, saved notes).
-     * Omit it and the hamburger opens the app menu directly.
+     * The page's L2 Menu content (conversation history, saved notes).
+     * Omit it and the hamburger opens the L1 Menu directly.
      */
     menuContent?: React.ReactNode
     children?: React.ReactNode
@@ -29,9 +28,8 @@ interface MobileHeaderProps {
 
 /**
  * 📱 App wiring around the library's presentational MobileHeader: the
- * hamburger drives the layout context and opens the two-level MobileMenu —
- * page context first (history, saved notes), with the app menu (what the
- * desktop navbar shows) one hamburger deeper.
+ * hamburger drives the layout context and opens the page's L2 Menu, with the
+ * L1 Menu one hamburger deeper.
  */
 export default function MobileHeader({
     title,
@@ -43,9 +41,9 @@ export default function MobileHeader({
     menuContent,
     children,
 }: MobileHeaderProps): React.ReactElement {
-    const { t } = useTranslation()
     const { isLeftSidebarExpanded, toggleLeftSidebar, setLeftSidebarExpanded } = useLayout()
-    const closeMenu = () => setLeftSidebarExpanded(false)
+    const openAppMenu = useOpenAppMenu()
+    const hasL2Menu = menuContent != null
 
     return (
         <>
@@ -54,15 +52,14 @@ export default function MobileHeader({
                 subtitle={subtitle}
                 onSubtitleClick={onSubtitleClick}
                 menuItems={menuItems}
-                onMenuClick={toggleLeftSidebar}
+                onMenuClick={hasL2Menu ? toggleLeftSidebar : openAppMenu}
             />
-            {isLeftSidebarExpanded && (
+            {hasL2Menu && isLeftSidebarExpanded && (
                 <MobileMenu
                     title={menuTitle}
                     action={menuAction}
-                    appMenuTitle={t('layout.mobileMenu.menu')}
-                    appMenu={<AppMenuContent onNavigate={closeMenu} />}
-                    onClose={closeMenu}
+                    onOpenAppMenu={openAppMenu}
+                    onClose={() => setLeftSidebarExpanded(false)}
                     data-testid="mobile-header-menu-overlay"
                 >
                     {menuContent}
