@@ -77,6 +77,27 @@
     @include ellipsis;
 }
 
+.categoryMenuIcon {
+    color: $color-text-muted;
+}
+
+// Filter chips in the mobile menu's Agents card header
+.menuChips {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 500;
+
+    button {
+        min-height: 2.25rem;
+        padding: 0 0.75rem;
+        font-size: 0.8125rem;
+    }
+}
+
 .categoryCount {
     font-size: 0.75rem;
     color: $color-text-muted;
@@ -89,6 +110,8 @@
 // ── Agent card (laid out by the library Grid: span 12 / md 6 / lg 4) ──────────
 
 .card {
+    // Clears the overlay MobileHeader when the mobile menu scrolls to a card
+    scroll-margin-top: $mobile-header-height;
     background: $color-background-secondary;
     border: 1px solid $color-border;
     border-radius: $radius-xl;

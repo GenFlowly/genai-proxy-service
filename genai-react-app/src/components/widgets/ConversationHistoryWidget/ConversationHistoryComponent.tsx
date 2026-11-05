@@ -50,9 +50,12 @@ interface ConversationHistoryComponentProps {
     // waiting on the (async, failure-prone) conversation load to flip some
     // unrelated piece of state
     onSelect?: () => void
+    // The full-screen mobile menu: a single collapsible History card whose
+    // Pinned and Recents scroll together, with touch rows and a visible grip
+    menu?: boolean
 }
 
-export default function ConversationHistoryComponent({ onSelect }: ConversationHistoryComponentProps = {}) {
+export default function ConversationHistoryComponent({ onSelect, menu = false }: ConversationHistoryComponentProps = {}) {
     const { t } = useTranslation()
     const { getAccessTokenSilently, isAuthenticated, customerId } = useAuth()
     const { conversationId, conversationTitle, pendingProjectId, startConversationInProject } = useConversation()
@@ -98,6 +101,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
     // a big dead block sits below the collapsed headers
     const [sectionExpanded, setSectionExpanded] = useState<Record<string, boolean>>(() => ({
         projects: getExpandedSection('projects') ?? true,
+        history: getExpandedSection('history') ?? true,
         pinned: getExpandedSection('pinned') ?? true,
         recent: getExpandedSection('recent') ?? true,
     }))
@@ -604,7 +608,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
     const toRow = (conv: ConversationSummary, isPinned: boolean) => {
         return {
             id: conv.conversationId,
-            label: conv.title?.trim() || conv.conversationId,
+            label: conv.title?.trim() || (menu ? t('conversation.conversationHistory.untitledConversation') : conv.conversationId),
             details: renderDetails(conv),
             isActive: conv.conversationId === activeId,
             ariaCurrent: 'page' as const,
@@ -614,6 +618,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                 {
                     icon: <Icon src={ICONS.FOLDER} size={14} aria-hidden={true} />,
                     label: t('conversation.conversationHistory.moveToProject'),
+                    tone: 'neutral' as const,
                     onClick: (e: React.MouseEvent) => {
                         e.stopPropagation()
                         setMoveTarget(conv)
@@ -626,6 +631,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                     label: isPinned
                         ? t('conversation.conversationHistory.unpinConversation')
                         : t('conversation.conversationHistory.pinConversation'),
+                    tone: 'primary' as const,
                     onClick: (e: React.MouseEvent) => (isPinned ? handleUnpin(e, conv) : handlePin(e, conv)),
                     revealOnHover: true,
                     testId: `conv-${isPinned ? 'unpin' : 'pin'}-btn-${conv.conversationId}`,
@@ -633,6 +639,7 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                 {
                     icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
                     label: t('conversation.conversationHistory.archiveConversation'),
+                    tone: 'muted' as const,
                     onClick: (e: React.MouseEvent) => handleArchive(e, conv.conversationId),
                     testId: `conv-archive-btn-${conv.conversationId}`,
                 },
@@ -827,8 +834,38 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
     const pinnedPresent = globalPinned.length > 0
     const recentPresent = globalRecent.length > 0
     const bottomCollapsed = (pinnedPresent || recentPresent)
-        && (!pinnedPresent || !sectionExpanded.pinned)
-        && (!recentPresent || !sectionExpanded.recent)
+        && (menu
+            ? !sectionExpanded.history
+            : (!pinnedPresent || !sectionExpanded.pinned) && (!recentPresent || !sectionExpanded.recent))
+
+    const menuHistoryGroups: SidebarListGroup[] = pinnedPresent || recentPresent
+        ? [{
+            id: 'history',
+            label: t('conversation.conversationHistory.history'),
+            collapsible: true,
+            defaultExpanded: sectionExpanded.history,
+            onToggle: expanded => toggleSection('history', expanded),
+            testId: 'conv-history-history-heading',
+            groups: [
+                ...(pinnedPresent
+                    ? [{
+                        id: 'pinned',
+                        label: t('conversation.conversationHistory.pinned'),
+                        icon: <Icon src={ICONS.PIN} size={13} aria-hidden={true} />,
+                        items: toTreeRows(globalPinned, true),
+                    }]
+                    : []),
+                ...(recentPresent
+                    ? [{
+                        id: 'recent',
+                        label: t('conversation.conversationHistory.recents'),
+                        items: toTreeRows(globalRecent, false),
+                    }]
+                    : []),
+            ],
+        }]
+        : []
+    const recentsVisible = menu ? sectionExpanded.history : sectionExpanded.recent
 
     return (
         <>
@@ -837,11 +874,13 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                 separatorLabel={t('conversation.conversationHistory.resizePanels')}
                 topCollapsed={topCollapsed}
                 bottomCollapsed={bottomCollapsed}
+                showGrip={menu}
                 handleTestId="history-split-handle"
                 topTestId="projects-pane"
                 bottomTestId="history-pane"
                 top={showProjectsPanel ? (
                     <SidebarListPanel
+                        variant={menu ? 'menu' : 'default'}
                         groups={projectsGroups}
                         isLoading={false}
                         hasError={false}
@@ -852,8 +891,9 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                 ) : null}
                 bottom={
                     <SidebarListPanel
-                        groups={historyGroups}
-                        fixedGroups={historyFixedGroups}
+                        variant={menu ? 'menu' : 'default'}
+                        groups={menu ? menuHistoryGroups : historyGroups}
+                        fixedGroups={menu ? undefined : historyFixedGroups}
                         testIds={{ list: 'history-scroll-list', endSentinel: 'history-end-sentinel' }}
                         // Older pages stream in as the end of the list nears;
                         // paused while a fetch runs and after a failure —
@@ -864,13 +904,13 @@ export default function ConversationHistoryComponent({ onSelect }: ConversationH
                         // sits in view of a now-tiny scroll area and the
                         // IntersectionObserver re-fires on every resulting
                         // re-render, looping fetches behind a closed section
-                        onEndReached={hasMore && !isLoading && !error && sectionExpanded.recent ? handleLoadMore : undefined}
+                        onEndReached={hasMore && !isLoading && !error && recentsVisible ? handleLoadMore : undefined}
                         isLoading={isLoading}
                         hasError={error}
                         errorText={t('conversation.conversationHistory.failedToLoad')}
                         emptyText={t('conversation.conversationHistory.noConversationsYet')}
                         listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
-                        footer={hasMore && sectionExpanded.recent && (isLoading || error) && (
+                        footer={hasMore && recentsVisible && (isLoading || error) && (
                             <SidebarListLoadMore
                                 label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
                                 onClick={handleLoadMore}

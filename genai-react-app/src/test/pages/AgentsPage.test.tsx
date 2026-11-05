@@ -38,10 +38,15 @@ jest.mock('../../hooks/useWindowSize', () => ({
 // overlay/open-close chrome, which has its own dedicated tests
 jest.mock('../../components/widgets/MobileHeader/MobileHeader', () => ({
     __esModule: true,
-    default: ({ title, menuItems, menuTitle, menuContent }: any) => (
+    default: ({ title, menuItems, menuTitle, menuAction, menuContent }: any) => (
         <div data-testid="mobile-header">
             <span>{title}</span>
             <span data-testid="mobile-menu-title">{menuTitle}</span>
+            {menuAction && (
+                <button data-testid={menuAction['data-testid']} onClick={menuAction.onClick}>
+                    {menuAction.label}
+                </button>
+            )}
             {menuItems?.map((item: any) => (
                 <button key={item['data-testid']} data-testid={item['data-testid']} onClick={item.onClick}>
                     {item.label}
@@ -369,29 +374,66 @@ describe('AgentsPage Component', () => {
             (useWindowSize as jest.Mock).mockReturnValue({ width: 500 });
         });
 
-        test('the category sidebar is available in the mobile menu, and picking one closes the overlay', async () => {
-            const memoryAgent = {
-                ...mockAgent,
-                graphId: 'graph-mem',
-                name: 'Memory Agent',
-                isDefault: false,
-                category: 'MEMORY',
-            };
+        const memoryAgent = {
+            ...mockAgent,
+            graphId: 'graph-mem',
+            name: 'Memory Agent',
+            isDefault: false,
+            category: 'MEMORY',
+        };
+        const mobileMenu = () => within(screen.getByTestId('mobile-menu-content'));
+        const agentsGrid = () => within(screen.getByTestId('agents-grid'));
+
+        test('picking a category in the menu filters both lists and leaves the menu open', async () => {
             (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
                 agents: [mockAgent, memoryAgent],
             });
             renderPage();
-            await waitFor(() => expect(screen.getByTestId('mobile-header')).toBeInTheDocument());
+            await waitFor(() => expect(agentsGrid().getByText('Default Graph')).toBeInTheDocument());
 
             expect(screen.getByTestId('mobile-menu-title')).toHaveTextContent('Categories');
-            const menuContent = screen.getByTestId('mobile-menu-content');
-            const memoryCategoryBtn = within(menuContent).getByTestId('agents-category-memory');
+            mockSetLeftSidebarExpanded.mockClear();
+            await userEvent.click(mobileMenu().getByTestId('agents-menu-category-memory'));
 
-            await userEvent.click(memoryCategoryBtn);
+            expect(agentsGrid().getByText('Memory Agent')).toBeInTheDocument();
+            expect(mobileMenu().getByTestId('agents-menu-agent-graph-mem')).toBeInTheDocument();
+            expect(mobileMenu().queryByTestId(`agents-menu-agent-${mockAgent.graphId}`)).not.toBeInTheDocument();
+            expect(mockSetLeftSidebarExpanded).not.toHaveBeenCalledWith(false);
+        });
 
-            // Same close-on-select behavior as the conversation/notes lists:
-            // picking something in the mobile menu dismisses it immediately
+        test('tapping an agent closes the menu and scrolls to its expanded card', async () => {
+            const scrollIntoView = jest.fn();
+            window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+            (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+                agents: [mockAgent, memoryAgent],
+            });
+            renderPage();
+            await waitFor(() => expect(agentsGrid().getByText('Default Graph')).toBeInTheDocument());
+
+            await userEvent.type(mobileMenu().getByTestId('mobile-menu-search'), 'memory');
+            await userEvent.click(mobileMenu().getByTestId('agents-menu-agent-graph-mem'));
+
             expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(false);
+            await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+            expect(agentsGrid().getByText('Memory Agent')).toBeInTheDocument();
+            expect(agentsGrid().getByRole('button', { name: /hide details/i })).toHaveAttribute('aria-expanded', 'true');
+            expect(mockNavigate).not.toHaveBeenCalled();
+        });
+
+        test('menu search filters by name across categories, and the ownership chips apply', async () => {
+            const systemAgent = { ...mockAgent, graphId: 'sys-1', name: 'Shared Default', isDefault: false, isSystem: true };
+            (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({
+                agents: [mockAgent, memoryAgent, systemAgent],
+            });
+            renderPage();
+            await waitFor(() => expect(agentsGrid().getByText('Default Graph')).toBeInTheDocument());
+
+            await userEvent.type(mobileMenu().getByTestId('mobile-menu-search'), 'e');
+            expect(mobileMenu().getByTestId('agents-menu-agent-graph-mem')).toBeInTheDocument();
+            expect(mobileMenu().getByTestId('agents-menu-agent-sys-1')).toBeInTheDocument();
+
+            await userEvent.click(mobileMenu().getByTestId('agents-menu-filter-mine'));
+            expect(mobileMenu().queryByTestId('agents-menu-agent-sys-1')).not.toBeInTheDocument();
         });
 
         test('shows the cards only: no Create agent, Fork or fork hint', async () => {
@@ -400,9 +442,10 @@ describe('AgentsPage Component', () => {
                 agents: [mockAgent, systemAgent],
             });
             renderPage();
-            await waitFor(() => expect(screen.getByText('Shared Default')).toBeInTheDocument());
+            await waitFor(() => expect(agentsGrid().getByText('Shared Default')).toBeInTheDocument());
 
             expect(screen.queryByTestId('create-agent-button')).not.toBeInTheDocument();
+            expect(screen.queryByTestId('menu-create-agent-button')).not.toBeInTheDocument();
             expect(screen.queryByRole('button', { name: /fork agent shared default/i })).not.toBeInTheDocument();
             expect(screen.queryByText(/Fork it to get your own editable copy/)).not.toBeInTheDocument();
         });
@@ -410,9 +453,9 @@ describe('AgentsPage Component', () => {
         test('opening a card still goes to the agent page, which shows the desktop notice', async () => {
             (agentsService.getCustomerAgents as jest.Mock).mockResolvedValueOnce({ agents: [mockAgent] });
             renderPage();
-            await waitFor(() => expect(screen.getByText('Default Graph')).toBeInTheDocument());
+            await waitFor(() => expect(agentsGrid().getByText('Default Graph')).toBeInTheDocument());
 
-            await userEvent.click(screen.getByText('Default Graph'));
+            await userEvent.click(agentsGrid().getByText('Default Graph'));
             expect(mockNavigate).toHaveBeenCalledWith(`/agents/${mockAgent.graphId}`);
         });
 
@@ -423,10 +466,13 @@ describe('AgentsPage Component', () => {
                 agents: [mockAgent, systemAgent],
             });
             renderPage();
-            await waitFor(() => expect(screen.getByText('Shared Default')).toBeInTheDocument());
+            await waitFor(() => expect(agentsGrid().getByText('Shared Default')).toBeInTheDocument());
 
             expect(screen.getByTestId('create-agent-button')).toBeInTheDocument();
             expect(screen.getByRole('button', { name: /fork agent shared default/i })).toBeInTheDocument();
+
+            await userEvent.click(screen.getByTestId('menu-create-agent-button'));
+            expect(mockNavigate).toHaveBeenCalledWith('/agents/new');
         });
     });
 

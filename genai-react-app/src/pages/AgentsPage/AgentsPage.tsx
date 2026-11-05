@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import Navbar from '../../components/navbar/Navbar'
@@ -34,6 +34,7 @@ import {
     CategoryFilter,
     categoryCount,
 } from './components/AgentsCategoryNav'
+import AgentsMenuContent from './components/AgentsMenuContent'
 
 // ── Node type display helpers ─────────────────────────────────────────────────
 
@@ -65,15 +66,36 @@ interface AgentCardProps {
     forking: boolean
     /** False on small screens, where a fork couldn't be opened. */
     canFork: boolean
+    /** Picked in the mobile menu: expand and scroll into view. */
+    reveal: boolean
+    onRevealed: () => void
 }
 
-function AgentCard({ agent, isEffectiveDefault, onOpen, onFork, forking, canFork }: AgentCardProps) {
+function AgentCard({ agent, isEffectiveDefault, onOpen, onFork, forking, canFork, reveal, onRevealed }: AgentCardProps) {
     const { t } = useTranslation()
     const [expanded, setExpanded] = useState(false)
+    const [pendingScroll, setPendingScroll] = useState(false)
+    const cardRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!reveal) return
+        setExpanded(true)
+        setPendingScroll(true)
+        onRevealed()
+    }, [reveal, onRevealed])
+
+    // Runs after the expanded card has rendered: scrolling sooner clamps to the
+    // shorter page
+    useEffect(() => {
+        if (!pendingScroll) return
+        setPendingScroll(false)
+        cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, [pendingScroll])
 
     return (
         // The whole tile opens the agent; inner controls stop propagation.
         <div
+            ref={cardRef}
             className={`${styles.card} ${isEffectiveDefault ? styles.cardDefault : ''}`}
             role="button"
             tabIndex={0}
@@ -217,6 +239,8 @@ export default function AgentsPage() {
     const [category, setCategory] = useState<CategoryFilter>('CONVERSATION')
     const [ownership, setOwnership] = useState<'all' | 'mine'>('all')
     const [forking, setForking] = useState(false)
+    const [revealAgentId, setRevealAgentId] = useState<string | null>(null)
+    const clearReveal = useCallback(() => setRevealAgentId(null), [])
     const { selectedAgentId } = useAI()
     const defaultId = effectiveDefaultAgentId(agents, selectedAgentId)
 
@@ -267,8 +291,8 @@ export default function AgentsPage() {
         }
     }
 
-    // Categories as a standard sidebar list (same panel the conversation and
-    // memory pages use), with the live count per category.
+    // Desktop categories as a standard sidebar list (same panel the conversation
+    // and memory pages use), with the live count per category.
     const categoryGroup: SidebarListGroup = {
         id: 'categories',
         label: t('agentsPage.categories.sectionLabel'),
@@ -283,14 +307,7 @@ export default function AgentsPage() {
             ),
             isActive: category === filter,
             ariaCurrent: 'true' as const,
-            onSelect: () => {
-                setCategory(filter)
-                // No-op on desktop (the mobile overlay isn't open there);
-                // on mobile this closes the overlay the same way picking a
-                // conversation/note already does, instead of leaving the
-                // category list sitting open over the now-filtered grid
-                setLeftSidebarExpanded(false)
-            },
+            onSelect: () => setCategory(filter),
             testId: `agents-category-${filter.toLowerCase()}`,
         })),
     }
@@ -312,15 +329,25 @@ export default function AgentsPage() {
                         },
                     ] : undefined}
                     menuTitle={t('agentsPage.categories.sectionLabel')}
+                    menuAction={canChangeAgents ? {
+                        label: t('agentsPage.agentsPage.createAgent'),
+                        icon: ICONS.COMPOSE,
+                        onClick: () => navigate('/agents/new'),
+                        'data-testid': 'menu-create-agent-button',
+                    } : undefined}
                     menuContent={(
-                        <SidebarListPanel
-                            groups={[categoryGroup]}
-                            isLoading={loading}
-                            hasError={false}
-                            errorText=""
-                            emptyText=""
-                            listAriaLabel={t('agentsPage.categories.navAriaLabel')}
-                            data-testid="agents-category-panel-mobile"
+                        <AgentsMenuContent
+                            agents={agents}
+                            loading={loading}
+                            category={category}
+                            ownership={ownership}
+                            onCategoryChange={setCategory}
+                            onOwnershipChange={setOwnership}
+                            onAgentSelect={agent => {
+                                setCategory(agentCategory(agent) as CategoryFilter)
+                                setRevealAgentId(agent.graphId)
+                                setLeftSidebarExpanded(false)
+                            }}
                         />
                     )}
                 />
@@ -424,6 +451,8 @@ export default function AgentsPage() {
                                                 onFork={handleFork}
                                                 forking={forking}
                                                 canFork={canChangeAgents}
+                                                reveal={agent.graphId === revealAgentId}
+                                                onRevealed={clearReveal}
                                             />
                                         </GridCol>
                                     ))}

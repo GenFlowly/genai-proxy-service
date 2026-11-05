@@ -38,6 +38,13 @@
             "sectionLabel": "Categories",
             "titleCreator": "Title Creator"
         },
+        "menu": {
+            "agents": "Agents",
+            "createdByYou": "Created by you",
+            "noAgents": "No agents match",
+            "resizePanels": "Resize the Categories and Agents panels",
+            "systemReadOnly": "System · read-only"
+        },
         "filters": {
             "allAgents": "All agents",
             "createdByMe": "Created by me"
@@ -247,6 +254,8 @@
             "urlCopiedToClipboard": "URL copied to clipboard"
         },
         "conversationHistory": {
+            "history": "History",
+            "untitledConversation": "Untitled conversation",
             "archiveConversation": "Archive conversation",
             "createProject": "Create",
             "createProjectFailed": "Failed to create project",
@@ -434,6 +443,14 @@
             "loading": "Loading..."
         },
         "mobileMenu": {
+            "clearSearch": "Clear search",
+            "noSearchResults": "No results",
+            "searchAgents": "Search agents",
+            "searchChats": "Search chats",
+            "searchFailed": "Search failed. Try again.",
+            "searchNotes": "Search notes",
+            "searchResults": "Results",
+            "searchSettings": "Search settings",
             "account": "Account",
             "back": "Back",
             "login": "Login",
