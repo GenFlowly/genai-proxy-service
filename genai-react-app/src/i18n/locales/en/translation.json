@@ -246,7 +246,8 @@
             "recentlyUsed": "Recently used",
             "searchPlaceholder": "Search instructions — describe what you need",
             "searchResults": "Search results",
-            "title": "Choose Instruction"
+            "title": "Choose Instruction",
+            "signInToSearch": "Sign in to search instructions."
         },
         "conversationHeader": {
             "aiConfig": "AI Config",
