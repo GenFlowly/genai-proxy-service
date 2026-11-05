@@ -230,6 +230,11 @@
         },
         "vendorModelSelect": {
             "noModelsAvailable": "No models available"
+        },
+        "search": {
+            "notSetUpVectorDb": "Search isn't set up. Connect a vector DB to search.",
+            "notSetUpEmbeddingKey": "Search isn't set up. Add an embedding key to search.",
+            "openSettings": "Open Settings"
         }
     },
     "conversation": {

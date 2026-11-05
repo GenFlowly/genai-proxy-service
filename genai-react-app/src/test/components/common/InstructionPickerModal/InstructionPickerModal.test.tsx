@@ -3,7 +3,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import InstructionPickerModal from '../../../../components/common/InstructionPickerModal/InstructionPickerModal';
+import { MemoryRouter } from 'react-router-dom';
 import * as instructionService from '../../../../services/instructionService';
+import { SearchError } from '../../../../services/searchError';
 import { loadRecentInstructionsCache, saveRecentInstructionsCache, clearRecentInstructionsCache } from '../../../../components/common/InstructionPickerModal/recentInstructionsCache';
 
 jest.mock('../../../../context/AuthContext', () => ({
@@ -97,5 +99,37 @@ describe('InstructionPickerModal', () => {
 
         await waitFor(() => expect(mockGetRecent).toHaveBeenCalled());
         expect(screen.getByText('Physics Wave Expert')).toBeInTheDocument();
+    });
+
+    test('says when search is not set up and links to the Settings page for it', async () => {
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+        mockSearch.mockRejectedValue(new SearchError('409', 409, 'SEARCH_NOT_CONFIGURED', 'VECTOR_DB_NOT_CONFIGURED'));
+        const onClose = jest.fn();
+        render(
+            <MemoryRouter>
+                <InstructionPickerModal isOpen onClose={onClose} onSelect={jest.fn()} />
+            </MemoryRouter>
+        );
+
+        await userEvent.type(screen.getByTestId('instruction-picker-search'), 'tax');
+
+        const notice = await screen.findByTestId('instruction-picker-not-set-up');
+        expect(notice).toHaveTextContent("Search isn't set up. Connect a vector DB to search.");
+        expect(screen.queryByText('Failed to load instructions. Please try again.')).not.toBeInTheDocument();
+        const link = screen.getByRole('link', { name: 'Open Settings' });
+        expect(link).toHaveAttribute('href', '/settings/ai/vector-db');
+        await userEvent.click(link);
+        expect(onClose).toHaveBeenCalled();
+    });
+
+    test('a search that failed for another reason keeps the generic error', async () => {
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+        mockSearch.mockRejectedValue(new SearchError('502', 502, 'SEARCH_UNAVAILABLE'));
+        render(<InstructionPickerModal isOpen onClose={jest.fn()} onSelect={jest.fn()} />);
+
+        await userEvent.type(screen.getByTestId('instruction-picker-search'), 'tax');
+
+        expect(await screen.findByText('Failed to load instructions. Please try again.')).toBeInTheDocument();
+        expect(screen.queryByTestId('instruction-picker-not-set-up')).not.toBeInTheDocument();
     });
 });

@@ -1,6 +1,7 @@
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { fetchWithRetry } from '../utils/apiUtils'
+import { searchErrorFrom } from './searchError'
 
 export type SearchDataType = 'conversation' | 'notes'
 
@@ -9,9 +10,12 @@ export interface SearchResultItem {
     key: string
     title?: string | null
     snippet: string
-    score: number
+    // Similarity for a vector-DB hit; absent for a keyword match.
+    score?: number | null
     matchedChunks: number
     createdAt?: string | null
+    // 'keyword': a record not yet in the vector DB that contains every query word.
+    match?: 'semantic' | 'keyword'
 }
 
 interface SearchResponse {
@@ -33,7 +37,7 @@ export async function searchContent(
     })
 
     if (!response.ok) {
-        throw new Error(`Search failed: ${response.status} ${response.statusText}`)
+        throw await searchErrorFrom(response, 'Search failed')
     }
 
     return ((await response.json()) as SearchResponse).results
