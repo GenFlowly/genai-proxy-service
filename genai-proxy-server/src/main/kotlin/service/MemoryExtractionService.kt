@@ -9,8 +9,11 @@ import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.observability.Metrics
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.providers.VectorEncodeException
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.MemoryRepository
+import com.genflowly.repository.PendingVectorType
+import com.genflowly.repository.VectorSyncPendingRepository
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
@@ -72,6 +75,7 @@ class MemoryExtractionService(
     private val conversationService: ConversationService,
     private val customerProfileRepository: CustomerProfileRepository,
     private val retrievalServerClient: RetrievalServerClient,
+    private val vectorSyncPendingRepository: VectorSyncPendingRepository,
     private val appScope: AppScope,
     /**
      * When true (development and lower environments), log lines may include
@@ -496,27 +500,53 @@ class MemoryExtractionService(
      * retrieval-server's service-to-service /encode-memory — no end-user
      * bearer token involved, so reconciler retries embed exactly like live
      * runs. Memories are tiny and rewritten in place: always the realtime
-     * path, never the batch accumulator.
+     * path, never the batch accumulator. A failed embed is recorded in
+     * VectorSyncPending — keyword-findable meanwhile — and retried by
+     * [VectorRetryService]; a permanent failure (no vector DB or embedding
+     * key) is not, since nothing could index the memory.
      */
     private suspend fun encodeMemoryVector(customerId: String, memory: CustomerMemory) {
         try {
-            val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
-            // Memories are extracted from conversations, so they follow the
-            // conversations-category default.
-            val model = prefs?.embeddingModelConversations ?: prefs?.embeddingModel
-            retrievalServerClient.encodeMemoryVector(
-                customerId = customerId,
-                memoryKey = memory.memoryId,
-                memoryValue = memory.text,
-                title = "[memory] ${memory.category ?: memory.kind.name.lowercase()}",
-                createdAt = memory.createdAt,
-                modelType = EmbeddingConstants.modelTypeFor(model),
-                modelName = model ?: EmbeddingConstants.MODEL_NAME,
-            )
+            embedMemory(customerId, memory)
         } catch (e: Exception) {
             Metrics.count("memory_vector_failure_total", 1.0, "operation" to "encode")
             logger.error("Failed to encode memory ${memory.memoryId} for $customerId", e)
+            if ((e as? VectorEncodeException)?.permanent == true) return
+            try {
+                vectorSyncPendingRepository.markPending(
+                    customerId, PendingVectorType.MEMORY, memory.memoryId,
+                    retryAt = Instant.now().plusSeconds(VECTOR_FIRST_RETRY_DELAY_SECONDS)
+                )
+            } catch (markError: Exception) {
+                logger.warn("Could not schedule a vector retry for memory ${memory.memoryId}: ${markError.message}")
+            }
         }
+    }
+
+    /**
+     * Re-embeds a memory's current text. Returns false when the memory no
+     * longer exists. Throws when the embed fails.
+     */
+    suspend fun retryMemoryVector(customerId: String, memoryId: String): Boolean {
+        val memory = memoryRepository.getMemory(customerId, memoryId) ?: return false
+        embedMemory(customerId, memory)
+        return true
+    }
+
+    private suspend fun embedMemory(customerId: String, memory: CustomerMemory) {
+        val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
+        // Memories are extracted from conversations, so they follow the
+        // conversations-category default.
+        val model = prefs?.embeddingModelConversations ?: prefs?.embeddingModel
+        retrievalServerClient.encodeMemoryVector(
+            customerId = customerId,
+            memoryKey = memory.memoryId,
+            memoryValue = memory.text,
+            title = "[memory] ${memory.category ?: memory.kind.name.lowercase()}",
+            createdAt = memory.createdAt,
+            modelType = EmbeddingConstants.modelTypeFor(model),
+            modelName = model ?: EmbeddingConstants.MODEL_NAME,
+        )
     }
 
     private suspend fun deleteMemoryVector(customerId: String, memoryId: String) {
@@ -587,6 +617,8 @@ class MemoryExtractionService(
         private const val RECONCILER_BATCH_SIZE = 25
         /** An unfinalized claim older than this is a crashed run — recoverable. */
         private const val STALE_CLAIM_SECONDS = 120L
+        /** A failed memory embed's first retry, via [VectorRetryService]. */
+        private const val VECTOR_FIRST_RETRY_DELAY_SECONDS = 60L
 
         /**
          * Vendor-enforced schema for the extraction output (same mechanism as

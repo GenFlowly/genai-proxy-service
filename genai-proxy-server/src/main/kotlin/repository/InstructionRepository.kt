@@ -207,7 +207,8 @@ class InstructionRepository(
             icon = item[DynamoDBConstants.INSTRUCTION_ICON_KEY]?.s(),
             color = item[DynamoDBConstants.INSTRUCTION_COLOR_KEY]?.s(),
             category = item[DynamoDBConstants.INSTRUCTION_CATEGORY_KEY]?.s(),
-            tags = item[DynamoDBConstants.INSTRUCTION_TAGS_KEY]?.l()?.mapNotNull { it.s() }
+            tags = item[DynamoDBConstants.INSTRUCTION_TAGS_KEY]?.l()?.mapNotNull { it.s() },
+            syncedWithVectorDb = item["is_synced_with_milvus"]?.bool() == true
         )
     }
 

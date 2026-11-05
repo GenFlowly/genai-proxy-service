@@ -278,6 +278,22 @@ class CustomerCredentialsRepository(
         }
     }
 
+    /**
+     * Whether the customer has a vector DB config row at all. Unlike
+     * [getCustomerVectorDBConfigStatusList], a DynamoDB failure throws rather
+     * than reading as "none".
+     */
+    suspend fun hasVectorDBConfig(customerId: String): Boolean = withContext(Dispatchers.IO) {
+        val response = dynamoDbClient.getItem(
+            GetItemRequest.builder()
+                .tableName(CUSTOMER_VECTOR_DB_CONFIG_TABLE)
+                .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
+                .projectionExpression(CUSTOMER_ID_KEY)
+                .build()
+        )
+        response.hasItem() && response.item().isNotEmpty()
+    }
+
     suspend fun getCustomerVectorDBConfigStatusList(customerId: String): List<com.genflowly.models.VectorDBConfigStatus> = withContext(Dispatchers.IO) {
         try {
             val getReq = GetItemRequest.builder()

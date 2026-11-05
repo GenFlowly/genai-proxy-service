@@ -93,6 +93,15 @@ def _title(entity: dict) -> str:
     return entity.get("title") or entity.get("subject") or ""
 
 
+def _not_configured_detail(e: Exception) -> dict:
+    # error_type tells the caller which setting is missing, so the app can
+    # point the user at it.
+    error_type = (
+        "embedding_key_missing" if isinstance(e, EmbeddingKeyMissing) else "vector_db_not_configured"
+    )
+    return {"error_type": error_type, "message": str(e)}
+
+
 @router.post("/search")
 @track("vector_retrieval", source="search")
 async def search(req: SearchRequest):
@@ -211,7 +220,7 @@ async def search(req: SearchRequest):
         # embedding provider, or no vector DB configured. 409 so the caller
         # can tell the user why instead of showing mysteriously empty results.
         logger.warning("Unified search unavailable for customer=%s: %s", req.customer_id, e)
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=_not_configured_detail(e))
     except Exception as e:
         logger.error("Unified search failed for customer=%s: %s", req.customer_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Search failed")

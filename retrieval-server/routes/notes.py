@@ -44,6 +44,18 @@ class EncodeMemoryRequest(BaseModel):
     model_name: Optional[str] = None
 
 
+class EncodeConversationRequest(BaseModel):
+    customer_id: str
+    conversation_key: str
+    message_key: str
+    text: str
+    title: str = ""
+    client: str = "web"
+    created_at: str = ""
+    model_type: Optional[str] = None
+    model_name: Optional[str] = None
+
+
 class DeleteInstructionVectorsRequest(BaseModel):
     customer_id: str
     instruction_key: str
@@ -228,6 +240,122 @@ async def encode_memory(req: EncodeMemoryRequest):
             req.customer_id, req.memory_key, e, exc_info=True,
         )
         raise HTTPException(status_code=500, detail="Failed to encode memory")
+
+
+def _conversation_collection_schema(dim: int, description: str):
+    """Milvus schema + index for a conversation collection.
+
+    MIRRORS encoding_library.processors.conversation_processor
+    .ConversationProcessor.get_collection_schema — keep the two in sync (same
+    import constraint as _memory_collection_schema).
+    """
+    from pymilvus import DataType, MilvusClient
+
+    schema = MilvusClient.create_schema(auto_id=False, enable_dynamic_field=True, description=description)
+    schema.add_field(field_name="id", datatype=DataType.VARCHAR, max_length=256, is_primary=True)
+    schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=dim)
+    schema.add_field(field_name="note_value", datatype=DataType.VARCHAR, max_length=65535)
+    schema.add_field(field_name="title", datatype=DataType.VARCHAR, max_length=512)
+    schema.add_field(field_name="conversation_key", datatype=DataType.VARCHAR, max_length=256)
+    schema.add_field(field_name="message_key", datatype=DataType.VARCHAR, max_length=256)
+    schema.add_field(field_name="client", datatype=DataType.VARCHAR, max_length=100)
+    schema.add_field(field_name="created_at", datatype=DataType.VARCHAR, max_length=64)
+    add_customer_id_field(schema)
+
+    index_params = MilvusClient.prepare_index_params()
+    index_params.add_index(field_name="vector", index_type="AUTOINDEX", metric_type="COSINE")
+    return schema, index_params
+
+
+@router.post("/encode-conversation")
+async def encode_conversation(req: EncodeConversationRequest):
+    """
+    Embed one user/assistant exchange into the shared 'conversation_{model}'
+    collection, producing the same rows as the encoding-server pipeline
+    (ConversationProcessor): chunk ids '{message_key}_{i}', chunk text in
+    note_value.
+
+    The proxy's retry path for exchanges whose pipeline embed never landed:
+    the pipeline needs the end user's bearer token, which a later retry
+    doesn't have; this call is service-to-service, like /encode-memory.
+
+    Idempotent: the exchange's existing chunks are deleted before the insert,
+    so a retry after a pipeline write that did land replaces rather than
+    duplicates.
+    """
+    if not req.customer_id or not req.conversation_key or not req.message_key or not req.text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="customer_id, conversation_key, message_key and text are required",
+        )
+
+    from encoding_library.utils.embedding_utils import EmbeddingKeyMissing, create_chunks, create_embeddings
+    from encoding_library.utils.model_registry import get_chunking_params
+    from graph.nodes.retrieval import customer_embedding_model
+
+    model_type, model_name = resolve_model(req.model_type, req.model_name)
+    collection_name = shared_collection_name("conversation", model_name)
+    logger.info(
+        "Encoding conversation exchange — customer=%s message_key=%s collection=%s",
+        req.customer_id, req.message_key, collection_name,
+    )
+
+    try:
+        chunk_size, chunk_overlap = get_chunking_params(model_type, model_name)
+        chunks = create_chunks(req.text, None, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        encoder = customer_embedding_model(req.customer_id, model_type, model_name)
+        embeddings = create_embeddings(chunks, encoder, customer_id=req.customer_id)
+        if not embeddings or any(not e.get("vector") for e in embeddings):
+            count("embedding_failure_total", source="encode_conversation", model=model_name)
+            raise RuntimeError(f"embedding returned no vector (model {model_type}/{model_name})")
+
+        client = get_milvus_client(req.customer_id)
+        dim = len(embeddings[0]["vector"])
+        schema, index_params = _conversation_collection_schema(
+            dim=dim,
+            description=build_collection_description(model_type, model_name, dim),
+        )
+        if ensure_collection(client, collection_name, schema, index_params):
+            logger.info("Created conversation collection '%s' (dim=%d)", collection_name, dim)
+
+        client.delete(
+            collection_name=collection_name,
+            filter=customer_filter(
+                req.customer_id, f'message_key == "{_escape_filter_value(req.message_key)}"'
+            ),
+        )
+        created_at = req.created_at or datetime.now(timezone.utc).isoformat()
+        records = [
+            {
+                "id": f"{req.message_key}_{i}",
+                "customer_id": req.customer_id[:CUSTOMER_ID_MAX_LENGTH],
+                "vector": chunk["vector"],
+                "note_value": chunk["text"][:65535],
+                "title": (req.title or "")[:500],
+                "conversation_key": req.conversation_key[:256],
+                "message_key": req.message_key[:256],
+                "client": (req.client or "web")[:100],
+                "created_at": created_at,
+            }
+            for i, chunk in enumerate(embeddings)
+        ]
+        # No flush: the cluster allows ~1 flush per 20s in total and reads see
+        # growing segments (see the encoding-server store step).
+        result = client.insert(collection_name=collection_name, data=records)
+        count("vector_store_chunks_total", result.get("insert_count", len(records)), data_type="CONVERSATION")
+        return {"status": "success", "collection": collection_name, "chunks": len(records)}
+    except HTTPException:
+        raise
+    except (EmbeddingKeyMissing, VectorDBNotConfigured) as e:
+        # Customer state — 409 so the proxy's retry treats it as permanent.
+        logger.warning("Cannot encode conversation for customer=%s: %s", req.customer_id, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        logger.error(
+            "Failed to encode conversation for customer=%s message_key=%s: %s",
+            req.customer_id, req.message_key, e, exc_info=True,
+        )
+        raise HTTPException(status_code=500, detail="Failed to encode conversation")
 
 
 @router.post("/delete-memory-vectors")
