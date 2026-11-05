@@ -12,6 +12,7 @@ from handlers.http_metrics import track_http_status
 # Trigger build - separated ECR repos
 
 from services.content_logging import LOG_USER_CONTENT, default_log_level
+from services.content_source import to_pointer_state
 
 setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
@@ -120,8 +121,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 # Validate via typed state
                 processor.validate(internal_state)
 
-                # Convert to SQS message format
+                # Convert to SQS message format. The message carries the item's
+                # keys only; the pipeline reloads its text from the source table.
                 message_body, message_attributes = processor.to_sqs_message(internal_state)
+                message_body = json.dumps(to_pointer_state(json.loads(message_body)))
 
                 # Send to SQS
                 response = sqs.send_message(
