@@ -9,6 +9,7 @@ from encoding_library.observability import set_request_id, setup_logging, track
 # Trigger build - separated ECR repos
 
 from services.content_logging import default_log_level
+from services.content_source import to_pointer_state
 
 setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
@@ -56,7 +57,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         logger.info(f"Added customer_id {customer_id} to state payload for message {message_id}")
                 else:
                     logger.info(f"Found customer_id {customer_id} in state payload for message {message_id}")
-                
+
+                # Execution input and history must never hold text, including
+                # for messages queued before ingestion stopped sending it.
+                body = to_pointer_state(body)
+
                 # Start Asynchronous Execution (Standard Workflow)
                 logger.info(f"Starting execution for message {message_id}")
                 response = sfn.start_execution(
