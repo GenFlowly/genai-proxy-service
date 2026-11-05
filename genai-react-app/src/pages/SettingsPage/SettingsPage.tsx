@@ -75,7 +75,7 @@ export default function SettingsPage(): React.ReactElement {
                 <MobileHeader
                     title={sectionTitle}
                     menuTitle={t('settingsPage.settingsSidebar.title')}
-                    menuContent={<SettingsSidebar onNavigate={() => setLeftSidebarExpanded(false)} />}
+                    menuContent={<SettingsSidebar menu onNavigate={() => setLeftSidebarExpanded(false)} />}
                 />
             )}
             <div className={styles.layout}>

@@ -1,7 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { MobileHeader as BaseMobileHeader, MobileMenu } from '@genflowly/component-library'
-import type { MobileHeaderMenuItem } from '@genflowly/component-library'
+import type { MobileHeaderMenuItem, MobileMenuAction } from '@genflowly/component-library'
 import { useLayout } from '../../../context/LayoutContext'
 import { AppMenuContent } from '../../sections/LeftSidebar/AppMenuContent'
 
@@ -15,8 +15,10 @@ interface MobileHeaderProps {
     onSubtitleClick?: () => void
     /** Entries of the kebab (3-dot) menu on the right; omit to hide the kebab. */
     menuItems?: MobileHeaderMenuItem[]
-    /** Title of the page-context menu view (e.g. "History", "Saved Notes"). */
+    /** Accessible name of the page-context menu view (e.g. "History", "Saved Notes"). */
     menuTitle?: string
+    /** The page's create action, centered in the page-context menu's top bar. */
+    menuAction?: MobileMenuAction
     /**
      * Page-context content of the menu (conversation history, saved notes).
      * Omit it and the hamburger opens the app menu directly.
@@ -37,6 +39,7 @@ export default function MobileHeader({
     onSubtitleClick,
     menuItems,
     menuTitle,
+    menuAction,
     menuContent,
     children,
 }: MobileHeaderProps): React.ReactElement {
@@ -56,6 +59,7 @@ export default function MobileHeader({
             {isLeftSidebarExpanded && (
                 <MobileMenu
                     title={menuTitle}
+                    action={menuAction}
                     appMenuTitle={t('layout.mobileMenu.menu')}
                     appMenu={<AppMenuContent onNavigate={closeMenu} />}
                     onClose={closeMenu}

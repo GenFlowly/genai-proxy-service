@@ -65,6 +65,23 @@ describe('MobileHeader', () => {
         expect(screen.queryByTestId('mock-context-content')).not.toBeInTheDocument()
     })
 
+    test('passes the page action to the menu', () => {
+        mockUseLayout.mockReturnValue(layoutValue(true))
+        const onClick = jest.fn()
+
+        render(
+            <MobileHeader
+                title="My Chat"
+                menuTitle="History"
+                menuAction={{ label: 'New chat', onClick, 'data-testid': 'menu-action' }}
+                menuContent={<div />}
+            />
+        )
+
+        fireEvent.click(screen.getByTestId('menu-action'))
+        expect(onClick).toHaveBeenCalled()
+    })
+
     test('closing the menu collapses the left sidebar', () => {
         mockUseLayout.mockReturnValue(layoutValue(true))
 

@@ -26,6 +26,7 @@ export const endpoints = {
     createInstruction: `${BASE}${API_PREFIX}/instruction`,
     getCustomerInstructions: `${BASE}${API_PREFIX}/instructions`,
     searchInstructions: `${BASE}${API_PREFIX}/instructions/search`,
+    search: `${BASE}${API_PREFIX}/search`,
     getRecentInstructions: `${BASE}${API_PREFIX}/instructions/recent`,
     createConversationTitle: `${BASE}${API_PREFIX}/conversation/title`,
     conversationShare: `${BASE}${API_PREFIX}/conversation/share`,

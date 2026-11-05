@@ -12,7 +12,7 @@ import { useLayout } from '../../../context/LayoutContext'
 import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
 import MobileHeader, { MobileHeaderMenuItem } from '../MobileHeader/MobileHeader'
 import { NAV_ITEMS } from '../NavbarMenuWidget/NavbarMenu'
-import ConversationHistoryComponent from '../ConversationHistoryWidget/ConversationHistoryComponent'
+import ChatMenuContent from './ChatMenuContent'
 import styles from './ConversationHeader.module.scss'
 import { useToast } from '../../../context/ToastContext'
 import {
@@ -148,7 +148,16 @@ export default function ConversationHeader(): React.ReactElement | null {
                 // The menu heading names the page you're on — the same label
                 // as this page's navbar item, not the menu's content
                 menuTitle={NAV_ITEMS.find(item => item.id === 'chat')?.label}
-                menuContent={<ConversationHistoryComponent onSelect={() => setLeftSidebarExpanded(false)} />}
+                menuAction={{
+                    label: t('conversation.conversationHeader.newChat'),
+                    icon: ICONS.COMPOSE,
+                    onClick: () => {
+                        resetConversation()
+                        setLeftSidebarExpanded(false)
+                    },
+                    'data-testid': 'menu-new-chat-button',
+                }}
+                menuContent={<ChatMenuContent onClose={() => setLeftSidebarExpanded(false)} />}
             >
                 {modals}
             </MobileHeader>

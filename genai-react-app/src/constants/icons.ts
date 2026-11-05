@@ -38,6 +38,10 @@ import imageAttachmentIcon from '../assets/icons/image-attachment-icon.svg'
 import stepsIcon from '../assets/icons/steps.svg'
 import linkIcon from '../assets/icons/link.svg'
 import gitForkIcon from '../assets/icons/git-fork.svg'
+import composeIcon from '../assets/icons/compose.svg'
+import chatBubbleIcon from '../assets/icons/chat-bubble.svg'
+import tagIcon from '../assets/icons/tag.svg'
+import documentTextIcon from '../assets/icons/document-text.svg'
 
 export const ICONS = {
     EDIT: editIcon,
@@ -78,4 +82,8 @@ export const ICONS = {
     STEPS: stepsIcon,
     LINK: linkIcon,
     GIT_FORK: gitForkIcon,
+    COMPOSE: composeIcon,
+    CHAT_BUBBLE: chatBubbleIcon,
+    TAG: tagIcon,
+    DOCUMENT_TEXT: documentTextIcon,
 }

@@ -31,10 +31,11 @@ jest.mock('../../../../components/common/InstructionPickerModal/InstructionPicke
 }))
 jest.mock('../../../../components/widgets/MobileHeader/MobileHeader', () => ({
     __esModule: true,
-    default: ({ title, subtitle, onSubtitleClick, menuTitle, children }: any) => (
+    default: ({ title, subtitle, onSubtitleClick, menuTitle, menuAction, children }: any) => (
         <div data-testid="mobile-header">
             <span>{title}</span>
             <span data-testid="mobile-menu-title">{menuTitle}</span>
+            <button data-testid="mobile-menu-action" onClick={menuAction?.onClick}>{menuAction?.label}</button>
             <button data-testid="mobile-subtitle" onClick={onSubtitleClick}>{subtitle}</button>
             {children}
         </div>
@@ -382,6 +383,22 @@ describe('ConversationHeader', () => {
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByTestId('mobile-menu-title')).toHaveTextContent('Chat')
+    })
+
+    test('mobile: the menu action starts a new chat', () => {
+        mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+        const resetConversation = jest.fn()
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+            resetConversation,
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+        fireEvent.click(screen.getByTestId('mobile-menu-action'))
+
+        expect(resetConversation).toHaveBeenCalled()
     })
 
     test('mobile: subtitle shows Choose instruction when none is loaded and opens the picker', () => {
