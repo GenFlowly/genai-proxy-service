@@ -64,6 +64,20 @@ describe('App Redirection', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/custom-path');
     });
 
+    test('onRedirectCallback passes returnState on as location state', () => {
+        render(
+            <MemoryRouter>
+                <App />
+            </MemoryRouter>
+        );
+
+        act(() => {
+            capturedOnRedirect({ returnTo: '/chat', returnState: { openMobileMenu: true } });
+        });
+
+        expect(mockNavigate).toHaveBeenCalledWith('/chat', { state: { openMobileMenu: true } });
+    });
+
     test('onRedirectCallback navigates to current pathname if returnTo is missing', () => {
         render(
             <MemoryRouter>

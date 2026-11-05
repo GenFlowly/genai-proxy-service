@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../context/AuthContext'
@@ -11,36 +11,20 @@ import logo from '../../assets/icons/logo.png'
 import { UserAvatarButton } from '@genflowly/component-library'
 import { NavbarMenu } from '../widgets/NavbarMenuWidget/NavbarMenu'
 import ThemeToggle from '../common/ThemeToggle/ThemeToggle'
-import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
-import { MobileMenuContent } from '../sections/LeftSidebar/MobileMenuContent'
+import { useOpenAppMenu } from '../../hooks/useAppMenu'
 
 export default function Navbar(): React.ReactElement {
     const { t } = useTranslation()
     const { loginWithRedirect, isAuthenticated, isOnboarding, user, customerPicture, customerName } = useAuth()
-    const { toggleLeftSidebar, toggleRightSidebar, isLeftSidebarExpanded } = useLayout()
+    const { toggleRightSidebar } = useLayout()
+    const openAppMenu = useOpenAppMenu()
     const navigate = useNavigate()
     const location = useLocation()
-    const { isMobile } = useResponsiveBreakpoints()
     // The right sidebar (AI settings) only exists on the chat page
     const isChatPage = location.pathname === '/' || location.pathname.startsWith('/chat')
 
     const displayPicture = customerPicture || user?.picture
     const displayName = customerName || user?.name || t("layout.navbar.account")
-
-    // Pin the mobile menu directly below the navbar, whatever its rendered height is
-    const navRef = useRef<HTMLElement>(null)
-    const [menuTopOffset, setMenuTopOffset] = useState(0)
-    const isMobileMenuOpen = isMobile && isLeftSidebarExpanded
-
-    useLayoutEffect(() => {
-        if (!isMobileMenuOpen) return
-        const measure = () => {
-            setMenuTopOffset(navRef.current ? Math.max(0, navRef.current.getBoundingClientRect().bottom) : 0)
-        }
-        measure()
-        window.addEventListener('resize', measure)
-        return () => window.removeEventListener('resize', measure)
-    }, [isMobileMenuOpen])
 
     const handleSettingsClick = () => {
         React.startTransition(() => {
@@ -50,11 +34,10 @@ export default function Navbar(): React.ReactElement {
 
 
     return (
-        <>
-        <nav className={styles.navbar} ref={navRef}>
+        <nav className={styles.navbar}>
             <div className={styles.container}>
                 <div className={styles.leftControls}>
-                    <button onClick={toggleLeftSidebar} className={styles.mobileToggle} aria-label={t("layout.mobileMenu.menu")} data-testid="mobile-left-sidebar-toggle">
+                    <button onClick={openAppMenu} className={styles.mobileToggle} aria-label={t("layout.mobileMenu.menu")} data-testid="mobile-left-sidebar-toggle">
                         <Icon src={ICONS.MENU} size={18} />
                     </button>
                     <Link to="/" className={styles.logoLink} title={t("layout.navbar.home")} data-testid="navbar-logo-link">
@@ -105,11 +88,5 @@ export default function Navbar(): React.ReactElement {
                 </div>
             </div>
         </nav>
-        {isMobileMenuOpen && (
-            <div className={styles.mobileMenuOverlay} style={{ top: menuTopOffset }}>
-                <MobileMenuContent />
-            </div>
-        )}
-        </>
     )
 }

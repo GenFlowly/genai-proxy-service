@@ -1,13 +1,23 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import '@testing-library/jest-dom'
 import MobileHeader from '../../../../components/widgets/MobileHeader/MobileHeader'
 import { useLayout } from '../../../../context/LayoutContext'
 
 jest.mock('../../../../context/LayoutContext')
-jest.mock('../../../../components/sections/LeftSidebar/AppMenuContent', () => ({
-    AppMenuContent: () => <div data-testid="mock-app-menu-content" />
-}))
+
+const LocationProbe = () => {
+    const location = useLocation()
+    return <div data-testid="location-state">{JSON.stringify(location.state)}</div>
+}
+
+const render = (ui: React.ReactElement) => rtlRender(
+    <MemoryRouter initialEntries={['/chat/abc']}>
+        {ui}
+        <LocationProbe />
+    </MemoryRouter>
+)
 
 const mockUseLayout = useLayout as jest.Mock
 
@@ -26,8 +36,8 @@ describe('MobileHeader', () => {
         mockUseLayout.mockReturnValue(layoutValue(false))
     })
 
-    test('renders title and opens the mobile menu from the hamburger', () => {
-        render(<MobileHeader title="My Chat" />)
+    test('with an L2 Menu the hamburger toggles it', () => {
+        render(<MobileHeader title="My Chat" menuContent={<div />} />)
 
         expect(screen.getByText('My Chat')).toBeInTheDocument()
         expect(screen.queryByTestId('mobile-header-menu-overlay')).not.toBeInTheDocument()
@@ -36,17 +46,24 @@ describe('MobileHeader', () => {
         expect(mockToggleLeftSidebar).toHaveBeenCalledTimes(1)
     })
 
-    test('without page context the menu opens straight to the app menu', () => {
-        mockUseLayout.mockReturnValue(layoutValue(true))
+    test('without an L2 Menu the hamburger asks for the L1 Menu', () => {
+        render(<MobileHeader title="Instructions" />)
 
-        render(<MobileHeader title="My Chat" />)
+        fireEvent.click(screen.getByTestId('mobile-header-menu-toggle'))
 
-        expect(screen.getByTestId('mobile-header-menu-overlay')).toBeInTheDocument()
-        expect(screen.getByTestId('mock-app-menu-content')).toBeInTheDocument()
-        expect(screen.queryByTestId('mobile-menu-back')).not.toBeInTheDocument()
+        expect(mockToggleLeftSidebar).not.toHaveBeenCalled()
+        expect(screen.getByTestId('location-state')).toHaveTextContent('{"appMenu":true}')
     })
 
-    test('with page context the menu shows it first, then drills into the app menu', () => {
+    test('without an L2 Menu an expanded sidebar opens no overlay', () => {
+        mockUseLayout.mockReturnValue(layoutValue(true))
+
+        render(<MobileHeader title="Instructions" />)
+
+        expect(screen.queryByTestId('mobile-header-menu-overlay')).not.toBeInTheDocument()
+    })
+
+    test('the L2 Menu shows its content and its hamburger asks for the L1 Menu', () => {
         mockUseLayout.mockReturnValue(layoutValue(true))
 
         render(
@@ -58,11 +75,10 @@ describe('MobileHeader', () => {
         )
 
         expect(screen.getByTestId('mock-context-content')).toBeInTheDocument()
-        expect(screen.queryByTestId('mock-app-menu-content')).not.toBeInTheDocument()
 
         fireEvent.click(screen.getByTestId('mobile-menu-app-toggle'))
-        expect(screen.getByTestId('mock-app-menu-content')).toBeInTheDocument()
-        expect(screen.queryByTestId('mock-context-content')).not.toBeInTheDocument()
+        expect(screen.getByTestId('location-state')).toHaveTextContent('{"appMenu":true}')
+        expect(screen.getByTestId('mock-context-content')).toBeInTheDocument()
     })
 
     test('passes the page action to the menu', () => {
@@ -85,7 +101,7 @@ describe('MobileHeader', () => {
     test('closing the menu collapses the left sidebar', () => {
         mockUseLayout.mockReturnValue(layoutValue(true))
 
-        render(<MobileHeader title="My Chat" />)
+        render(<MobileHeader title="My Chat" menuContent={<div />} />)
 
         fireEvent.click(screen.getByTestId('mobile-menu-close'))
         expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(false)

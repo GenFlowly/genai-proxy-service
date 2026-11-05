@@ -442,6 +442,11 @@
         "appContent": {
             "loading": "Loading..."
         },
+        "l1Menu": {
+            "headlineOne": "One prompt.",
+            "headlineTwo": "Many models.",
+            "headlineThree": "Evaluate all."
+        },
         "mobileMenu": {
             "clearSearch": "Clear search",
             "noSearchResults": "No results",
@@ -452,7 +457,6 @@
             "searchResults": "Results",
             "searchSettings": "Search settings",
             "account": "Account",
-            "back": "Back",
             "login": "Login",
             "menu": "Menu",
             "signingIn": "Signing in…",
