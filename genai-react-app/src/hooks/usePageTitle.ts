@@ -2,8 +2,9 @@ import { useEffect } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { useSidebarMenu } from '../context/SidebarMenuContext'
 import { SIDEBAR_MENU_REGISTRY } from '../config/SidebarMenuConfig'
+import { APP_NAME } from '../constants/appName'
 
-const DEFAULT_TITLE = 'AI Proxy'
+const DEFAULT_TITLE = APP_NAME
 
 const ROUTE_TITLES: Record<string, string> = {
     '/chat': DEFAULT_TITLE,
