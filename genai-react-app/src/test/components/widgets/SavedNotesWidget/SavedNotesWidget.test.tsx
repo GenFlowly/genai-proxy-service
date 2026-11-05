@@ -26,6 +26,29 @@ describe('SavedNotesWidget', () => {
         })
     })
 
+    test('in the mobile menu the notes sit under one collapsible header', async () => {
+        mockGetNotes.mockResolvedValue([
+            { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+        ])
+
+        render(<SavedNotesWidget menu />)
+
+        const heading = await screen.findByTestId('saved-notes-heading')
+        expect(screen.getByText('First note')).toBeInTheDocument()
+
+        fireEvent.click(heading)
+        expect(screen.queryByText('First note')).not.toBeInTheDocument()
+        fireEvent.click(heading)
+        expect(screen.getByText('First note')).toBeInTheDocument()
+    })
+
+    test('in the mobile menu an empty list still shows the empty state', async () => {
+        mockGetNotes.mockResolvedValue([])
+        render(<SavedNotesWidget menu />)
+        expect(await screen.findByTestId('saved-notes-empty')).toBeInTheDocument()
+        expect(screen.queryByTestId('saved-notes-heading')).not.toBeInTheDocument()
+    })
+
     test('shows loading state, then renders fetched notes', async () => {
         mockGetNotes.mockResolvedValue([
             { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },

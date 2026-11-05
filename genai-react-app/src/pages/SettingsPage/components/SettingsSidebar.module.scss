@@ -161,3 +161,113 @@
     // this only stretches it across the sidebar footer.
     width: 100%;
 }
+
+// ── Full-screen mobile menu ───────────────────────────────────────────────────
+
+.menuCard {
+    background-color: $color-sidebar-background;
+}
+
+.menuHeader {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    min-height: 2.625rem;
+    margin: 0;
+    padding: 0 0.75rem;
+    color: $color-text-muted;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.menuScroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 0.25rem 0.25rem;
+}
+
+.menuEmpty {
+    margin: 0;
+    padding: 1rem 0.5rem;
+    color: $color-text-muted;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.menuNav {
+    gap: 2px;
+
+    .navGroup {
+        gap: 2px;
+    }
+
+    .tabButton {
+        min-height: 3rem;
+        padding: 0 0.625rem 0 0.5rem;
+        gap: 0.625rem;
+        border-radius: $radius-md;
+        font-size: 0.9375rem;
+        font-weight: 400;
+
+        &.active {
+            font-weight: 600;
+
+            &::before {
+                content: none;
+            }
+
+            .icon {
+                color: $color-text-muted;
+            }
+        }
+    }
+
+    .parentActive {
+        font-weight: 600;
+
+        .icon {
+            color: $color-text-muted;
+        }
+    }
+
+    .childNav {
+        margin-left: 1rem;
+        padding-left: 0.5rem;
+    }
+
+    .childButton {
+        min-height: 2.75rem;
+        padding: 0 0.625rem;
+        font-size: 0.9375rem;
+        font-weight: 400;
+
+        &.active {
+            font-weight: 600;
+        }
+    }
+}
+
+.menuLogoutCard {
+    flex-shrink: 0;
+    padding: 0.25rem;
+    background-color: $color-sidebar-background;
+}
+
+.menuLogout {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0 0.625rem 0 0.5rem;
+    border: none;
+    border-radius: $radius-md;
+    background: transparent;
+    color: $color-error;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+}

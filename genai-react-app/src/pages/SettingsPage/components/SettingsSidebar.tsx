@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { Icon, PillButton } from '@genflowly/component-library'
+import { Icon, PillButton, ScrollArea, SidebarCard } from '@genflowly/component-library'
+import MobileMenuBody from '../../../components/widgets/MobileMenuBody/MobileMenuBody'
 import { ICONS } from '../../../constants/icons'
 import styles from './SettingsSidebar.module.scss'
 
@@ -28,9 +29,12 @@ interface SettingsNavItem {
 interface SettingsSidebarProps {
     /** Called after navigating to a section — closes the mobile menu overlay. */
     onNavigate?: () => void
+    // The full-screen mobile menu: cards, sub-pages opening in place, and a
+    // search that filters the sections
+    menu?: boolean
 }
 
-export function SettingsSidebar({ onNavigate }: SettingsSidebarProps = {}): React.ReactElement {
+export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarProps = {}): React.ReactElement {
     const { t } = useTranslation()
     const { logout } = useAuth()
     const navigate = useNavigate()
@@ -41,6 +45,7 @@ export function SettingsSidebar({ onNavigate }: SettingsSidebarProps = {}): Reac
     // Manual expand/collapse choices; when absent, a section is expanded
     // whenever the current route is inside it
     const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({})
+    const [query, setQuery] = useState('')
 
     const navItems: SettingsNavItem[] = [
         {
@@ -142,20 +147,29 @@ export function SettingsSidebar({ onNavigate }: SettingsSidebarProps = {}): Reac
             // onNavigate; reopening it shows the section already expanded
             // (isExpanded defaults to isInSection) so a different child is one
             // more tap away.
-            if (!isInSection(item)) {
+            if (!menu && !isInSection(item)) {
                 navigate(item.children[0].path)
                 onNavigate?.()
             }
         }
     }
 
-    return (
-        <aside className={styles.sidebar}>
-            <div className={styles.header}>
-                <h2>{t('settingsPage.settingsSidebar.title')}</h2>
-            </div>
+    const iconSize = menu ? 18 : 20
 
-            <nav className={styles.nav}>
+    const normalizedQuery = query.trim().toLowerCase()
+    const matches = (label: string) => label.toLowerCase().includes(normalizedQuery)
+    const searchHits = navItems.flatMap(item =>
+        item.children
+            ? item.children
+                .filter(child => matches(child.label) || matches(item.label))
+                .map(child => ({ key: `${item.key}-${child.key}`, label: child.label, icon: item.icon, path: child.path }))
+            : matches(item.label)
+                ? [{ key: item.key as string, label: item.label, icon: item.icon, path: item.path }]
+                : []
+    )
+
+    const nav = (
+            <nav className={`${styles.nav} ${menu ? styles.menuNav : ''}`}>
                 {navItems.map(item => (
                     item.children ? (
                         <div key={item.key} className={styles.navGroup}>
@@ -164,7 +178,7 @@ export function SettingsSidebar({ onNavigate }: SettingsSidebarProps = {}): Reac
                                 onClick={() => handleParentClick(item)}
                                 aria-expanded={isExpanded(item)}
                             >
-                                <Icon src={item.icon} size={20} className={styles.icon} />
+                                <Icon src={item.icon} size={iconSize} className={styles.icon} />
                                 <span>{item.label}</span>
                                 <Icon
                                     src={ICONS.ALT_ARROW_RIGHT}
@@ -196,12 +210,66 @@ export function SettingsSidebar({ onNavigate }: SettingsSidebarProps = {}): Reac
                             className={`${styles.tabButton} ${activeTab === item.key ? styles.active : ''}`}
                             onClick={() => { navigate(item.path); onNavigate?.() }}
                         >
-                            <Icon src={item.icon} size={20} className={styles.icon} />
+                            <Icon src={item.icon} size={iconSize} className={styles.icon} />
                             <span>{item.label}</span>
                         </button>
                     )
                 ))}
             </nav>
+    )
+
+    if (menu) {
+        return (
+            <MobileMenuBody
+                searchValue={query}
+                onSearchChange={setQuery}
+                searchPlaceholder={t('layout.mobileMenu.searchSettings')}
+            >
+                <SidebarCard className={styles.menuCard}>
+                    <h2 className={styles.menuHeader}>{t('settingsPage.settingsSidebar.title')}</h2>
+                    <ScrollArea className={styles.menuScroll}>
+                        {normalizedQuery ? (
+                            searchHits.length > 0 ? (
+                                <nav className={`${styles.nav} ${styles.menuNav}`}>
+                                    {searchHits.map(hit => (
+                                        <button
+                                            key={hit.key}
+                                            className={styles.tabButton}
+                                            onClick={() => { navigate(hit.path); onNavigate?.() }}
+                                            data-testid={`settings-search-hit-${hit.key}`}
+                                        >
+                                            <Icon src={hit.icon} size={iconSize} className={styles.icon} />
+                                            <span>{hit.label}</span>
+                                        </button>
+                                    ))}
+                                </nav>
+                            ) : (
+                                <p className={styles.menuEmpty}>{t('layout.mobileMenu.noSearchResults')}</p>
+                            )
+                        ) : nav}
+                    </ScrollArea>
+                </SidebarCard>
+                <SidebarCard className={styles.menuLogoutCard}>
+                    <button
+                        className={styles.menuLogout}
+                        onClick={() => logout({ returnTo: window.location.origin })}
+                        data-testid="settings-menu-logout"
+                    >
+                        <Icon src={ICONS.LOGOUT} size={iconSize} />
+                        <span>{t('settingsPage.settingsSidebar.logout')}</span>
+                    </button>
+                </SidebarCard>
+            </MobileMenuBody>
+        )
+    }
+
+    return (
+        <aside className={styles.sidebar}>
+            <div className={styles.header}>
+                <h2>{t('settingsPage.settingsSidebar.title')}</h2>
+            </div>
+
+            {nav}
 
             <div className={styles.footer}>
                 <PillButton
