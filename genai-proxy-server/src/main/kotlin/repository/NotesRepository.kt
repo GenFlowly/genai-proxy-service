@@ -236,6 +236,21 @@ class NotesRepository(
         }
     }
 
+    /** The customer's notes with these keys, soft-deleted ones left out. */
+    suspend fun getNotesByKeys(customerId: String, noteKeys: List<String>): List<Map<String, AttributeValue>> =
+        withContext(Dispatchers.IO) {
+            if (noteKeys.isEmpty()) return@withContext emptyList()
+            dynamoDbClient.batchGetWithRetry(
+                DynamoDBConstants.CUSTOMER_NOTES_TABLE,
+                noteKeys.distinct().map {
+                    mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(it).build()
+                    )
+                }
+            ).filter { it["is_delete"]?.bool() != true }
+        }
+
     suspend fun getNotes(customerId: String): List<Map<String, AttributeValue>> = withContext(Dispatchers.IO) {
         try {
             val items = mutableListOf<Map<String, AttributeValue>>()

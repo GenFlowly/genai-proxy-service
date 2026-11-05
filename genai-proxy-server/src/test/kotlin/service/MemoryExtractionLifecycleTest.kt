@@ -10,6 +10,8 @@ import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.MemoryRepository
+import com.genflowly.repository.PendingVectorType
+import com.genflowly.repository.VectorSyncPendingRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -41,10 +43,11 @@ class MemoryExtractionLifecycleTest {
     private val conversationService = mockk<ConversationService>(relaxed = true)
     private val profiles = mockk<CustomerProfileRepository>(relaxed = true)
     private val retrievalClient = mockk<com.genflowly.providers.RetrievalServerClient>(relaxed = true)
+    private val vectorPending = mockk<VectorSyncPendingRepository>(relaxed = true)
 
     private val service = MemoryExtractionService(
         resolution, executor, memoryRepo, memoryService, conversationService,
-        profiles, retrievalClient, AppScope(), logContent = false
+        profiles, retrievalClient, vectorPending, AppScope(), logContent = false
     )
 
     private val agent = ResolvedAgent(
@@ -109,6 +112,44 @@ class MemoryExtractionLifecycleTest {
         coVerify { memoryRepo.finalizeConversationExtraction("CU1", "CONV1", 6) }
         coVerify { memoryRepo.deletePendingExtraction("CU1", "CONV1") }
         coVerify(exactly = 0) { memoryRepo.rollbackConversationExtractionMark(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a failed memory embed is recorded for a retry`() = runTest {
+        baseline()
+        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Neel.","kind":"EPISODIC","category":"profile"}]}""")
+        coEvery { retrievalClient.encodeMemoryVector(any(), any(), any(), any(), any(), any(), any()) } throws
+            com.genflowly.providers.VectorEncodeException(500, "zilliz down")
+
+        service.processDuePendingExtractions()
+
+        coVerify { vectorPending.markPending("CU1", PendingVectorType.MEMORY, "MEM#new", null, match { it.isAfter(Instant.now()) }) }
+        coVerify { memoryRepo.finalizeConversationExtraction("CU1", "CONV1", 6) }
+    }
+
+    @Test
+    fun `a memory that can never be embedded is not retried`() = runTest {
+        baseline()
+        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Neel.","kind":"EPISODIC","category":"profile"}]}""")
+        coEvery { retrievalClient.encodeMemoryVector(any(), any(), any(), any(), any(), any(), any()) } throws
+            com.genflowly.providers.VectorEncodeException(409, "No vector DB configured")
+
+        service.processDuePendingExtractions()
+
+        coVerify(exactly = 0) { vectorPending.markPending(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `retrying a memory re-embeds its current text, and a forgotten one is gone`() = runTest {
+        coEvery { memoryRepo.getMemory("CU1", "MEM#a") } returns CustomerMemory(
+            memoryId = "MEM#a", text = "Lives in Seattle.", kind = MemoryKind.CORE,
+            sourceType = MemorySourceType.CONVERSATION, createdAt = "t", updatedAt = "t"
+        )
+        coEvery { memoryRepo.getMemory("CU1", "MEM#gone") } returns null
+
+        assertTrue(service.retryMemoryVector("CU1", "MEM#a"))
+        coVerify { retrievalClient.encodeMemoryVector("CU1", "MEM#a", "Lives in Seattle.", any(), any(), any(), any()) }
+        kotlin.test.assertFalse(service.retryMemoryVector("CU1", "MEM#gone"))
     }
 
     @Test

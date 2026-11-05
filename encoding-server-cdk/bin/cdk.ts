@@ -41,6 +41,7 @@ const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-Lam
     messageTableName: process.env.MESSAGE_TABLE_NAME || 'Message',
     conversationTableName: process.env.CONVERSATION_TABLE_NAME || 'Conversation',
     customerMemoryTableName: process.env.CUSTOMER_MEMORY_TABLE_NAME || 'CustomerMemory',
+    vectorSyncPendingTableName: process.env.VECTOR_SYNC_PENDING_TABLE_NAME || 'VectorSyncPending',
     customerApiKeyTableName: process.env.CUSTOMER_API_KEY_TABLE_NAME || 'CustomerVendorApiKeys',
     purgeAllowedClientIds: process.env.PURGE_ALLOWED_CLIENT_IDS,
     customerApiUsageTableName: process.env.CUSTOMER_API_USAGE_TABLE_NAME || 'CustomerAIUsage',

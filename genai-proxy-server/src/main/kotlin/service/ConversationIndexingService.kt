@@ -5,8 +5,12 @@ import com.genflowly.di.AppScope
 import com.genflowly.models.encoding.EncodingConversationData
 import com.genflowly.models.encoding.EncodingSaveConversationRequest
 import com.genflowly.providers.EncodingServerClient
+import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.CustomerCredentialsRepository
 import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.repository.PendingVectorType
+import com.genflowly.repository.VectorSyncPendingRepository
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.launch
@@ -14,9 +18,16 @@ import org.slf4j.LoggerFactory
 
 /**
  * Pushes each completed user/assistant exchange into the embedding pipeline so
- * conversations become semantically searchable (see ConversationSearchService).
+ * conversations become semantically searchable (see UnifiedSearchService).
  * One exchange becomes one CONVERSATION document, keyed by the assistant
  * message id — appending exchanges never re-embeds earlier ones.
+ *
+ * Each exchange is recorded in VectorSyncPending before it is sent: search
+ * keyword-matches it until the pipeline's store step deletes that row, and the
+ * row's scheduled retry ([VectorRetryService] → [retryExchange]) re-embeds it
+ * if the pipeline never lands. Customers without a vector DB are skipped
+ * entirely: nothing could index their exchanges, and connecting one later
+ * does not backfill.
  *
  * All entry points are fire-and-forget (appScope) — indexing runs after the
  * user-facing work has completed and must never affect it. The Message table
@@ -25,7 +36,10 @@ import org.slf4j.LoggerFactory
 class ConversationIndexingService(
     private val conversationRepository: ConversationRepository,
     private val customerProfileRepository: CustomerProfileRepository,
+    private val customerCredentialsRepository: CustomerCredentialsRepository,
+    private val vectorSyncPendingRepository: VectorSyncPendingRepository,
     private val encodingServerClient: EncodingServerClient,
+    private val retrievalServerClient: RetrievalServerClient,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(ConversationIndexingService::class.java)
@@ -52,15 +66,27 @@ class ConversationIndexingService(
             try {
                 val assistantText = conversationRepository
                     .getMessage(conversationId, responseMessageId)?.text ?: ""
-                val exchangeText =
-                    "User: ${userText.take(MAX_SIDE_CHARS)}\nAssistant: ${assistantText.take(MAX_SIDE_CHARS)}"
                 if (userText.trim().length + assistantText.trim().length < MIN_EXCHANGE_CHARS) {
                     return@launch
                 }
+                // A failed lookup must not drop the exchange: assume configured.
+                if (!runCatching { customerCredentialsRepository.hasVectorDBConfig(customerId) }.getOrDefault(true)) {
+                    return@launch
+                }
 
-                val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
-                val model = prefs?.embeddingModelConversations ?: prefs?.embeddingModel
+                try {
+                    vectorSyncPendingRepository.markPending(
+                        customerId, PendingVectorType.CONVERSATION, responseMessageId,
+                        conversationId = conversationId,
+                        retryAt = Instant.now().plusSeconds(FIRST_RETRY_DELAY_SECONDS)
+                    )
+                } catch (e: Exception) {
+                    // The exchange is still sent; it just isn't keyword-findable
+                    // or retried if the pipeline fails.
+                    logger.warn("Could not record $responseMessageId as pending: ${e.message}")
+                }
 
+                val model = embeddingModel(customerId)
                 if (collectionsEnsured.add(customerId)) {
                     // Customers onboarded before the CONVERSATION data type
                     // existed have no conversation collection yet; creation is
@@ -78,7 +104,7 @@ class ConversationIndexingService(
                             conversationKey = conversationId,
                             message_key = responseMessageId,
                             messageKey = responseMessageId,
-                            text = exchangeText,
+                            text = exchangeText(userText, assistantText),
                             title = "",
                             created_at = now,
                             createdAt = now
@@ -92,6 +118,35 @@ class ConversationIndexingService(
         }
     }
 
+    /**
+     * Re-embeds one exchange directly through the retrieval-server, rebuilt
+     * from the Message table. Returns false when the exchange no longer
+     * exists. Throws when the embed fails.
+     */
+    suspend fun retryExchange(customerId: String, conversationId: String, responseMessageId: String): Boolean {
+        val response = conversationRepository.getMessage(conversationId, responseMessageId) ?: return false
+        val userText = response.previousMessageId
+            ?.let { conversationRepository.getMessage(conversationId, it)?.text }
+            ?: ""
+        val model = embeddingModel(customerId)
+        retrievalServerClient.encodeConversationVector(
+            customerId = customerId,
+            conversationId = conversationId,
+            messageId = responseMessageId,
+            text = exchangeText(userText, response.text),
+            createdAt = response.createdAt ?: Instant.now().toString(),
+            client = response.client.ifBlank { "web" },
+            modelType = EmbeddingConstants.modelTypeFor(model),
+            modelName = model ?: EmbeddingConstants.MODEL_NAME
+        )
+        return true
+    }
+
+    private suspend fun embeddingModel(customerId: String): String? {
+        val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
+        return prefs?.embeddingModelConversations ?: prefs?.embeddingModel
+    }
+
     companion object {
         // The chunker splits long exchanges downstream; this cap only keeps the
         // ingest payload safely inside SQS/Step Functions message limits.
@@ -99,5 +154,12 @@ class ConversationIndexingService(
 
         // Exchanges like "thanks" / "ok" carry no search signal — skip them.
         private const val MIN_EXCHANGE_CHARS = 20
+
+        // The pipeline normally stores an exchange within a minute; the retry
+        // only runs if it hasn't by then.
+        const val FIRST_RETRY_DELAY_SECONDS = 300L
+
+        fun exchangeText(userText: String, assistantText: String) =
+            "User: ${userText.take(MAX_SIDE_CHARS)}\nAssistant: ${assistantText.take(MAX_SIDE_CHARS)}"
     }
 }

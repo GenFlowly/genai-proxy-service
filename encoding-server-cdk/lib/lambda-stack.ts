@@ -39,6 +39,9 @@ export interface LambdaStackProps extends cdk.StackProps {
     messageTableName: string;
     conversationTableName: string;
     customerMemoryTableName: string;
+    // The proxy's registry of records not yet in the vector DB: the store
+    // step deletes a record's row once its vectors are stored.
+    vectorSyncPendingTableName: string;
     // Per-customer embedding (and vendor LLM) API keys — the proxy's
     // CustomerVendorApiKeys table, KMS-encrypted. Hosted embedding models
     // (voyage/openai) run exclusively on the customer's own key; there is no
@@ -89,6 +92,8 @@ export class LambdaStack extends cdk.Stack {
             CUSTOMER_MEMORY_TABLE: props.customerMemoryTableName,
         };
         const contentSourceTables = [customerNotesTable, messageTable, conversationTable, instructionsTable, customerMemoryTable];
+        const vectorSyncPendingTable = dynamodb.Table.fromTableName(this, 'VectorSyncPendingTable', props.vectorSyncPendingTableName);
+        const vectorSyncPendingEnv = { VECTOR_SYNC_PENDING_TABLE: props.vectorSyncPendingTableName };
         const customerApiKeyTable = dynamodb.Table.fromTableName(this, 'CustomerVendorApiKeysTable', props.customerApiKeyTableName);
         const customerApiKeyEnv = { CUSTOMER_API_KEY_TABLE: props.customerApiKeyTableName };
         const customerApiUsageTable = dynamodb.Table.fromTableName(this, 'CustomerApiUsageTable', props.customerApiUsageTableName);
@@ -215,6 +220,7 @@ export class LambdaStack extends cdk.Stack {
                 JOBLIB_TEMP_FOLDER: '/tmp',
                 ...customerApiKeyEnv,
                 ...contentSourceEnv,
+                ...vectorSyncPendingEnv,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
                 ...usageTrackingEnv,
             },
@@ -227,6 +233,7 @@ export class LambdaStack extends cdk.Stack {
         // their milvus_ids after insertion.
         customerNotesTable.grantReadWriteData(this.createAndStoreLambda);
         instructionsTable.grantReadWriteData(this.createAndStoreLambda);
+        vectorSyncPendingTable.grant(this.createAndStoreLambda, 'dynamodb:DeleteItem');
         // Cost and Usage: writes per-customer embedding usage after each
         // embed call, reads AIModelCatalog to price it.
         customerApiUsageTable.grantReadWriteData(this.createAndStoreLambda);
@@ -292,6 +299,7 @@ export class LambdaStack extends cdk.Stack {
                 ...appEnv,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
                 CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
+                ...vectorSyncPendingEnv,
                 ...customerApiKeyEnv,
                 ...documentsEnv,
                 ...usageTrackingEnv,
@@ -302,6 +310,7 @@ export class LambdaStack extends cdk.Stack {
         customerVectorDBConfigTable.grantReadData(this.pollVoyageBatchesLambda);
         // Poller marks notes synced (store step) and resets them on failure
         customerNotesTable.grantReadWriteData(this.pollVoyageBatchesLambda);
+        vectorSyncPendingTable.grant(this.pollVoyageBatchesLambda, 'dynamodb:DeleteItem');
         // Resolves the job's customer's Voyage key to poll/download their batch.
         customerApiKeyTable.grantReadData(this.pollVoyageBatchesLambda);
         // Cost and Usage: records the completed batch job's embedding usage

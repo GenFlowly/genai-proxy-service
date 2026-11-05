@@ -243,7 +243,11 @@ class InstructionService(
         return specificShare?.role == ShareRole.EDIT || publicShare?.role == ShareRole.EDIT
     }
 
-    suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse {
+    suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse =
+        GetCustomerInstructionListResponse(instructions = accessibleInstructions(customerId).map { it.second })
+
+    /** Every accessible version, sorted by id and version desc, with the stored row it came from. */
+    private suspend fun accessibleInstructions(customerId: String): List<Pair<com.genflowly.models.Instruction, InstructionResponse>> {
         val ownedInstructions = instructionRepository.getInstructionsByCreator(customerId)
 
         val sharedInstructionIds = shareRepository.getSharedEntityIdsForCustomer(customerId, "INS-")
@@ -271,11 +275,11 @@ class InstructionService(
         val allInstructions = (ownedInstructions + sharedInstructions).distinctBy { it.id to it.version }
 
         // Return all versions, sorted by ID and version desc
-        val responseItems = allInstructions.sortedWith(
+        return allInstructions.sortedWith(
             compareBy<com.genflowly.models.Instruction> { it.id }.thenByDescending { it.version }
         ).map { instruction ->
             val role = if (instruction.creator == customerId) ShareRole.OWNER else roleMap[instruction.id] ?: ShareRole.VIEW
-            InstructionResponse(
+            instruction to InstructionResponse(
                 id = instruction.id,
                 name = instruction.name,
                 version = instruction.version ?: 1,
@@ -287,10 +291,6 @@ class InstructionService(
                 role = role
             )
         }
-
-        return GetCustomerInstructionListResponse(
-            instructions = responseItems
-        )
     }
 
     suspend fun getLatestCustomerInstructions(customerId: String): List<InstructionResponse> {
@@ -308,28 +308,42 @@ class InstructionService(
     }
 
     /**
-     * Semantic search over the latest version of every instruction the
-     * customer can access — owned AND shared/SYSTEM — served by the vector
+     * Search over the latest version of every instruction the customer can
+     * access — owned AND shared/SYSTEM. Semantic hits come from the vector
      * index (instruction text, name, category and tags are all embedded),
      * ordered by similarity. Each instruction is indexed exactly once, under
      * its creator; visibility is enforced at query time by sending the
      * accessible instruction ids as the index's allow-list, so sharing and
-     * unsharing take effect on the next search with no index writes. Hits
-     * are hydrated back from the accessible-latest set — content always
-     * comes from DDB; the index knows only chunk text and keys. A blank
-     * query returns all latest instructions. Vector-index failures propagate
-     * to the caller.
+     * unsharing take effect on the next search with no index writes. Latest
+     * versions not yet in the vector index (embed in flight or failed, or
+     * a new version saved by a shared editor, which is never re-indexed) are
+     * keyword-matched instead and listed first. Hits are hydrated back from
+     * the accessible-latest set — content always comes from DDB; the index
+     * knows only chunk text and keys. A blank query returns all latest
+     * instructions. Vector-index failures propagate to the caller.
      */
     suspend fun searchInstructions(customerId: String, query: String): GetCustomerInstructionListResponse {
-        val latest = getLatestCustomerInstructions(customerId)
+        val latestRows = accessibleInstructions(customerId)
+            .groupBy { it.first.id }
+            .values
+            .mapNotNull { versions -> versions.maxByOrNull { it.second.version } }
+            .sortedByDescending { it.second.version }
+        val latest = latestRows.map { it.second }
         val q = query.trim()
 
         if (q.isEmpty()) {
             return GetCustomerInstructionListResponse(instructions = latest)
         }
 
+        val matcher = KeywordMatcher(q)
+        val keyword = latestRows
+            .filter { (row, _) ->
+                !row.syncedWithVectorDb &&
+                        matcher.matches(row.name, row.instructions, row.category, row.tags?.joinToString(" "))
+            }
+            .map { it.second }
         val accessibleById = latest.associateBy { it.id }
-        val hits = retrievalServerClient
+        val semantic = retrievalServerClient
             .search(
                 customerId,
                 q,
@@ -338,7 +352,9 @@ class InstructionService(
                 allowedKeys = mapOf("instructions" to latest.map { it.id })
             )
             .mapNotNull { accessibleById[it.key] }
-        return GetCustomerInstructionListResponse(instructions = hits)
+        return GetCustomerInstructionListResponse(
+            instructions = KeywordMatcher.mergeKeywordFirst(semantic, keyword, SEMANTIC_SEARCH_TOP_N) { it.id }
+        )
     }
 
     /**

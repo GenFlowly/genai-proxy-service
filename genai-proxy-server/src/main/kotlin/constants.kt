@@ -204,6 +204,16 @@ object DynamoDBConstants {
     const val MEMORY_PENDING_DUE_AT_KEY = "dueAt"
     const val MEMORY_PENDING_INDEX = "pending-extraction-index"
 
+    // Records saved but not (yet) in the customer's vector DB. PK=customerId,
+    // SK="<type>#<key>". Rows scheduled for an embed retry carry the constant
+    // retryShard, so the sparse retry-due-index holds exactly the due work.
+    const val VECTOR_SYNC_PENDING_TABLE = "VectorSyncPending"
+    const val VECTOR_SYNC_ITEM_KEY = "itemKey"
+    const val VECTOR_SYNC_RETRY_SHARD_KEY = "retryShard"
+    const val VECTOR_SYNC_RETRY_SHARD_VALUE = "RETRY"
+    const val VECTOR_SYNC_DUE_AT_KEY = "dueAt"
+    const val VECTOR_SYNC_RETRY_INDEX = "retry-due-index"
+
     // Customer-owned projects grouping conversations in the history sidebar.
     // PK=customerId, SK=projectId. Conversations reference a project via a
     // plain projectId attribute on their Conversation row (REMOVEd on project

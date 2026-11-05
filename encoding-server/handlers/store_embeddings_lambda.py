@@ -14,6 +14,7 @@ from encoding_library.utils.vector_db import (
     get_milvus_client,
 )
 
+from handlers.vector_sync_pending import clear_pending
 from services.content_logging import default_log_level
 
 setup_logging("encoding-server", level=default_log_level())
@@ -95,6 +96,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         count("vector_store_chunks_total", result.get("insert_count", 0),
               data_type=memory_request_internal_state.data_type)
         logger.info(f"Inserted {result.get('insert_count', 0)} records into '{collection_name}'.")
+        clear_pending(customer_id, memory_request_internal_state.data_type, memory_request_internal_state.raw_data)
 
         if memory_request_internal_state.data_type == "NOTE":
             try:
