@@ -56,4 +56,17 @@ describe('ThemeToggle Component', () => {
         const container = screen.getByTestId('theme-toggle');
         expect(container).toHaveClass('custom-class');
     });
+
+    test('marks the current mode as pressed', () => {
+        mockUseTheme.mockReturnValue({
+            themeMode: 'dark',
+            setThemeMode: mockSetThemeMode
+        });
+
+        render(<ThemeToggle variant="surface" />);
+
+        expect(screen.getByTestId('theme-toggle-dark')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('theme-toggle-light')).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.getByRole('group')).toBeInTheDocument();
+    });
 });

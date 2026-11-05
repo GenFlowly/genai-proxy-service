@@ -1,6 +1,6 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import '@testing-library/jest-dom'
 
 // Mock all heavy providers and pages
@@ -25,6 +25,8 @@ jest.mock('../context/ToastContext', () => ({
     ToastProvider: ({ children }: any) => <>{children}</>,
 }))
 jest.mock('../components/common/ServiceWorkerUpdateNotifier/ServiceWorkerUpdateNotifier', () => () => null)
+jest.mock('../hooks/useResponsiveBreakpoints', () => ({ useResponsiveBreakpoints: jest.fn() }))
+jest.mock('../components/sections/L1Menu/L1Menu', () => ({ L1Menu: () => <div data-testid="l1-menu" /> }))
 
 jest.mock('../pages/LandingPage', () => () => <div data-testid="landing-page" />)
 jest.mock('../pages/SettingsPage/SettingsPage', () => () => <div data-testid="settings-page" />)
@@ -48,16 +50,26 @@ jest.mock('@auth0/auth0-react', () => ({
 
 import { useAuth } from '../context/AuthContext'
 import { useAuth0 } from '@auth0/auth0-react'
+import { useLayout } from '../context/LayoutContext'
+import { useResponsiveBreakpoints } from '../hooks/useResponsiveBreakpoints'
 import AppContent from '../AppContent'
 import { withQueryClient } from './utils/queryWrapper'
 
 const mockUseAuth = useAuth as jest.Mock
 const mockUseAuth0 = useAuth0 as jest.Mock
 
-function renderAt(path: string) {
+const mockSetLeftSidebarExpanded = jest.fn()
+
+const LocationProbe = () => {
+    const location = useLocation()
+    return <div data-testid="location">{location.pathname} {JSON.stringify(location.state)}</div>
+}
+
+function renderAt(path: string | { pathname: string; state: object }) {
     return render(withQueryClient(
         <MemoryRouter initialEntries={[path]}>
             <AppContent />
+            <LocationProbe />
         </MemoryRouter>
     ))
 }
@@ -66,6 +78,8 @@ describe('AppContent', () => {
     beforeEach(() => {
         jest.clearAllMocks()
         mockUseAuth.mockReturnValue({ isLoading: false })
+        ;(useLayout as jest.Mock).mockReturnValue({ setLeftSidebarExpanded: mockSetLeftSidebarExpanded })
+        ;(useResponsiveBreakpoints as jest.Mock).mockReturnValue({ isNarrow: false, isMobile: false })
         mockUseAuth0.mockReturnValue({
             isAuthenticated: false,
             isLoading: false,
@@ -184,5 +198,114 @@ describe('AppContent', () => {
         renderAt('/chat')
         expect(screen.queryByTestId('onboarding-wizard-mock')).not.toBeInTheDocument()
         expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+    })
+
+    describe('below isNarrow', () => {
+        beforeEach(() => {
+            ;(useResponsiveBreakpoints as jest.Mock).mockReturnValue({ isNarrow: true, isMobile: true })
+        })
+
+        const signedIn = {
+            isLoading: false,
+            isAuthenticated: true,
+            isSessionAuthenticated: true,
+            isOnboarding: false,
+            onboardingCompleted: true,
+            completeOnboarding: jest.fn(),
+        }
+
+        test('/ is the L1 Menu, not a redirect to /chat', () => {
+            renderAt('/')
+            expect(screen.getByTestId('l1-menu')).toBeInTheDocument()
+            expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
+        })
+
+        test('signed out on a bare /chat lands on the L1 Menu', () => {
+            renderAt('/chat')
+            expect(screen.getByTestId('l1-menu')).toBeInTheDocument()
+            expect(screen.getByTestId('location')).toHaveTextContent('/')
+        })
+
+        test('signed out on a shared conversation link stays on it', () => {
+            renderAt('/chat/some-id')
+            expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+            expect(screen.queryByTestId('l1-menu')).not.toBeInTheDocument()
+        })
+
+        test('signed in on a bare /chat stays on it', () => {
+            mockUseAuth.mockReturnValue(signedIn)
+            renderAt('/chat')
+            expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+        })
+
+        test('the login session alone is enough to stay on /chat while /onboard is in flight', () => {
+            mockUseAuth.mockReturnValue({ ...signedIn, isAuthenticated: false, isOnboarding: true })
+            renderAt('/chat')
+            expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+        })
+
+        test('the appMenu state shows the L1 Menu over the page, which stays mounted', () => {
+            mockUseAuth.mockReturnValue(signedIn)
+            renderAt({ pathname: '/chat/some-id', state: { appMenu: true } })
+            expect(screen.getByTestId('l1-menu')).toBeInTheDocument()
+            expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+        })
+
+        test('an L2 Menu request opens it and leaves history clean', async () => {
+            mockUseAuth.mockReturnValue(signedIn)
+            renderAt({ pathname: '/chat', state: { openMobileMenu: true } })
+
+            expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true)
+            await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/chat null'))
+        })
+
+        test('an L2 Menu request waits out the /onboard sync, since the wizard may follow', () => {
+            mockUseAuth.mockReturnValue({ ...signedIn, isOnboarding: true })
+            renderAt({ pathname: '/chat', state: { openMobileMenu: true } })
+
+            expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true)
+            expect(screen.getByTestId('location')).toHaveTextContent('{"openMobileMenu":true}')
+        })
+
+        test('an L2 Menu request survives the wizard', () => {
+            mockUseAuth.mockReturnValue({ ...signedIn, onboardingCompleted: false })
+            renderAt({ pathname: '/chat', state: { openMobileMenu: true } })
+
+            expect(screen.getByTestId('onboarding-wizard-mock')).toBeInTheDocument()
+            expect(screen.getByTestId('location')).toHaveTextContent('{"openMobileMenu":true}')
+        })
+
+        test('finishing the wizard lands on the Chat L2 Menu, wherever it started', async () => {
+            const completeOnboarding = jest.fn().mockResolvedValue(undefined)
+            mockUseAuth.mockReturnValue({ ...signedIn, onboardingCompleted: false, completeOnboarding })
+            renderAt('/')
+
+            fireEvent.click(screen.getByTestId('onboarding-wizard-mock-done'))
+
+            await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/chat {"openMobileMenu":true}'))
+            expect(completeOnboarding).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    test('finishing the wizard on desktop stays where it is', async () => {
+        const completeOnboarding = jest.fn().mockResolvedValue(undefined)
+        mockUseAuth.mockReturnValue({
+            isLoading: false,
+            isAuthenticated: true,
+            isOnboarding: false,
+            onboardingCompleted: false,
+            completeOnboarding,
+        })
+        renderAt('/memory')
+
+        fireEvent.click(screen.getByTestId('onboarding-wizard-mock-done'))
+
+        await waitFor(() => expect(completeOnboarding).toHaveBeenCalled())
+        expect(screen.getByTestId('location')).toHaveTextContent('/memory null')
+    })
+
+    test('the appMenu state is ignored on desktop', () => {
+        renderAt({ pathname: '/chat', state: { appMenu: true } })
+        expect(screen.queryByTestId('l1-menu')).not.toBeInTheDocument()
     })
 })
