@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { DateRangePicker, DateRange } from '@genflowly/component-library'
 import { useAuth } from '../../../../context/AuthContext'
 import { getLlmUsage, LlmUsageSummary, UsageByDim } from '../../../../services/getUsageService'
-import { defaultUsageRange, usageDateRangePresets } from './usageDateRange'
+import { defaultUsageRange, localToday, toUtcUsageRange, usageDateRangePresets } from './usageDateRange'
 import { formatUsd, formatCount } from './usageFormat'
 import styles from './LlmUsageSettings.module.scss'
 
@@ -29,7 +29,7 @@ export function LlmUsageSettings(): React.ReactElement {
         setError(false)
         try {
             const token = await getAccessTokenSilently()
-            const result = await getLlmUsage(token, nextRange)
+            const result = await getLlmUsage(token, toUtcUsageRange(nextRange))
             setSummary(result)
         } catch (err) {
             console.error('LlmUsageSettings: failed to fetch usage', err)
@@ -84,6 +84,7 @@ export function LlmUsageSettings(): React.ReactElement {
                 value={range}
                 onChange={handleRangeChange}
                 presets={usageDateRangePresets(t)}
+                maxDate={localToday()}
                 fromLabel={t('settingsPage.usageCommon.dateRangeFrom')}
                 toLabel={t('settingsPage.usageCommon.dateRangeTo')}
                 presetsAriaLabel={t('settingsPage.usageCommon.dateRangePresetsLabel')}

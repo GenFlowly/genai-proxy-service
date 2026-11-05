@@ -2,6 +2,7 @@ import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LlmUsageSettings } from './LlmUsageSettings'
+import { defaultUsageRange, localToday, toUtcUsageRange } from './usageDateRange'
 import { useAuth } from '../../../../context/AuthContext'
 import { getLlmUsage } from '../../../../services/getUsageService'
 
@@ -54,11 +55,7 @@ describe('LlmUsageSettings', () => {
 
         await waitFor(() => expect(mockGetLlmUsage).toHaveBeenCalledTimes(1))
         const [, range] = mockGetLlmUsage.mock.calls[0]
-        const days =
-            (new Date(`${range.to}T00:00:00Z`).getTime() - new Date(`${range.from}T00:00:00Z`).getTime()) /
-                86400000 +
-            1
-        expect(days).toBe(30)
+        expect(range).toEqual(toUtcUsageRange(defaultUsageRange()))
     })
 
     test('renders the empty state when there is no usage for the range', async () => {
@@ -87,11 +84,8 @@ describe('LlmUsageSettings', () => {
 
         await waitFor(() => expect(mockGetLlmUsage).toHaveBeenCalledTimes(2))
         const [, secondRange] = mockGetLlmUsage.mock.calls[1]
-        const days =
-            (new Date(`${secondRange.to}T00:00:00Z`).getTime() -
-                new Date(`${secondRange.from}T00:00:00Z`).getTime()) /
-                86400000 +
-            1
-        expect(days).toBe(7)
+        const from = new Date(`${localToday()}T00:00:00Z`)
+        from.setUTCDate(from.getUTCDate() - 6)
+        expect(secondRange).toEqual(toUtcUsageRange({ from: from.toISOString().slice(0, 10), to: localToday() }))
     })
 })
