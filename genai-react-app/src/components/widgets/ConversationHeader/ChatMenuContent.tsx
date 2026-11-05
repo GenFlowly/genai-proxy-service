@@ -27,6 +27,7 @@ export default function ChatMenuContent({ onClose }: { onClose: () => void }): R
                         navigate(`/chat/${result.key}`)
                         onClose()
                     }}
+                    onLeave={onClose}
                 />
             ) : undefined}
         >

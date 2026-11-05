@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
 import { Grid, GridCol, Modal, InputTextWithHint, InstructionTile, ScrollArea } from '@genflowly/component-library'
 import { searchInstructions, getRecentInstructions } from '../../../services/instructionService'
+import { SearchError, isSearchNotConfigured, searchSetupMessageKey, searchSetupPath } from '../../../services/searchError'
 import { InstructionResponse } from '../../../models/instruction.models'
 import { loadRecentInstructionsCache, saveRecentInstructionsCache } from './recentInstructionsCache'
 import styles from './InstructionPickerModal.module.scss'
@@ -29,6 +31,7 @@ export default function InstructionPickerModal({
     const [results, setResults] = useState<InstructionResponse[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [hasError, setHasError] = useState(false)
+    const [setupError, setSetupError] = useState<SearchError | null>(null)
 
     const isSearching = query.trim().length > 0
 
@@ -40,6 +43,7 @@ export default function InstructionPickerModal({
         setQuery('')
         setResults([])
         setHasError(false)
+        setSetupError(null)
         const cached = loadRecentInstructionsCache(customerId)
         if (cached) setRecent(cached)
         let cancelled = false
@@ -75,13 +79,16 @@ export default function InstructionPickerModal({
             void (async () => {
                 setIsLoading(true)
                 setHasError(false)
+                setSetupError(null)
                 try {
                     const token = await getAccessTokenSilently()
                     const response = await searchInstructions(token, query.trim())
                     if (!cancelled) setResults(response.instructions)
                 } catch (error) {
                     console.error('Failed to search instructions', error)
-                    if (!cancelled) setHasError(true)
+                    if (cancelled) return
+                    if (isSearchNotConfigured(error)) setSetupError(error)
+                    else setHasError(true)
                 } finally {
                     if (!cancelled) setIsLoading(false)
                 }
@@ -119,7 +126,14 @@ export default function InstructionPickerModal({
 
                 <h4 className={styles.listTitle}>{listTitle}</h4>
 
-                {hasError ? (
+                {isSearching && setupError ? (
+                    <p className={styles.stateText} data-testid="instruction-picker-not-set-up">
+                        {t(searchSetupMessageKey(setupError.reason))}
+                        <Link to={searchSetupPath(setupError.reason)} onClick={onClose} className={styles.stateLink}>
+                            {t('common.search.openSettings')}
+                        </Link>
+                    </p>
+                ) : hasError ? (
                     <p className={styles.stateText}>{t('conversation.instructionPicker.error')}</p>
                 ) : isLoading && shown.length === 0 ? (
                     <p className={styles.stateText}>{t('conversation.instructionPicker.loading')}</p>

@@ -21,4 +21,18 @@ describe('searchContent', () => {
         mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' })
         await expect(searchContent('token', 'a', ['notes'])).rejects.toThrow('Search failed: 500')
     })
+
+    test('a search that is not set up says which setting is missing', async () => {
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 409,
+            statusText: 'Conflict',
+            json: async () => ({ code: 'SEARCH_NOT_CONFIGURED', reason: 'EMBEDDING_KEY_MISSING' }),
+        })
+        await expect(searchContent('token', 'a', ['notes'])).rejects.toMatchObject({
+            status: 409,
+            code: 'SEARCH_NOT_CONFIGURED',
+            reason: 'EMBEDDING_KEY_MISSING',
+        })
+    })
 })

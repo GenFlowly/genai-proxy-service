@@ -44,6 +44,7 @@ export default function NotesMenuContent({ onClose }: { onClose: () => void }): 
                     types={SEARCH_TYPES}
                     untitledLabel={t('sidebar.savedNotesWidget.untitled')}
                     onSelect={openResult}
+                    onLeave={onClose}
                 />
             ) : undefined}
         >
