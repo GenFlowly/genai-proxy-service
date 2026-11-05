@@ -1,12 +1,17 @@
 import os
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
+from encoding_library.chunkers.enums import ChunkingType
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.processors.processor_factory import ProcessorFactory
-from encoding_library.utils.embedding_utils import create_embeddings, get_embedding_model_for_customer
-from encoding_library.utils.model_registry import build_collection_description, resolve_model
+from encoding_library.utils.embedding_utils import (
+    create_chunks,
+    create_embeddings,
+    get_embedding_model_for_customer,
+)
+from encoding_library.utils.model_registry import build_collection_description, get_chunking_params, resolve_model
 from encoding_library.utils.vector_db import (
     customer_filter,
     ensure_collection,
@@ -15,9 +20,57 @@ from encoding_library.utils.vector_db import (
 )
 
 from services.content_logging import default_log_level
+from services.content_source import content_sha256, load_raw_data
 
 setup_logging("encoding-server", level=default_log_level())
 logger = logging.getLogger()
+
+
+def _reload_batch_chunks(
+    state: MemoryRequestInternalState,
+    chunk_offset: int,
+    chunk_count: Optional[int],
+    chunk_total: Optional[int],
+    expected_digest: str,
+) -> List[str]:
+    """This batch's chunks, re-derived from the item's source table. Empty
+    when the item is gone, or changed after parse-and-chunk planned the
+    batches: the save that changed it queued its own run."""
+    raw_data = load_raw_data(state)
+    if raw_data is None:
+        return []
+    state.raw_data = raw_data
+    text = ProcessorFactory.get_processor(state).get_text_to_encode(state)
+    if content_sha256(text) != expected_digest:
+        count("pipeline_content_changed_total", data_type=state.data_type)
+        logger.info(f"Item changed after chunking; skipping the batch at offset {chunk_offset}")
+        return []
+
+    chunking_type = state.chunking_type or ChunkingType.RECURSIVE.value
+    encoder = None
+    if chunking_type == ChunkingType.SEMANTIC.value:
+        encoder = get_embedding_model_for_customer(state.customer_id, state.model_type, state.model_name)
+    chunk_size, chunk_overlap = get_chunking_params(
+        state.model_type, state.model_name, state.chunk_size, state.chunk_overlap
+    )
+    chunks = create_chunks(
+        text,
+        encoder,
+        chunking_type=chunking_type,
+        chunking_technique=state.chunking_technique,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+    if chunk_total is not None and len(chunks) != int(chunk_total):
+        # Re-chunking disagreed with the plan (semantic chunking is not
+        # deterministic): the first batch embeds every chunk so vector ids
+        # stay contiguous, and the other batches stand down.
+        logger.warning(
+            f"Chunk plan mismatch ({chunk_total} planned, {len(chunks)} now); the first batch embeds all"
+        )
+        return chunks if chunk_offset == 0 else []
+    end = chunk_offset + int(chunk_count) if chunk_count is not None else len(chunks)
+    return chunks[chunk_offset:end]
 
 
 def _summary(state: MemoryRequestInternalState, collection: str, inserted: int) -> Dict[str, Any]:
@@ -52,13 +105,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     try:
         # Global index of this batch's first chunk, stamped by parse-and-chunk
-        # outside the typed state; popped before from_dict sees it.
+        # outside the typed state; popped before from_dict sees it. Batches of
+        # source-backed types carry their chunk plan instead of the chunks.
         chunk_offset = int(event.pop("chunk_offset", 0) or 0)
+        chunk_count = event.pop("chunk_count", None)
+        chunk_total = event.pop("chunk_total", None)
+        expected_digest = event.pop("content_sha256", None)
         memory_request_internal_state = MemoryRequestInternalState.from_dict(event)
         set_request_id(memory_request_internal_state.request_id)
         customer_id = memory_request_internal_state.customer_id
         if not customer_id:
             raise ValueError("customer_id is missing from the payload")
+
+        if not memory_request_internal_state.data_chunks and expected_digest:
+            reloaded = _reload_batch_chunks(
+                memory_request_internal_state, chunk_offset, chunk_count, chunk_total, expected_digest
+            )
+            if not reloaded:
+                return _summary(memory_request_internal_state, collection="", inserted=0)
+            memory_request_internal_state.data_chunks = reloaded
 
         chunks = memory_request_internal_state.data_chunks
         if not chunks:

@@ -20,7 +20,7 @@ export class SqsStack extends cdk.Stack {
         // Create Dead Letter Queue for failed messages
         this.deadLetterQueue = new sqs.Queue(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-dlq`, {
             queueName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-dlq`,
-            retentionPeriod: cdk.Duration.days(14), // Keep failed messages for 14 days
+            retentionPeriod: cdk.Duration.days(7), // Keep failed messages for 7 days
         });
 
         // Create main ingestion queue with DLQ

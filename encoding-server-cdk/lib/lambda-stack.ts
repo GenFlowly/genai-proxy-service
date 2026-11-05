@@ -34,6 +34,11 @@ export interface LambdaStackProps extends cdk.StackProps {
     customerVectorDBConfigTableName: string;
     customerNotesTableName: string;
     instructionsTableName: string;
+    // Source tables the pipeline reads indexed text from: pipeline messages
+    // carry ids only (encoding-server services/content_source.py).
+    messageTableName: string;
+    conversationTableName: string;
+    customerMemoryTableName: string;
     // Per-customer embedding (and vendor LLM) API keys — the proxy's
     // CustomerVendorApiKeys table, KMS-encrypted. Hosted embedding models
     // (voyage/openai) run exclusively on the customer's own key; there is no
@@ -73,6 +78,17 @@ export class LambdaStack extends cdk.Stack {
         });
         const NOTES_EMBEDDING_STATUS_INDEX = 'embedding-status-index';
         const instructionsTable = dynamodb.Table.fromTableName(this, 'InstructionsTable', props.instructionsTableName);
+        const messageTable = dynamodb.Table.fromTableName(this, 'MessageTable', props.messageTableName);
+        const conversationTable = dynamodb.Table.fromTableName(this, 'ConversationTable', props.conversationTableName);
+        const customerMemoryTable = dynamodb.Table.fromTableName(this, 'CustomerMemoryTable', props.customerMemoryTableName);
+        const contentSourceEnv = {
+            CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
+            MESSAGE_TABLE: props.messageTableName,
+            CONVERSATION_TABLE: props.conversationTableName,
+            INSTRUCTIONS_TABLE: props.instructionsTableName,
+            CUSTOMER_MEMORY_TABLE: props.customerMemoryTableName,
+        };
+        const contentSourceTables = [customerNotesTable, messageTable, conversationTable, instructionsTable, customerMemoryTable];
         const customerApiKeyTable = dynamodb.Table.fromTableName(this, 'CustomerVendorApiKeysTable', props.customerApiKeyTableName);
         const customerApiKeyEnv = { CUSTOMER_API_KEY_TABLE: props.customerApiKeyTableName };
         const customerApiUsageTable = dynamodb.Table.fromTableName(this, 'CustomerApiUsageTable', props.customerApiUsageTableName);
@@ -166,9 +182,11 @@ export class LambdaStack extends cdk.Stack {
                 JOBLIB_TEMP_FOLDER: '/tmp',
                 ...modelRegistryEnv,
                 ...customerApiKeyEnv,
+                ...contentSourceEnv,
             },
         });
         embeddingModelRegistryTable.grantReadData(this.parseAndChunkLambda);
+        contentSourceTables.forEach((table) => table.grant(this.parseAndChunkLambda, 'dynamodb:GetItem'));
         // Semantic chunking (only) embeds on the customer's own hosted-provider key.
         customerApiKeyTable.grantReadData(this.parseAndChunkLambda);
         this.parseAndChunkLambda.addToRolePolicy(new iam.PolicyStatement({
@@ -196,12 +214,12 @@ export class LambdaStack extends cdk.Stack {
                 ...appEnv,
                 JOBLIB_TEMP_FOLDER: '/tmp',
                 ...customerApiKeyEnv,
+                ...contentSourceEnv,
                 CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
-                CUSTOMER_NOTES_TABLE: props.customerNotesTableName,
-                INSTRUCTIONS_TABLE: props.instructionsTableName,
                 ...usageTrackingEnv,
             },
         });
+        contentSourceTables.forEach((table) => table.grant(this.createAndStoreLambda, 'dynamodb:GetItem'));
         customerVectorDBConfigTable.grantReadData(this.createAndStoreLambda);
         // Embeds on the customer's own hosted-provider key (voyage/openai).
         customerApiKeyTable.grantReadData(this.createAndStoreLambda);
@@ -217,6 +235,14 @@ export class LambdaStack extends cdk.Stack {
             actions: ['kms:Decrypt'],
             resources: ['*'],
         }));
+
+        // CloudFormation updates these downstream-first (create-and-store,
+        // parse-and-chunk, ingest-notes) so no step receives a payload its
+        // deployed version can't read: an older parse-and-chunk indexes an
+        // empty string for an ids-only message and marks the note synced, and
+        // an older create-and-store skips a chunk plan.
+        this.parseAndChunkLambda.node.addDependency(this.createAndStoreLambda);
+        this.ingestNotesLambda.node.addDependency(this.parseAndChunkLambda);
 
         /**
          * Voyage Batch pathway — customer-level batch embedding only: the

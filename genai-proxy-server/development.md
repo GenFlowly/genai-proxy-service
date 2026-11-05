@@ -216,13 +216,14 @@ Dashboard JSONs live in `observability/grafana/`. All charts share a global stat
 
 ### Logging policy — production logs problems only, never user content
 
-Two independent layers keep production logs clean. Both key off `APP_ENV`: set in each Fly service's toml (`production` in `fly.production.toml`, `development` in `fly.toml`) and stamped on every encoding lambda by the CDK stacks from the deploy `STAGE`; unset — e.g. a local machine — means development.
+Two independent layers keep production logs clean, and a third keeps content out of the records AWS writes for us. The first two key off `APP_ENV`: set in each Fly service's toml (`production` in `fly.production.toml`, `development` in `fly.toml`) and stamped on every encoding lambda by the CDK stacks from the deploy `STAGE`; unset — e.g. a local machine — means development.
 
 1. **Level.** Production emits WARN/WARNING and above only; development logs the full INFO narrative (per-node traces, prompts, responses). Wiring:
    - **Kotlin proxy**: logback levels are `${LOG_LEVEL:-INFO}`; `fly.production.toml` sets `LOG_LEVEL=WARN`.
    - **retrieval-server**: `app.py` derives the level from `APP_ENV` (production → WARNING); an explicit `LOG_LEVEL` env var overrides it — e.g. a temporary INFO window while debugging production, which is safe because of layer 2.
    - **encoding-server lambdas**: every handler passes `default_log_level()` from `encoding-server/services/content_logging.py` to `setup_logging` (same WARNING/INFO/`LOG_LEVEL` semantics).
 2. **Content gate (defense in depth).** Lines carrying user content — prompts, system prompts/instructions, LLM responses, memories, queries, request payloads, raw lambda events — are *additionally* gated per environment, so content cannot leak even when production runs at INFO: Python `content_logging.py` in each service (`if LOG_USER_CONTENT:` for whole-line dumps, `redact(value, limit)` for a single field), Kotlin `logContent = !appConfig.isProduction` threaded to where it's needed (see `Routing.kt`, `di/Modules.kt`).
+3. **Queues and workflow state carry ids only (all stages).** Step Functions keeps every execution's input and state for 90 days whatever the logging settings, and the encoding dead-letter queue receives the execution input. So the encoding pipeline's SQS messages and Step Functions payloads hold record keys only, and the lambdas reload the text from DynamoDB: see `encoding-server/development.md` → "Pipeline payloads carry ids, never text". Production state-machine logging is `ERROR` without execution data.
 
 Rules for every log line you add:
 

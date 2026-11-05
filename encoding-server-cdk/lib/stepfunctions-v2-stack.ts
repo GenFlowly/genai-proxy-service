@@ -111,10 +111,13 @@ export class StepFunctionsV2Stack extends cdk.Stack {
             definitionBody: sfn.DefinitionBody.fromChainable(definition),
             stateMachineType: sfn.StateMachineType.STANDARD,
             timeout: cdk.Duration.hours(2),
+            // Executions carry ids, never text (encoding-server
+            // services/content_source.py). Production logs failures only,
+            // without execution data; development keeps the full trace.
             logs: {
                 destination: logGroup,
-                level: sfn.LogLevel.ALL,
-                includeExecutionData: true,
+                level: props.stage === STAGES.PROD ? sfn.LogLevel.ERROR : sfn.LogLevel.ALL,
+                includeExecutionData: props.stage !== STAGES.PROD,
             },
         });
 
