@@ -2,6 +2,7 @@ package com.genflowly.activity.instruction
 
 import com.genflowly.Routes
 import com.genflowly.activity.search.respondSearchFailure
+import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GetCustomerInstructionListResponse
 import com.genflowly.models.api.SearchErrorResponse
 import com.genflowly.utils.getAuthenticatedCustomerId
@@ -21,7 +22,7 @@ fun Route.registerSearchInstructionsRoutes(
     instructionService: InstructionService,
     customerProfileService: CustomerProfileService
 ) {
-    authenticate("auth0", "apiKey", optional = true) {
+    authenticate("auth0", "apiKey") {
         get(Routes.SEARCH_INSTRUCTIONS, {
             tags("Instructions")
             summary = "Search instructions"
@@ -30,8 +31,7 @@ fun Route.registerSearchInstructionsRoutes(
                     "accessible-ids filter at query time; each instruction is indexed once, " +
                     "under its creator). Instruction text, name, category and tags are " +
                     "embedded; results are ordered by similarity. A blank query returns all " +
-                    "latest instructions. Authentication is optional: unauthenticated callers " +
-                    "search the public instruction set."
+                    "latest instructions. Requires sign-in."
             request {
                 queryParameter<String>("q") {
                     description = "Search query; blank returns all latest instructions"
@@ -42,6 +42,13 @@ fun Route.registerSearchInstructionsRoutes(
                 code(HttpStatusCode.OK) {
                     description = "Instructions matching the query"
                     body<GetCustomerInstructionListResponse>()
+                }
+                code(HttpStatusCode.Unauthorized) {
+                    description = "Not signed in"
+                }
+                code(HttpStatusCode.Forbidden) {
+                    description = "No customer profile for the signed-in user"
+                    body<ErrorResponse>()
                 }
                 code(HttpStatusCode.Conflict) {
                     description = "Search isn't set up for this customer (code SEARCH_NOT_CONFIGURED); " +
@@ -59,7 +66,11 @@ fun Route.registerSearchInstructionsRoutes(
             }
         }) {
             try {
-                val customerId = call.getAuthenticatedCustomerId(customerProfileService) ?: "PUBLIC"
+                val customerId = call.getAuthenticatedCustomerId(customerProfileService)
+                if (customerId == null) {
+                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Customer profile not found"))
+                    return@get
+                }
                 val query = call.request.queryParameters["q"] ?: ""
 
                 val response = instructionService.searchInstructions(customerId, query)

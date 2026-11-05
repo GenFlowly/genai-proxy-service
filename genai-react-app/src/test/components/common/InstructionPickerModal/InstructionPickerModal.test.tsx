@@ -8,9 +8,11 @@ import * as instructionService from '../../../../services/instructionService';
 import { SearchError } from '../../../../services/searchError';
 import { loadRecentInstructionsCache, saveRecentInstructionsCache, clearRecentInstructionsCache } from '../../../../components/common/InstructionPickerModal/recentInstructionsCache';
 
+const mockAuth = { isAuthenticated: true };
 jest.mock('../../../../context/AuthContext', () => ({
     useAuth: () => ({
         customerId: 'cust-1',
+        isAuthenticated: mockAuth.isAuthenticated,
         getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token')
     })
 }));
@@ -32,6 +34,7 @@ const searchedInstruction = {
 describe('InstructionPickerModal', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockAuth.isAuthenticated = true;
         clearRecentInstructionsCache(); // The module-level SWR cache must not leak between tests
         mockGetRecent.mockResolvedValue({ instructions: [recentInstruction] });
         mockSearch.mockResolvedValue({ instructions: [searchedInstruction] });
@@ -53,6 +56,17 @@ describe('InstructionPickerModal', () => {
         expect(await screen.findByText('H1B Tax Advisor')).toBeInTheDocument();
         expect(screen.getByText('Search results')).toBeInTheDocument();
         await waitFor(() => expect(mockSearch).toHaveBeenCalledWith('mock-token', 'tax'));
+    });
+
+    test('signed-out users are asked to sign in instead of searching', async () => {
+        mockAuth.isAuthenticated = false;
+        render(<InstructionPickerModal isOpen onClose={jest.fn()} onSelect={jest.fn()} />);
+
+        await userEvent.type(screen.getByTestId('instruction-picker-search'), 'tax');
+
+        expect(await screen.findByText('Sign in to search instructions.')).toBeInTheDocument();
+        await new Promise(resolve => setTimeout(resolve, 400));
+        expect(mockSearch).not.toHaveBeenCalled();
     });
 
     test('selecting a tile fires onSelect with the instruction', async () => {

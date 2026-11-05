@@ -25,6 +25,7 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
@@ -110,6 +111,17 @@ class SearchRoutesTest {
         for (path in paths) {
             assertEquals(HttpStatusCode.InternalServerError, get(path).status, path)
         }
+    }
+
+    @Test
+    fun `signed-out callers can't search`() = testApplication {
+        setUpRoutes()
+
+        for (path in paths) {
+            assertEquals(HttpStatusCode.Unauthorized, client.get(path).status, path)
+        }
+        coVerify(exactly = 0) { instructionService.searchInstructions(any(), any()) }
+        coVerify(exactly = 0) { unifiedSearchService.search(any(), any(), any(), any()) }
     }
 
     @Test
