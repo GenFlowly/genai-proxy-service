@@ -7,8 +7,11 @@ import com.genflowly.models.api.CustomerNote
 import com.genflowly.models.api.GetNotesResponse
 import com.genflowly.models.encoding.EncodingNoteData
 import com.genflowly.models.encoding.EncodingSaveNoteRequest
+import com.genflowly.repository.CustomerCredentialsRepository
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.NotesRepository
+import com.genflowly.repository.PendingVectorType
+import com.genflowly.repository.VectorSyncPendingRepository
 import com.genflowly.providers.EncodingServerClient
 import com.genflowly.models.RequestType
 import com.genflowly.providers.RetrievalServerClient
@@ -25,9 +28,27 @@ class NotesService(
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
     private val memoryExtractionService: MemoryExtractionService,
+    private val customerCredentialsRepository: CustomerCredentialsRepository,
+    private val vectorSyncPendingRepository: VectorSyncPendingRepository,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger(NotesService::class.java)
+
+    /**
+     * Records the note as not in the vector DB until the encoding-server's
+     * store step deletes the row, so search keyword-matches it while its embed
+     * is in flight — seconds for realtime customers, up to a batch cycle for
+     * batch-mode ones. Skipped for customers without a vector DB: nothing
+     * could index the note.
+     */
+    private suspend fun markPendingEmbedding(customerId: String, noteKey: String) {
+        try {
+            if (!runCatching { customerCredentialsRepository.hasVectorDBConfig(customerId) }.getOrDefault(true)) return
+            vectorSyncPendingRepository.markPending(customerId, PendingVectorType.NOTE, noteKey)
+        } catch (e: Exception) {
+            logger.warn("Could not record note $noteKey as pending: ${e.message}")
+        }
+    }
 
     /**
      * Generates a short descriptive title for a note via the NOTE_TITLE agent
@@ -118,6 +139,8 @@ class NotesService(
             }
         }
 
+        markPendingEmbedding(customerId, request.data.note_key)
+
         // 3. Delivery to embedding. Batch-mode customers are swept from
         // CustomerNotes by the encoding server's accumulator, so we just flag the
         // note here and skip the synchronous /encode-notes call. Realtime
@@ -185,6 +208,11 @@ class NotesService(
                 retrievalServerClient.deleteNoteVectors(customerId, noteKey)
             } catch (e: Exception) {
                 logger.error("Error deleting vectors for note $noteKey", e)
+            }
+            try {
+                vectorSyncPendingRepository.clear(customerId, PendingVectorType.NOTE, noteKey)
+            } catch (e: Exception) {
+                logger.warn("Could not clear the pending row of deleted note $noteKey: ${e.message}")
             }
         }
     }

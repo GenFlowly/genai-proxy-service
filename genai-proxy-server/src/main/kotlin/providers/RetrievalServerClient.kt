@@ -401,6 +401,29 @@ class RetrievalServerClient(
     }
 
     /**
+     * Reads a /search 409 — `{"detail": {"error_type": ..., "message": ...}}`,
+     * or the plain-string `detail` older retrieval-servers send, which only
+     * ever reported a missing vector DB or embedding key.
+     */
+    private fun searchNotConfigured(errorBody: String): SearchNotConfiguredException {
+        val detail = try {
+            json.parseToJsonElement(errorBody).jsonObject["detail"]
+        } catch (e: Exception) {
+            null
+        }
+        val structured = detail as? kotlinx.serialization.json.JsonObject
+        val message = structured?.get("message")?.jsonPrimitive?.content
+            ?: (detail as? kotlinx.serialization.json.JsonPrimitive)?.content
+            ?: "Search is not set up"
+        val reason = when (structured?.get("error_type")?.jsonPrimitive?.content) {
+            "embedding_key_missing" -> SearchSetupReason.EMBEDDING_KEY
+            "vector_db_not_configured" -> SearchSetupReason.VECTOR_DB
+            else -> if (message.contains("embedding provider")) SearchSetupReason.EMBEDDING_KEY else SearchSetupReason.VECTOR_DB
+        }
+        return SearchNotConfiguredException(reason, message)
+    }
+
+    /**
      * Executes a specific agent graph (request agents) through the LangGraph
      * runtime. Returns the final state's generated_response + usage; text is
      * null on any failure so callers can advance their provider failover.
@@ -951,7 +974,10 @@ class RetrievalServerClient(
      * customer's partition, so items indexed under OTHER customers (shared
      * instructions live under their creator) become findable — the id list IS
      * the access control, so it must come from an authoritative ACL check.
-     * Throws on transport errors — callers decide whether that is fatal.
+     * Never reports a failed search as an empty one: throws
+     * [SearchNotConfiguredException] when the customer is missing a setting
+     * search needs, [SearchUnavailableException] on any other error response,
+     * and propagates transport errors.
      */
     suspend fun search(
         customerId: String,
@@ -976,8 +1002,12 @@ class RetrievalServerClient(
         }
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
+            if (response.status == HttpStatusCode.Conflict) {
+                logger.warn { "Search not configured for customer $customerId: $errorBody" }
+                throw searchNotConfigured(errorBody)
+            }
             logger.error { "Unified search failed for customer $customerId: ${response.status} $errorBody" }
-            return emptyList()
+            throw SearchUnavailableException(response.status.value, "Search failed: ${response.status}")
         }
         val wire = json.decodeFromString<SearchWireResponse>(response.bodyAsText())
         return wire.results.map {
@@ -1047,9 +1077,52 @@ class RetrievalServerClient(
         }
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
-            throw IllegalStateException("encode-memory failed for $memoryKey: ${response.status} $errorBody")
+            throw VectorEncodeException(response.status.value, "encode-memory failed for $memoryKey: ${response.status} $errorBody")
         }
         logger.info { "Encoded memory $memoryKey into the vector store" }
+    }
+
+    /**
+     * Embeds one user/assistant exchange into the customer's conversation
+     * collection via the service-to-service /encode-conversation — the retry
+     * path for exchanges whose encoding-server pipeline embed never landed
+     * (that pipeline needs the end user's bearer token, which a later retry
+     * doesn't have). Writes the same rows as the pipeline and deletes the
+     * exchange's prior chunks first, so it is idempotent. Throws
+     * [VectorEncodeException] on an error response.
+     */
+    suspend fun encodeConversationVector(
+        customerId: String,
+        conversationId: String,
+        messageId: String,
+        text: String,
+        createdAt: String,
+        client: String,
+        modelType: String?,
+        modelName: String?
+    ) {
+        val response = httpClient.post("$retrievalServerUrl/encode-conversation") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                json.encodeToString(
+                    EncodeConversationPayload(
+                        customer_id = customerId,
+                        conversation_key = conversationId,
+                        message_key = messageId,
+                        text = text,
+                        created_at = createdAt,
+                        client = client,
+                        model_type = modelType,
+                        model_name = modelName,
+                    )
+                )
+            )
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            throw VectorEncodeException(response.status.value, "encode-conversation failed for $messageId: ${response.status} $errorBody")
+        }
+        logger.info { "Encoded exchange $messageId into the vector store" }
     }
 
     /**
@@ -1091,6 +1164,18 @@ private data class EncodeMemoryPayload(
 )
 
 @Serializable
+private data class EncodeConversationPayload(
+    val customer_id: String,
+    val conversation_key: String,
+    val message_key: String,
+    val text: String,
+    val created_at: String = "",
+    val client: String = "web",
+    val model_type: String? = null,
+    val model_name: String? = null,
+)
+
+@Serializable
 private data class DeleteInstructionVectorsPayload(val customer_id: String, val instruction_key: String)
 
 @Serializable
@@ -1116,6 +1201,27 @@ private data class SearchWireHit(
 
 @Serializable
 private data class SearchWireResponse(val results: List<SearchWireHit> = emptyList())
+
+/** The customer setting a search needs but doesn't have; [code] is what API clients see. */
+enum class SearchSetupReason(val code: String) {
+    VECTOR_DB("VECTOR_DB_NOT_CONFIGURED"),
+    EMBEDDING_KEY("EMBEDDING_KEY_MISSING")
+}
+
+/** Search can't run until the customer configures [reason]; retrying won't help. */
+class SearchNotConfiguredException(val reason: SearchSetupReason, message: String) : RuntimeException(message)
+
+/**
+ * The retrieval-server refused to embed a record with HTTP [status].
+ * [permanent] failures (a missing customer setting, a malformed record) won't
+ * succeed on retry.
+ */
+class VectorEncodeException(val status: Int, message: String) : IllegalStateException(message) {
+    val permanent: Boolean get() = status == 409 || status == 400
+}
+
+/** The retrieval-server failed the search with HTTP [status]. */
+class SearchUnavailableException(val status: Int, message: String) : RuntimeException(message)
 
 /** An item-level semantic search hit (one per conversation/note/...), decoupled from the wire format. */
 data class SearchVectorHit(

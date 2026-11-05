@@ -202,7 +202,7 @@ class GenerationOrchestrator(
         // Memory injection is a graph concern (the MEMORY node): here we only
         // make the governance call — request consent AND the account setting.
         val systemPrompt = instructionResp?.instruction ?: ""
-        val memoryEnabled = useLearnedPreferences && memoryService.isMemoryEnabled(customerId)
+        val memoryEnabled = useLearnedPreferences && memoryService.getMemorySettings(customerId).useInReplies
         val effectiveInstructionId = instructionResp?.id ?: ""
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 
@@ -410,7 +410,7 @@ class GenerationOrchestrator(
         val vendorSystemPrompt = ResponseFormatting.decorateSystemPrompt(
             systemPrompt, client, structuredOutput = responseSchema != null
         )
-        val memoryEnabled = useLearnedPreferences && memoryService.isMemoryEnabled(customerId)
+        val memoryEnabled = useLearnedPreferences && memoryService.getMemorySettings(customerId).useInReplies
         val effectiveInstructionId = instructionResp?.id ?: ""
         val effectiveInstructionVersion = instructionResp?.version?.toString() ?: ""
 

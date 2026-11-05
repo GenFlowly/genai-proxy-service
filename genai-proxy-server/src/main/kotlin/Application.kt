@@ -452,6 +452,9 @@ fun Application.module() {
     // Memory-extraction reconciler: re-dispatches pending extraction work
     // (restart-lost runs, retryable failures, debounce backstops) every minute.
     get<com.genflowly.service.MemoryExtractionService>().startPendingReconciler()
+    // Vector retry sweep: re-embeds conversation exchanges and memories whose
+    // embed never reached the vector DB, with backoff.
+    get<com.genflowly.service.VectorRetryService>().start()
     val exchangeSideEffects = get<com.genflowly.service.ExchangeSideEffects>()
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 

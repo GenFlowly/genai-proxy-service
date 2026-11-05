@@ -33,7 +33,10 @@ class CustomerProfileService(
         embeddingModel: String? = null,
         embeddingModelConversations: String? = null,
         embeddingModelNotes: String? = null,
-        preferredAgentId: String? = null
+        preferredAgentId: String? = null,
+        memoryLearnFromChats: Boolean? = null,
+        memoryLearnFromNotes: Boolean? = null,
+        memoryUseInReplies: Boolean? = null
     ) {
         customerProfileRepository.savePreferences(
             customerId,
@@ -43,7 +46,10 @@ class CustomerProfileService(
             embeddingModel,
             embeddingModelConversations,
             embeddingModelNotes,
-            preferredAgentId
+            preferredAgentId,
+            memoryLearnFromChats,
+            memoryLearnFromNotes,
+            memoryUseInReplies
         )
     }
 
