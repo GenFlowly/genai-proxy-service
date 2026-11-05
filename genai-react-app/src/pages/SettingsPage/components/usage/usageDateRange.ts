@@ -9,7 +9,7 @@ function toIsoDate(d: Date): string {
 export function defaultUsageRange(): DateRange {
     const to = new Date()
     const from = new Date(to)
-    from.setDate(from.getDate() - 29)
+    from.setUTCDate(from.getUTCDate() - 29)
     return { from: toIsoDate(from), to: toIsoDate(to) }
 }
 

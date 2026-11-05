@@ -15,6 +15,20 @@ describe('defaultUsageRange', () => {
         const todayIso = new Date().toISOString().slice(0, 10)
         expect(range.to).toBe(todayIso)
     })
+
+    describe('across a daylight-saving change', () => {
+        beforeEach(() => jest.useFakeTimers())
+        afterEach(() => jest.useRealTimers())
+
+        test.each([
+            ['2026-11-05T00:01:00Z', '2026-10-07', '2026-11-05'],
+            ['2026-11-04T23:59:00Z', '2026-10-06', '2026-11-04'],
+            ['2026-03-20T00:30:00Z', '2026-02-19', '2026-03-20'],
+        ])('at %s it runs from %s to %s', (now, from, to) => {
+            jest.setSystemTime(new Date(now))
+            expect(defaultUsageRange()).toEqual({ from, to })
+        })
+    })
 })
 
 describe('usageDateRangePresets', () => {
