@@ -102,15 +102,6 @@
   border-bottom: 1px solid $color-border;
 }
 
-.mobileMenuOverlay {
-  @include respond-to-mobile {
-    position: fixed; // Viewport-pinned; `top` is set inline to the navbar's measured bottom edge
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 100; // Above page content and headers, below the navbar (z=1000)
-  }
-}
 .dropdownLabel {
   font-size: 0.875rem;
   color: $color-text-muted;

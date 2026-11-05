@@ -1,0 +1,192 @@
+@import '../../../styles/themes.scss';
+
+.menu {
+    position: fixed;
+    inset: 0;
+    z-index: 101; // Above the L2 Menu (z=100), which can be open underneath
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background-color: $color-background;
+    color: $color-text-primary;
+}
+
+.header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 4rem;
+    padding: env(safe-area-inset-top, 0px) max(1.5rem, env(safe-area-inset-right, 0px)) 0
+        max(1.5rem, env(safe-area-inset-left, 0px));
+}
+
+.logo {
+    display: block;
+    width: 30px;
+    height: 28px;
+}
+
+.brandName {
+    margin: 0;
+    font-size: 1.25rem;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+}
+
+.hero {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 1rem max(1.5rem, env(safe-area-inset-right, 0px)) 2.75rem
+        max(1.5rem, env(safe-area-inset-left, 0px));
+}
+
+.headline {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    font-size: min(2.875rem, 14vw); // "Many models." must not wrap on a 320px phone
+    line-height: 1.08;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+.nav {
+    flex-shrink: 0;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0 1.75rem;
+}
+
+.navItem {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-height: 62px;
+    padding: 0 max(1.5rem, env(safe-area-inset-right, 0px)) 0 max(1.5rem, env(safe-area-inset-left, 0px));
+    font-size: 2.375rem;
+    line-height: 1;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: $color-text-muted;
+    text-decoration: none;
+
+    &:active {
+        opacity: 0.7;
+    }
+
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: -2px;
+    }
+}
+
+.navItemActive {
+    font-weight: 700;
+    color: $color-text-primary;
+}
+
+.activeDot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: $color-primary;
+}
+
+.footer {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 max(1rem, env(safe-area-inset-right, 0px)) max(1.75rem, env(safe-area-inset-bottom, 0px))
+        max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.loginButton {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0 1rem;
+    border: none;
+    border-radius: 26px;
+    background-color: $color-button-primary;
+    color: #ffffff;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+        background-color: $color-primary-hover-alt;
+    }
+
+    &:active {
+        background-color: $color-primary-pressed;
+    }
+
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: 2px;
+    }
+}
+
+.accountButton {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0 1rem 0 0.375rem;
+    border-radius: 26px;
+    background-color: rgba(127, 127, 127, 0.18);
+    color: $color-text-primary;
+    text-decoration: none;
+
+    &:active {
+        background-color: rgba(127, 127, 127, 0.32);
+    }
+
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: 2px;
+    }
+}
+
+.avatar {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.accountName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.authPlaceholder {
+    flex: 1 1 auto;
+    height: 52px;
+    border-radius: 26px;
+    background-color: $color-background-tertiary;
+    animation: authPlaceholderPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes authPlaceholderPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}

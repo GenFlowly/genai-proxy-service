@@ -26,7 +26,9 @@ export default function App(): React.ReactElement {
   useVisualViewportHeight();
 
   const onRedirectCallback = (appState: any) => {
-    navigate(appState?.returnTo || window.location.pathname);
+    const returnTo = appState?.returnTo || window.location.pathname;
+    if (appState?.returnState) navigate(returnTo, { state: appState.returnState });
+    else navigate(returnTo);
   };
 
   return (

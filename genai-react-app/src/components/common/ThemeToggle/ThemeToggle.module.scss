@@ -61,3 +61,57 @@
         color: #ffffff;
     }
 }
+
+// Touch-sized, on a themed page surface instead of the dark menu bar
+.surface {
+    --toggle-thumb: #ffffff;
+    --toggle-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+    --toggle-idle: #555555;
+
+    flex-shrink: 0;
+    height: 3.25rem;
+    padding: 0.25rem;
+    background: rgba(127, 127, 127, 0.18);
+    border: none;
+    box-shadow: none;
+
+    .slider {
+        top: 0.25rem;
+        bottom: 0.25rem;
+        width: 2.75rem;
+        background: var(--toggle-thumb);
+        box-shadow: var(--toggle-thumb-shadow);
+
+        &[data-active="system"] {
+            transform: translateX(calc(2.75rem + 0.125rem));
+        }
+        &[data-active="dark"] {
+            transform: translateX(calc(5.5rem + 0.25rem));
+        }
+    }
+
+    .toggleOption {
+        width: 2.75rem;
+        height: 2.75rem;
+        color: var(--toggle-idle);
+
+        &:hover {
+            color: $color-text-primary;
+        }
+
+        &.active {
+            color: $color-text-primary;
+        }
+
+        &:focus-visible {
+            outline: 2px solid $color-primary;
+            outline-offset: -2px;
+        }
+    }
+}
+
+:global([data-theme='dark']) .surface {
+    --toggle-thumb: rgba(255, 255, 255, 0.16);
+    --toggle-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --toggle-idle: #c7c7cc;
+}
