@@ -36,18 +36,17 @@ class CustomerAIFailoverException(
  * keys, since admin operations are ours to pay for and the admin panel only
  * manages the system key store.
  *
- * Provider candidates, in order:
- *  1. The customer's own prioritized (vendor, model, priority) configs from
- *     their settings, when any are set.
- *  2. Otherwise, derived from whichever vendors they have a valid key for:
- *     the agent's preferred vendor first (with the agent's model), then the
- *     remaining keyed vendors with the seeded per-vendor default model — so
- *     a customer who only has, say, a CLAUDE key still gets titles even when
- *     the agent prefers OPENAI.
- *  3. For keyless ADMIN_PANEL accounts only: the system provider configs.
+ * Customer keys run on ONE provider, the customer's primary (their priority-1
+ * key, else the key they added first), so the content of a background task
+ * never reaches a vendor the customer didn't rank first, and there is no
+ * failover to their other keys. The model is the vendor's small default from
+ * the request-agent manifest, unless the customer pointed this action at
+ * their own agent on that vendor, which keeps its model. Keyless
+ * ADMIN_PANEL accounts use the system provider configs instead.
  *
  * Candidates are tried in order; any generation failure — including BLANK
- * output and a parse failure — moves on to the next one. Customer-key
+ * output and a parse failure — moves on to the next one, so only the
+ * system-key list ever has more than one. Customer-key
  * candidates run durably (DBOS) when the retrieval server has the durable
  * runtime configured; system-key candidates always run plain, because the
  * durable path resolves credentials server-side from the customer's stored
@@ -90,10 +89,9 @@ class GenerationAgentExecutor(
     }
 
     /**
-     * Generate and [parse] the response text, with provider failover on the
-     * customer's keys. A parse failure (e.g. unparseable persona or
-     * memory-operations JSON) counts as a provider failure and advances to
-     * the next candidate. THROWS ([NoCustomerAIKeyException] /
+     * Generate and [parse] the response text on the customer's primary
+     * provider. A parse failure (e.g. unparseable persona or
+     * memory-operations JSON) counts as a provider failure. THROWS ([NoCustomerAIKeyException] /
      * [CustomerAIFailoverException]) when no candidate succeeds, so callers
      * can react.
      */
@@ -192,11 +190,7 @@ class GenerationAgentExecutor(
         )
     }
 
-    /**
-     * Explicit customer configs win outright; the derived fallback only
-     * applies when the customer configured nothing, so their settings fully
-     * control which vendors/models internal generations use (and pay for).
-     */
+    /** The customer's primary provider; system keys only for keyless ADMIN_PANEL accounts. */
     private suspend fun buildCandidates(
         agent: ResolvedAgent,
         customerId: String
@@ -210,28 +204,20 @@ class GenerationAgentExecutor(
         agent: ResolvedAgent,
         customerId: String
     ): List<CustomerAIProviderConfig> {
-        val configured = customerCredentialsService.getPrioritizedProviderConfigs(customerId)
-        if (configured.isNotEmpty()) return configured
-
-        val usableKeys = customerCredentialsService.getUsableVendorKeys(customerId)
-        if (usableKeys.isEmpty()) return emptyList()
-
-        // The published agent's own model preference (from its GENERATION node
-        // config) — the only place a request agent's model comes from.
-        val preference = agent.modelPreference
-
-        return buildList {
-            val preferredKey = preference?.let { usableKeys[it.aiVendor] }
-            if (preference != null && preferredKey != null) {
-                add(CustomerAIProviderConfig(preference.aiVendor, preference.model, preferredKey, priority = 1))
-            }
-            usableKeys
-                .filterKeys { it != preference?.aiVendor }
-                .forEach { (vendor, key) ->
-                    val model = requestAgentSeeds.vendorDefaultModels[vendor] ?: return@forEach
-                    add(CustomerAIProviderConfig(vendor, model, key, priority = size + 1))
-                }
+        val primary = customerCredentialsService.getPrimaryProvider(customerId) ?: return emptyList()
+        // A SYSTEM agent's model preference names a vendor the customer never
+        // chose, so only the customer's own agent can pick the model.
+        val ownAgentModel = agent.modelPreference
+            ?.takeIf { agent.customerOverride && it.aiVendor == primary.aiVendor }
+            ?.model
+        val model = ownAgentModel
+            ?: requestAgentSeeds.vendorDefaultModels[primary.aiVendor]
+            ?: primary.chatModel
+        if (model == null) {
+            logger.warn { "${agent.requestType}: primary vendor ${primary.aiVendor} has no model for customer $customerId" }
+            return emptyList()
         }
+        return listOf(CustomerAIProviderConfig(primary.aiVendor, model, primary.apiKey, priority = 1))
     }
 
     /**

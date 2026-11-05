@@ -151,60 +151,57 @@ class CustomerCredentialsService(
     }
 
     /**
-     * All fully configured customer providers (valid key + selected model +
-     * priority), decrypted and sorted by priority ascending — the order
-     * internal generations should try them in. Vendors missing any piece of
-     * configuration are skipped; customers who never configured a model or
-     * priority get an empty list.
+     * The provider every background task (titles, learning facts, instruction
+     * personas) runs on, so their content reaches only the vendor the customer
+     * ranked first: the valid key with the lowest priority or, when no key has
+     * a priority, the key added first. Null when no valid AI key is stored.
      */
-    suspend fun getPrioritizedProviderConfigs(customerId: String): List<com.genflowly.models.CustomerAIProviderConfig> {
-        // preferredModels (shared with the AI-config widget) is the source of
-        // truth for each vendor's model; the vendor item's selectedModel is a
-        // legacy fallback for customers who never saved widget preferences.
-        val preferredByVendor = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }
-            .getOrNull()?.preferredModels.orEmpty()
-            .associateBy({ it.aiVendor }, { it.model })
-        return customerCredentialsRepository.getCustomerVendorItems(customerId).mapNotNull { item ->
+    suspend fun getPrimaryProvider(customerId: String): com.genflowly.models.PrimaryAIProvider? {
+        val primary = customerCredentialsRepository.getCustomerVendorItems(customerId).mapNotNull { item ->
             val vendor = item[com.genflowly.DynamoDBConstants.AI_VENDOR_KEY]?.s()
                 ?.let { AIVendor.fromStoredNameOrNull(it) }
                 ?: return@mapNotNull null
             val encrypted = item["apiKey"]?.s()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
             // Legacy items may lack the validity flag: a stored key counts as valid.
-            val isValid = item["isAPIKeyValid"]?.bool() ?: true
-            val model = (preferredByVendor[vendor] ?: item["selectedModel"]?.s())?.takeIf { it.isNotBlank() }
-            val priority = item["priority"]?.n()?.toIntOrNull()
-            if (!isValid || model == null || priority == null) return@mapNotNull null
-            com.genflowly.models.CustomerAIProviderConfig(
-                aiVendor = vendor,
-                model = model,
-                apiKey = kmsProvider.decrypt(encrypted),
-                priority = priority
+            if (item["isAPIKeyValid"]?.bool() == false) return@mapNotNull null
+            StoredAIKey(
+                vendor = vendor,
+                encryptedKey = encrypted,
+                priority = item["priority"]?.n()?.toIntOrNull(),
+                createdAt = item["createdAt"]?.s()?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() },
+                selectedModel = item["selectedModel"]?.s()
             )
-        }.sortedBy { it.priority }
+        }.minWithOrNull(
+            compareBy<StoredAIKey>(
+                { it.priority ?: Int.MAX_VALUE },
+                // Legacy rows without createdAt rank after dated ones, then
+                // in the stable legacy-vendor order.
+                { it.createdAt ?: java.time.Instant.MAX },
+                { AIVendor.entries.indexOf(it.vendor).takeIf { i -> i >= 0 } ?: AIVendor.entries.size },
+                { it.vendor.name }
+            )
+        ) ?: return null
+
+        // preferredModels (shared with the AI-config widget) is the source of
+        // truth for each vendor's model; the vendor item's selectedModel is a
+        // legacy fallback for customers who never saved widget preferences.
+        val chatModel = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }
+            .getOrNull()?.preferredModels?.firstOrNull { it.aiVendor == primary.vendor }?.model
+            ?: primary.selectedModel
+        return com.genflowly.models.PrimaryAIProvider(
+            aiVendor = primary.vendor,
+            apiKey = kmsProvider.decrypt(primary.encryptedKey),
+            chatModel = chatModel?.takeIf { it.isNotBlank() }
+        )
     }
 
-    /**
-     * Decrypted keys for every vendor the customer has a usable (present +
-     * valid) key for, in [AIVendor] enum order. Used to build fallback
-     * candidates when no prioritized configs are set.
-     */
-    suspend fun getUsableVendorKeys(customerId: String): Map<AIVendor, String> {
-        val byVendor = customerCredentialsRepository.getCustomerVendorItems(customerId)
-            .mapNotNull { item ->
-                val vendor = item[com.genflowly.DynamoDBConstants.AI_VENDOR_KEY]?.s()
-                    ?.let { AIVendor.fromStoredNameOrNull(it) }
-                    ?: return@mapNotNull null
-                val encrypted = item["apiKey"]?.s()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                // Legacy items may lack the validity flag: a stored key counts as valid.
-                if (item["isAPIKeyValid"]?.bool() == false) return@mapNotNull null
-                vendor to encrypted
-            }.toMap()
-        // Legacy vendors first (stable, preferred fallback order), then any
-        // long-tail vendors the customer brought a key for.
-        val ordered = AIVendor.entries.filter { it in byVendor } +
-            byVendor.keys.filter { it !in AIVendor.entries }.sortedBy { it.name }
-        return ordered.associateWith { kmsProvider.decrypt(byVendor.getValue(it)) }
-    }
+    private data class StoredAIKey(
+        val vendor: AIVendor,
+        val encryptedKey: String,
+        val priority: Int?,
+        val createdAt: java.time.Instant?,
+        val selectedModel: String?
+    )
 
     suspend fun getAIVendorAPIKeyStatusList(customerId: String): List<com.genflowly.models.AIVendorAPIKeyStatus> {
         val storedKeys = customerCredentialsRepository.getCustomerApiKeys(customerId)

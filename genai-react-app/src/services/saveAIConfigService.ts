@@ -15,6 +15,10 @@ export interface SaveAIConfigPreferencesRequest {
         embeddingModelConversations?: string
         /** Default embedding model for notes. */
         embeddingModelNotes?: string
+        /** Memory switches; omitted ones keep their stored value. */
+        memoryLearnFromChats?: boolean
+        memoryLearnFromNotes?: boolean
+        memoryUseInReplies?: boolean
     }
     otherPreferences?: Record<string, string>
 }

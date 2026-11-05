@@ -231,7 +231,7 @@ class MemoryExtractionService(
                 "Memory extraction triggered for conversation {} by customer {} (deferred={})",
                 conversationId, customerId, deferred
             )
-            if (!memoryService.isMemoryEnabled(customerId)) {
+            if (!memoryService.getMemorySettings(customerId).learnFromChats) {
                 terminalSkip("disabled"); return
             }
 
@@ -367,7 +367,7 @@ class MemoryExtractionService(
             }
             try {
                 if (content.trim().length < MIN_NOTE_CHARS) { skip("too_short"); return@launch }
-                if (!memoryService.isMemoryEnabled(customerId)) { skip("disabled"); return@launch }
+                if (!memoryService.getMemorySettings(customerId).learnFromNotes) { skip("disabled"); return@launch }
                 val noteText = listOfNotNull(title?.takeIf { it.isNotBlank() && it != "Untitled" }, content)
                     .joinToString("\n").take(MAX_NOTE_CHARS)
                 Metrics.tracked("memory_extraction", "source" to SOURCE_NOTE) {

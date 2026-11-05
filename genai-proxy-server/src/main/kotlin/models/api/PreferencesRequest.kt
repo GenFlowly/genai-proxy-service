@@ -25,4 +25,9 @@ data class AIConfigPreferences(
     // preference (revert to the server-side default agent); null leaves it
     // unchanged.
     val preferredAgentId: String? = null,
+    // Memory switches (Settings > Defaults > Learned facts). Null = never set,
+    // which means on; null on a save leaves the stored value unchanged.
+    val memoryLearnFromChats: Boolean? = null,
+    val memoryLearnFromNotes: Boolean? = null,
+    val memoryUseInReplies: Boolean? = null,
 )

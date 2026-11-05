@@ -579,7 +579,8 @@
             "overwriteApiKey": "Overwrite API Key",
             "save": "Save",
             "saveErrorToast": "Error saving API key.",
-            "savingLabel": "Saving..."
+            "savingLabel": "Saving...",
+            "primaryProviderNote": "Your priority 1 provider also writes chat and note titles and learns facts about you, using a smaller model. If no priority is set, the first provider you added does this."
         },
         "developerSettings": {
             "copiedToast": "API key copied to clipboard.",
@@ -957,6 +958,27 @@
             "toolCount_one": "1 tool",
             "toolCount_other": "{{count}} tools",
             "yourConnectors": "What you have connected"
+        },
+        "learnedFacts": {
+            "title": "Learned facts",
+            "subtitle": "Facts the assistant learns about you, shown under replies as facts added to memory. Learning runs on your priority 1 AI provider.",
+            "fromChats": "Learn from my chats",
+            "fromChatsDescription": "After each reply, save new facts about you from the conversation.",
+            "fromNotes": "Learn from my notes",
+            "fromNotesDescription": "When you finish editing a note, save new facts about you from it.",
+            "useInReplies": "Use learned facts in replies",
+            "useInRepliesDescription": "Add what the assistant knows about you to your chats, so replies can use it. Your facts are sent to the provider you chat with.",
+            "deleteAll": "Delete all learned facts",
+            "deleteAllTitle": "Delete all learned facts?",
+            "deleteAllConfirm": "This permanently deletes every fact the assistant has learned about you. It can't be undone.",
+            "deleteAllConfirmButton": "Delete all",
+            "cancel": "Cancel",
+            "deleting": "Deleting...",
+            "deletedToast_one": "Deleted {{count}} learned fact.",
+            "deletedToast_other": "Deleted {{count}} learned facts.",
+            "deleteErrorToast": "Couldn't delete learned facts. Please try again.",
+            "saveErrorToast": "Couldn't save the setting. Please try again.",
+            "loginFirstToast": "Please log in first."
         }
     },
     "sidebar": {

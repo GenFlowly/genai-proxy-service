@@ -71,7 +71,8 @@ class MemoryExtractionLifecycleTest {
         coEvery { memoryRepo.startPendingAttempt("CU1", "CONV1", any()) } returns 1
         coEvery { memoryRepo.getExtractionMark("CU1", "CONV1") } returns
             MemoryRepository.ExtractionMark(processed = processed, claimedFrom = null, claimedAt = null)
-        coEvery { memoryService.isMemoryEnabled("CU1") } returns true
+        coEvery { memoryService.getMemorySettings("CU1") } returns
+            MemorySettings(learnFromChats = true, learnFromNotes = true, useInReplies = true)
         coEvery { conversationService.getLatestMessageId("CONV1") } returns "M-last"
         coEvery { conversationService.getMessageThread("CONV1", "M-last") } returns
             (1..threadSize).map { message(it) }

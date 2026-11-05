@@ -78,6 +78,14 @@ describe('AISettings', () => {
         mockUseAuth.mockReturnValue(authValue());
     });
 
+    test('says the priority 1 provider also runs titles and learned facts', () => {
+        render(withQueryClient(<AISettings />));
+
+        expect(screen.getByTestId('ai-settings-primary-note')).toHaveTextContent(
+            'Your priority 1 provider also writes chat and note titles and learns facts about you'
+        );
+    });
+
     test('hides vendors without keys behind the add-vendor dropdown', async () => {
         render(withQueryClient(<AISettings />));
 

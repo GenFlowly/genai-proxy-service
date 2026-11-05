@@ -21,9 +21,12 @@ jest.mock('../../../context/ToastContext');
 jest.mock('../../../services/saveAIConfigService');
 jest.mock('../../../services/requestAgentsService');
 jest.mock('../../../services/agentsService');
-// The sibling section has its own test suite
+// The sibling sections have their own test suites
 jest.mock('./EmbeddingModelDefaults', () => ({
     EmbeddingModelDefaults: () => <div data-testid="embedding-defaults-section" />,
+}));
+jest.mock('./LearnedFactsSettings', () => ({
+    LearnedFactsSettings: () => <div data-testid="learned-facts-section" />,
 }));
 // Render library select/button as native elements so options are inspectable
 jest.mock('@genflowly/component-library', () => ({
@@ -170,6 +173,11 @@ describe('DefaultsSettings', () => {
     test('renders the embedding defaults section', async () => {
         await renderLoaded();
         expect(screen.getByTestId('embedding-defaults-section')).toBeInTheDocument();
+    });
+
+    test('renders the learned facts section', async () => {
+        await renderLoaded();
+        expect(screen.getByTestId('learned-facts-section')).toBeInTheDocument();
     });
 
     test('an unknown future action still renders, labeled by its server display name', async () => {
