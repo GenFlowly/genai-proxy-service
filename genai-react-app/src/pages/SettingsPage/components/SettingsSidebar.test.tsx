@@ -107,4 +107,62 @@ describe('SettingsSidebar', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/vector-db');
         expect(onNavigate).toHaveBeenCalled();
     });
+
+    describe('mobile menu', () => {
+        const renderMenu = (onNavigate = jest.fn()) => {
+            render(
+                <MemoryRouter initialEntries={['/settings/profile']}>
+                    <SettingsSidebar menu onNavigate={onNavigate} />
+                </MemoryRouter>
+            );
+            return onNavigate;
+        };
+
+        test('a section opens in place without navigating or closing the menu', async () => {
+            const onNavigate = renderMenu();
+
+            await userEvent.click(screen.getByText('AI Settings'));
+
+            expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
+            expect(mockNavigate).not.toHaveBeenCalled();
+            expect(onNavigate).not.toHaveBeenCalled();
+        });
+
+        test('a sub-page navigates and closes the menu', async () => {
+            const onNavigate = renderMenu();
+
+            await userEvent.click(screen.getByText('AI Settings'));
+            await userEvent.click(screen.getByText('LLM API Keys'));
+
+            expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/llm-keys');
+            expect(onNavigate).toHaveBeenCalled();
+        });
+
+        test('search lists matching sections and sub-pages, and says when nothing matches', async () => {
+            const onNavigate = renderMenu();
+            const search = screen.getByTestId('mobile-menu-search');
+
+            await userEvent.type(search, 'web search');
+            expect(screen.queryByText('Profile')).not.toBeInTheDocument();
+            await userEvent.click(screen.getByText('Web Search'));
+            expect(mockNavigate).toHaveBeenCalledWith('/settings/usage/web-search');
+            expect(onNavigate).toHaveBeenCalled();
+
+            await userEvent.clear(search);
+            await userEvent.type(search, 'zzz');
+            expect(screen.getByText('No results')).toBeInTheDocument();
+        });
+
+        test('search matches sections without sub-pages', async () => {
+            renderMenu();
+            await userEvent.type(screen.getByTestId('mobile-menu-search'), 'tools');
+            expect(screen.getByTestId('settings-search-hit-tools')).toBeInTheDocument();
+        });
+
+        test('logs out from its own card', async () => {
+            renderMenu();
+            await userEvent.click(screen.getByTestId('settings-menu-logout'));
+            expect(mockLogout).toHaveBeenCalled();
+        });
+    });
 });

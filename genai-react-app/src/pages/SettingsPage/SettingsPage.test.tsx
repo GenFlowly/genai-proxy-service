@@ -137,7 +137,7 @@ describe('SettingsPage', () => {
             expect(menu.getByText('Profile')).toBeInTheDocument();
             expect(menu.getByText('AI Settings')).toBeInTheDocument();
 
-            fireEvent.click(menu.getByText('AI Settings'));
+            fireEvent.click(menu.getByText('Profile'));
 
             expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(false);
         });

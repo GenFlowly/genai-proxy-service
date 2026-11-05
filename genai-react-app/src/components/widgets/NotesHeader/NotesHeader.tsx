@@ -6,7 +6,7 @@ import { useNotes } from '../../../context/NotesContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
 import MobileHeader from '../MobileHeader/MobileHeader'
-import SavedNotesWidget from '../SidebarWidgets/SavedNotesWidget/SavedNotesWidget'
+import NotesMenuContent from './NotesMenuContent'
 import { SaveStatus } from '../../../hooks/useAutosave'
 import { parseServerDate } from '../../../utils/timeUtils'
 import { ICONS } from '../../../constants/icons'
@@ -73,7 +73,16 @@ export default function NotesHeader(): React.ReactElement {
                     },
                 ]}
                 menuTitle={t('sidebar.savedNotesWidget.title')}
-                menuContent={<SavedNotesWidget onSelect={() => setLeftSidebarExpanded(false)} />}
+                menuAction={{
+                    label: t('notes.notesHeader.newNote'),
+                    icon: ICONS.COMPOSE,
+                    onClick: () => {
+                        startNewNote()
+                        setLeftSidebarExpanded(false)
+                    },
+                    'data-testid': 'menu-new-note-button',
+                }}
+                menuContent={<NotesMenuContent onClose={() => setLeftSidebarExpanded(false)} />}
             />
         )
     }
