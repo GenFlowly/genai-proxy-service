@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { useLocation, useParams } from 'react-router-dom';
 import { useSidebarMenu } from '../../context/SidebarMenuContext';
+import { APP_NAME } from '../../constants/appName';
 
 // Mock dependencies
 jest.mock('react-router-dom', () => ({
@@ -14,7 +15,7 @@ jest.mock('../../context/SidebarMenuContext', () => ({
 }));
 
 describe('usePageTitle Hook', () => {
-    const DEFAULT_TITLE = 'AI Proxy';
+    const DEFAULT_TITLE = APP_NAME;
 
     beforeEach(() => {
         jest.clearAllMocks();
