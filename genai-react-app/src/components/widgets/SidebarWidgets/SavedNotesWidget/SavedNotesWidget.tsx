@@ -6,10 +6,11 @@ import { useNotes } from '../../../../context/NotesContext'
 import { getNotes, deleteNote, SavedNote } from '../../../../services/saveNotesService'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
-import { SidebarListPanel, SidebarListGroup } from '@genflowly/component-library'
+import { SidebarCard, SidebarListPanel, SidebarListGroup } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import { formatServerDateTime, formatServerTime } from '../../../../utils/timeUtils'
 import { groupByDate, DateGroupId } from '../../../../utils/dateGrouping'
+import { getExpandedSection, setExpandedSection } from '../../ConversationHistoryWidget/historyCache'
 import { loadNotesCache, saveNotesCache } from './notesCache'
 
 const noteLabel = (note: SavedNote): string => {
@@ -21,10 +22,12 @@ const noteLabel = (note: SavedNote): string => {
 interface SavedNotesWidgetProps {
     /** Called after a note is opened (e.g. to close the mobile menu). */
     onSelect?: () => void
+    // The full-screen mobile menu: a single card under a collapsible header
+    menu?: boolean
     'data-testid'?: string
 }
 
-export default function SavedNotesWidget({ onSelect, 'data-testid': testId }: SavedNotesWidgetProps = {}) {
+export default function SavedNotesWidget({ onSelect, menu = false, 'data-testid': testId }: SavedNotesWidgetProps = {}) {
     const { t } = useTranslation()
     const { getAccessTokenSilently, customerId } = useAuth()
     const { openNote, activeNote, updatedNote, clearActiveNote } = useNotes()
@@ -134,6 +137,7 @@ export default function SavedNotesWidget({ onSelect, 'data-testid': testId }: Sa
                 action: {
                     icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
                     label: t('sidebar.savedNotesWidget.archiveNote'),
+                    tone: 'muted' as const,
                     onClick: (e: React.MouseEvent) => handleArchive(e, note.noteKey),
                     testId: `note-archive-btn-${note.noteKey}`,
                 },
@@ -141,10 +145,21 @@ export default function SavedNotesWidget({ onSelect, 'data-testid': testId }: Sa
         }),
     }))
 
-    return (
+    const panel = (
         <SidebarListPanel
-            title={t('sidebar.savedNotesWidget.title')}
-            groups={groups}
+            title={menu ? undefined : t('sidebar.savedNotesWidget.title')}
+            variant={menu ? 'menu' : 'default'}
+            groups={menu && groups.length > 0
+                ? [{
+                    id: 'saved-notes',
+                    label: t('sidebar.savedNotesWidget.title'),
+                    collapsible: true,
+                    defaultExpanded: getExpandedSection('savedNotes') ?? true,
+                    onToggle: expanded => setExpandedSection('savedNotes', expanded),
+                    testId: 'saved-notes-heading',
+                    groups,
+                }]
+                : groups}
             isLoading={isLoading}
             hasError={hasError}
             errorText={t('sidebar.savedNotesWidget.couldNotLoadNotes')}
@@ -159,4 +174,6 @@ export default function SavedNotesWidget({ onSelect, 'data-testid': testId }: Sa
             }}
         />
     )
+
+    return menu ? <SidebarCard>{panel}</SidebarCard> : panel
 }

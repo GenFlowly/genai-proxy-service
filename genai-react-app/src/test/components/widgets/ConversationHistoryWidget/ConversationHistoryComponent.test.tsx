@@ -85,6 +85,53 @@ describe('ConversationHistoryComponent', () => {
         mockGetProjectConversations.mockResolvedValue({ conversations: [], lastEvaluatedKey: null })
     })
 
+    describe('mobile menu', () => {
+        const pinnedConversation = { conversationId: 'conv-pinned', title: 'Pinned Chat', createdAt: null, updatedAt: null }
+
+        test('one collapsible History header holds Pinned and Recents', async () => {
+            mockGetPinnedConversations.mockResolvedValue({ conversations: [pinnedConversation] })
+            render(<ConversationHistoryComponent menu />)
+
+            const heading = await screen.findByTestId('conv-history-history-heading')
+            expect(screen.getByText('Pinned')).toBeInTheDocument()
+            expect(screen.getByText('Recents')).toBeInTheDocument()
+            expect(screen.queryByTestId('conv-history-pinned-heading')).not.toBeInTheDocument()
+            expect(screen.queryByTestId('conv-history-recents-heading')).not.toBeInTheDocument()
+
+            fireEvent.click(heading)
+            expect(screen.queryByText('Pinned Chat')).not.toBeInTheDocument()
+            expect(screen.getByTestId('history-split-handle')).toHaveAttribute('aria-hidden', 'true')
+
+            fireEvent.click(heading)
+            expect(screen.getByText('Pinned Chat')).toBeInTheDocument()
+        })
+
+        test('labels a conversation without a title instead of showing its id', async () => {
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [{ conversationId: 'conv-raw-id', title: '', createdAt: null, updatedAt: null }],
+                lastEvaluatedKey: null,
+            })
+            render(<ConversationHistoryComponent menu />)
+
+            expect(await screen.findByText('Untitled conversation')).toBeInTheDocument()
+            expect(screen.queryByText('conv-raw-id')).not.toBeInTheDocument()
+        })
+
+        test('desktop keeps separate Pinned and Recents headers and the raw id', async () => {
+            mockGetPinnedConversations.mockResolvedValue({ conversations: [pinnedConversation] })
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [{ conversationId: 'conv-raw-id', title: '', createdAt: null, updatedAt: null }],
+                lastEvaluatedKey: null,
+            })
+            render(<ConversationHistoryComponent />)
+
+            expect(await screen.findByTestId('conv-history-pinned-heading')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-recents-heading')).toBeInTheDocument()
+            expect(screen.queryByTestId('conv-history-history-heading')).not.toBeInTheDocument()
+            expect(screen.getByText('conv-raw-id')).toBeInTheDocument()
+        })
+    })
+
     test('renders Recents heading once conversations load', async () => {
         render(<ConversationHistoryComponent />)
         await waitFor(() => {
