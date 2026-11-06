@@ -75,10 +75,15 @@ class UnifiedSearchService(
         return toResult(hit, title = note["title"]?.s() ?: hit.title)
     }
 
+    // A memory's title is its current text (the vector may hold an older
+    // version); the snippet is its category.
     private suspend fun enrichMemory(customerId: String, hit: SearchVectorHit): SearchResultItem? {
-        memoryRepository.getMemory(customerId, hit.key) ?: return null
-        return toResult(hit, title = hit.title)
+        val memory = memoryRepository.getMemory(customerId, hit.key) ?: return null
+        return toResult(hit, title = memory.text).copy(snippet = memoryLabel(memory))
     }
+
+    private fun memoryLabel(memory: com.genflowly.models.api.CustomerMemory) =
+        memory.category ?: memory.kind.name.lowercase()
 
     private fun toResult(hit: SearchVectorHit, title: String?) = SearchResultItem(
         type = hit.type,
@@ -180,8 +185,8 @@ class UnifiedSearchService(
             keywordResult(
                 type = PendingVectorType.MEMORY,
                 key = memory.memoryId,
-                title = "[memory] ${memory.category ?: memory.kind.name.lowercase()}",
-                snippet = matcher.snippet(memory.text),
+                title = memory.text,
+                snippet = memoryLabel(memory),
                 createdAt = memory.createdAt
             )
         }

@@ -2,13 +2,21 @@ package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
+import com.genflowly.DynamoDBConstants.MEMORY_CHANGE_PREFIX
 import com.genflowly.DynamoDBConstants.MEMORY_CONV_META_PREFIX
 import com.genflowly.DynamoDBConstants.MEMORY_ID_KEY
 import com.genflowly.DynamoDBConstants.MEMORY_ITEM_PREFIX
+import com.genflowly.DynamoDBConstants.MEMORY_PROFILE_PLACEMENT
+import com.genflowly.DynamoDBConstants.MEMORY_USAGE_PREFIX
 import com.genflowly.models.api.CustomerMemory
+import com.genflowly.models.api.MemoryChange
+import com.genflowly.models.api.MemoryChangeType
 import com.genflowly.models.api.MemoryKind
+import com.genflowly.models.api.MemoryPlacement
 import com.genflowly.models.api.MemorySourceType
+import com.genflowly.models.api.MemoryUsage
 import java.time.Instant
+import java.util.Base64
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,89 +26,226 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
+import software.amazon.awssdk.services.dynamodb.model.Put
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException
+import software.amazon.awssdk.services.dynamodb.model.Update
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
+
+/** What caused a change, as recorded on its change-log row. */
+data class MemoryChangeCause(
+    val type: MemoryChangeType,
+    val sourceType: MemorySourceType? = null,
+    val conversationId: String? = null,
+    val messageId: String? = null,
+    val noteKey: String? = null,
+    val reason: String? = null,
+)
 
 /**
  * Data access for the CustomerMemory table. Memory items live under the
  * "MEM#" sort-key prefix; per-conversation extraction bookkeeping lives under
  * "META#CONV#" and is invisible to listings (key-condition prefix, not a
  * filter, so listing cost stays proportional to real memories).
+ *
+ * Every change to a memory is one transaction: the memory row and an
+ * immutable change-log row written together. Writes are conditioned on the
+ * row's write counter (or, for text edits, its version), so a change based
+ * on a stale read is refused instead of overwriting a newer one.
  */
 class MemoryRepository(
     private val dynamoDbClient: DynamoDbClient,
     private val logger: KLogger
 ) {
 
+    /** Creates a memory as version 1, with the change-log entry that says why. */
     suspend fun createMemory(
         customerId: String,
         text: String,
-        kind: MemoryKind,
+        placements: List<MemoryPlacement>,
         category: String?,
         sourceType: MemorySourceType,
-        sourceId: String?
+        sourceId: String?,
+        cause: MemoryChangeCause,
     ): CustomerMemory = withContext(Dispatchers.IO) {
+        require(placements.isNotEmpty()) { "A memory must apply somewhere" }
         val now = Instant.now().toString()
+        val ordered = ordered(placements)
         val memory = CustomerMemory(
             memoryId = "$MEMORY_ITEM_PREFIX${UUID.randomUUID()}",
             text = text,
-            kind = kind,
+            kind = ordered.first().kind,
             category = category,
             sourceType = sourceType,
             sourceId = sourceId,
             createdAt = now,
-            updatedAt = now
+            updatedAt = now,
+            placements = ordered,
+            version = 1,
+            tracked = true,
+            rev = 1,
         )
         val item = mutableMapOf(
-            CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-            MEMORY_ID_KEY to AttributeValue.builder().s(memory.memoryId).build(),
-            "text" to AttributeValue.builder().s(memory.text).build(),
-            "kind" to AttributeValue.builder().s(memory.kind.name).build(),
-            "sourceType" to AttributeValue.builder().s(memory.sourceType.name).build(),
-            "createdAt" to AttributeValue.builder().s(now).build(),
-            "updatedAt" to AttributeValue.builder().s(now).build()
+            CUSTOMER_ID_KEY to s(customerId),
+            MEMORY_ID_KEY to s(memory.memoryId),
+            "text" to s(memory.text),
+            "kind" to s(memory.kind.name),
+            "sourceType" to s(memory.sourceType.name),
+            "createdAt" to s(now),
+            "updatedAt" to s(now),
+            PLACEMENTS to placementsValue(ordered),
+            VERSION to n(1),
+            REV to n(1),
         )
-        memory.category?.let { item["category"] = AttributeValue.builder().s(it).build() }
-        memory.sourceId?.let { item["sourceId"] = AttributeValue.builder().s(it).build() }
+        memory.category?.let { item["category"] = s(it) }
+        memory.sourceId?.let { item["sourceId"] = s(it) }
 
-        dynamoDbClient.putItem(
-            PutItemRequest.builder()
-                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
-                .item(item)
-                .build()
+        dynamoDbClient.transactWriteItems(
+            TransactWriteItemsRequest.builder().transactItems(
+                TransactWriteItem.builder().put(
+                    Put.builder()
+                        .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                        .item(item)
+                        .conditionExpression("attribute_not_exists($MEMORY_ID_KEY)")
+                        .build()
+                ).build(),
+                changePut(customerId, memory.memoryId, now, cause, version = 1, text = text),
+            ).build()
         )
         logger.info { "Created memory ${memory.memoryId} for customer $customerId" }
         memory
     }
 
-    /** Rewrites a memory's text. Returns false when the memory no longer exists. */
+    /**
+     * Saves [text] as the next version of [memory] (as read). Returns false
+     * when the memory is gone or a newer version was saved since it was read.
+     */
     suspend fun updateMemoryText(
         customerId: String,
-        memoryId: String,
-        text: String
+        memory: CustomerMemory,
+        text: String,
+        cause: MemoryChangeCause,
     ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            dynamoDbClient.updateItem(
-                UpdateItemRequest.builder()
-                    .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
-                    .key(memoryKey(customerId, memoryId))
-                    .updateExpression("SET #text = :text, #updatedAt = :now")
-                    .conditionExpression("attribute_exists($MEMORY_ID_KEY)")
-                    .expressionAttributeNames(mapOf("#text" to "text", "#updatedAt" to "updatedAt"))
-                    .expressionAttributeValues(
-                        mapOf(
-                            ":text" to AttributeValue.builder().s(text).build(),
-                            ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
-                        )
-                    )
-                    .build()
+        val now = Instant.now().toString()
+        val newVersion = memory.version + 1
+        val condition = if (memory.tracked) "#version = :base"
+            else "attribute_exists($MEMORY_ID_KEY) AND attribute_not_exists(#version)"
+        val values = mutableMapOf(
+            ":text" to s(text), ":nv" to n(newVersion), ":now" to s(now), ":zero" to n(0), ":one" to n(1)
+        )
+        if (memory.tracked) values[":base"] = n(memory.version)
+        val update = Update.builder()
+            .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+            .key(memoryKey(customerId, memory.memoryId))
+            .updateExpression(
+                "SET #text = :text, #version = :nv, #updatedAt = :now, #rev = if_not_exists(#rev, :zero) + :one"
             )
-            true
-        } catch (e: ConditionalCheckFailedException) {
-            logger.warn { "Skipped update of missing memory $memoryId for $customerId" }
-            false
+            .conditionExpression(condition)
+            .expressionAttributeNames(
+                mapOf("#text" to "text", "#version" to VERSION, "#updatedAt" to "updatedAt", "#rev" to REV)
+            )
+            .expressionAttributeValues(values)
+            .build()
+        transact(
+            buildList {
+                if (!memory.tracked) add(legacyBaselinePut(customerId, memory))
+                add(TransactWriteItem.builder().update(update).build())
+                add(
+                    changePut(
+                        customerId, memory.memoryId, now, cause,
+                        version = newVersion, text = text, previousText = memory.text
+                    )
+                )
+            },
+            "update text of ${memory.memoryId}"
+        )
+    }
+
+    /**
+     * Sets where [memory] (as read) applies, logging the move or copy.
+     * Returns false when it is gone or changed since it was read.
+     */
+    suspend fun setPlacements(
+        customerId: String,
+        memory: CustomerMemory,
+        placements: List<MemoryPlacement>,
+        cause: MemoryChangeCause,
+        from: List<MemoryPlacement>,
+        to: List<MemoryPlacement>,
+    ): Boolean = withContext(Dispatchers.IO) {
+        require(placements.isNotEmpty()) { "A memory must apply somewhere" }
+        val now = Instant.now().toString()
+        val ordered = ordered(placements)
+        val values = mutableMapOf(
+            ":p" to placementsValue(ordered),
+            ":k" to s(ordered.first().kind.name),
+            ":nrev" to n(memory.rev + 1),
+            ":now" to s(now),
+        )
+        val revCondition = if (memory.rev == 0L) {
+            "attribute_not_exists(#rev)"
+        } else {
+            values[":rev"] = n(memory.rev)
+            "#rev = :rev"
         }
+        val names = mutableMapOf(
+            "#placements" to PLACEMENTS, "#kind" to "kind", "#rev" to REV, "#updatedAt" to "updatedAt"
+        )
+        var expression = "SET #placements = :p, #kind = :k, #rev = :nrev, #updatedAt = :now"
+        if (!memory.tracked) {
+            expression += ", #version = :one"
+            names["#version"] = VERSION
+            values[":one"] = n(1)
+        }
+        val update = Update.builder()
+            .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+            .key(memoryKey(customerId, memory.memoryId))
+            .updateExpression(expression)
+            .conditionExpression("attribute_exists($MEMORY_ID_KEY) AND $revCondition")
+            .expressionAttributeNames(names)
+            .expressionAttributeValues(values)
+            .build()
+        transact(
+            buildList {
+                if (!memory.tracked) add(legacyBaselinePut(customerId, memory))
+                add(TransactWriteItem.builder().update(update).build())
+                add(changePut(customerId, memory.memoryId, now, cause, from = from, to = to))
+            },
+            "set placements of ${memory.memoryId}"
+        )
+    }
+
+    /** The memory's change log, oldest first. */
+    suspend fun getChanges(customerId: String, memoryId: String): List<MemoryChange> =
+        withContext(Dispatchers.IO) {
+            queryPrefix(customerId, "$MEMORY_CHANGE_PREFIX${uuidOf(memoryId)}#").mapNotNull { itemToChange(it) }
+        }
+
+    /**
+     * One page of the memory's usage log, newest first, and the cursor of the
+     * next page (null on the last one).
+     */
+    suspend fun getUsagePage(
+        customerId: String,
+        memoryId: String,
+        limit: Int,
+        cursor: String?,
+    ): Pair<List<MemoryUsage>, String?> = withContext(Dispatchers.IO) {
+        val prefix = "$MEMORY_USAGE_PREFIX${uuidOf(memoryId)}#"
+        val builder = QueryRequest.builder()
+            .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+            .keyConditionExpression("$CUSTOMER_ID_KEY = :cid AND begins_with($MEMORY_ID_KEY, :prefix)")
+            .expressionAttributeValues(mapOf(":cid" to s(customerId), ":prefix" to s(prefix)))
+            .scanIndexForward(false)
+            .limit(limit)
+        decodeCursor(cursor)?.takeIf { it.startsWith(prefix) }?.let {
+            builder.exclusiveStartKey(memoryKey(customerId, it))
+        }
+        val response = dynamoDbClient.query(builder.build())
+        val next = if (response.hasLastEvaluatedKey()) response.lastEvaluatedKey()[MEMORY_ID_KEY]?.s() else null
+        response.items().mapNotNull { itemToUsage(it) } to next?.let { encodeCursor(it) }
     }
 
     /** Hard delete — memories are user-visible learned data, kept only while wanted. */
@@ -441,21 +586,183 @@ class MemoryRepository(
         MEMORY_ID_KEY to AttributeValue.builder().s(memoryId).build()
     )
 
+    /** Runs the transaction; false when one of its conditions failed. */
+    private fun transact(items: List<TransactWriteItem>, what: String): Boolean = try {
+        dynamoDbClient.transactWriteItems(TransactWriteItemsRequest.builder().transactItems(items).build())
+        true
+    } catch (e: TransactionCanceledException) {
+        if (e.cancellationReasons().any { it.code() == "ConditionalCheckFailed" }) {
+            logger.info { "Refused to $what: changed or deleted since it was read" }
+            false
+        } else {
+            throw e
+        }
+    }
+
+    private fun changePut(
+        customerId: String,
+        memoryId: String,
+        createdAt: String,
+        cause: MemoryChangeCause,
+        version: Int? = null,
+        text: String? = null,
+        previousText: String? = null,
+        from: List<MemoryPlacement>? = null,
+        to: List<MemoryPlacement>? = null,
+        suffix: String = UUID.randomUUID().toString().take(8),
+    ): TransactWriteItem {
+        val item = mutableMapOf(
+            CUSTOMER_ID_KEY to s(customerId),
+            MEMORY_ID_KEY to s("$MEMORY_CHANGE_PREFIX${uuidOf(memoryId)}#$createdAt#$suffix"),
+            CHANGE_TYPE to s(cause.type.name),
+            "createdAt" to s(createdAt),
+        )
+        version?.let { item[VERSION] = n(it) }
+        text?.let { item["text"] = s(it) }
+        previousText?.let { item["previousText"] = s(it) }
+        cause.sourceType?.let { item["sourceType"] = s(it.name) }
+        cause.conversationId?.let { item["conversationId"] = s(it) }
+        cause.messageId?.let { item["messageId"] = s(it) }
+        cause.noteKey?.let { item["noteKey"] = s(it) }
+        cause.reason?.takeIf { it.isNotBlank() }?.let { item["reason"] = s(it) }
+        from?.let { item[FROM_PLACEMENTS] = placementsValue(it) }
+        to?.let { item[TO_PLACEMENTS] = placementsValue(it) }
+        return TransactWriteItem.builder().put(
+            Put.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                .item(item)
+                .conditionExpression("attribute_not_exists($MEMORY_ID_KEY)")
+                .build()
+        ).build()
+    }
+
+    /**
+     * Version 1 of a memory stored before versions were recorded: its text as
+     * it is now, written with its first recorded change. The fixed key makes
+     * a second, racing baseline fail instead of duplicating it.
+     */
+    private fun legacyBaselinePut(customerId: String, memory: CustomerMemory): TransactWriteItem =
+        changePut(
+            customerId, memory.memoryId, memory.createdAt.ifBlank { EPOCH },
+            MemoryChangeCause(
+                type = MemoryChangeType.LEGACY,
+                sourceType = memory.sourceType,
+                conversationId = memory.sourceId.takeIf { memory.sourceType == MemorySourceType.CONVERSATION },
+                noteKey = memory.sourceId.takeIf { memory.sourceType == MemorySourceType.NOTE },
+            ),
+            version = 1,
+            text = memory.text,
+            suffix = BASELINE_SUFFIX,
+        )
+
+    private fun queryPrefix(customerId: String, prefix: String): List<Map<String, AttributeValue>> =
+        dynamoDbClient.queryPaginator(
+            QueryRequest.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                .keyConditionExpression("$CUSTOMER_ID_KEY = :cid AND begins_with($MEMORY_ID_KEY, :prefix)")
+                .expressionAttributeValues(mapOf(":cid" to s(customerId), ":prefix" to s(prefix)))
+                .build()
+        ).items().toList()
+
     private fun itemToMemory(item: Map<String, AttributeValue>): CustomerMemory? {
         val memoryId = item[MEMORY_ID_KEY]?.s() ?: return null
         val text = item["text"]?.s() ?: return null
+        val kind = item["kind"]?.s()?.let { runCatching { MemoryKind.valueOf(it) }.getOrNull() }
+            ?: MemoryKind.EPISODIC
+        val placements = item[PLACEMENTS]?.m()?.let { parsePlacements(it) }.orEmpty()
+            .ifEmpty { listOf(MemoryPlacement(projectId = null, kind = kind)) }
         return CustomerMemory(
             memoryId = memoryId,
             text = text,
-            kind = item["kind"]?.s()?.let { runCatching { MemoryKind.valueOf(it) }.getOrNull() }
-                ?: MemoryKind.EPISODIC,
+            kind = placements.first().kind,
             category = item["category"]?.s(),
             sourceType = item["sourceType"]?.s()
                 ?.let { runCatching { MemorySourceType.valueOf(it) }.getOrNull() }
                 ?: MemorySourceType.CONVERSATION,
             sourceId = item["sourceId"]?.s(),
             createdAt = item["createdAt"]?.s() ?: "",
-            updatedAt = item["updatedAt"]?.s() ?: ""
+            updatedAt = item["updatedAt"]?.s() ?: "",
+            placements = placements,
+            version = item[VERSION]?.n()?.toIntOrNull() ?: 1,
+            tracked = item.containsKey(VERSION),
+            hitCount = item[HIT_COUNT]?.n()?.toLongOrNull() ?: 0,
+            lastUsedAt = item[LAST_USED_AT]?.s(),
+            rev = item[REV]?.n()?.toLongOrNull() ?: 0,
         )
+    }
+
+    private fun itemToChange(item: Map<String, AttributeValue>): MemoryChange? {
+        val changeId = item[MEMORY_ID_KEY]?.s() ?: return null
+        val type = item[CHANGE_TYPE]?.s()?.let { runCatching { MemoryChangeType.valueOf(it) }.getOrNull() }
+            ?: return null
+        return MemoryChange(
+            changeId = changeId,
+            type = type,
+            createdAt = item["createdAt"]?.s() ?: "",
+            version = item[VERSION]?.n()?.toIntOrNull(),
+            text = item["text"]?.s(),
+            previousText = item["previousText"]?.s(),
+            sourceType = item["sourceType"]?.s()?.let { runCatching { MemorySourceType.valueOf(it) }.getOrNull() },
+            conversationId = item["conversationId"]?.s(),
+            messageId = item["messageId"]?.s(),
+            noteKey = item["noteKey"]?.s(),
+            reason = item["reason"]?.s(),
+            from = item[FROM_PLACEMENTS]?.m()?.let { parsePlacements(it) },
+            to = item[TO_PLACEMENTS]?.m()?.let { parsePlacements(it) },
+        )
+    }
+
+    private fun itemToUsage(item: Map<String, AttributeValue>): MemoryUsage? {
+        val conversationId = item["conversationId"]?.s() ?: return null
+        val messageId = item["messageId"]?.s() ?: return null
+        return MemoryUsage(
+            conversationId = conversationId,
+            messageId = messageId,
+            usedAt = item[DynamoDBConstants.MEMORY_USED_AT_KEY]?.s() ?: "",
+            how = item["how"]?.s() ?: "",
+        )
+    }
+
+    private fun parsePlacements(map: Map<String, AttributeValue>): List<MemoryPlacement> =
+        ordered(
+            map.mapNotNull { (key, value) ->
+                val kind = value.s()?.let { runCatching { MemoryKind.valueOf(it) }.getOrNull() }
+                    ?: return@mapNotNull null
+                MemoryPlacement(projectId = key.takeUnless { it == MEMORY_PROFILE_PLACEMENT }, kind = kind)
+            }
+        )
+
+    private fun placementsValue(placements: List<MemoryPlacement>): AttributeValue =
+        AttributeValue.builder().m(
+            placements.associate { (it.projectId ?: MEMORY_PROFILE_PLACEMENT) to s(it.kind.name) }
+        ).build()
+
+    private fun s(value: String): AttributeValue = AttributeValue.builder().s(value).build()
+
+    private fun n(value: Number): AttributeValue = AttributeValue.builder().n(value.toString()).build()
+
+    private companion object {
+        const val PLACEMENTS = "placements"
+        const val VERSION = "version"
+        const val REV = "rev"
+        const val HIT_COUNT = DynamoDBConstants.MEMORY_HIT_COUNT_KEY
+        const val LAST_USED_AT = DynamoDBConstants.MEMORY_LAST_USED_AT_KEY
+        const val CHANGE_TYPE = "changeType"
+        const val FROM_PLACEMENTS = "fromPlacements"
+        const val TO_PLACEMENTS = "toPlacements"
+        const val BASELINE_SUFFIX = "base"
+        const val EPOCH = "1970-01-01T00:00:00Z"
+
+        fun uuidOf(memoryId: String) = memoryId.removePrefix(MEMORY_ITEM_PREFIX)
+
+        /** Profile first, then projects by id: stable, and the first one gives [CustomerMemory.kind]. */
+        fun ordered(placements: List<MemoryPlacement>): List<MemoryPlacement> =
+            placements.distinctBy { it.projectId }.sortedWith(compareBy({ it.projectId != null }, { it.projectId }))
+
+        fun encodeCursor(sortKey: String): String =
+            Base64.getUrlEncoder().withoutPadding().encodeToString(sortKey.toByteArray())
+
+        fun decodeCursor(cursor: String?): String? =
+            cursor?.let { runCatching { String(Base64.getUrlDecoder().decode(it)) }.getOrNull() }
     }
 }

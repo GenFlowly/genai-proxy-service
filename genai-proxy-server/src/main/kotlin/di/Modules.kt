@@ -214,12 +214,13 @@ fun appModule(): Module = module {
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get(), get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { com.genflowly.service.ProjectService(get(), get(), get()) }
+    single { com.genflowly.service.ProjectService(get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
-    single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
+    single { com.genflowly.service.MemoryVectorService(get(), get(), get(), get()) }
+    single { com.genflowly.service.MemoryService(get(), get(), get(), get(), get(), get(), get()) }
     single {
         com.genflowly.service.MemoryExtractionService(
-            get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            get(), get(), get(), get(), get(), get(), get(),
             logContent = !get<AppConfig>().isProduction
         )
     }

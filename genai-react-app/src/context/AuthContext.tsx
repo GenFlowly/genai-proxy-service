@@ -16,7 +16,7 @@ import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.model
 import { InstructionResponse } from '../models/instruction.models'
 import { StoreCustomerVectorDBConfigResponse } from '../models/storeCustomerVectorDBConfig.models'
 import { clearHistoryCache } from '../components/widgets/ConversationHistoryWidget/historyCache'
-import { clearNotesCache } from '../components/widgets/SidebarWidgets/SavedNotesWidget/notesCache'
+import { memoriesCache } from '../services/memoriesService'
 import { clearRecentInstructionsCache } from '../components/common/InstructionPickerModal/recentInstructionsCache'
 import { customerKey } from '../utils/storageKeys'
 import { queryClient } from '../queryClient'
@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         // Module-level caches hold the departing customer's data in memory,
         // out of localStorage.clear()'s reach.
         clearHistoryCache()
-        clearNotesCache()
+        memoriesCache.clear()
         clearRecentInstructionsCache()
         try {
             localStorage.clear()

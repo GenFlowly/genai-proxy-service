@@ -1,77 +1,856 @@
-@import '../../styles/variables.scss';
 @import '../../styles/themes.scss';
 @import '../../styles/mixins.scss';
+
+$mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+// ── Page shell (the standard skeleton: header band, then the canvas row) ─────
 
 .page {
     height: 100vh;
     overflow: hidden;
-    background-color: $background-gray;
+    background-color: $color-background;
     display: flex;
     flex-direction: column;
 }
 
 .layout {
     display: flex;
-    flex: 1 1 0; // Fill remaining height below navbar + header
-    min-height: 0; // Allow flex child to shrink + scroll correctly
+    flex: 1 1 0;
+    min-height: 0;
     width: 100%;
     overflow: hidden;
     position: relative;
-
-    // Page canvas behind the widget panels (matches the chat page); shows
-    // through the panels' rounded corners and the 1px gaps between them
     background-color: $color-page-background;
     gap: $widget-gap;
     padding: $widget-gap;
 
     @include respond-to-tablet {
-        background-color: $background-gray;
+        background-color: $color-background;
         gap: 0;
         padding: 0;
     }
 }
 
-.centerContainer {
+.main {
     flex: 1 1 auto;
     min-width: 0;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    overflow-y: auto;
-    overflow-x: hidden;
     background-color: $color-background;
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-    padding-right: 3.5rem; // Reserve space for the collapsed RightSidebar's 56px strip (desktop only)
+    border-radius: $widget-radius;
+    padding: 1.5rem 2rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
 
     @include respond-to-tablet {
-        // RightSidebar fully unmounts below this width — nothing to clear
-        padding-right: 0;
+        border-radius: 0;
+        padding: 1rem 0.5rem 1.5rem;
+        // Clear the fixed MobileHeader overlay
+        padding-top: 4rem;
     }
 }
 
-.formContainer {
-    width: 100%;
-    max-width: 900px;
+// ── Sidebar cards (desktop sidebar and the L2 Menu) ──────────────────────────
+
+.sidebarColumn {
+    height: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    padding: 0 2rem;
+    gap: $widget-gap;
 }
 
-.inputWrapper {
+.profileCard {
+    flex: 0 0 auto;
+}
+
+.projectsCard {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.scopeItem {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
     width: 100%;
 }
 
-.editorWrapper {
-    width: 100%;
-    height: 500px; // Fixed height for editor area
+.scopeIcon {
+    color: $color-text-muted;
+    flex-shrink: 0;
+}
+
+.scopeLabel {
+    flex: 1;
+    @include ellipsis;
+}
+
+.scopeCount {
+    font-size: 0.75rem;
+    color: $color-text-muted;
+    background: $color-background-tertiary;
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+// ── States ───────────────────────────────────────────────────────────────────
+
+.stateContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 4rem 2rem;
+    text-align: center;
+}
+
+.spinner {
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 3px solid $color-border;
+    border-top-color: $color-primary;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.stateText {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: $color-text-primary;
+}
+
+.stateSubText {
+    margin: 0;
+    max-width: 28rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: $color-text-muted;
+}
+
+// ── Memory cards ─────────────────────────────────────────────────────────────
+
+.card {
+    position: relative;
+    height: 100%;
+    min-width: 0;
+    min-height: 9.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 0.75rem 0.875rem 1rem;
+    background: $color-background-secondary;
     border: 1px solid $color-border;
+    border-radius: 12px;
+    transition: border-color $transition-fast;
+
+    @media (hover: hover) {
+        &:hover {
+            border-color: $color-primary;
+        }
+    }
+
+    @include respond-to-tablet {
+        min-height: 0;
+        padding: 0.125rem 0.125rem 0.875rem 0.875rem;
+    }
+}
+
+.cardMenuOpen {
+    z-index: 5;
+    border-color: $color-primary;
+}
+
+.cardHead {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+}
+
+.spacer {
+    flex: 1;
+}
+
+.tag {
+    padding: 0.25rem 0.6rem;
+    border: 1px solid $color-border-light;
+    border-radius: 999px;
+    background: $color-background-tertiary;
+    color: $color-text-muted;
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+
+    @include respond-to-tablet {
+        font-size: 0.75rem;
+    }
+}
+
+.tagKind {
+    border-color: $color-primary;
+    background: $color-background-selected;
+    color: $color-primary;
+    font-weight: 600;
+}
+
+.menuAnchor {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.kebab {
+    @include interactive-base;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: $radius-md;
+    background: transparent;
+    color: $color-text-muted;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover {
+        background: $color-background-tertiary;
+    }
+
+    // 44px touch target on phones
+    @include respond-to-tablet {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
+}
+
+.menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    width: 13rem;
+    padding: 0.25rem 0;
+    display: flex;
+    flex-direction: column;
+    background: $color-background-secondary;
+    border: 1px solid $color-border;
+    border-radius: $radius-md;
+    box-shadow: $shadow-lg;
+    z-index: 10;
+}
+
+.menuItem {
+    @include interactive-base;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.875rem;
+    border: 0;
+    background: transparent;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+
+    &:hover {
+        background: $color-background-hover;
+    }
+}
+
+.menuItemDanger {
+    color: $color-error;
+}
+
+.cardText {
+    flex: 1;
+    display: block;
+    padding: 0 0.25rem 0 0;
+    border: 0;
+    background: transparent;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    text-align: left;
+    text-wrap: pretty;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: 2px;
+        border-radius: $radius-sm;
+    }
+}
+
+.cardFoot {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-right: 0.25rem;
+    font-size: 0.75rem;
+    color: $color-text-muted;
+
+    @include respond-to-tablet {
+        padding-right: 0.75rem;
+        font-size: 0.8rem;
+    }
+}
+
+.count {
+    font-weight: 600;
+    color: $color-text-secondary;
+    font-variant-numeric: tabular-nums;
+}
+
+.versionBadge {
+    padding: 0.125rem 0.375rem;
+    border-radius: $radius-sm;
+    background: $color-background-tertiary;
+    color: $color-text-secondary;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+// ── Phones: actions sheet ────────────────────────────────────────────────────
+
+.sheetLayer {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+}
+
+.sheetScrim {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 85vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem 0.75rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    background: $color-background-secondary;
+    border-top: 1px solid $color-border;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.sheetGrip {
+    align-self: center;
+    width: 2.5rem;
+    height: 0.25rem;
+    margin: 0 0 0.5rem;
+    border-radius: 2px;
+    background: $color-text-muted;
+    opacity: 0.6;
+}
+
+.sheetSummary {
+    padding: 0.25rem 0.5rem 0.875rem;
+    border-bottom: 1px solid $color-border-light;
+}
+
+.sheetText {
+    margin: 0 0 0.375rem;
+    font-size: 1rem;
+    line-height: 1.45;
+    color: $color-text-primary;
+}
+
+.sheetMeta {
+    margin: 0;
+    font-size: 0.8rem;
+    color: $color-text-muted;
+}
+
+.sheetAction {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-height: 3.25rem;
+    padding: 0 0.5rem;
+    border: 0;
+    border-radius: $radius-lg;
+    background: transparent;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 1rem;
+    text-align: left;
+    cursor: pointer;
+
+    &.menuItemDanger {
+        color: $color-error;
+    }
+}
+
+// ── Dialogs ──────────────────────────────────────────────────────────────────
+
+.dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.dialogMemory {
+    padding: 0.75rem 0.875rem;
+    border-radius: $radius-lg;
+    background: $color-background-tertiary;
+}
+
+.dialogText {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: $color-text-primary;
+}
+
+.dialogMeta {
+    margin: 0.375rem 0 0;
+    font-size: 0.75rem;
+    color: $color-text-muted;
+}
+
+.dialogActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.75rem;
+}
+
+.dialogActionsStacked {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.segmented {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.1875rem;
+    border: 1px solid $color-border;
+    border-radius: 999px;
+}
+
+.segment {
+    @include interactive-base;
+    min-height: 2rem;
+    padding: 0 0.75rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 500;
+
+    @include respond-to-tablet {
+        min-height: 2.75rem;
+        font-size: 0.95rem;
+    }
+}
+
+.segmentOn {
+    background: $color-background-selected;
+    color: $color-primary;
+    font-weight: 600;
+}
+
+.help {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: $color-text-muted;
+}
+
+.destinations {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.fieldLabel {
+    padding: 0;
+    margin-bottom: 0.375rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: $color-text-secondary;
+}
+
+.destination {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0 0.75rem;
+    border-radius: $radius-lg;
+    cursor: pointer;
+
+    input {
+        margin: 0;
+        accent-color: $color-primary;
+    }
+}
+
+.destinationOn {
+    background: $color-background-selected;
+}
+
+.destinationLabel {
+    flex: 1;
+    min-width: 0;
+    @include ellipsis;
+    font-size: 0.9rem;
+    color: $color-text-primary;
+}
+
+.destinationNote {
+    font-size: 0.75rem;
+    color: $color-text-muted;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+// ── Detail and new-memory pages ──────────────────────────────────────────────
+
+.detail {
+    width: 100%;
+    max-width: 56rem;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+
+    @include respond-to-tablet {
+        padding: 0 0.25rem;
+    }
+}
+
+.narrowForm {
+    max-width: 45rem;
+}
+
+.fieldRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem 1.5rem;
+
+    > .field {
+        flex: 1 1 16rem;
+    }
+}
+
+.select {
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    background: $color-background-secondary;
+    color: $color-text-primary;
+    font: inherit;
+    font-size: 0.9rem;
+
+    @include respond-to-tablet {
+        height: 3rem;
+        font-size: 1rem;
+    }
+}
+
+.versionsToggle {
+    margin: 0 -0.25rem;
+    border: 1px solid $color-border-light;
+    border-radius: $radius-lg;
+    background: $color-sidebar-background;
+    overflow: hidden;
+}
+
+.versionsToggleButton {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 0;
+    background: transparent;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+
+    .fieldLabel {
+        margin: 0;
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: $color-text-muted;
+    }
+}
+
+.versionRow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.versionDetails {
+    @include ellipsis;
+}
+
+.metaRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.muted {
+    color: $color-text-muted;
+}
+
+.textArea {
+    width: 100%;
+    min-height: 7rem;
+    resize: vertical;
+    padding: 1rem;
+    border: 1px solid $color-border;
+    border-radius: 8px;
+    background: $color-background-secondary;
+    color: $color-text-primary;
+    font-family: $mono;
+    font-size: 0.875rem;
+    line-height: 1.6;
+
+    &:focus {
+        outline: 0;
+        border-color: $color-border-focus;
+        box-shadow: $shadow-focus;
+    }
+
+    @include respond-to-tablet {
+        // 16px keeps iOS Safari from zooming on focus
+        font-size: 1rem;
+        padding: 0.75rem 0.875rem;
+    }
+}
+
+.detailActions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    border-bottom: 1px solid $color-border-light;
+}
+
+.tab {
+    @include interactive-base;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+    margin-bottom: -1px;
+    padding: 0 0.875rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: $color-text-muted;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+
+    @include respond-to-tablet {
+        flex: 1;
+        justify-content: center;
+        min-height: 2.75rem;
+    }
+}
+
+.tabOn {
+    border-bottom-color: $color-primary;
+    color: $color-text-primary;
+    font-weight: 600;
+}
+
+.logPanel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.changeList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+}
+
+.change {
+    padding: 0.875rem 1rem;
+    border: 1px solid $color-border-light;
+    border-radius: 8px;
+    background: $color-background-secondary;
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+}
+
+.changeSelected {
+    border-color: $color-primary;
+}
+
+.changeHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+}
+
+.changeTitle {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $color-text-primary;
+}
+
+.changeFacts {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.fact {
+    display: flex;
+    gap: 0.75rem;
+
+    dt {
+        width: 6rem;
+        flex-shrink: 0;
+        color: $color-text-muted;
+    }
+
+    dd {
+        margin: 0;
+        flex: 1;
+        min-width: 0;
+        color: $color-text-secondary;
+        overflow-wrap: anywhere;
+    }
+
+    @include respond-to-mobile {
+        flex-direction: column;
+        gap: 0.125rem;
+
+        dt {
+            width: auto;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+    }
+}
+
+.logLink {
+    color: $color-primary;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.mono {
+    font-family: $mono;
+    font-size: 0.8rem;
+}
+
+.struck {
+    color: $color-text-muted;
+    text-decoration: line-through;
+}
+
+.usageList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid $color-border-light;
     border-radius: 8px;
     overflow: hidden;
 }
 
-.actions {
+.usageRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7rem 7rem 11rem;
+    gap: 0.75rem;
+    align-items: center;
+    min-height: 2.5rem;
+    padding: 0.375rem 0.75rem;
+    border-bottom: 1px solid $color-border-light;
+    font-size: 0.8rem;
+
+    &:last-child {
+        border-bottom: 0;
+    }
+
+    @include respond-to-mobile {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.25rem 0.75rem;
+        padding: 0.5rem 0.75rem;
+    }
+}
+
+.usageConversation {
+    min-width: 0;
+    @include ellipsis;
+    font-size: 0.875rem;
+}
+
+.usageFoot {
     display: flex;
-    justify-content: flex-end;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.8rem;
 }

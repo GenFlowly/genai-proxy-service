@@ -19,7 +19,8 @@ class ProjectNotFoundException(projectId: String) : Exception("Project $projectI
 class ProjectService(
     private val projectRepository: ProjectRepository,
     private val conversationRepository: ConversationRepository,
-    private val cacheVersionService: CacheVersionService
+    private val cacheVersionService: CacheVersionService,
+    private val memoryService: MemoryService
 ) {
     private val logger = LoggerFactory.getLogger(ProjectService::class.java)
 
@@ -62,6 +63,8 @@ class ProjectService(
      * (it falls back to the global history sections), then the project row
      * goes. Unassign-first means a mid-crash leaves a retryable state — the
      * project still exists with fewer members — never dangling projectIds.
+     * The project's memories lose it the same way, and a memory left in no
+     * project is deleted.
      */
     suspend fun deleteProject(customerId: String, projectId: String) {
         projectRepository.getProject(customerId, projectId)
@@ -71,6 +74,7 @@ class ProjectService(
         if (assigned.isNotEmpty()) {
             logger.info("Unassigned ${assigned.size} conversations while deleting project $projectId")
         }
+        memoryService.removeProject(customerId, projectId)
         projectRepository.deleteProject(customerId, projectId)
         cacheVersionService.bumpCustomer(customerId, CacheVersionRepository.Resource.PROJECTS)
     }

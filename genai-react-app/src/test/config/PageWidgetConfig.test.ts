@@ -9,13 +9,6 @@ describe('PageWidgetConfig', () => {
         expect(config.centerSection).toContain('CONVERSATION_LIST');
     });
 
-    test('getPageConfig returns correct config for MEMORY_PAGE', () => {
-        const config = getPageConfig('MEMORY_PAGE');
-        expect(config).toBeDefined();
-        expect(config.pageId).toBe('MEMORY_PAGE');
-        expect(config.centerSection).toContain('NOTES_WIDGET');
-    });
-
     test('getPageConfig returns default (CHAT_PAGE) for unknown ID (safety fallback)', () => {
         // Casting string to PageId to simulate invalid input if TS allows or dynamic usage
         const config = getPageConfig('UNKNOWN_ID' as PageId);

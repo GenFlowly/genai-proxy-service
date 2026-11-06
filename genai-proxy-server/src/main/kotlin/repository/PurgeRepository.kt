@@ -10,9 +10,15 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
+import software.amazon.awssdk.services.dynamodb.model.Delete
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.DeleteRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException
+import software.amazon.awssdk.services.dynamodb.model.Update
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 import software.amazon.awssdk.services.dynamodb.model.WriteRequest
 
 /**
@@ -118,6 +124,141 @@ class PurgeRepository(
                 mapOf(CUSTOMER_ID_KEY to s(customerId), DynamoDBConstants.MEMORY_ID_KEY to s("$prefix$conversationId"))
             }
         )
+
+    /**
+     * Deletes the usage-log rows saying a memory was used in the conversation,
+     * taking each one off its memory's hit counter, and moves lastUsedAt back
+     * to the newest use left. The memories themselves, their versions and
+     * change logs are kept. Returns how many rows it deleted.
+     */
+    suspend fun deleteMemoryUsageOfConversation(customerId: String, conversationId: String): Int {
+        val rows = query(
+            DynamoDBConstants.CUSTOMER_MEMORY_TABLE, CUSTOMER_ID_KEY, customerId,
+            listOf(DynamoDBConstants.MEMORY_ID_KEY, DynamoDBConstants.CONVERSATION_ID_KEY, DynamoDBConstants.MEMORY_USED_AT_KEY),
+            indexName = null,
+            sortKeyPrefix = DynamoDBConstants.MEMORY_ID_KEY to DynamoDBConstants.MEMORY_USAGE_PREFIX
+        ).filter { it[DynamoDBConstants.CONVERSATION_ID_KEY]?.s() == conversationId }
+            .mapNotNull { row -> row[DynamoDBConstants.MEMORY_ID_KEY]?.s()?.let { it to row[DynamoDBConstants.MEMORY_USED_AT_KEY]?.s() } }
+        var deleted = 0
+        rows.groupBy { memoryIdOfUsage(it.first) }.forEach { (memoryId, uses) ->
+            val removed = uses.filter { (usageKey, _) -> deleteUsage(customerId, memoryId, usageKey) }
+            deleted += removed.size
+            removed.mapNotNull { it.second }.maxOrNull()?.let { newestRemoved ->
+                rewindLastUsedAt(customerId, memoryId, newestRemoved)
+            }
+        }
+        return deleted
+    }
+
+    /**
+     * Deletes one usage row and its hit together. False when the row was
+     * already gone, so a rerun never takes a hit off twice. When the memory is
+     * gone (or its counter is already 0) the row goes on its own.
+     */
+    private suspend fun deleteUsage(customerId: String, memoryId: String, usageKey: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val usageRow = memoryKey(customerId, usageKey)
+            try {
+                dynamoDbClient.transactWriteItems(
+                    TransactWriteItemsRequest.builder().transactItems(
+                        TransactWriteItem.builder().delete(
+                            Delete.builder()
+                                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                                .key(usageRow)
+                                .conditionExpression("attribute_exists(#sk)")
+                                .expressionAttributeNames(mapOf("#sk" to DynamoDBConstants.MEMORY_ID_KEY))
+                                .build()
+                        ).build(),
+                        TransactWriteItem.builder().update(
+                            Update.builder()
+                                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                                .key(memoryKey(customerId, memoryId))
+                                .updateExpression("SET #hits = #hits - :one")
+                                .conditionExpression("attribute_exists(#sk) AND #hits >= :one")
+                                .expressionAttributeNames(
+                                    mapOf("#sk" to DynamoDBConstants.MEMORY_ID_KEY, "#hits" to DynamoDBConstants.MEMORY_HIT_COUNT_KEY)
+                                )
+                                .expressionAttributeValues(mapOf(":one" to AttributeValue.builder().n("1").build()))
+                                .build()
+                        ).build()
+                    ).build()
+                )
+                true
+            } catch (e: TransactionCanceledException) {
+                val (row, memory) = e.cancellationReasons().map { it.code() }.let { it.getOrNull(0) to it.getOrNull(1) }
+                when {
+                    row == CONDITIONAL_CHECK_FAILED -> false
+                    memory == CONDITIONAL_CHECK_FAILED -> {
+                        dynamoDbClient.deleteItem(
+                            DeleteItemRequest.builder().tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE).key(usageRow).build()
+                        )
+                        true
+                    }
+                    else -> throw e
+                }
+            }
+        }
+
+    /**
+     * Sets lastUsedAt to the newest use left, or removes it when none is left,
+     * but only while it still names [newestRemoved]: a newer use, or one in
+     * another conversation, keeps its time.
+     */
+    private suspend fun rewindLastUsedAt(customerId: String, memoryId: String, newestRemoved: String) {
+        withContext(Dispatchers.IO) {
+            val newestLeft = dynamoDbClient.query(
+                QueryRequest.builder()
+                    .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                    .keyConditionExpression("#pk = :cid AND begins_with(#sk, :prefix)")
+                    .expressionAttributeNames(mapOf("#pk" to CUSTOMER_ID_KEY, "#sk" to DynamoDBConstants.MEMORY_ID_KEY))
+                    .expressionAttributeValues(
+                        mapOf(":cid" to s(customerId), ":prefix" to s(usagePrefixOf(memoryId)))
+                    )
+                    .scanIndexForward(false)
+                    .limit(1)
+                    .build()
+            ).items().firstOrNull()?.get(DynamoDBConstants.MEMORY_USED_AT_KEY)?.s()
+            val names = mapOf("#sk" to DynamoDBConstants.MEMORY_ID_KEY, "#last" to DynamoDBConstants.MEMORY_LAST_USED_AT_KEY)
+            try {
+                dynamoDbClient.updateItem(
+                    UpdateItemRequest.builder()
+                        .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                        .key(memoryKey(customerId, memoryId))
+                        .updateExpression(if (newestLeft != null) "SET #last = :left" else "REMOVE #last")
+                        .conditionExpression("attribute_exists(#sk) AND #last = :removed")
+                        .expressionAttributeNames(names)
+                        .expressionAttributeValues(
+                            mapOf(":removed" to s(newestRemoved)) + (newestLeft?.let { mapOf(":left" to s(it)) } ?: emptyMap())
+                        )
+                        .build()
+                )
+            } catch (e: ConditionalCheckFailedException) {
+                logger.debug { "Kept lastUsedAt of $memoryId: a newer use, or the memory is gone" }
+            }
+        }
+    }
+
+    private fun memoryKey(customerId: String, sortKey: String) =
+        mapOf(CUSTOMER_ID_KEY to s(customerId), DynamoDBConstants.MEMORY_ID_KEY to s(sortKey))
+
+    /** Deletes one memory's change log and usage log. */
+    suspend fun deleteMemoryHistory(customerId: String, memoryId: String): Int =
+        deleteMemoryRows(customerId, memoryId.removePrefix(DynamoDBConstants.MEMORY_ITEM_PREFIX) + "#")
+
+    /** Deletes the change logs and usage logs of every memory the customer has. */
+    suspend fun deleteAllMemoryHistory(customerId: String): Int = deleteMemoryRows(customerId, "")
+
+    private suspend fun deleteMemoryRows(customerId: String, suffix: String): Int =
+        listOf(DynamoDBConstants.MEMORY_CHANGE_PREFIX, DynamoDBConstants.MEMORY_USAGE_PREFIX).sumOf { prefix ->
+            deleteKeys(
+                DynamoDBConstants.CUSTOMER_MEMORY_TABLE,
+                keys(
+                    DynamoDBConstants.CUSTOMER_MEMORY_TABLE, CUSTOMER_ID_KEY, customerId,
+                    listOf(CUSTOMER_ID_KEY, DynamoDBConstants.MEMORY_ID_KEY),
+                    sortKeyPrefix = DynamoDBConstants.MEMORY_ID_KEY to "$prefix$suffix"
+                )
+            )
+        }
 
     /** Deletes the rows recording which instructions the conversation used. */
     suspend fun deleteInstructionUsageSeen(customerId: String, conversationId: String): Int =
@@ -349,6 +490,7 @@ class PurgeRepository(
     private fun s(value: String): AttributeValue = AttributeValue.builder().s(value).build()
 
     private companion object {
+        const val CONDITIONAL_CHECK_FAILED = "ConditionalCheckFailed"
         const val ATTACHMENTS = "attachments"
         const val TOOL_RESULTS_JSON = "toolResultsJson"
         // VectorSyncPending item keys are "<type token>#<key>"; see PendingVectorType.
@@ -360,5 +502,13 @@ class PurgeRepository(
         const val MAX_UNPROCESSED_RETRIES = 8
         const val BACKOFF_BASE_MS = 50L
         const val BACKOFF_MAX_MS = 5_000L
+
+        /** "MEMUSE#<uuid>#<turn>#<messageId>" → "MEM#<uuid>". */
+        fun memoryIdOfUsage(usageKey: String): String =
+            DynamoDBConstants.MEMORY_ITEM_PREFIX +
+                usageKey.removePrefix(DynamoDBConstants.MEMORY_USAGE_PREFIX).substringBefore('#')
+
+        fun usagePrefixOf(memoryId: String): String =
+            DynamoDBConstants.MEMORY_USAGE_PREFIX + memoryId.removePrefix(DynamoDBConstants.MEMORY_ITEM_PREFIX) + "#"
     }
 }

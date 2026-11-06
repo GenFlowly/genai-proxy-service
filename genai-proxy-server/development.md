@@ -337,6 +337,9 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `memory_operation_total` | operation (`add`\|`update`\|`delete`\|`unknown`), status (`ok`\|`noop`\|`error`) | Kotlin proxy — one per proposed memory operation |
 | `memory_vector_failure_total` | operation (`encode`\|`delete`) | Kotlin proxy — memory vector push/delete failed (swallowed, counted) |
 | `memory_learned_facts_write_failure_total` | — | Kotlin proxy — learned-facts marker write onto the message failed |
+| `memory_user_change_total` | operation (`create`\|`edit`\|`move`\|`copy`\|`remove_from_project`\|`delete`) | Kotlin proxy (`MemoryService`) — one per memory change the customer made on the Memory page |
+| `memory_usage_recorded_total` | source (`node`\|`tool`) | retrieval-server — memories logged as used in a reply (usage row + hit counter) |
+| `memory_usage_write_failure_total` | source (`node`\|`tool`) | retrieval-server — usage-log write failed (swallowed, counted); a duplicate for the same reply is not a failure |
 | `graph_stale_serve_total` | — | retrieval-server graph_loader (DDB failure papered over by cache) |
 | `voice_session_total` / `voice_session_duration_seconds` | vendor, status (`ok`\|`error`\|`connect_failed`) | retrieval-server voice sessions |
 | `internal_client_total` / `_duration_seconds` | operation (path), status (`ok`\|`4xx`\|`5xx`\|`error`=transport failure, plus `not_configured` on skipped encoding calls) | Kotlin proxy shared HttpClient → retrieval/encoding servers |

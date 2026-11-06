@@ -9,6 +9,8 @@ import { OPEN_L2_MENU_STATE } from './hooks/useAppMenu'
 import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
+import MemoryDetailPage from './pages/MemoryPage/MemoryDetailPage'
+import NewMemoryPage from './pages/MemoryPage/NewMemoryPage'
 import AgentsPage from './pages/AgentsPage/AgentsPage'
 import GraphAgentEditorPage from './pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage'
 import InstructionsPage from './pages/InstructionsPage/InstructionsPage'
@@ -74,6 +76,8 @@ export default function AppContent(): React.ReactElement {
                             <Route path="/settings/*" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                             <Route path="/history" element={<ProtectedRoute><ConversationHistoryPage /></ProtectedRoute>} />
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
+                            <Route path="/memory/new" element={<ProtectedRoute><NewMemoryPage /></ProtectedRoute>} />
+                            <Route path="/memory/:memoryId" element={<ProtectedRoute><MemoryDetailPage /></ProtectedRoute>} />
                             <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
                             <Route path="/agents/new" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
                             <Route path="/agents/:graphId" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />

@@ -86,8 +86,13 @@ export const endpoints = {
     attachments: `${BASE}${API_PREFIX}/attachments`,
     attachmentUrl: (attachmentId: string) => `${BASE}${API_PREFIX}/attachments/url?attachmentId=${encodeURIComponent(attachmentId)}`,
     getLearnedFacts: (conversationId: string, messageId: string) => `${BASE}${API_PREFIX}/conversation/learned-facts?conversationId=${encodeURIComponent(conversationId)}&messageId=${encodeURIComponent(messageId)}`,
-    deleteMemoryFact: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${memoryId}`,
+    // Memory ids look like "MEM#<uuid>": the "#" must be encoded, or the
+    // browser drops the rest of the id as a URL fragment.
+    memories: `${BASE}${API_PREFIX}/memories`,
+    memory: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}`,
+    moveMemory: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/move`,
+    copyMemory: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/copy`,
+    memoryUsage: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/usage`,
     deleteAccount: `${BASE}${API_PREFIX}/account`,
     deleteAllCredentials: `${BASE}${API_PREFIX}/credentials`,
-    deleteAllMemoryFacts: `${BASE}${API_PREFIX}/memories`,
 };

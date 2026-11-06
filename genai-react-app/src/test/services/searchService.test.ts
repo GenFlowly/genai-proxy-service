@@ -9,17 +9,17 @@ describe('searchContent', () => {
     test('encodes the query and limits the types', async () => {
         mockFetch.mockResolvedValue({ ok: true, json: async () => ({ results: [{ key: 'a' }] }) })
 
-        const results = await searchContent('token', 'a&b', ['notes'])
+        const results = await searchContent('token', 'a&b', ['memory'])
 
         expect(results).toEqual([{ key: 'a' }])
         const [url, options] = mockFetch.mock.calls[0]
-        expect(url).toContain('/search?q=a%26b&types=notes')
+        expect(url).toContain('/search?q=a%26b&types=memory')
         expect(options.headers.Authorization).toBe('Bearer token')
     })
 
     test('throws on a failed response', async () => {
         mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' })
-        await expect(searchContent('token', 'a', ['notes'])).rejects.toThrow('Search failed: 500')
+        await expect(searchContent('token', 'a', ['memory'])).rejects.toThrow('Search failed: 500')
     })
 
     test('a search that is not set up says which setting is missing', async () => {
@@ -29,7 +29,7 @@ describe('searchContent', () => {
             statusText: 'Conflict',
             json: async () => ({ code: 'SEARCH_NOT_CONFIGURED', reason: 'EMBEDDING_KEY_MISSING' }),
         })
-        await expect(searchContent('token', 'a', ['notes'])).rejects.toMatchObject({
+        await expect(searchContent('token', 'a', ['memory'])).rejects.toMatchObject({
             status: 409,
             code: 'SEARCH_NOT_CONFIGURED',
             reason: 'EMBEDDING_KEY_MISSING',

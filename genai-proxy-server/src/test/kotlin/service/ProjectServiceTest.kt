@@ -26,7 +26,8 @@ class ProjectServiceTest {
     private val projectRepo = mockk<ProjectRepository>(relaxed = true)
     private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
     private val cacheVersions = mockk<CacheVersionService>(relaxed = true)
-    private val service = ProjectService(projectRepo, conversationRepo, cacheVersions)
+    private val memoryService = mockk<MemoryService>(relaxed = true)
+    private val service = ProjectService(projectRepo, conversationRepo, cacheVersions, memoryService)
 
     private fun project(id: String = proj, updatedAt: String = "2026-01-01T00:00:00Z") = Project(
         projectId = id, name = "Research", createdAt = "2026-01-01T00:00:00Z", updatedAt = updatedAt
@@ -108,6 +109,7 @@ class ProjectServiceTest {
         coVerifyOrder {
             conversationRepo.removeConversationProject("conv-1", cust)
             conversationRepo.removeConversationProject("conv-2", cust)
+            memoryService.removeProject(cust, proj)
             projectRepo.deleteProject(cust, proj)
         }
     }

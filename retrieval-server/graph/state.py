@@ -142,6 +142,12 @@ class RetrievalState(TypedDict):
     # customer's learned memories (request consent AND account setting).
     memory_enabled: bool
 
+    # MemoryContext as a dict (project_id, conversation_id,
+    # response_message_id, turn_started_at), or None when memory is off or the
+    # caller isn't a conversation turn. Scopes which memories apply and keys
+    # the usage log.
+    memory_context: Optional[dict]
+
     # Written by the MEMORY node: the rendered "what you know about this user"
     # block. The response-generating nodes append it to their persona.
     memories_block: Optional[str]
