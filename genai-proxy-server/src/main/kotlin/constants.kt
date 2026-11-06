@@ -214,6 +214,13 @@ object DynamoDBConstants {
     const val VECTOR_SYNC_DUE_AT_KEY = "dueAt"
     const val VECTOR_SYNC_RETRY_INDEX = "retry-due-index"
 
+    // Deletions in progress, one row per account, conversation or note (PK
+    // jobKey: "ACCOUNT#<customerId>", "CONVERSATION#<customerId>#<id>",
+    // "NOTE#<customerId>#<noteKey>"). Pending jobs carry the constant
+    // pendingShard, so the sparse pending-purge-index holds exactly the jobs
+    // still to run.
+    const val PURGE_JOBS_TABLE = "PurgeJobs"
+    const val PURGE_JOBS_PENDING_INDEX = "pending-purge-index"
     // Customer-owned projects grouping conversations in the history sidebar.
     // PK=customerId, SK=projectId. Conversations reference a project via a
     // plain projectId attribute on their Conversation row (REMOVEd on project

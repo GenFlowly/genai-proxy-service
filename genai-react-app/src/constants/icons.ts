@@ -26,7 +26,7 @@ import laptopIcon from '../assets/icons/laptop.svg'
 import moonIcon from '../assets/icons/moon.svg'
 import loginIcon from '../assets/icons/login.svg'
 import logoutIcon from '../assets/icons/logout.svg'
-import archiveIcon from '../assets/icons/archive.svg'
+import trashIcon from '../assets/icons/trash.svg'
 import folderIcon from '../assets/icons/folder.svg'
 import folderPlusIcon from '../assets/icons/folder-plus.svg'
 import pinIcon from '../assets/icons/pin.svg'
@@ -71,7 +71,7 @@ export const ICONS = {
     SUN: sunIcon,
     LOGIN: loginIcon,
     LOGOUT: logoutIcon,
-    ARCHIVE: archiveIcon,
+    TRASH: trashIcon,
     FOLDER: folderIcon,
     FOLDER_PLUS: folderPlusIcon,
     PIN: pinIcon,

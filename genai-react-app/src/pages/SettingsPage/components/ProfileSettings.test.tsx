@@ -8,6 +8,10 @@ import { withQueryClient } from '../../../test/utils/queryWrapper';
 
 jest.mock('../../../context/AuthContext');
 jest.mock('../../../services/userService');
+// The delete section has its own test suite
+jest.mock('./DeleteDataSettings', () => ({
+    DeleteDataSettings: () => <div data-testid="delete-data-section" />,
+}));
 
 const mockUseAuth = useAuth as jest.Mock;
 const mockGetUserProfile = getUserProfile as jest.Mock;
@@ -60,6 +64,7 @@ describe('ProfileSettings', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
         expect(screen.getByText('john@example.com')).toBeInTheDocument();
         expect(screen.getByRole('checkbox')).toBeChecked();
+        expect(screen.getByTestId('delete-data-section')).toBeInTheDocument();
     });
 
     test('updates username successfully', async () => {

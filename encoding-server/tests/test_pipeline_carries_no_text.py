@@ -108,7 +108,7 @@ class PipelineTest(unittest.TestCase):
                                           "is_delete": True})
         self.assertEqual(parse_and_chunk_lambda.handler(note_pointer(), None), {"batches": []})
 
-    def _store(self, batch):
+    def _store(self, batch, ddb=None):
         inserted = []
         milvus = mock.MagicMock()
         milvus.insert.side_effect = lambda collection_name, data: inserted.extend(data) or {"insert_count": len(data)}
@@ -121,7 +121,7 @@ class PipelineTest(unittest.TestCase):
                 mock.patch.object(create_and_store_lambda, "get_milvus_client", return_value=milvus), \
                 mock.patch.object(create_and_store_lambda, "ensure_collection", return_value=False), \
                 mock.patch.object(NoteProcessor, "get_collection_schema", return_value=(None, None)), \
-                mock.patch("boto3.client"):
+                mock.patch("boto3.client", return_value=ddb or mock.MagicMock()):
             summary = create_and_store_lambda.handler(dict(batch), None)
         return summary, inserted
 
@@ -150,6 +150,29 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(first["inserted"], 61)
         self.assertEqual(len({r["id"] for r in first_rows}), 61)
         self.assertEqual((later["inserted"], later_rows), (0, []))
+
+    def test_marking_a_note_synced_requires_its_row(self):
+        ddb = mock.MagicMock()
+
+        self._store(self._plan()[0], ddb=ddb)
+
+        [call] = [c for c in ddb.update_item.call_args_list if c.kwargs.get("TableName") == "CustomerNotes"]
+        self.assertEqual("attribute_exists(noteKey)", call.kwargs["ConditionExpression"])
+
+    def test_a_note_deleted_while_it_was_stored_is_not_brought_back_or_counted_as_a_failure(self):
+        from botocore.exceptions import ClientError
+
+        ddb = mock.MagicMock()
+        ddb.update_item.side_effect = ClientError(
+            {"Error": {"Code": "ConditionalCheckFailedException", "Message": "missing"}}, "UpdateItem"
+        )
+        with mock.patch.object(create_and_store_lambda, "count") as counted:
+            summary, _ = self._store(self._plan()[0], ddb=ddb)
+
+        names = [c.args[0] for c in counted.call_args_list]
+        self.assertIn("vector_store_note_deleted_total", names)
+        self.assertNotIn("vector_store_ddb_writeback_failure_total", names)
+        self.assertEqual(25, summary["inserted"])
 
     def test_batches_planned_before_the_change_still_store_their_chunks(self):
         legacy_batch = {**note_pointer(), "raw_data": {"note_key": "nk-1", "created_at": "t"},

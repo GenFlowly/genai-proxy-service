@@ -1,0 +1,106 @@
+@import '../../../styles/themes.scss';
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.sectionTitle {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    margin: 0;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap; // The button drops below the text on narrow screens
+    gap: 1rem 1.5rem;
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid $color-border-light;
+}
+
+.rowText {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1 1 16rem;
+    min-width: 0;
+
+    strong {
+        font-size: 1rem;
+        font-weight: 500;
+        color: $color-text-primary;
+    }
+
+    span {
+        font-size: 0.875rem;
+        color: $color-text-muted;
+        line-height: 1.4;
+    }
+}
+
+.notice {
+    font-size: 0.9375rem;
+    color: $color-text-primary;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid $color-border-light;
+}
+
+.dialogText {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    margin: 0 0 0.75rem;
+}
+
+.dialogList {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    margin: 0 0 0.75rem;
+    padding-left: 1.25rem;
+}
+
+.confirmLabel {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $color-text-secondary;
+    margin: 0.5rem 0;
+}
+
+.confirmInput {
+    width: 100%;
+    min-width: 0; // Inputs have an intrinsic min width that overflows narrow dialogs
+    box-sizing: border-box;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    border: 1px solid $color-border-light;
+    background: transparent;
+    color: $color-text-primary;
+    font-size: 0.95rem;
+
+    &:focus {
+        outline: none;
+        border-color: $color-primary;
+        box-shadow: 0 0 0 1px $color-primary;
+    }
+}
+
+.dialogError {
+    font-size: 0.875rem;
+    color: $color-error;
+    margin: 0.75rem 0 0;
+}
+
+.dialogActions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}

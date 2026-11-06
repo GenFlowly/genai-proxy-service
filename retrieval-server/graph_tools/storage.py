@@ -6,14 +6,17 @@ directory in tests or open-source deployments.
 """
 import logging
 import os
-from typing import Protocol
+from typing import Optional, Protocol
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
 
 class ArtifactStore(Protocol):
-    def put(self, key: str, data: bytes, content_type: str) -> None:
-        """Persist `data` under `key`. Raises on failure."""
+    def put(self, key: str, data: bytes, content_type: str, tags: Optional[dict[str, str]] = None) -> None:
+        """Persist `data` under `key`, with object `tags` where the backend
+        has them (S3 lifecycle rules can expire objects by tag). Raises on
+        failure."""
         ...
 
     def get(self, key: str) -> bytes:
@@ -35,7 +38,7 @@ class LocalDiskArtifactStore:
     def _path(self, key: str) -> str:
         return os.path.join(self._base_dir, *key.split("/"))
 
-    def put(self, key: str, data: bytes, content_type: str) -> None:
+    def put(self, key: str, data: bytes, content_type: str, tags: Optional[dict[str, str]] = None) -> None:
         path = self._path(key)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
@@ -79,9 +82,10 @@ class S3ArtifactStore:
             self._client = boto3.client("s3")
         return self._client
 
-    def put(self, key: str, data: bytes, content_type: str) -> None:
+    def put(self, key: str, data: bytes, content_type: str, tags: Optional[dict[str, str]] = None) -> None:
+        extra = {"Tagging": urlencode(tags)} if tags else {}
         self._s3().put_object(
-            Bucket=self._bucket, Key=key, Body=data, ContentType=content_type
+            Bucket=self._bucket, Key=key, Body=data, ContentType=content_type, **extra
         )
         logger.info(
             "Stored artifact %s (%d bytes) in s3://%s", key, len(data), self._bucket

@@ -42,7 +42,7 @@ class ConversationTitleGenerationTest {
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
         mockk<AgentResolutionService> { coEvery { resolve(any(), any()) } returns mockk(relaxed = true) },
         executor,
-        AppScope()
+        mockk(relaxed = true), AppScope()
     )
 
     private fun stubOwnerAccess() {

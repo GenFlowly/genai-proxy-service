@@ -22,16 +22,18 @@ fun Route.registerDeleteConversationRoutes(
     authenticate("auth0", "apiKey") {
         delete(Routes.DELETE_CONVERSATION, {
             tags("Conversations")
-            summary = "Archive (soft-delete) a conversation"
-            description = "Archives the conversation. It can be restored with the unarchive endpoint."
+            summary = "Delete a conversation"
+            description = "The owner's delete is permanent: the conversation, its messages, its shares and " +
+                    "public link, its files and its vectors are deleted, and it can't be restored. Someone the " +
+                    "conversation was shared with only removes it from their own history; the owner keeps it."
             request {
                 pathParameter<String>("conversationId") {
-                    description = "Conversation to archive"
+                    description = "Conversation to delete"
                 }
             }
             response {
                 code(HttpStatusCode.OK) {
-                    description = "Conversation archived"
+                    description = "Conversation deleted, or removed from the caller's history"
                     body<StatusResponse>()
                 }
                 code(HttpStatusCode.BadRequest) {
@@ -59,14 +61,14 @@ fun Route.registerDeleteConversationRoutes(
                     )
                 }
 
-                conversationManagementService.archiveConversation(
+                conversationManagementService.deleteConversation(
                     conversationId = conversationId,
                     customerId = customerId
                 )
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
             } catch (e: SecurityException) {
-                logger.warn("Unauthorized conversation archive attempt: {}", e.message)
+                logger.warn("Unauthorized conversation delete attempt: {}", e.message)
                 call.respond(HttpStatusCode.Forbidden, mapOf("error" to (e.message ?: "Forbidden")))
             } catch (e: Exception) {
                 logger.error("Unexpected error in Delete Conversation controller: {}", e.message, e)

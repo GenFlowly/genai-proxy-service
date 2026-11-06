@@ -213,8 +213,8 @@ class UnifiedSearchService(
             }
             return null
         }
-        // Archive is the product's "delete": hide archived conversations
-        // instead of deleting vectors, so unarchiving restores searchability.
+        // Conversations archived before deletes became permanent keep their
+        // vectors until they are purged (scratch/purge_archived_items.py).
         if (conversationRepository.isConversationArchived(conversationId, customerId)) return null
         return VisibleConversation(conversationRepository.getConversationTitle(conversationId, customerId))
     }
