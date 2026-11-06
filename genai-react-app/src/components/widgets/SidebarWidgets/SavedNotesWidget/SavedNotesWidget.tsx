@@ -6,6 +6,7 @@ import { useNotes } from '../../../../context/NotesContext'
 import { getNotes, deleteNote, SavedNote } from '../../../../services/saveNotesService'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
+import { DeleteConfirmModal } from '../../../common/DeleteConfirmModal/DeleteConfirmModal'
 import { SidebarCard, SidebarListPanel, SidebarListGroup } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import { formatServerDateTime, formatServerTime } from '../../../../utils/timeUtils'
@@ -38,6 +39,9 @@ export default function SavedNotesWidget({ onSelect, menu = false, 'data-testid'
     const [notes, setNotes] = useState<SavedNote[]>(cached ?? [])
     const [isLoading, setIsLoading] = useState(true)
     const [hasError, setHasError] = useState(false)
+    const [deleteTarget, setDeleteTarget] = useState<SavedNote | null>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [deleteError, setDeleteError] = useState<string | null>(null)
 
     // Only persist state to the cache once a real load has happened, so an
     // empty "never loaded" state can't masquerade as "no notes"
@@ -66,7 +70,7 @@ export default function SavedNotesWidget({ onSelect, menu = false, 'data-testid'
         return () => { cancelled = true }
     }, [getAccessTokenSilently])
 
-    // Mirror every loaded/mutated state (fetch, archive, autosave merge) to
+    // Mirror every loaded/mutated state (fetch, delete, autosave merge) to
     // the cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
@@ -86,18 +90,25 @@ export default function SavedNotesWidget({ onSelect, menu = false, 'data-testid'
         })
     }, [updatedNote])
 
-    const handleArchive = async (e: React.MouseEvent, noteKey: string) => {
-        e.stopPropagation()
+    // Deleting is permanent, so it always asks first
+    const handleDelete = async () => {
+        if (!deleteTarget) return
+        const noteKey = deleteTarget.noteKey
+        setIsDeleting(true)
+        setDeleteError(null)
         try {
             const token = await getAccessTokenSilently()
             await deleteNote(token, noteKey)
             setNotes(prev => prev.filter(n => n.noteKey !== noteKey))
-            // If the archived note is currently open in the editor, close it
+            setDeleteTarget(null)
             if (noteKey === activeNote?.noteKey) {
                 clearActiveNote()
             }
         } catch (err) {
-            console.error('Failed to archive note:', err)
+            console.error('Failed to delete note:', err)
+            setDeleteError(t('sidebar.savedNotesWidget.deleteFailed'))
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -135,11 +146,15 @@ export default function SavedNotesWidget({ onSelect, menu = false, 'data-testid'
                 },
                 testId: `saved-note-${note.noteKey}`,
                 action: {
-                    icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
-                    label: t('sidebar.savedNotesWidget.archiveNote'),
+                    icon: <Icon src={ICONS.TRASH} size={14} aria-hidden={true} />,
+                    label: t('sidebar.savedNotesWidget.deleteNote'),
                     tone: 'muted' as const,
-                    onClick: (e: React.MouseEvent) => handleArchive(e, note.noteKey),
-                    testId: `note-archive-btn-${note.noteKey}`,
+                    onClick: (e: React.MouseEvent) => {
+                        e.stopPropagation()
+                        setDeleteError(null)
+                        setDeleteTarget(note)
+                    },
+                    testId: `note-delete-btn-${note.noteKey}`,
                 },
             }
         }),
@@ -175,5 +190,23 @@ export default function SavedNotesWidget({ onSelect, menu = false, 'data-testid'
         />
     )
 
-    return menu ? <SidebarCard>{panel}</SidebarCard> : panel
+    const dialog = (
+        <DeleteConfirmModal
+            isOpen={deleteTarget != null}
+            title={t('sidebar.savedNotesWidget.deleteNoteTitle')}
+            message={t('sidebar.savedNotesWidget.deleteNoteConfirm')}
+            isDeleting={isDeleting}
+            error={deleteError}
+            onConfirm={handleDelete}
+            onCancel={() => setDeleteTarget(null)}
+            data-testid="delete-note"
+        />
+    )
+
+    return (
+        <>
+            {menu ? <SidebarCard>{panel}</SidebarCard> : panel}
+            {dialog}
+        </>
+    )
 }

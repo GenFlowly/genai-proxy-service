@@ -14,9 +14,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * Pin/unpin are owner-only: unlike archive/rename (edit-or-owner, persisted
- * against the owner's row), pin state is per-customer, so shared editors and
- * viewers must be rejected before any write happens.
+ * Pin/unpin are owner-only: unlike rename (edit-or-owner, persisted against
+ * the owner's row), pin state is per-customer, so shared editors and viewers
+ * must be rejected before any write happens.
  */
 class ConversationPinTest {
 
@@ -31,7 +31,7 @@ class ConversationPinTest {
         conversationService, conversationRepo, shareRepo,
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
         mockk(relaxed = true),
-        com.genflowly.di.AppScope()
+        mockk(relaxed = true), com.genflowly.di.AppScope()
     )
 
     private fun stubRole(customerId: String, role: ShareRole?) {

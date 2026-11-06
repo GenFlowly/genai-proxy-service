@@ -18,7 +18,7 @@ However, five problems mean an accurate privacy policy today would read badly, a
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **Full chat and note text is stored in production logs and queues.** Step Functions records it for up to 90 days, CloudWatch for 7 days and the dead-letter queue for 14 days. The queue held 381 messages when checked.                                                           | Contradicts the repo's own "no content in production logs" rule. A role set up for Grafana Cloud can read these logs. | Hours for logging, days to remove it fully | **Fixed in PR #331**, merged but not yet deployed to production. Execution history from earlier runs keeps text for up to 90 days.                                                                                        |
 | 2   | **Public share links can expose private notes and memories.** Agent trace data goes to anonymous viewers with only one step type redacted.                                                                                                                                         | The most direct way a user could be harmed today.                                                                     | Under a day                                | Open                                                                                                                                                                                                                      |
-| 3   | **Users can't delete things.** There is no delete for conversations or notes, no account deletion, no export, and no way to remove a stored API key. Archived chats can still be fed to AI providers.                                                                              | Required by Apple and by GDPR and CCPA. Most of the deletion code already exists on an unmerged branch.               | 1-2 weeks                                  | Open                                                                                                                                                                                                                      |
+| 3   | **Users can't delete things.** There is no delete for conversations or notes, no account deletion, no export, and no way to remove a stored API key. Archived chats can still be fed to AI providers.                                                                              | Required by Apple and by GDPR and CCPA. Most of the deletion code already exists on an unmerged branch.               | 1-2 weeks                                  | **Fixed on `development`**: delete is permanent and everywhere for conversations, notes and accounts, and deleted or archived content can't reach AI providers. Export is still open.                                     |
 | 4   | **Data reaches more vendors than the user chose.** Memory is on with no off switch. Saving a note sends it to an AI provider. A chat with Claude can have its title and memory work sent to OpenAI.                                                                                | This is the biggest gap against the goal of "maximum privacy" in BYOK.                                                | Days                                       | **Fixed on `development`**, live once merged: memory switches (on by default), and background tasks run only on the priority-1 provider. A chat on another vendor still sends its title and memory work to that provider. |
 | 5   | **Provider defaults are not disclosed.** Voyage, the embedding provider the setup wizard recommends, may train on content unless the user opts out, and opting out requires a payment method. OpenAI keeps Responses API state for 30 days because `store` is left at its default. | Users assume BYOK means their data is safe with vendors.                                                              | Days                                       | Open                                                                                                                                                                                                                      |
 
@@ -218,23 +218,23 @@ Checked 2026-11-05. These terms change, so re-check before using them in the pro
 
 ## 4. Where data stays
 
-Production state on 2026-11-05. "Target" assumes the recommendations below are done. "Done in PR #331" marks targets that PR reaches once it is deployed.
+Production state on 2026-11-05. "Target" assumes the recommendations below are done. Account deletion, built on `development` (R4), deletes every store here that we control, except Step Functions history, logs, Voyage files, Supabase and backups. "Done in PR #331" marks targets that PR reaches once it is deployed.
 
 | Store | Holds | Retention today | Deletion path today | Target |
 |---|---|---|---|---|
-| DynamoDB `Message`, `Conversation` | Prompts, replies, system prompt copies, tool results, thinking steps, cost | **Forever** | **None.** Archive only sets `archivedAt`. | Trash for 30 days, then hard delete. Optional auto-delete. |
-| DynamoDB `CustomerNotes` | Note text | **Forever** | **None.** Archive sets `is_delete`, and re-saving the same key restores the note. | Same as above |
+| DynamoDB `Message`, `Conversation` | Prompts, replies, system prompt copies, tool results, thinking steps, cost | **Forever** | **None.** Archive only sets `archivedAt`. | Permanent delete, everywhere. **Done on `development`** (no Trash: you chose immediate deletion). Optional auto-delete still open. |
+| DynamoDB `CustomerNotes` | Note text | **Forever** | **None.** Archive sets `is_delete`, and re-saving the same key restores the note. | Permanent delete. **Done on `development`** |
 | DynamoDB `CustomerMemory` | Learned facts | Until deleted | Hard delete per fact. Vector delete is best-effort. | Add "delete all" |
 | DynamoDB `CustomerProfile` | Auth0 ID, email, name, picture, username | **Forever** | **None** | Deleted with account. Store less (R27). |
 | DynamoDB key tables | Encrypted AI, embedding, search, vector DB and tool credentials | Until replaced | **Tool keys only.** No delete for AI keys, Voyage keys or vector DB credentials. | Delete any of them, any time |
-| S3 attachments bucket | Uploads, generated PDFs, agent scratch files | **Forever.** No lifecycle rules. [live] | **None** | Deleted with the conversation. Scratch expires in 7 days. |
+| S3 attachments bucket | Uploads, generated PDFs, agent scratch files | **Forever.** No lifecycle rules. [live] | **None** | Deleted with the conversation; scratch expires after 1 day. **Both done on `development`** |
 | S3 `customer-documents` | Batch-mode note documents | **Forever, versioned.** [live] | **None** | Deleted with the note, including all versions |
 | Step Functions history | **Full chat and note text** | **90 days** after each run | None | IDs only. **Done in PR #331.** Runs from before it keep their text until they age out. |
 | CloudWatch Step Functions logs | **Full chat and note text** | **7 days** [live] | None | Errors only, no execution data. **Done in PR #331.** |
 | SQS dead-letter queue | **Full chat and note text** | **14 days**. 381 messages in production. [live] | None | IDs only, 7 days. **Done in PR #331.** |
 | SQS ingestion queue | Full text | Seconds normally, 4 days at most [live] | None | IDs only. **Done in PR #331.** |
 | Lambda logs | WARN and above: IDs and error text | **Never expire** [live] | None | 30 days |
-| Your Zilliz cluster | Plain-text chunks and vectors | Until deleted | Notes and memories best-effort. **Conversations never.** | Deleted with the source item |
+| Your Zilliz cluster | Plain-text chunks and vectors | Until deleted | Notes and memories best-effort. **Conversations never.** | Deleted with the source item. **Done on `development`** for conversations and notes, and search hides anything left behind |
 | Voyage file storage | Batch input and output | About 30 days [vendor]. We don't delete them. | None | Deleted when the job completes |
 | AI, embedding and search providers | What was sent | Their terms | Not ours to delete | Disclosed |
 | Supabase (development) | Prompts, history, tool results | **No expiry** except `run_events`, 7 days (`durable_runtime.py:30`) | None | Time limit before any production use |
@@ -344,6 +344,25 @@ Search engines aren't told to stay away either. `robots.txt` allows all pages, a
 
 **Effort:** S for step 1. M to L for the rest.
 
+**Status (2026-11-05): built on `development`, not yet in production, with the decision you made: archive is now delete, permanent and immediate, with no Trash.**
+
+- **Steps 1 and 2.** "Archive" is renamed "Delete" for conversations and notes, behind a confirmation dialog. The owner's delete removes the conversation everywhere:
+  - its row and every share (public link included);
+  - its messages and the files they reference;
+  - its vector-DB queue, memory-extraction and instruction-usage rows;
+  - its vectors.
+
+  A note loses its row, its batch-mode document (every version) and its vectors. Someone a conversation was shared with only removes their own access.
+- **Archived content no longer reaches AI providers.** The agent's knowledge search checks each conversation and note hit against DynamoDB and drops anything deleted, archived or soft-deleted (`retrieval-server/graph/visibility.py`), so even vectors a failed delete left behind can't reach a prompt.
+- **Step 3.** Deletes run as resumable jobs in `PurgeJobs` (no port of the old branch), with a final sweep 15 minutes later for replies that were still generating. Writes that could recreate a deleted row are now conditional. Agent scratch files are tagged and expire after a day.
+- **Step 4.** Vectors are deleted by `customer_id` and item key across the shared collections (`/delete-conversation-vectors`, plus `/delete-customer-vectors` for accounts).
+- **Step 5.** Notes are hard-deleted, including every S3 version of their document.
+- **Still open:**
+  - Learned facts from a deleted item stay (they are managed in Settings, and other conversations may have taught them too).
+  - Files a fork made by someone else still references are deleted with the owner's conversation.
+  - The iOS app still says "Archive" and deletes without asking (filed in its Bugs.md).
+  - Items archived before this change are still stored: `scratch/purge_archived_items.py` queues them for deletion once the proxy is deployed (dev: 29 conversations and 5 notes; production: 19 and 3).
+
 ### R4. There is no account deletion or data export
 
 **What happens.** Neither exists on `development`. [code]
@@ -367,6 +386,16 @@ It also needs Auth0 Management API credentials, or the Auth0 user survives delet
 
 **Effort:** M for the deletion port, M for export.
 
+**Status (2026-11-05): deletion is built on `development`, not yet in production. Export is not built.** Settings > Profile > "Delete account" asks for "DELETE" to be typed, then calls `DELETE /api/v1/account`.
+
+- **Rewritten, not ported.** The old branch is gone from GitHub; its code survived only in unreachable local commits and served as a checklist. It follows Q3's recommendation, which is still your call: everything goes, shared conversations included, so public links are revoked and recipients lose access. Messages the user wrote in other people's conversations stay there.
+- **How it runs.** The profile, username and developer API keys are deleted before the request returns, so the login can't reach the account again. A job in the existing `PurgeJobs` table then deletes the rest in stages (content, then vectors, then credentials, then files, then the Auth0 user) and sweeps once more after 15 minutes for replies that were still generating. A restart or failure resumes it with backoff.
+- **Vectors.** A new retrieval-server endpoint, `/delete-customer-vectors`, deletes by `customer_id` across the shared collections and drops the user's legacy collections. That fixes step 4 of R3 for account deletion. If the user's cluster can't be reached after six attempts, deletion finishes without it and records a warning; the dialog tells the user to clear it themselves.
+- **Still open:**
+  - **Auth0 login.** It is deleted only once Management API credentials are configured: create a machine-to-machine Auth0 application granted `delete:users`, then add `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET` as secrets in both GitHub environments. Until then the login survives, and signing in again starts a new, empty account.
+  - **iOS.** Apple requires deletion in the app itself, so the iOS app needs the same button.
+  - **Not covered:** export; durable-run data in Supabase (dev only, Q7); Voyage batch files; provider-side copies; DynamoDB backups, which expire after 35 days.
+
 ### R5. Users can't remove a stored API key
 
 **What happens.** No route deletes an AI vendor key or vector DB credentials (`StoreCustomerVendorApiKeyActivity.kt:24,65` and `StoreCustomerVectorDBConfigActivity.kt:26` are POST only). The embedding key delete refuses everything except the Hugging Face token (`CustomerCredentialsService.kt:369`). Only tool credentials can be removed.
@@ -376,6 +405,8 @@ A user can only overwrite a key with another valid one, or revoke it at the vend
 **Fix:** add DELETE routes and UI for all of them, and handle dependent settings. When a key is removed, skip that vendor in background tasks.
 
 **Effort:** S.
+
+**Status (2026-11-05): "Delete all API keys" is built on `development`, not yet in production.** Settings > Profile removes every stored credential in one step (`DELETE /api/v1/credentials`): AI and embedding keys, the vector DB connection, and tool and connector credentials. Tools keep their non-secret settings. Removing a single key is still not possible.
 
 ### R6. Text enters the pipeline even when it has nowhere to go
 
@@ -639,8 +670,8 @@ The principle: **nothing leaves for a vendor the user didn't choose for that pur
 | Titles and other background tasks | Preferred vendor, then any stored key. Priority-1 provider only on `development` | Priority-1 provider only, no failover (decided) |
 | Web search | Available once a key is stored | Same, plus a per-chat switch |
 | Thinking steps | Saved in full | Short lifetime, or labels only |
-| Deleting anything | Not possible | Trash for 30 days, or "Delete now" |
-| Removing keys | Tool keys only | All keys |
+| Deleting anything | Not possible. Permanent delete of conversations, notes and accounts built on `development` | Permanent delete, everywhere (decided: no Trash) |
+| Removing keys | Tool keys only. "Delete all keys" built on `development` | All keys, one at a time or all at once |
 | OpenAI `store` | Default (stored 30 days) | `false` |
 | Text in logs and queues | Yes. Fixed in PR #331, live once deployed. | IDs only |
 
@@ -699,10 +730,10 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Memory switches, on by default (decided). **Done on `development`.** | R7 | S-M |
 | Indexing switches | R8 | M |
 | Pin background tasks to the priority-1 provider. **Done on `development`.** | R9 | S-M |
-| Remove keys | R5 | S |
+| Remove keys (all at once: **done on `development`**; one at a time: open) | R5 | S |
 | Provider facts, Voyage acknowledgement, delete batch files | R11 | S-M |
-| Real delete with Trash, purge worker, S3 lifecycle, vector purge fix | R3, R18 | M-L |
-| Account deletion and export | R4 | M-L |
+| Real delete (permanent, no Trash: decided), purge jobs, scratch expiry, vector purge fix. **Done on `development`**; Lambda log retention (R18) open | R3, R18 | M-L |
+| Account deletion (**done on `development`**) and export (open) | R4 | M-L |
 | Send IDs instead of text through the pipeline. **Done in PR #331.** | R1 step 3 | M |
 | Close the logging gaps | R19 | S |
 | `/privacy`, `/terms`, consent screen, iOS privacy manifest | R12 | S-M |

@@ -170,47 +170,8 @@ class NotesRepository(
     }
 
     /**
-     * Soft-delete a note: the DDB item is kept but flagged is_delete=true so
-     * it disappears from listings. Returns false when the note doesn't exist.
-     */
-    suspend fun softDeleteNote(
-        customerId: String,
-        noteKey: String
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            dynamoDbClient.updateItem(
-                UpdateItemRequest.builder()
-                    .tableName(DynamoDBConstants.CUSTOMER_NOTES_TABLE)
-                    .key(mapOf(
-                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                        DynamoDBConstants.NOTE_KEY to AttributeValue.builder().s(noteKey).build()
-                    ))
-                    .updateExpression("SET #isDelete = :true, #deletedAt = :now, #updatedAt = :now")
-                    .conditionExpression("attribute_exists(${DynamoDBConstants.NOTE_KEY})")
-                    .expressionAttributeNames(mapOf(
-                        "#isDelete" to "is_delete",
-                        "#deletedAt" to "deletedAt",
-                        "#updatedAt" to "updatedAt"
-                    ))
-                    .expressionAttributeValues(mapOf(
-                        ":true" to AttributeValue.builder().bool(true).build(),
-                        ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
-                    ))
-                    .build()
-            )
-            logger.info("Soft-deleted note $noteKey for customer $customerId")
-            true
-        } catch (e: ConditionalCheckFailedException) {
-            logger.warn("Skipped soft delete for missing note $noteKey of $customerId")
-            false
-        } catch (e: Exception) {
-            logger.error("Failed to soft-delete note $noteKey for $customerId", e)
-            throw e
-        }
-    }
-
-    /**
-     * Fetches one note row, or null when it doesn't exist or is soft-deleted.
+     * Fetches one note row, or null when it doesn't exist or is soft-deleted
+     * (rows deleted before notes were hard-deleted).
      */
     suspend fun getNote(
         customerId: String,

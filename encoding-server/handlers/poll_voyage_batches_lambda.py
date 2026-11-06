@@ -143,6 +143,8 @@ def _reset_notes_to_pending(batches: List[Dict[str, Any]]) -> None:
                 Key={"customerId": {"S": customer_id}, "noteKey": {"S": note_key}},
                 UpdateExpression="SET embedding_status = :p, embedding_updated_at = :now REMOVE embedding_batch_id",
                 ExpressionAttributeValues={":p": {"S": "pending"}, ":now": {"S": _now()}},
+                # A note deleted meanwhile must stay deleted.
+                ConditionExpression="attribute_exists(noteKey)",
             )
         except Exception as e:
             logger.error(f"Failed to reset note {note_key} to pending: {e}")

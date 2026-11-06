@@ -29,6 +29,7 @@ import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
@@ -61,6 +62,15 @@ data class PendingRun(
  * thin [Conversation] data class (raw DynamoDB attributes). Read in one GetItem
  * where several of them are needed together (e.g. forking).
  */
+/** What a conditional touch of a conversation row found. */
+enum class TouchResult {
+    TOUCHED,
+    /** No row under that key: the conversation is gone, or the key isn't the owner's. */
+    NO_ROW,
+    /** The update failed for another reason; the row may well exist. */
+    FAILED
+}
+
 data class ConversationAttributes(
     val title: String? = null,
     val pinnedAt: String? = null,
@@ -202,7 +212,7 @@ class ConversationRepository(
         customerId: String,
         conversationId: String,
         vendors: Set<String> = emptySet()
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): TouchResult = withContext(Dispatchers.IO) {
         try {
             val attrNames = mutableMapOf("#ua" to "updatedAt", "#cid" to CONVERSATION_ID_KEY)
             val attrValues = mutableMapOf<String, AttributeValue>(
@@ -227,13 +237,13 @@ class ConversationRepository(
                     .expressionAttributeValues(attrValues)
                     .build()
             )
-            true
+            TouchResult.TOUCHED
         } catch (e: ConditionalCheckFailedException) {
-            false
+            TouchResult.NO_ROW
         } catch (e: Exception) {
             // Best-effort: a failed touch must not fail the message write
             logger.error("Failed to touch conversation $conversationId", e)
-            false
+            TouchResult.FAILED
         }
     }
 
@@ -292,11 +302,16 @@ class ConversationRepository(
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                     ))
                     .updateExpression("DELETE #pr :e")
-                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY))
+                    // An update on a missing item creates it: a run ending after its
+                    // conversation was deleted must not bring a bare row back.
+                    .conditionExpression("attribute_exists(#cid)")
+                    .expressionAttributeNames(mapOf("#pr" to PENDING_RUNS_KEY, "#cid" to CONVERSATION_ID_KEY))
                     .expressionAttributeValues(mapOf(":e" to AttributeValue.builder().ss(run.encode()).build()))
                     .build()
             )
             true
+        } catch (e: ConditionalCheckFailedException) {
+            false
         } catch (e: Exception) {
             logger.error("Failed to remove pending run on conversation $conversationId", e)
             false
@@ -343,62 +358,20 @@ class ConversationRepository(
                     CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
                 ))
                 .updateExpression("SET #t = :title")
-                .expressionAttributeNames(mapOf("#t" to "title"))
+                // A title generated after the conversation was deleted must not
+                // bring its row back.
+                .conditionExpression("attribute_exists(#cid)")
+                .expressionAttributeNames(mapOf("#t" to "title", "#cid" to CONVERSATION_ID_KEY))
                 .expressionAttributeValues(mapOf(":title" to AttributeValue.builder().s(title).build()))
                 .build()
 
             dynamoDbClient.updateItem(updateReq)
             // Title text is derived from the user's conversation — id only.
             logger.info("Updated title for conversation $conversationId")
+        } catch (e: ConditionalCheckFailedException) {
+            logger.info("Not titling conversation $conversationId: it no longer exists")
         } catch (e: Exception) {
             logger.error("Failed to update conversation title in DynamoDB", e)
-        }
-    }
-
-    suspend fun archiveConversation(
-        conversationId: String,
-        customerId: String
-    ) = withContext(Dispatchers.IO) {
-        try {
-            dynamoDbClient.updateItem(
-                UpdateItemRequest.builder()
-                    .tableName(CONVERSATION_TABLE)
-                    .key(mapOf(
-                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
-                    ))
-                    .updateExpression("SET #aa = :now")
-                    .expressionAttributeNames(mapOf("#aa" to ARCHIVED_AT_KEY))
-                    .expressionAttributeValues(mapOf(":now" to AttributeValue.builder().s(Instant.now().toString()).build()))
-                    .build()
-            )
-            logger.info("Archived conversation $conversationId for customer $customerId")
-        } catch (e: Exception) {
-            logger.error("Failed to archive conversation $conversationId", e)
-            throw e
-        }
-    }
-
-    suspend fun unarchiveConversation(
-        conversationId: String,
-        customerId: String
-    ) = withContext(Dispatchers.IO) {
-        try {
-            dynamoDbClient.updateItem(
-                UpdateItemRequest.builder()
-                    .tableName(CONVERSATION_TABLE)
-                    .key(mapOf(
-                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
-                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
-                    ))
-                    .updateExpression("REMOVE #aa")
-                    .expressionAttributeNames(mapOf("#aa" to ARCHIVED_AT_KEY))
-                    .build()
-            )
-            logger.info("Unarchived conversation $conversationId for customer $customerId")
-        } catch (e: Exception) {
-            logger.error("Failed to unarchive conversation $conversationId", e)
-            throw e
         }
     }
 
@@ -929,24 +902,45 @@ class ConversationRepository(
      * Writes the async memory-extraction outcome onto a message. "[]" is the
      * terminal "nothing learned" marker that stops client polling.
      */
+    /** Stores the facts learned from a message. Returns false when the message no longer exists. */
     suspend fun setMessageLearnedFacts(
         conversationId: String,
         messageId: String,
         factsJson: String
-    ) = withContext(Dispatchers.IO) {
-        dynamoDbClient.updateItem(
-            software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest.builder()
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest.builder()
+                    .tableName(MESSAGE_TABLE)
+                    .key(mapOf(
+                        "conversationId" to AttributeValue.builder().s(conversationId).build(),
+                        "messageId" to AttributeValue.builder().s(messageId).build()
+                    ))
+                    .updateExpression("SET learnedFactsJson = :facts")
+                    // The message may have been deleted with its conversation.
+                    .conditionExpression("attribute_exists(messageId)")
+                    .expressionAttributeValues(mapOf(
+                        ":facts" to AttributeValue.builder().s(factsJson).build()
+                    ))
+                    .build()
+            )
+            true
+        } catch (e: ConditionalCheckFailedException) {
+            false
+        }
+    }
+
+    suspend fun deleteMessage(conversationId: String, messageId: String) = withContext(Dispatchers.IO) {
+        dynamoDbClient.deleteItem(
+            DeleteItemRequest.builder()
                 .tableName(MESSAGE_TABLE)
                 .key(mapOf(
                     "conversationId" to AttributeValue.builder().s(conversationId).build(),
                     "messageId" to AttributeValue.builder().s(messageId).build()
                 ))
-                .updateExpression("SET learnedFactsJson = :facts")
-                .expressionAttributeValues(mapOf(
-                    ":facts" to AttributeValue.builder().s(factsJson).build()
-                ))
                 .build()
         )
+        Unit
     }
 
     suspend fun getMessage(

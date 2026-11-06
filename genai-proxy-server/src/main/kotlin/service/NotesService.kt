@@ -14,7 +14,6 @@ import com.genflowly.repository.PendingVectorType
 import com.genflowly.repository.VectorSyncPendingRepository
 import com.genflowly.providers.EncodingServerClient
 import com.genflowly.models.RequestType
-import com.genflowly.providers.RetrievalServerClient
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 
@@ -22,7 +21,7 @@ class NoteNotFoundException(noteKey: String) : Exception("Note $noteKey not foun
 
 class NotesService(
     private val encodingServerClient: EncodingServerClient,
-    private val retrievalServerClient: RetrievalServerClient,
+    private val contentDeletionService: ContentDeletionService,
     private val notesRepository: NotesRepository,
     private val customerProfileRepository: CustomerProfileRepository,
     private val agentResolutionService: AgentResolutionService,
@@ -189,31 +188,12 @@ class NotesService(
     }
 
     /**
-     * Delete a note: soft delete in DynamoDB (is_delete=true, item kept) and a
-     * hard delete of its embeddings in the vector DB via the retrieval server.
-     * Throws NoteNotFoundException when the note doesn't exist.
+     * Permanently deletes a note everywhere it is stored (see
+     * [ContentDeletionService]). Throws NoteNotFoundException when the note
+     * doesn't exist.
      */
     suspend fun deleteNote(customerId: String, noteKey: String) {
-        // 1. Soft delete in DynamoDB — the authoritative state for listings
-        val existed = notesRepository.softDeleteNote(customerId, noteKey)
-        if (!existed) {
-            throw NoteNotFoundException(noteKey)
-        }
-
-        // 2. Hard-delete the note's vectors asynchronously (same fire-and-forget
-        // convention as the encoding call on save); a failure leaves orphaned
-        // vectors behind but never blocks or fails the delete itself
-        appScope.launch {
-            try {
-                retrievalServerClient.deleteNoteVectors(customerId, noteKey)
-            } catch (e: Exception) {
-                logger.error("Error deleting vectors for note $noteKey", e)
-            }
-            try {
-                vectorSyncPendingRepository.clear(customerId, PendingVectorType.NOTE, noteKey)
-            } catch (e: Exception) {
-                logger.warn("Could not clear the pending row of deleted note $noteKey: ${e.message}")
-            }
-        }
+        notesRepository.getNote(customerId, noteKey) ?: throw NoteNotFoundException(noteKey)
+        contentDeletionService.requestNoteDeletion(customerId, noteKey)
     }
 }

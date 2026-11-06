@@ -1,5 +1,5 @@
 import {
-    archiveConversation,
+    deleteConversation,
     getCustomerConversations,
     getPinnedConversations,
     pinConversation,
@@ -21,11 +21,11 @@ describe('conversationHistoryService', () => {
         jest.clearAllMocks();
     });
 
-    describe('archiveConversation', () => {
+    describe('deleteConversation', () => {
         it('should call fetchWithRetry with correct parameters', async () => {
             (fetchWithRetry as jest.Mock).mockResolvedValueOnce({ ok: true });
 
-            await archiveConversation(mockToken, mockConversationId);
+            await deleteConversation(mockToken, mockConversationId);
 
             expect(fetchWithRetry).toHaveBeenCalledWith(
                 endpoints.deleteConversation(mockConversationId),
@@ -44,8 +44,8 @@ describe('conversationHistoryService', () => {
                 statusText: 'Internal Server Error',
             });
 
-            await expect(archiveConversation(mockToken, mockConversationId)).rejects.toThrow(
-                'Failed to archive conversation: Internal Server Error'
+            await expect(deleteConversation(mockToken, mockConversationId)).rejects.toThrow(
+                'Failed to delete conversation: Internal Server Error'
             );
         });
     });

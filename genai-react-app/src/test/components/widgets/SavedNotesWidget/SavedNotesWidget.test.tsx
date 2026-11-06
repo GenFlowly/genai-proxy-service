@@ -146,7 +146,7 @@ describe('SavedNotesWidget', () => {
         expect(screen.getByText('Generated Title')).toBeInTheDocument()
     })
 
-    test('archives a note when the archive button is clicked', async () => {
+    test('deletes a note after the user confirms', async () => {
         mockGetNotes.mockResolvedValue([
             { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
             { noteKey: 'k2', noteValue: 'second body', title: 'Second note', createdAt: '2026-08-02T10:00:00Z', updatedAt: '2026-08-02T10:00:00Z' },
@@ -159,7 +159,8 @@ describe('SavedNotesWidget', () => {
             expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
         })
 
-        fireEvent.click(screen.getByTestId('note-archive-btn-k1'))
+        fireEvent.click(screen.getByTestId('note-delete-btn-k1'))
+        fireEvent.click(screen.getByTestId('delete-note-confirm'))
 
         await waitFor(() => {
             expect(mockDeleteNote).toHaveBeenCalledWith('mock-token', 'k1')
@@ -183,15 +184,37 @@ describe('SavedNotesWidget', () => {
             expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
         })
 
-        fireEvent.click(screen.getByTestId('note-archive-btn-k1'))
+        fireEvent.click(screen.getByTestId('note-delete-btn-k1'))
+        fireEvent.click(screen.getByTestId('delete-note-confirm'))
 
         await waitFor(() => {
             expect(mockDeleteNote).toHaveBeenCalled()
         })
         expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
+        expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't delete the note")
     })
 
-    test('clears the active note when it is archived', async () => {
+    test('nothing is deleted until the user confirms', async () => {
+        mockGetNotes.mockResolvedValue([
+            { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
+        ])
+
+        render(<SavedNotesWidget />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
+        })
+
+        fireEvent.click(screen.getByTestId('note-delete-btn-k1'))
+        expect(screen.getByTestId('delete-note')).toHaveTextContent("It's deleted for good")
+
+        fireEvent.click(screen.getByTestId('delete-note-cancel'))
+
+        expect(screen.queryByTestId('delete-note')).not.toBeInTheDocument()
+        expect(mockDeleteNote).not.toHaveBeenCalled()
+    })
+
+    test('clears the active note when it is deleted', async () => {
         mockGetNotes.mockResolvedValue([
             { noteKey: 'k1', noteValue: 'note body', title: 'First note', createdAt: '2026-08-01T10:00:00Z', updatedAt: '2026-08-01T10:00:00Z' },
         ])
@@ -213,11 +236,12 @@ describe('SavedNotesWidget', () => {
             expect(screen.getByTestId('saved-note-k1')).toBeInTheDocument()
         })
 
-        // Open the note, then archive it
+        // Open the note, then delete it
         fireEvent.click(screen.getByTestId('saved-note-k1'))
         expect(screen.getByTestId('active-note')).toHaveTextContent('k1')
 
-        fireEvent.click(screen.getByTestId('note-archive-btn-k1'))
+        fireEvent.click(screen.getByTestId('note-delete-btn-k1'))
+        fireEvent.click(screen.getByTestId('delete-note-confirm'))
 
         await waitFor(() => {
             expect(screen.getByTestId('active-note')).toHaveTextContent('none')

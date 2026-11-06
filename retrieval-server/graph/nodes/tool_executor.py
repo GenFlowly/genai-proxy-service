@@ -28,6 +28,7 @@ import time
 import uuid
 
 from encoding_library.observability import count, observe
+from graph.fs_tools import SCRATCH_TAGS
 from graph.state import RetrievalState
 from graph.tool_credentials import resolve_tool_credentials_and_settings, secrets_accessor
 from graph.tools_runtime import credential_refs_for, make_tool_context, tools_for
@@ -147,7 +148,7 @@ def _spill_oversized(
     path = f"results/{tool_name}_{seq}.txt"
     data = content.encode("utf-8")
     try:
-        store.put(f"{fs_prefix}{path}", data, "text/plain; charset=utf-8")
+        store.put(f"{fs_prefix}{path}", data, "text/plain; charset=utf-8", tags=SCRATCH_TAGS)
     except Exception as e:
         logger.error("Spill of %s result failed — %s", tool_name, e, exc_info=True)
         return (

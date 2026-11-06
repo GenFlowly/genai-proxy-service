@@ -170,4 +170,12 @@ jobs:
           # Set secrets and deploy
           flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.flycast" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}" AUTH0_REACT_APP_CLIENT_IDS="${{ env.AUTH0_REACT_APP_CLIENT_IDS }}" AUTH0_ADMIN_PANEL_CLIENT_IDS="${{ env.AUTH0_ADMIN_PANEL_CLIENT_IDS }}"
 
+          # Auth0 Management API credentials (a machine-to-machine app granted
+          # delete:users), so account deletion also removes the Auth0 login.
+          # AUTH0_MGMT_DOMAIN is the tenant's canonical domain. Inert if unset:
+          # the login survives deletion and the job records a warning.
+          if [ -n "${{ secrets.AUTH0_MGMT_CLIENT_SECRET }}" ]; then
+            flyctl secrets set --app $APP_NAME --stage AUTH0_MGMT_DOMAIN="${{ secrets.AUTH0_MGMT_DOMAIN }}" AUTH0_MGMT_CLIENT_ID="${{ secrets.AUTH0_MGMT_CLIENT_ID }}" AUTH0_MGMT_CLIENT_SECRET="${{ secrets.AUTH0_MGMT_CLIENT_SECRET }}"
+          fi
+
           flyctl deploy --app $APP_NAME --yes

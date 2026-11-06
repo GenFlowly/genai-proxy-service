@@ -33,7 +33,11 @@ data class AppConfig(
      * the stateless /retrieve stream. Off by default; dark-shipped behind
      * DURABLE_RUNS_ENABLED until the durable path is proven end-to-end.
      */
-    val durableRunsEnabled: Boolean
+    val durableRunsEnabled: Boolean,
+    /** Versioned bucket of batch-mode note documents (CUSTOMER_DOCUMENTS_BUCKET); null skips its purge. */
+    val customerDocumentsBucket: String? = null,
+    /** Auth0 Management API credentials for deleting a user's login; null unless all of AUTH0_MGMT_* are set. */
+    val auth0Management: Auth0ManagementConfig? = null
 ) {
     val isProduction: Boolean get() = environment == "production"
 
@@ -71,8 +75,18 @@ data class AppConfig(
                 ?.takeIf { it.isNotEmpty() } ?: "genflowly.com",
             environment = System.getenv("APP_ENV")?.trim()?.lowercase()
                 ?.takeIf { it.isNotEmpty() } ?: "development",
-            durableRunsEnabled = System.getenv("DURABLE_RUNS_ENABLED")?.trim()?.lowercase() == "true"
+            durableRunsEnabled = System.getenv("DURABLE_RUNS_ENABLED")?.trim()?.lowercase() == "true",
+            customerDocumentsBucket = System.getenv("CUSTOMER_DOCUMENTS_BUCKET")?.trim()?.takeIf { it.isNotEmpty() },
+            auth0Management = auth0ManagementFromEnv()
         )
+
+        private fun auth0ManagementFromEnv(): Auth0ManagementConfig? {
+            val domain = System.getenv("AUTH0_MGMT_DOMAIN")?.trim()?.removePrefix("https://")?.trimEnd('/')
+            val clientId = System.getenv("AUTH0_MGMT_CLIENT_ID")?.trim()
+            val clientSecret = System.getenv("AUTH0_MGMT_CLIENT_SECRET")?.trim()
+            if (domain.isNullOrEmpty() || clientId.isNullOrEmpty() || clientSecret.isNullOrEmpty()) return null
+            return Auth0ManagementConfig(domain, clientId, clientSecret)
+        }
 
         private fun envList(name: String): Set<String> =
             System.getenv(name)
@@ -82,4 +96,13 @@ data class AppConfig(
                 ?.toSet()
                 ?: emptySet()
     }
+}
+
+/**
+ * A machine-to-machine Auth0 application authorized for the Management API
+ * with the delete:users scope. [domain] is the tenant's canonical domain
+ * (e.g. genflowly.us.auth0.com), which the Management API audience requires.
+ */
+data class Auth0ManagementConfig(val domain: String, val clientId: String, val clientSecret: String) {
+    override fun toString(): String = "Auth0ManagementConfig(domain=$domain, clientId=$clientId, clientSecret=***)"
 }

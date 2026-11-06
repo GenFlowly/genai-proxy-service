@@ -60,7 +60,7 @@ export default function PlainNotes() {
     }, [status, lastSavedAt, setSaveState])
 
     // Load the note selected in the Saved Notes sidebar into the editor; when
-    // the active note is cleared (archived) or a new note is requested, start
+    // the active note is cleared (deleted) or a new note is requested, start
     // a fresh empty note
     const handledNewNoteRequestRef = useRef(newNoteRequestId)
     useEffect(() => {
@@ -79,8 +79,8 @@ export default function PlainNotes() {
             reset(activeNote.noteValue)
         } else {
             // "New Note" saves pending edits under the note being left; a
-            // plain clear (archive) drops them instead — saving them would
-            // resurrect the archived note
+            // plain clear (delete) drops them instead — saving them would
+            // recreate the deleted note
             if (isNewNoteRequest) flush()
             noteKeyRef.current = newNoteKey()
             createdAtRef.current = new Date().toISOString()

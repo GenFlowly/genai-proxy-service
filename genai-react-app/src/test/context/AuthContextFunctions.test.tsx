@@ -50,6 +50,7 @@ const TestComponent = () => {
 
             <button onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'PINECONE', isConfigValid: true } as any)} data-testid="upd-vdb-new">Add VDB</button>
             <button onClick={() => auth.updateVectorDBConfigStatus({ vendor: 'PINECONE', isConfigValid: false } as any)} data-testid="upd-vdb-upd">Update VDB</button>
+            <button onClick={() => auth.resyncAccount()} data-testid="resync">Resync</button>
         </div>
     );
 };
@@ -134,6 +135,33 @@ describe('AuthContext Functions', () => {
             screen.getByTestId('upd-vdb-upd').click();
         });
         expect(screen.getByTestId('vdb-count')).toHaveTextContent('1');
+    }, 15000);
+
+    test('resyncAccount re-runs the onboard sync and applies its key statuses', async () => {
+        render(
+            <MemoryRouter>
+                <LayoutProvider>
+                    <AuthProvider>
+                        <TestComponent />
+                    </AuthProvider>
+                </LayoutProvider>
+            </MemoryRouter>
+        );
+        await waitFor(() => expect(screen.getByTestId('cust-id')).toHaveTextContent('c1'), { timeout: 5000 });
+        const callsBefore = (onboardCustomer as jest.Mock).mock.calls.length;
+        (onboardCustomer as jest.Mock).mockResolvedValue({
+            customerId: 'c1',
+            customerInstructions: [],
+            aiVendorAPIKeyStatusList: [{ aiVendor: 'OPENAI', status: 'NOT_SET', isAPIKeyValid: false }],
+            vectorDBConfigStatusList: []
+        });
+
+        act(() => {
+            screen.getByTestId('resync').click();
+        });
+
+        await waitFor(() => expect((onboardCustomer as jest.Mock).mock.calls.length).toBe(callsBefore + 1));
+        await waitFor(() => expect(screen.getByTestId('vendor-count')).toHaveTextContent('1'));
     }, 15000);
 
 });

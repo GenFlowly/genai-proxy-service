@@ -1143,10 +1143,56 @@ class RetrievalServerClient(
         logger.info { "Successfully deleted vectors for memory $memoryKey" }
         return true
     }
+
+    /**
+     * Hard-deletes every vector of one conversation in the customer's vector
+     * DB via /delete-conversation-vectors. Throws when the retrieval server
+     * could not finish, so the caller can retry.
+     */
+    suspend fun deleteConversationVectors(customerId: String, conversationId: String) {
+        val response = httpClient.post("$retrievalServerUrl/delete-conversation-vectors") {
+            contentType(ContentType.Application.Json)
+            setBody(
+                json.encodeToString(
+                    DeleteConversationVectorsPayload(customer_id = customerId, conversation_key = conversationId)
+                )
+            )
+        }
+        check(response.status.isSuccess()) { "Conversation vector delete failed: ${response.status}" }
+    }
+
+    /**
+     * Hard-deletes every vector the customer owns in their vector DB, for
+     * account deletion: their rows in each shared collection and their legacy
+     * per-customer collections. Returns how many vectors were deleted. Throws
+     * when the retrieval server could not finish, so the caller can retry.
+     */
+    suspend fun deleteCustomerVectors(customerId: String): Int {
+        val response = httpClient.post("$retrievalServerUrl/delete-customer-vectors") {
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(DeleteCustomerVectorsPayload(customer_id = customerId)))
+            // One delete per collection in the customer's cluster
+            timeout {
+                requestTimeoutMillis = 300_000L
+                socketTimeoutMillis = 300_000L
+            }
+        }
+        check(response.status.isSuccess()) { "Vector purge failed: ${response.status}" }
+        return json.decodeFromString<DeleteCustomerVectorsResult>(response.bodyAsText()).deleted.values.sum()
+    }
 }
 
 @Serializable
 private data class DeleteNoteVectorsPayload(val customer_id: String, val note_key: String)
+
+@Serializable
+private data class DeleteCustomerVectorsPayload(val customer_id: String)
+
+@Serializable
+private data class DeleteConversationVectorsPayload(val customer_id: String, val conversation_key: String)
+
+@Serializable
+private data class DeleteCustomerVectorsResult(val deleted: Map<String, Int> = emptyMap())
 
 @Serializable
 private data class DeleteMemoryVectorsPayload(val customer_id: String, val memory_key: String)

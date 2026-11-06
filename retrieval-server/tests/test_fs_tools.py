@@ -38,6 +38,21 @@ class SafePathTests(unittest.TestCase):
 
 
 class FsToolsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_writes_carry_the_scratch_tag_the_lifecycle_rule_expires(self):
+        writes = []
+
+        class _Store:
+            def put(self, key, data, content_type, tags=None):
+                writes.append((key, tags))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            context = _context(tmp)
+            context.store = _Store()
+            await FsWriteTool().run({"path": "notes/a.md", "content": "x"}, context)
+
+        self.assertEqual(1, len(writes))
+        self.assertEqual({"retention": "scratch"}, writes[0][1])
+
     async def test_write_then_read_roundtrip_under_the_run_prefix(self):
         with tempfile.TemporaryDirectory() as tmp:
             context = _context(tmp)

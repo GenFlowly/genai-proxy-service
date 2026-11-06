@@ -222,7 +222,8 @@ export const unassignConversationFromProject = async (
     }
 };
 
-export const archiveConversation = async (
+/** Permanently deletes the conversation, everywhere it is stored. */
+export const deleteConversation = async (
     token: string,
     conversationId: string
 ): Promise<void> => {
@@ -237,6 +238,6 @@ export const archiveConversation = async (
     );
 
     if (!response.ok) {
-        throw new Error(`Failed to archive conversation: ${response.statusText}`);
+        throw new Error(`Failed to delete conversation: ${response.statusText}`);
     }
 };

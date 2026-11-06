@@ -17,6 +17,7 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest
+import software.amazon.awssdk.services.dynamodb.model.ReturnValue
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 
 /**
@@ -184,6 +185,27 @@ class CustomerCredentialsRepository(
                 throw e
             }
         }
+
+    /**
+     * Deletes every key row of the customer: AI vendors and the embedding
+     * rows (VOYAGE, HUGGINGFACE). Returns how many of them held a key.
+     */
+    suspend fun deleteAllCustomerApiKeys(customerId: String): Int {
+        val rows = getCustomerVendorItems(customerId)
+        rows.mapNotNull { it[AI_VENDOR_KEY]?.s() }.forEach { deleteCustomerApiKey(customerId, it) }
+        return rows.count { !it["apiKey"]?.s().isNullOrBlank() }
+    }
+
+    /** Deletes the customer's vector DB connection. Returns true when there was one. */
+    suspend fun deleteCustomerVectorDBConfig(customerId: String): Boolean = withContext(Dispatchers.IO) {
+        dynamoDbClient.deleteItem(
+            DeleteItemRequest.builder()
+                .tableName(CUSTOMER_VECTOR_DB_CONFIG_TABLE)
+                .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
+                .returnValues(ReturnValue.ALL_OLD)
+                .build()
+        ).attributes().isNotEmpty()
+    }
 
     suspend fun initCustomerApiKey(
         customerId: String,
@@ -432,5 +454,44 @@ class CustomerCredentialsRepository(
                 logger.error("Failed to delete tool credentials for $customerId / $toolType", e)
                 throw e
             }
+        }
+
+    /**
+     * Removes the credentials from every tool row of the customer, connectors'
+     * included. A row that also holds non-secret settings keeps them; any
+     * other row is deleted. Returns how many rows held credentials.
+     */
+    suspend fun removeAllToolCredentials(customerId: String): Int {
+        var removed = 0
+        for (row in listCustomerToolCredentials(customerId)) {
+            val toolType = row[DynamoDBConstants.TOOL_TYPE_KEY]?.s() ?: continue
+            val hadCredentials = !row[DynamoDBConstants.TOOL_CREDENTIALS_KEY]?.s().isNullOrBlank()
+            if (row.containsKey(DynamoDBConstants.TOOL_SETTINGS_KEY)) {
+                if (hadCredentials) removeToolCredentialsKeepingSettings(customerId, toolType)
+            } else {
+                deleteCustomerToolCredentials(customerId, toolType)
+            }
+            if (hadCredentials) removed++
+        }
+        return removed
+    }
+
+    private suspend fun removeToolCredentialsKeepingSettings(customerId: String, toolType: String) =
+        withContext(Dispatchers.IO) {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(DynamoDBConstants.CUSTOMER_TOOL_CREDENTIALS_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        DynamoDBConstants.TOOL_TYPE_KEY to AttributeValue.builder().s(toolType).build(),
+                    ))
+                    .updateExpression("REMOVE #credentials, #authType")
+                    .expressionAttributeNames(mapOf(
+                        "#credentials" to DynamoDBConstants.TOOL_CREDENTIALS_KEY,
+                        "#authType" to DynamoDBConstants.TOOL_AUTH_TYPE_KEY,
+                    ))
+                    .build()
+            )
+            logger.info("Removed tool credentials for $customerId / $toolType, kept its settings")
         }
 }
