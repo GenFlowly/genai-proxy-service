@@ -10,11 +10,18 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
+import software.amazon.awssdk.services.dynamodb.model.CancellationReason
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemResponse
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryResponse
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsResponse
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
+import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse
 import software.amazon.awssdk.services.dynamodb.paginators.QueryIterable
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,6 +40,13 @@ class PurgeRepositoryTest {
     private val repo = PurgeRepository(ddb, KotlinLogging.logger("PurgeRepositoryTest"))
     private val writes = mutableListOf<BatchWriteItemRequest>()
     private val queries = mutableListOf<QueryRequest>()
+    private val transactions = mutableListOf<List<TransactWriteItem>>()
+    private val updates = mutableListOf<UpdateItemRequest>()
+    private val itemDeletes = mutableListOf<DeleteItemRequest>()
+    private var transactionError: TransactionCanceledException? = null
+
+    /** usedAt of the newest usage row left, by usage prefix, for the one-row newest-first lookup. */
+    private val newestLeft = mutableMapOf<String, String>()
 
     /** Query results by "table/index"; a list of pages, each a list of items. */
     private val pages = mutableMapOf<String, List<List<Map<String, AttributeValue>>>>()
@@ -42,6 +56,12 @@ class PurgeRepositoryTest {
         every { ddb.query(any<QueryRequest>()) } answers {
             val request = firstArg<QueryRequest>()
             queries += request
+            if (request.limit() == 1 && request.scanIndexForward() == false) {
+                val usedAt = newestLeft[request.expressionAttributeValues()[":prefix"]?.s()]
+                return@answers QueryResponse.builder()
+                    .items(listOfNotNull(usedAt?.let { mapOf("usedAt" to s(it)) }))
+                    .build()
+            }
             val all = pages["${request.tableName()}/${request.indexName() ?: ""}"].orEmpty()
             val index = request.exclusiveStartKey()?.get("page")?.n()?.toInt() ?: 0
             val page = all.getOrElse(index) { emptyList() }
@@ -53,6 +73,19 @@ class PurgeRepositoryTest {
         every { ddb.batchWriteItem(any<BatchWriteItemRequest>()) } answers {
             writes += firstArg<BatchWriteItemRequest>()
             BatchWriteItemResponse.builder().build()
+        }
+        every { ddb.transactWriteItems(any<TransactWriteItemsRequest>()) } answers {
+            transactionError?.let { throw it }
+            transactions += firstArg<TransactWriteItemsRequest>().transactItems()
+            TransactWriteItemsResponse.builder().build()
+        }
+        every { ddb.updateItem(any<UpdateItemRequest>()) } answers {
+            updates += firstArg<UpdateItemRequest>()
+            UpdateItemResponse.builder().build()
+        }
+        every { ddb.deleteItem(any<DeleteItemRequest>()) } answers {
+            itemDeletes += firstArg<DeleteItemRequest>()
+            DeleteItemResponse.builder().build()
         }
     }
 
@@ -236,6 +269,101 @@ class PurgeRepositoryTest {
             listOf("META#CONV#C1", "META#PENDING#C1"),
             deletedKeys(DynamoDBConstants.CUSTOMER_MEMORY_TABLE).map { it.getValue("memoryId").s() }
         )
+    }
+
+    /** Usage rows of memories u1 and u2: u1 was used in C2 once and C1 twice, u2 once in C1. */
+    private fun usageRows() {
+        pages["${DynamoDBConstants.CUSTOMER_MEMORY_TABLE}/"] = listOf(listOf(
+            mapOf("memoryId" to s("MEMUSE#u1#t0#m0"), "conversationId" to s("C2"), "usedAt" to s("t0")),
+            mapOf("memoryId" to s("MEMUSE#u1#t1#m1"), "conversationId" to s("C1"), "usedAt" to s("t1")),
+            mapOf("memoryId" to s("MEMUSE#u1#t2#m2"), "conversationId" to s("C1"), "usedAt" to s("t2")),
+            mapOf("memoryId" to s("MEMUSE#u2#t3#m3"), "conversationId" to s("C1"), "usedAt" to s("t3")),
+        ))
+        newestLeft["MEMUSE#u1#"] = "t0"
+    }
+
+    private fun canceled(vararg codes: String) = TransactionCanceledException.builder()
+        .message("Transaction cancelled")
+        .cancellationReasons(codes.map { CancellationReason.builder().code(it).build() })
+        .build()
+
+    @Test
+    fun `deleting a conversation's memory usage takes each use off its memory's counter`() = runTest {
+        usageRows()
+
+        assertEquals(3, repo.deleteMemoryUsageOfConversation("CU1", "C1"))
+
+        assertEquals("MEMUSE#", queries.first().expressionAttributeValues()[":prefix"]?.s())
+        assertEquals(
+            listOf("MEMUSE#u1#t1#m1" to "MEM#u1", "MEMUSE#u1#t2#m2" to "MEM#u1", "MEMUSE#u2#t3#m3" to "MEM#u2"),
+            transactions.map { (delete, update) ->
+                delete.delete().key().getValue("memoryId").s() to update.update().key().getValue("memoryId").s()
+            }
+        )
+        val (delete, update) = transactions.first()
+        assertEquals("attribute_exists(#sk)", delete.delete().conditionExpression())
+        assertEquals("SET #hits = #hits - :one", update.update().updateExpression())
+        assertEquals("attribute_exists(#sk) AND #hits >= :one", update.update().conditionExpression())
+        assertEquals("hitCount", update.update().expressionAttributeNames()["#hits"])
+    }
+
+    @Test
+    fun `lastUsedAt moves back to the newest use left, or goes when none is left`() = runTest {
+        usageRows()
+
+        repo.deleteMemoryUsageOfConversation("CU1", "C1")
+
+        val (u1, u2) = updates
+        assertEquals("MEM#u1", u1.key().getValue("memoryId").s())
+        assertEquals("SET #last = :left", u1.updateExpression())
+        assertEquals("t0", u1.expressionAttributeValues()[":left"]?.s())
+        assertEquals("attribute_exists(#sk) AND #last = :removed", u1.conditionExpression())
+        assertEquals("t2", u1.expressionAttributeValues()[":removed"]?.s())
+        assertEquals("REMOVE #last", u2.updateExpression())
+        assertEquals("t3", u2.expressionAttributeValues()[":removed"]?.s())
+    }
+
+    @Test
+    fun `a rerun takes nothing off twice`() = runTest {
+        usageRows()
+        transactionError = canceled("ConditionalCheckFailed", "None")
+
+        assertEquals(0, repo.deleteMemoryUsageOfConversation("CU1", "C1"))
+
+        assertTrue(itemDeletes.isEmpty())
+        assertTrue(updates.isEmpty())
+    }
+
+    @Test
+    fun `a use of a memory that's gone is still deleted`() = runTest {
+        usageRows()
+        transactionError = canceled("None", "ConditionalCheckFailed")
+
+        assertEquals(3, repo.deleteMemoryUsageOfConversation("CU1", "C1"))
+
+        assertEquals(
+            listOf("MEMUSE#u1#t1#m1", "MEMUSE#u1#t2#m2", "MEMUSE#u2#t3#m3"),
+            itemDeletes.map { it.key().getValue("memoryId").s() }
+        )
+    }
+
+    @Test
+    fun `any other failure stops the job so it runs again`() = runTest {
+        usageRows()
+        transactionError = canceled("TransactionConflict", "None")
+
+        assertFailsWith<TransactionCanceledException> { repo.deleteMemoryUsageOfConversation("CU1", "C1") }
+    }
+
+    @Test
+    fun `a memory's history is its change and usage rows`() = runTest {
+        pages["${DynamoDBConstants.CUSTOMER_MEMORY_TABLE}/"] = listOf(listOf(
+            mapOf("customerId" to s("CU1"), "memoryId" to s("MEMCHG#u1#t1#ab")),
+        ))
+
+        repo.deleteMemoryHistory("CU1", "MEM#u1")
+
+        assertEquals(listOf("MEMCHG#u1#", "MEMUSE#u1#"), queries.map { it.expressionAttributeValues()[":prefix"]?.s() })
     }
 
     @Test

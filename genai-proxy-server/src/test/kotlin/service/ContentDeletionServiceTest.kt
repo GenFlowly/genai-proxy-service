@@ -112,6 +112,7 @@ class ContentDeletionServiceTest {
             purge.deleteMessages("C1")
             purge.deletePendingVectorRows("CU1", "C1")
             purge.deleteMemoryBookkeeping("CU1", "C1")
+            purge.deleteMemoryUsageOfConversation("CU1", "C1")
             purge.deleteInstructionUsageSeen("CU1", "C1")
             jobs.recordStage(conversationJob(), STAGE_CONTENT, any())
             retrieval.deleteConversationVectors("CU1", "C1")

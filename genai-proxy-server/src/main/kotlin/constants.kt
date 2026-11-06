@@ -194,6 +194,21 @@ object DynamoDBConstants {
     const val CUSTOMER_MEMORY_TABLE = "CustomerMemory"
     const val MEMORY_ID_KEY = "memoryId"
     const val MEMORY_ITEM_PREFIX = "MEM#"
+    // A memory's immutable change log, "MEMCHG#<uuid>#<createdAt>#<suffix>",
+    // and usage log, "MEMUSE#<uuid>#<turnStartedAt>#<messageId>" (written by
+    // the retrieval server, which shares this key format). Neither prefix
+    // matches "MEM#", so memory listings never see them.
+    const val MEMORY_CHANGE_PREFIX = "MEMCHG#"
+    const val MEMORY_USAGE_PREFIX = "MEMUSE#"
+    // hitCount always equals the memory's number of usage rows: each row is
+    // written and deleted in one transaction with its hit. lastUsedAt is the
+    // newest row's usedAt.
+    const val MEMORY_HIT_COUNT_KEY = "hitCount"
+    const val MEMORY_LAST_USED_AT_KEY = "lastUsedAt"
+    const val MEMORY_USED_AT_KEY = "usedAt"
+    // Placement key for Profile in a memory's placements map; every other key
+    // is a project id.
+    const val MEMORY_PROFILE_PLACEMENT = "PROFILE"
     const val MEMORY_CONV_META_PREFIX = "META#CONV#"
     // Durable extraction work queue: one row per conversation awaiting an
     // extraction run/retry, drained by the reconciler via the sparse GSI

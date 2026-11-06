@@ -315,6 +315,14 @@ class ConversationService(
         return conversationId
     }
 
+    /**
+     * The project the conversation is in, when [customerId] owns it. Null for
+     * a conversation outside any project and for one shared with them: a
+     * project belongs to its owner, so its memories never apply to anyone else.
+     */
+    suspend fun getOwnedConversationProjectId(conversationId: String, customerId: String): String? =
+        conversationRepository.getConversationAttributes(conversationId, customerId)?.projectId
+
     // ─── Messages ─────────────────────────────────────────────────────────────
 
     suspend fun getMessage(

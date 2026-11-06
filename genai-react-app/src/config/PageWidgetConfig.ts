@@ -1,4 +1,4 @@
-export type PageId = 'CHAT_PAGE' | 'MEMORY_PAGE' | 'SETTINGS_PAGE' | 'AGENTS_PAGE'
+export type PageId = 'CHAT_PAGE' | 'SETTINGS_PAGE' | 'AGENTS_PAGE'
 
 export interface PageConfig {
     pageId: PageId
@@ -13,14 +13,6 @@ export const PAGE_WIDGET_CONFIG: PageConfig[] = [
         leftSidebar: ['CONVERSATION_HISTORY_SIDEBAR_WIDGET', 'THREAD_LIST'],
         rightSidebar: ['AI_VENDOR', 'AGENT_PICKER', 'TOKEN_COUNTER'],
         centerSection: ['CONVERSATION_LIST'],
-    },
-    {
-        pageId: 'MEMORY_PAGE',
-        // Saved notes render directly on the page in a ResizableSidebar
-        // (mirroring the chat page's history panel), not via LeftSidebar
-        leftSidebar: [],
-        rightSidebar: [],
-        centerSection: ['NOTES_WIDGET'],
     },
     {
         pageId: 'SETTINGS_PAGE',

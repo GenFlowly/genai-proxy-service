@@ -62,13 +62,15 @@ class GenerationOrchestratorSystemPromptTest {
         coEvery {
             retrievalService.retrieveAndGenerate(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                memoryContext = any()
             )
         } returns RetrievalResult("ok", 1, 2, 3, null)
         every {
             retrievalService.retrieveAndGenerateStream(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                memoryContext = any()
             )
         } returns flowOf()
     }
@@ -85,7 +87,8 @@ class GenerationOrchestratorSystemPromptTest {
                 llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
                 conversationHistory = any(), systemPrompt = decorated, agentic = any(),
                 queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
-                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any()
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                memoryContext = any()
             )
         }
 
@@ -109,7 +112,8 @@ class GenerationOrchestratorSystemPromptTest {
                 llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
                 conversationHistory = any(), systemPrompt = decorated, agentic = any(),
                 queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
-                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any()
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                memoryContext = any()
             )
         }
     }
@@ -126,7 +130,8 @@ class GenerationOrchestratorSystemPromptTest {
                 llmProvider = any(), llmModel = any(), llmMaxTokens = any(),
                 conversationHistory = any(), systemPrompt = instruction, agentic = any(),
                 queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
-                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any()
+                responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
+                memoryContext = any()
             )
         }
     }

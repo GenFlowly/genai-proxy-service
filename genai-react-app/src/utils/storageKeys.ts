@@ -17,7 +17,7 @@
  * - 'i18nextLng'               — written by i18next's language detector
  * - UI layout preferences written via component-library storageKey props:
  *   'conversation_history_split_fraction', 'conversation_history_width_rem',
- *   'settings_sidebar_width_rem', 'saved_notes_width_rem',
+ *   'settings_sidebar_width_rem', 'memory_sidebar_width_rem',
  *   'agentsCategorySidebarWidth'
  *
  * External writer bound to this convention: component-library Request.tsx
@@ -38,7 +38,7 @@ export const StorageSuffix = {
     aiVendorModels: 'ai_vendor_models',
     promptEditorContentPrefix: 'prompt_editor_content_',
     conversationHistory: 'conversation_history_cache_v1',
-    savedNotes: 'saved_notes_cache_v1',
+    memories: 'memories_cache_v1',
     recentInstructions: 'recent_instructions_cache_v1',
     requestAgents: 'request_agents_cache',
     customerAgents: 'customer_agents_cache',

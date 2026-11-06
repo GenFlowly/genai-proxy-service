@@ -10,9 +10,6 @@ export const NAV_ITEMS = [
     { id: 'instructions', label: 'Instructions', path: '/instructions' },
 ];
 
-// Pages whose left sidebar must stay expanded (e.g. Memory's Saved Notes list)
-const EXPANDED_SIDEBAR_PATHS = ['/memory'];
-
 export const isNavItemActive = (pathname: string, itemPath: string): boolean =>
     pathname === itemPath || (itemPath !== '/' && pathname.startsWith(itemPath));
 
@@ -20,8 +17,8 @@ export const NavbarMenu: React.FC = () => {
     const location = useLocation();
     const { setLeftSidebarExpanded } = useLayout();
 
-    const handleLinkClick = (path: string) => {
-        setLeftSidebarExpanded(EXPANDED_SIDEBAR_PATHS.includes(path));
+    const handleLinkClick = () => {
+        setLeftSidebarExpanded(false);
     };
 
     return (
@@ -34,7 +31,7 @@ export const NavbarMenu: React.FC = () => {
                         to={item.path}
                         className={`${styles.navLink} ${isActive ? styles.activeNavLink : ''}`}
                         data-testid={`navbar-item-${item.id}`}
-                        onClick={() => handleLinkClick(item.path)}
+                        onClick={handleLinkClick}
                     >
                         {item.label}
                     </Link>

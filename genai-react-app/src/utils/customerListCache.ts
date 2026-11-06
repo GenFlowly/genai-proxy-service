@@ -2,7 +2,7 @@ import { customerKey } from './storageKeys'
 
 /**
  * Stale-while-revalidate localStorage store, one instance per cached list
- * (conversation history, saved notes, recent instructions): keyed per
+ * (conversation history, memories, recent instructions): keyed per
  * customer so the UI paints instantly on a fresh session, with the last
  * known value mirrored in memory to skip re-parsing on every mount. This is
  * a render seed only — callers always refetch and save() the fresh result.
