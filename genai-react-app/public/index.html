@@ -40,9 +40,75 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>Unbiase AI</title>
+    <!--
+      Boot splash, painted before the bundle loads. SplashScreenDismisser fades it
+      out once Auth0's session check settles; .splash-hidden's 250ms fade must
+      match FADE_MS there. Same in light and dark: it continues the app icon.
+    -->
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(to bottom right, #2B394D, #0F161F);
+        transition: opacity 0.25s ease-out;
+      }
+      #splash.splash-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash svg {
+        width: 104px;
+        height: 96px;
+        animation: splash-enter 0.88s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      }
+      #splash .splash-ribbon {
+        animation: splash-breathe 1.8s ease-in-out infinite;
+      }
+      #splash .splash-ribbon-back {
+        animation-delay: 0.9s;
+      }
+      #splash p {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 48px;
+        margin: 0;
+        text-align: center;
+        font: 600 17px/22px 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: #FFFFFF;
+        animation: splash-fade 0.48s ease 0.8s both;
+      }
+      @keyframes splash-enter {
+        from { opacity: 0; transform: scale(1.5); }
+      }
+      @keyframes splash-fade {
+        from { opacity: 0; }
+      }
+      @keyframes splash-breathe {
+        50% { opacity: 0.4; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash, #splash * {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+    <noscript><style>#splash { display: none; }</style></noscript>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="splash" role="status" aria-label="Loading">
+      <svg viewBox="24 24 428 394" aria-hidden="true">
+        <path class="splash-ribbon splash-ribbon-back" fill="#006BE8" stroke="#006BE8" stroke-width="1.5" stroke-linejoin="round" d="M422.5 332.9L418.5 336.7L414.5 339.8L324.5 406.8L318.5 410.8L314.5 412.9L309.5 414.9L305.5 415.9L299.5 416.9L289.5 416.6L284.5 415.7L278.5 413.8L272.5 410.9L267.5 407.7L263.8 404.5L259.5 400.1L254.2 392.5L251.2 385.5L250.1 381.5L249.1 376.5L248.9 369.5L250.8 273.5L249.9 263.5L248.7 257.5L246.8 250.5L243.9 243.5L239.8 236.5L235.5 231.3L230.5 227.3L226.5 225.2L223.5 224.2L218.5 223.7L215.5 223.8L212.5 224.1L208.5 225.2L200.5 229.2L192.5 235.1L192.1 234.5L201.5 227.3L209.5 223L216.5 220.1L228.5 217.2L239.5 216.3L251.5 217.1L261.5 219.2L272.5 222.8L278.5 223.3L283.5 222.9L287.5 221.9L292.5 220L298.5 217L306.5 211.9L314.5 205.7L450.5 92.4L450.9 93.5L450.8 260.5L449.8 276.5L447.7 287.5L445.8 294.5L443.7 300.5L441 306.5L436.8 314.5L432.9 320.5L426.6 328.5Z"/>
+        <path class="splash-ribbon" fill="#4597F7" d="M261.5 218.5L260.5 219L251.5 217.1L241.5 216.3L228.5 217.2L216.5 220.1L211.5 222.1L203.5 226.1L194.5 232.3L186.2 240.5L180.8 247.5L110.8 328.5L107.2 332.5L104.5 334.8L100.5 336.9L97.5 337.9L93.5 338.8L85.5 338.9L77.5 337.8L70.5 335.7L65.5 333.8L56.5 328.9L50.5 324.6L45.8 320.5L38.4 312.5L32.3 303.5L29.3 297.5L27.2 291.5L25.4 282.5L25.2 276.5L25.7 272.5L33.2 131.5L34 120.5L34.5 117.8L36.2 125.5L39.1 131.5L41.1 134.5L43.9 137.5L46.5 139.7L49.5 141.5L54.5 143.7L58.5 144.7L65.5 145.1L70.5 144.8L75.5 143.7L82.5 141L88.5 137.7L94.5 132.9L178.3 45.5L191.5 32.2L197.5 28.3L200.5 27L203.5 26.1L208.5 25.1L216.5 25.2L221.5 26.3L226.5 28.2L231.5 31.1L235.5 34.3L237.6 36.5L241.8 42.5L243.6 46.5L244.9 50.5L245.8 58.5L246.1 186.5L248.2 197.5L251.1 205.5L253.3 209.5L256.1 213.5Z"/>
+      </svg>
+      <p>Unbiase AI</p>
+    </div>
     <div id="root"></div>
     <!--
       This HTML file is a template.
