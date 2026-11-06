@@ -1,6 +1,5 @@
 import React from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
 import { useAuth } from './context/AuthContext'
 import { useDefaultsPrefetch } from './hooks/useDefaultsPrefetch'
 import { useTapOutsideEndsEditing } from './hooks/useTapOutsideEndsEditing'
@@ -40,15 +39,15 @@ function NewChatRoute(): React.ReactElement {
     return isNarrow && !isSessionAuthenticated ? <Navigate to="/" replace /> : <LandingPage />
 }
 
-export default function AppContent(): React.ReactElement {
-    const { t } = useTranslation()
+export default function AppContent(): React.ReactElement | null {
     const { isLoading, isOnboarding, isAuthenticated, onboardingCompleted, completeOnboarding } = useAuth()
     const { isNarrow } = useResponsiveBreakpoints()
     const navigate = useNavigate()
     useDefaultsPrefetch()
     useTapOutsideEndsEditing()
 
-    if (isLoading) return <div>{t("layout.appContent.loading")}</div>
+    // The boot splash (public/index.html) covers this until SplashScreenDismisser lifts it.
+    if (isLoading) return null
 
     // isAuthenticated here is the strict flag (Auth0 session + /onboard success);
     // isOnboarding means the /onboard sync call itself is still in flight — wait

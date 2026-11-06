@@ -453,9 +453,6 @@
         }
     },
     "layout": {
-        "appContent": {
-            "loading": "Loading..."
-        },
         "l1Menu": {
             "headlineOne": "One prompt.",
             "headlineTwo": "Many models.",
