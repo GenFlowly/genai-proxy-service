@@ -23,7 +23,7 @@ export const usePageTitle = () => {
     const { activeWidgetId } = useSidebarMenu()
 
     useEffect(() => {
-        const path = location.pathname.replace(/\/chat\/.*/, '/chat')
+        const path = location.pathname.replace(/\/chat\/.*/, '/chat').replace(/\/memory\/.*/, '/memory')
         
         if (path === '/chat' && !conversationId) {
             document.title = `New Conversation | ${DEFAULT_TITLE}`

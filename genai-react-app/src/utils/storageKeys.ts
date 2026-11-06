@@ -17,12 +17,13 @@
  * - 'i18nextLng'               — written by i18next's language detector
  * - UI layout preferences written via component-library storageKey props:
  *   'conversation_history_split_fraction', 'conversation_history_width_rem',
- *   'settings_sidebar_width_rem', 'saved_notes_width_rem',
+ *   'settings_sidebar_width_rem', 'memory_sidebar_width_rem',
  *   'agentsCategorySidebarWidth'
  *
- * External writer bound to this convention: component-library Request.tsx
- * builds `${customerId}_prompt_editor_content_conv-<blockId>` draft keys
- * itself — StorageSuffix.promptEditorContentPrefix must stay in sync with it.
+ * Leftovers only: component-library Request.tsx before 0.1.125 kept
+ * `${customerId}_prompt_editor_content_conv-<blockId>` drafts. Nothing reads or
+ * writes them now; New Chat still sweeps them (StorageSuffix.promptEditorContentPrefix)
+ * because they hold prompt text.
  */
 export function customerKey(customerId: string, suffix: string): string {
     return `${customerId}_${suffix}`
@@ -38,7 +39,7 @@ export const StorageSuffix = {
     aiVendorModels: 'ai_vendor_models',
     promptEditorContentPrefix: 'prompt_editor_content_',
     conversationHistory: 'conversation_history_cache_v1',
-    savedNotes: 'saved_notes_cache_v1',
+    memories: 'memories_cache_v1',
     recentInstructions: 'recent_instructions_cache_v1',
     requestAgents: 'request_agents_cache',
     customerAgents: 'customer_agents_cache',

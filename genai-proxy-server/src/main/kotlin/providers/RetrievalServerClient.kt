@@ -35,6 +35,21 @@ import com.genflowly.models.aiVendorFromProviderString
 import com.genflowly.models.toProviderString
 import mu.KLogger
 
+/**
+ * Where, and for which reply, memories are used. The MEMORY node applies
+ * Profile memories plus [project_id]'s only, and keys the usage log it writes
+ * by [response_message_id] and [turn_started_at], so a retried or failed-over
+ * call for the same reply counts each memory once. Sent only when memory is
+ * enabled for the request.
+ */
+@Serializable
+data class MemoryContext(
+    val project_id: String? = null,
+    val conversation_id: String,
+    val response_message_id: String,
+    val turn_started_at: String,
+)
+
 @Serializable
 private data class RetrievalAgentPayload(
     val customer_id: String,
@@ -56,6 +71,7 @@ private data class RetrievalAgentPayload(
     val response_schema: kotlinx.serialization.json.JsonObject? = null,
     /** Governance decision: MEMORY nodes may inject learned user memories. */
     val memory_enabled: Boolean = false,
+    val memory_context: MemoryContext? = null,
     /** Purpose label for llm_request_total{source=...}: "conversation" or a RequestType lowercased. */
     val request_source: String = "conversation",
     /**
@@ -299,7 +315,8 @@ class RetrievalServerClient(
         memoryEnabled: Boolean,
         requestSource: String,
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        memoryContext: MemoryContext? = null
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
@@ -319,6 +336,7 @@ class RetrievalServerClient(
             tool_results = toolResults,
             response_schema = responseSchema,
             memory_enabled = memoryEnabled,
+            memory_context = memoryContext.takeIf { memoryEnabled },
             request_source = requestSource,
             graph_id = graphId,
             thinking_level = thinkingLevel
@@ -345,10 +363,11 @@ class RetrievalServerClient(
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        memoryContext: MemoryContext? = null
     ): RetrievalResult {
         logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -507,10 +526,11 @@ class RetrievalServerClient(
         memoryEnabled: Boolean = false,
         requestSource: String = "conversation",
         graphId: String? = null,
-        thinkingLevel: String? = null
+        thinkingLevel: String? = null,
+        memoryContext: MemoryContext? = null
     ): Flow<StreamChunk> = channelFlow {
         logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)

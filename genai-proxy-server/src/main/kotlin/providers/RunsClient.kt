@@ -49,6 +49,7 @@ private data class RunStartPayload(
     val tool_results: List<PayloadToolResult> = emptyList(),
     val response_schema: JsonObject? = null,
     val memory_enabled: Boolean = false,
+    val memory_context: MemoryContext? = null,
     val request_source: String = "conversation",
     val graph_id: String? = null,
     /** End user's per-request reasoning depth; overrides node-config thinking_level on the response generator. */
@@ -113,7 +114,8 @@ class RunsClient(
         requestSource: String = "conversation",
         graphId: String? = null,
         thinkingLevel: String? = null,
-        runId: String? = null
+        runId: String? = null,
+        memoryContext: MemoryContext? = null
     ): String? {
         val payload = json.encodeToString(
             RunStartPayload(
@@ -132,6 +134,7 @@ class RunsClient(
                 tool_results = toolResults,
                 response_schema = responseSchema,
                 memory_enabled = memoryEnabled,
+                memory_context = memoryContext.takeIf { memoryEnabled },
                 request_source = requestSource,
                 graph_id = graphId,
                 thinking_level = thinkingLevel,

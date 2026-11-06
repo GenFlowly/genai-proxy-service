@@ -12,15 +12,19 @@ import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
 import { ICONS } from '../../../constants/icons'
 import styles from './EmbeddingModelDefaults.module.scss'
 
-/** Data categories that can each carry their own default embedding model. */
-type EmbeddingCategory = 'conversations' | 'notes'
+/**
+ * Data categories that can each carry their own default embedding model. No
+ * app saves notes any more, so only conversations are offered; a stored
+ * notes default is left as it is.
+ */
+type EmbeddingCategory = 'conversations'
 
 interface CategorySelection {
     vendor: string
     model: string
 }
 
-const CATEGORIES: EmbeddingCategory[] = ['conversations', 'notes']
+const CATEGORIES: EmbeddingCategory[] = ['conversations']
 
 /** Infer the owning vendor from the model's naming convention. */
 function vendorForModel(model: string): string {
@@ -30,7 +34,7 @@ function vendorForModel(model: string): string {
 }
 
 /**
- * Per-category default embedding models (conversations, notes), picked
+ * Per-category default embedding models (conversations), picked
  * vendor-first then model. Only vendors with a stored embedding API key
  * (managed on the Embedding Model API Keys page) offer models.
  */
@@ -42,7 +46,6 @@ export function EmbeddingModelDefaults(): React.ReactElement {
 
     const [selections, setSelections] = useState<Record<EmbeddingCategory, CategorySelection>>({
         conversations: { vendor: '', model: '' },
-        notes: { vendor: '', model: '' },
     })
     const [saving, setSaving] = useState(false)
 
@@ -58,10 +61,8 @@ export function EmbeddingModelDefaults(): React.ReactElement {
     useEffect(() => {
         const conversations =
             aiConfigPreferences?.embeddingModelConversations ?? aiConfigPreferences?.embeddingModel ?? ''
-        const notes = aiConfigPreferences?.embeddingModelNotes ?? aiConfigPreferences?.embeddingModel ?? ''
         setSelections({
             conversations: { vendor: vendorForModel(conversations), model: conversations },
-            notes: { vendor: vendorForModel(notes), model: notes },
         })
     }, [aiConfigPreferences])
 
@@ -93,10 +94,8 @@ export function EmbeddingModelDefaults(): React.ReactElement {
             showToast(t('settingsPage.embeddingDefaults.loginFirstToast'))
             return
         }
-        const prefs: { embeddingModelConversations?: string; embeddingModelNotes?: string } = {}
-        if (selections.conversations.model) prefs.embeddingModelConversations = selections.conversations.model
-        if (selections.notes.model) prefs.embeddingModelNotes = selections.notes.model
-        if (!prefs.embeddingModelConversations && !prefs.embeddingModelNotes) return
+        if (!selections.conversations.model) return
+        const prefs = { embeddingModelConversations: selections.conversations.model }
         try {
             setSaving(true)
             const token = await getAccessTokenSilently()
@@ -154,8 +153,7 @@ export function EmbeddingModelDefaults(): React.ReactElement {
                             ? t('settingsPage.embeddingDefaults.saving')
                             : t('settingsPage.embeddingDefaults.save')}
                         icon={ICONS.SAVE_ICON}
-                        disabled={saving
-                            || (!selections.conversations.model && !selections.notes.model)}
+                        disabled={saving || !selections.conversations.model}
                         data-testid="save-default-embedding-model"
                     />
                 </div>

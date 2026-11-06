@@ -37,7 +37,6 @@ const mockSave = saveAIConfigPreferences as jest.Mock;
 const mockDeleteAll = deleteAllMemoryFacts as jest.Mock;
 
 const chats = () => screen.getByTestId('learned-facts-memoryLearnFromChats') as HTMLInputElement;
-const notes = () => screen.getByTestId('learned-facts-memoryLearnFromNotes') as HTMLInputElement;
 const replies = () => screen.getByTestId('learned-facts-memoryUseInReplies') as HTMLInputElement;
 
 describe('LearnedFactsSettings', () => {
@@ -61,36 +60,40 @@ describe('LearnedFactsSettings', () => {
         render(<LearnedFactsSettings />);
 
         expect(chats().checked).toBe(true);
-        expect(notes().checked).toBe(true);
         expect(replies().checked).toBe(true);
+    });
+
+    test('there is no notes switch, since no app saves notes', () => {
+        render(<LearnedFactsSettings />);
+
+        expect(screen.queryByTestId('learned-facts-memoryLearnFromNotes')).not.toBeInTheDocument();
     });
 
     test('shows the stored values', () => {
         act(() => {
-            replaceAiPreferences('CU1', { memoryLearnFromNotes: false, memoryUseInReplies: null });
+            replaceAiPreferences('CU1', { memoryLearnFromChats: false, memoryUseInReplies: null });
         });
 
         render(<LearnedFactsSettings />);
 
-        expect(chats().checked).toBe(true);
-        expect(notes().checked).toBe(false);
+        expect(chats().checked).toBe(false);
         expect(replies().checked).toBe(true);
     });
 
     test('turning a switch off saves only that switch', async () => {
         render(<LearnedFactsSettings />);
 
-        await userEvent.click(notes());
+        await userEvent.click(replies());
 
         await waitFor(() =>
             expect(mockSave).toHaveBeenCalledWith('tok', {
-                aiConfigPreferences: { memoryLearnFromNotes: false },
+                aiConfigPreferences: { memoryUseInReplies: false },
             })
         );
-        await waitFor(() => expect(notes().checked).toBe(false));
-        expect(notes()).not.toBeDisabled();
+        await waitFor(() => expect(replies().checked).toBe(false));
+        expect(replies()).not.toBeDisabled();
         expect(chats().checked).toBe(true);
-        expect(getAiPreferences()?.memoryLearnFromNotes).toBe(false);
+        expect(getAiPreferences()?.memoryUseInReplies).toBe(false);
     });
 
     test('a failed save shows the error and puts the switch back', async () => {

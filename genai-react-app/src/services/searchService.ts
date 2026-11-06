@@ -3,7 +3,7 @@ import { endpoints } from '../config/endpoints'
 import { fetchWithRetry } from '../utils/apiUtils'
 import { searchErrorFrom } from './searchError'
 
-export type SearchDataType = 'conversation' | 'notes'
+export type SearchDataType = 'conversation' | 'memory'
 
 export interface SearchResultItem {
     type: string

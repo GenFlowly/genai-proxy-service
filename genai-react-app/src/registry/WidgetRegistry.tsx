@@ -8,9 +8,7 @@ import NewChatWidget from '../components/widgets/SidebarWidgets/NewChatWidget/Ne
 import AIVendorWidget from '../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget'
 import AgentPickerWidget from '../components/widgets/SidebarWidgets/AgentPickerWidget/AgentPickerWidget'
 import TokenCounter from '../components/widgets/SidebarWidgets/TokenCounter/TokenCounter'
-import SavedNotesWidget from '../components/widgets/SidebarWidgets/SavedNotesWidget/SavedNotesWidget'
 
-import NotesWidget from '../components/widgets/CenterWidgets/NotesWidget/NotesWidget'
 import ConversationListWidget from '../components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget'
 import ConfigureAIVendorSettingsWidget from '../components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget'
 import DatabaseConnectionsSettingsWidget from '../components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget'
@@ -55,11 +53,6 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
         id: 'AGENT_PICKER',
         component: AgentPickerWidget,
     },
-    'SAVED_NOTES_WIDGET': {
-        id: 'SAVED_NOTES_WIDGET',
-        component: SavedNotesWidget,
-        name: 'Saved Notes',
-    },
     'TOKEN_COUNTER': {
         id: 'TOKEN_COUNTER',
         component: TokenCounter,
@@ -70,10 +63,6 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
     'CONVERSATION_LIST': {
         id: 'CONVERSATION_LIST',
         component: ConversationListWidget,
-    },
-    'NOTES_WIDGET': {
-        id: 'NOTES_WIDGET',
-        component: NotesWidget,
     },
     'CONFIGURE_AI_VENDOR_SETTINGS': {
         id: 'CONFIGURE_AI_VENDOR_SETTINGS',

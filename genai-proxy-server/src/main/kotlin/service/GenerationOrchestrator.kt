@@ -15,6 +15,7 @@ import com.genflowly.models.retrieval.toPayloadToolResults
 import com.genflowly.models.retrieval.toPayloadTools
 import com.genflowly.models.retrieval.toResultsJson
 import com.genflowly.config.AppConfig
+import com.genflowly.providers.MemoryContext
 import com.genflowly.providers.RetrievalServerClient
 import com.genflowly.providers.RunsClient
 import com.genflowly.repository.GraphRepository
@@ -209,6 +210,10 @@ class GenerationOrchestrator(
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
             conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId)
+        val turnStartedAt = java.time.Instant.now().toString()
+        val memoryProjectId = if (memoryEnabled) {
+            conversationService.getOwnedConversationProjectId(activeConversationId, customerId)
+        } else null
 
         var actualPreviousMessageId = selectedResponseId
         if (actualPreviousMessageId.isNullOrBlank() && !conversationId.isNullOrBlank()) {
@@ -255,7 +260,9 @@ class GenerationOrchestrator(
                         toolResults = toolResults,
                         responseSchema = responseSchema,
                         memoryEnabled = memoryEnabled,
-                        agentId = agentId
+                        agentId = agentId,
+                        memoryProjectId = memoryProjectId,
+                        turnStartedAt = turnStartedAt
                     )
                 }
             }.awaitAll()
@@ -278,10 +285,14 @@ class GenerationOrchestrator(
         toolResults: List<ToolResult> = emptyList(),
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         memoryEnabled: Boolean = false,
-        agentId: String? = null
+        agentId: String? = null,
+        memoryProjectId: String? = null,
+        turnStartedAt: String? = null
     ): Message {
         val apiKey = customerCredentialsService.getCustomerApiKeyForVendor(aiVendor, message.customerId)
             ?: throw IllegalArgumentException("API key not found for vendor: $aiVendor")
+        // Chosen before the call so the MEMORY node can log which reply used each memory.
+        val responseMessageId = java.util.UUID.randomUUID().toString()
 
         val thread = if (message.previousMessageId.isNullOrBlank()) {
             listOf(message)
@@ -315,10 +326,17 @@ class GenerationOrchestrator(
             responseSchema = responseSchema,
             memoryEnabled = memoryEnabled,
             graphId = agentId,
-            thinkingLevel = thinkingLevel
+            thinkingLevel = thinkingLevel,
+            memoryContext = MemoryContext(
+                project_id = memoryProjectId,
+                conversation_id = message.conversationId,
+                response_message_id = responseMessageId,
+                turn_started_at = turnStartedAt ?: java.time.Instant.now().toString(),
+            )
         )
 
         val responseMessage = Message(
+            messageId = responseMessageId,
             conversationId = message.conversationId,
             customerId = message.customerId,
             client = message.client,
@@ -417,6 +435,10 @@ class GenerationOrchestrator(
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
             conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId)
+        val turnStartedAt = java.time.Instant.now().toString()
+        val memoryProjectId = if (memoryEnabled) {
+            conversationService.getOwnedConversationProjectId(activeConversationId, customerId)
+        } else null
 
         // Brand-new UI conversation: kick off title generation now, in
         // parallel with the rest of the setup and the vendor stream, instead
@@ -524,6 +546,12 @@ class GenerationOrchestrator(
         // Pre-calculate the deterministic response ID to send as a response header immediately
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
         val responseMessageId = java.util.UUID.nameUUIDFromBytes(responseUniqueContent.toByteArray()).toString()
+        val memoryContext = MemoryContext(
+            project_id = memoryProjectId,
+            conversation_id = activeConversationId,
+            response_message_id = responseMessageId,
+            turn_started_at = turnStartedAt,
+        )
 
         // Generation is DECOUPLED from the client connection: it runs on
         // appScope and pushes chunks through a buffered channel the HTTP
@@ -578,7 +606,8 @@ class GenerationOrchestrator(
                     responseSchema = responseSchema,
                     memoryEnabled = memoryEnabled,
                     graphId = agentId,
-                    thinkingLevel = config.thinkingLevel
+                    thinkingLevel = config.thinkingLevel,
+                    memoryContext = memoryContext
                 )
                 // Durable /runs path (flagged): start a durable background run and
                 // reattach to its event stream. Credentials are NOT sent — the
@@ -606,7 +635,8 @@ class GenerationOrchestrator(
                             responseSchema = responseSchema,
                             memoryEnabled = memoryEnabled,
                             graphId = agentId,
-                            thinkingLevel = config.thinkingLevel
+                            thinkingLevel = config.thinkingLevel,
+                            memoryContext = memoryContext
                         )
                         if (startedRunId != null) {
                             // Register for durable cancel FIRST — addPendingRun below

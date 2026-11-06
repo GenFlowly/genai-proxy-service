@@ -1,19 +1,16 @@
 package com.genflowly.service
 
-import com.genflowly.EmbeddingConstants
 import com.genflowly.di.AppScope
 import com.genflowly.models.RequestType
 import com.genflowly.models.api.CustomerMemory
 import com.genflowly.models.api.LearnedFactView
+import com.genflowly.models.api.MemoryChangeType
 import com.genflowly.models.api.MemoryKind
+import com.genflowly.models.api.MemoryPlacement
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.observability.Metrics
-import com.genflowly.providers.RetrievalServerClient
-import com.genflowly.providers.VectorEncodeException
-import com.genflowly.repository.CustomerProfileRepository
+import com.genflowly.repository.MemoryChangeCause
 import com.genflowly.repository.MemoryRepository
-import com.genflowly.repository.PendingVectorType
-import com.genflowly.repository.VectorSyncPendingRepository
 import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.CancellationException
@@ -39,15 +36,28 @@ private data class MemoryOperation(
     val text: String? = null,
     val kind: String? = null,
     val category: String? = null,
-    val memoryId: String? = null
+    val memoryId: String? = null,
+    val reason: String? = null,
+    val messageIndex: Int? = null
 )
 
 @Serializable
 private data class ExistingMemoryView(
     val memoryId: String,
     val kind: String,
+    val appliesIn: String,
     val category: String?,
     val text: String
+)
+
+/** What one extraction run reads from: the content, where it came from, and where its memories go. */
+private data class ExtractionSource(
+    val type: MemorySourceType,
+    val sourceId: String,
+    /** The conversation's project (its owner's), or null for Profile. */
+    val projectId: String?,
+    /** Transcript line number to message id, for attributing each change. */
+    val messageIds: Map<Int, String> = emptyMap(),
 )
 
 /**
@@ -66,6 +76,11 @@ private data class ExistingMemoryView(
  * conversation's final exchange retries instead of being silently unlearned.
  * Note extraction (content not re-derivable later) keeps the simpler
  * run-once-now behavior.
+ *
+ * A conversation in a project learns into that project and sees only Profile
+ * memories and that project's; other projects' memories stay out of reach.
+ * Every ADD and UPDATE is logged with the conversation, the message that
+ * caused it and the agent's reason.
  */
 class MemoryExtractionService(
     private val agentResolutionService: AgentResolutionService,
@@ -73,9 +88,7 @@ class MemoryExtractionService(
     private val memoryRepository: MemoryRepository,
     private val memoryService: MemoryService,
     private val conversationService: ConversationService,
-    private val customerProfileRepository: CustomerProfileRepository,
-    private val retrievalServerClient: RetrievalServerClient,
-    private val vectorSyncPendingRepository: VectorSyncPendingRepository,
+    private val memoryVectorService: MemoryVectorService,
     private val appScope: AppScope,
     /**
      * When true (development and lower environments), log lines may include
@@ -281,14 +294,21 @@ class MemoryExtractionService(
 
             try {
                 Metrics.tracked("memory_extraction", "source" to SOURCE_CONVERSATION) {
-                    val transcript = thread.takeLast(MAX_TRANSCRIPT_MESSAGES).joinToString("\n") { message ->
+                    val recent = thread.takeLast(MAX_TRANSCRIPT_MESSAGES)
+                    val transcript = recent.withIndex().joinToString("\n") { (i, message) ->
                         val speaker = if (message.role == "assistant") "Assistant" else "User"
-                        "$speaker: ${message.text.take(MAX_MESSAGE_CHARS)}"
+                        "[${i + 1}] $speaker: ${message.text.take(MAX_MESSAGE_CHARS)}"
                     }
                     if (logContent) {
                         logger.info("Memory extraction transcript for conversation {}:\n{}", conversationId, transcript)
                     }
-                    val added = extract(customerId, transcript, MemorySourceType.CONVERSATION, conversationId)
+                    val source = ExtractionSource(
+                        type = MemorySourceType.CONVERSATION,
+                        sourceId = conversationId,
+                        projectId = conversationService.getOwnedConversationProjectId(conversationId, customerId),
+                        messageIds = recent.withIndex().associate { (i, message) -> i + 1 to message.messageId },
+                    )
+                    val added = extract(customerId, transcript, source)
                     if (responseMessageId != null) {
                         val factsJson = json.encodeToString(added.map { LearnedFactView(it.memoryId, it.text) })
                         conversationService.setMessageLearnedFacts(conversationId, responseMessageId, factsJson)
@@ -371,7 +391,7 @@ class MemoryExtractionService(
                 val noteText = listOfNotNull(title?.takeIf { it.isNotBlank() && it != "Untitled" }, content)
                     .joinToString("\n").take(MAX_NOTE_CHARS)
                 Metrics.tracked("memory_extraction", "source" to SOURCE_NOTE) {
-                    extract(customerId, noteText, MemorySourceType.NOTE, noteKey)
+                    extract(customerId, noteText, ExtractionSource(MemorySourceType.NOTE, noteKey, projectId = null))
                 }
             } catch (e: Exception) {
                 logger.warn("Memory extraction from note $noteKey failed: ${e.message}")
@@ -388,15 +408,27 @@ class MemoryExtractionService(
     private suspend fun extract(
         customerId: String,
         content: String,
-        sourceType: MemorySourceType,
-        sourceId: String
+        extractionSource: ExtractionSource,
     ): List<CustomerMemory> {
-        val existing = memoryRepository.getMemories(customerId)
-        val existingJson = json.encodeToString(existing.map {
-            ExistingMemoryView(it.memoryId, it.kind.name, it.category, it.text)
+        val projectId = extractionSource.projectId
+        val sourceId = extractionSource.sourceId
+        // Profile memories plus this project's: other projects' are siloed and
+        // must neither be shown to the agent nor be editable from here.
+        val existing = memoryRepository.getMemories(customerId).mapNotNull { memory ->
+            val here = memory.placements.firstOrNull { it.projectId == null }
+                ?: projectId?.let { id -> memory.placements.firstOrNull { it.projectId == id } }
+                ?: return@mapNotNull null
+            memory to here
+        }
+        val existingJson = json.encodeToString(existing.map { (memory, here) ->
+            ExistingMemoryView(
+                memory.memoryId, here.kind.name,
+                appliesIn = if (here.projectId == null) "profile" else "this project",
+                memory.category, memory.text
+            )
         })
 
-        val source = sourceType.name.lowercase()
+        val source = extractionSource.type.name.lowercase()
         val agent = agentResolutionService.resolve(RequestType.MEMORY_EXTRACTION, customerId)
         val operations = generationAgentExecutor.executeWithCustomerFailover(
             agent = agent,
@@ -419,13 +451,13 @@ class MemoryExtractionService(
             return emptyList()
         }
 
-        val existingById = existing.associateBy { it.memoryId }
+        val existingById = existing.associate { (memory, _) -> memory.memoryId to memory }
         val addedMemories = mutableListOf<CustomerMemory>()
         var applied = 0
         operations.forEach { op ->
             val opName = op.op.lowercase().takeIf { it in KNOWN_OPERATIONS } ?: "unknown"
             try {
-                val changed = applyOperation(customerId, op, existingById, sourceType, sourceId, addedMemories)
+                val changed = applyOperation(customerId, op, existingById, extractionSource, addedMemories)
                 if (changed) applied++
                 Metrics.count(
                     "memory_operation_total", 1.0,
@@ -449,8 +481,7 @@ class MemoryExtractionService(
         customerId: String,
         op: MemoryOperation,
         existingById: Map<String, CustomerMemory>,
-        sourceType: MemorySourceType,
-        sourceId: String,
+        source: ExtractionSource,
         addedMemories: MutableList<CustomerMemory> = mutableListOf()
     ): Boolean = when (op.op.uppercase()) {
         "ADD" -> {
@@ -461,12 +492,13 @@ class MemoryExtractionService(
                 val memory = memoryRepository.createMemory(
                     customerId = customerId,
                     text = text,
-                    kind = kind,
+                    placements = listOf(MemoryPlacement(source.projectId, kind)),
                     category = op.category?.take(50),
-                    sourceType = sourceType,
-                    sourceId = sourceId
+                    sourceType = source.type,
+                    sourceId = source.sourceId,
+                    cause = cause(MemoryChangeType.LEARNED, op, source),
                 )
-                encodeMemoryVector(customerId, memory)
+                memoryVectorService.encode(customerId, memory)
                 addedMemories.add(memory)
                 true
             }
@@ -474,20 +506,32 @@ class MemoryExtractionService(
         "UPDATE" -> {
             val target = op.memoryId?.let { existingById[it] }
             val text = op.text?.trim()?.take(MAX_MEMORY_CHARS)
-            if (target == null || text.isNullOrBlank()) false
-            else if (memoryRepository.updateMemoryText(customerId, target.memoryId, text)) {
+            if (target == null || text.isNullOrBlank() || text == target.text) false
+            else if (memoryRepository.updateMemoryText(customerId, target, text, cause(MemoryChangeType.UPDATED, op, source))) {
                 // /encode-memory deletes the memory_key's prior vectors before
                 // inserting, so the re-encode replaces rather than duplicates.
-                encodeMemoryVector(customerId, target.copy(text = text))
+                memoryVectorService.encode(customerId, target.copy(text = text))
                 true
             } else false
         }
         "DELETE" -> {
             val target = op.memoryId?.let { existingById[it] }
-            if (target != null && memoryRepository.deleteMemory(customerId, target.memoryId)) {
-                deleteMemoryVector(customerId, target.memoryId)
-                true
-            } else false
+            if (target == null) false else {
+                // From a project conversation, a memory other projects share
+                // only leaves this project; anything else is deleted outright.
+                val inThisProject = source.projectId?.takeIf { id -> target.placements.any { it.projectId == id } }
+                try {
+                    memoryService.deleteMemory(
+                        customerId, target.memoryId, inThisProject,
+                        cause = cause(MemoryChangeType.REMOVED_FROM_PROJECT, op, source),
+                    )
+                    true
+                } catch (e: MemoryNotFoundException) {
+                    false
+                } catch (e: MemoryConflictException) {
+                    false
+                }
+            }
         }
         else -> {
             logger.warn("Ignoring unknown memory operation '${op.op}' for $customerId")
@@ -495,68 +539,21 @@ class MemoryExtractionService(
         }
     }
 
-    /**
-     * Best-effort push into the vector store for semantic recall, via the
-     * retrieval-server's service-to-service /encode-memory — no end-user
-     * bearer token involved, so reconciler retries embed exactly like live
-     * runs. Memories are tiny and rewritten in place: always the realtime
-     * path, never the batch accumulator. A failed embed is recorded in
-     * VectorSyncPending — keyword-findable meanwhile — and retried by
-     * [VectorRetryService]; a permanent failure (no vector DB or embedding
-     * key) is not, since nothing could index the memory.
-     */
-    private suspend fun encodeMemoryVector(customerId: String, memory: CustomerMemory) {
-        try {
-            embedMemory(customerId, memory)
-        } catch (e: Exception) {
-            Metrics.count("memory_vector_failure_total", 1.0, "operation" to "encode")
-            logger.error("Failed to encode memory ${memory.memoryId} for $customerId", e)
-            if ((e as? VectorEncodeException)?.permanent == true) return
-            try {
-                vectorSyncPendingRepository.markPending(
-                    customerId, PendingVectorType.MEMORY, memory.memoryId,
-                    retryAt = Instant.now().plusSeconds(VECTOR_FIRST_RETRY_DELAY_SECONDS)
-                )
-            } catch (markError: Exception) {
-                logger.warn("Could not schedule a vector retry for memory ${memory.memoryId}: ${markError.message}")
-            }
-        }
-    }
+    private fun cause(type: MemoryChangeType, op: MemoryOperation, source: ExtractionSource) = MemoryChangeCause(
+        type = type,
+        sourceType = source.type,
+        conversationId = source.sourceId.takeIf { source.type == MemorySourceType.CONVERSATION },
+        messageId = op.messageIndex?.let { source.messageIds[it] },
+        noteKey = source.sourceId.takeIf { source.type == MemorySourceType.NOTE },
+        reason = op.reason?.trim()?.take(MAX_REASON_CHARS)?.takeIf { it.isNotEmpty() },
+    )
 
     /**
      * Re-embeds a memory's current text. Returns false when the memory no
      * longer exists. Throws when the embed fails.
      */
-    suspend fun retryMemoryVector(customerId: String, memoryId: String): Boolean {
-        val memory = memoryRepository.getMemory(customerId, memoryId) ?: return false
-        embedMemory(customerId, memory)
-        return true
-    }
-
-    private suspend fun embedMemory(customerId: String, memory: CustomerMemory) {
-        val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
-        // Memories are extracted from conversations, so they follow the
-        // conversations-category default.
-        val model = prefs?.embeddingModelConversations ?: prefs?.embeddingModel
-        retrievalServerClient.encodeMemoryVector(
-            customerId = customerId,
-            memoryKey = memory.memoryId,
-            memoryValue = memory.text,
-            title = "[memory] ${memory.category ?: memory.kind.name.lowercase()}",
-            createdAt = memory.createdAt,
-            modelType = EmbeddingConstants.modelTypeFor(model),
-            modelName = model ?: EmbeddingConstants.MODEL_NAME,
-        )
-    }
-
-    private suspend fun deleteMemoryVector(customerId: String, memoryId: String) {
-        try {
-            retrievalServerClient.deleteMemoryVectors(customerId, memoryId)
-        } catch (e: Exception) {
-            Metrics.count("memory_vector_failure_total", 1.0, "operation" to "delete")
-            logger.error("Failed to delete vectors for memory $memoryId", e)
-        }
-    }
+    suspend fun retryMemoryVector(customerId: String, memoryId: String): Boolean =
+        memoryVectorService.retry(customerId, memoryId)
 
     /**
      * Parses the agent's operations JSON, THROWING on blank or unparseable
@@ -601,6 +598,7 @@ class MemoryExtractionService(
         private const val MIN_NOTE_CHARS = 30
         private const val MAX_NOTE_CHARS = 8000
         private const val MAX_MEMORY_CHARS = 300
+        private const val MAX_REASON_CHARS = 300
 
         /**
          * dueAt offset on the pending row written at enqueue: past the worst
@@ -617,8 +615,6 @@ class MemoryExtractionService(
         private const val RECONCILER_BATCH_SIZE = 25
         /** An unfinalized claim older than this is a crashed run — recoverable. */
         private const val STALE_CLAIM_SECONDS = 120L
-        /** A failed memory embed's first retry, via [VectorRetryService]. */
-        private const val VECTOR_FIRST_RETRY_DELAY_SECONDS = 60L
 
         /**
          * Vendor-enforced schema for the extraction output (same mechanism as
@@ -645,6 +641,22 @@ class MemoryExtractionService(
                             }
                             putJsonObject("category") { put("type", "string") }
                             putJsonObject("memoryId") { put("type", "string") }
+                            putJsonObject("reason") {
+                                put("type", "string")
+                                put(
+                                    "description",
+                                    "Why this operation is needed, in one short sentence the user will read " +
+                                        "in their memory's change log."
+                                )
+                            }
+                            putJsonObject("messageIndex") {
+                                put("type", "integer")
+                                put(
+                                    "description",
+                                    "Number of the transcript line ([n]) that caused this operation, usually the " +
+                                        "user's own message. Omit for notes."
+                                )
+                            }
                         }
                         putJsonArray("required") { add("op") }
                     }

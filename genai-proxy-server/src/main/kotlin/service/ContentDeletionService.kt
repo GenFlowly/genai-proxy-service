@@ -125,6 +125,7 @@ class ContentDeletionService(
                 val messages = purge.deleteMessages(itemId)
                 purge.deletePendingVectorRows(job.customerId, itemId)
                 purge.deleteMemoryBookkeeping(job.customerId, itemId)
+                purge.deleteMemoryUsageOfConversation(job.customerId, itemId)
                 purge.deleteInstructionUsageSeen(job.customerId, itemId)
                 if (messages > 0) logger.info("Deleted {} message(s) of conversation {}", messages, itemId)
             }

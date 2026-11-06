@@ -114,6 +114,18 @@ class ExecuteAgentGraphRequest(BaseModel):
     durable: bool = False
 
 
+class MemoryContext(BaseModel):
+    """Where, and for which reply, memories are used (the proxy's
+    MemoryContext). The MEMORY node applies Profile memories plus
+    project_id's only, and keys the usage log it writes by
+    response_message_id and turn_started_at, so a retried or failed-over call
+    for the same reply counts each memory once."""
+    project_id: Optional[str] = None
+    conversation_id: str
+    response_message_id: str
+    turn_started_at: str
+
+
 class RetrieveRequest(BaseModel):
     customer_id: str
     client: str
@@ -149,6 +161,9 @@ class RetrieveRequest(BaseModel):
     # Governance decision from the proxy server: MEMORY nodes may inject
     # learned user memories (request consent AND account setting).
     memory_enabled: bool = False
+    # Sent with memory_enabled: the conversation's project and the reply, for
+    # memory scoping and the usage log.
+    memory_context: Optional[MemoryContext] = None
     # Explicit agent graph to run instead of the customer's default. The proxy
     # validates access (own-or-System) before sending; ownership is re-checked
     # here as defense in depth. None → default resolution.
@@ -184,6 +199,7 @@ class RunRequest(BaseModel):
     tool_results: list[ToolResult] = []
     response_schema: Optional[dict] = None
     memory_enabled: bool = False
+    memory_context: Optional[MemoryContext] = None
     graph_id: Optional[str] = None
     # Same semantics as RetrieveRequest.thinking_level.
     thinking_level: Optional[str] = None
