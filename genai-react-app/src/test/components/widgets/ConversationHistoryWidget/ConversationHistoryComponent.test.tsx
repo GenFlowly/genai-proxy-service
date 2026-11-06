@@ -330,7 +330,7 @@ describe('ConversationHistoryComponent', () => {
         }
     })
 
-    test('a failed page load pauses auto-loading and offers a manual retry', async () => {
+    test('a failed page load retries itself, with no Load more button', async () => {
         const page2 = [{ conversationId: 'conv-3', title: 'Third', createdAt: null, updatedAt: null }]
         mockGetCustomerConversations
             .mockResolvedValueOnce({ conversations: defaultConversations, lastEvaluatedKey: 'page2-key' })
@@ -347,18 +347,17 @@ describe('ConversationHistoryComponent', () => {
 
             io.reachEnd()
 
-            // The failure surfaces the manual button instead of auto-retrying
-            // (while the fetch is in flight it reads "Loading…")
+            // The failure pauses auto-loading (no live sentinel) and shows no button
             await waitFor(() => {
-                expect(screen.getByTestId('conv-history-load-more')).toHaveTextContent('Load more')
+                expect(screen.queryByTestId('history-end-sentinel')).not.toBeInTheDocument()
             })
-            expect(screen.queryByTestId('history-end-sentinel')).not.toBeInTheDocument()
+            expect(screen.queryByText('Load more')).not.toBeInTheDocument()
 
-            fireEvent.click(screen.getByTestId('conv-history-load-more'))
-
+            // The first backoff retry (2s) fetches the same page again
             await waitFor(() => {
                 expect(screen.getByTestId('conv-history-item-conv-3')).toBeInTheDocument()
-            })
+            }, { timeout: 4000 })
+            expect(mockGetCustomerConversations).toHaveBeenLastCalledWith('mock-token', 15, 'page2-key')
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         } finally {
             io.restore()
@@ -778,6 +777,33 @@ describe('ConversationHistoryComponent', () => {
             })
             expect(screen.getByTestId('conv-history-project-proj-1')).toHaveAttribute('aria-expanded', 'true')
             expect(mockGetProjectConversations).toHaveBeenCalledWith('mock-token', 'proj-1', 50, null)
+        })
+
+        test('an expanded project loads all its pages, with no Load more row', async () => {
+            setupMocks({ activeId: 'conv-p1' })
+            mockGetProjects.mockResolvedValue({
+                projects: [
+                    { projectId: 'proj-1', name: 'Project One', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' },
+                ],
+            })
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [...projectConversations, ...defaultConversations],
+                lastEvaluatedKey: null,
+            })
+            const older = { ...projectConversations[0], conversationId: 'conv-p-old', title: 'Older project chat' }
+            mockGetProjectConversations
+                .mockResolvedValueOnce({ conversations: projectConversations, lastEvaluatedKey: 'proj-page2' })
+                .mockResolvedValueOnce({ conversations: [older], lastEvaluatedKey: null })
+
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-item-conv-p-old')).toBeInTheDocument()
+            })
+            expect(mockGetProjectConversations).toHaveBeenNthCalledWith(1, 'mock-token', 'proj-1', 50, null)
+            expect(mockGetProjectConversations).toHaveBeenNthCalledWith(2, 'mock-token', 'proj-1', 50, 'proj-page2')
+            expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+            expect(screen.queryByText('Load more')).not.toBeInTheDocument()
         })
 
         test('Projects section renders above the global Pinned and Recents sections', async () => {

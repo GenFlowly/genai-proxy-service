@@ -21,7 +21,7 @@ import { CollapsedVendorBrandName } from '../../common/BrandName/BrandName'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { CONVERSATION_FORKED_EVENT } from '../../../constants/events'
-import { SidebarListPanel, SidebarListGroup, SidebarListItem, SidebarListLoadMore, Modal, InputTextWithHint, VerticalSplit } from '@genflowly/component-library'
+import { SidebarListPanel, SidebarListGroup, SidebarListItem, Modal, InputTextWithHint, VerticalSplit } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
 import { loadHistoryCache, saveHistoryCache, getExpandedProject, setExpandedProject, getExpandedSection, setExpandedSection } from './historyCache'
@@ -30,6 +30,10 @@ import { formatServerDateTime, formatServerTime, parseServerDate } from '../../.
 const PAGE_SIZE = 15
 // Page size for a project's own member list (GET /projects/conversations)
 const PROJECT_PAGE_SIZE = 50
+// A failed older History page retries itself after these delays, then stops.
+// There is no Load more button: older pages stream in as the end of the list
+// nears.
+const PAGE_RETRY_DELAYS_MS = [2000, 5000, 15000, 30000]
 
 // Top (Projects) pane's share of the sidebar height, persisted as a fraction
 // so both panes keep scaling together when the sidebar resizes
@@ -77,7 +81,6 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     // fetched when the project expands — never derived from the recents/pinned
     // pages, which only ever hold a sliver of a project's membership
     const [projectItems, setProjectItems] = useState<Record<string, ConversationSummary[]>>(cached?.projectItems ?? {})
-    const [projectCursors, setProjectCursors] = useState<Record<string, string | null>>({})
     // Projects already fetched this mount — the cached copy paints meanwhile
     const loadedProjectsRef = React.useRef<Set<string>>(new Set())
 
@@ -114,6 +117,8 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     // empty "never loaded" state can't masquerade as "no conversations"
     const hasLoadedRef = React.useRef(!!cached)
 
+    const [pageRetries, setPageRetries] = useState(0)
+
     const fetchPage = useCallback(async (startKey?: string | null) => {
         if (!isAuthenticated) return
         setIsLoading(true)
@@ -125,6 +130,7 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
             setItems(prev => startKey ? [...prev, ...resp.conversations] : resp.conversations)
             setLastKey(resp.lastEvaluatedKey)
             setHasMore(!!resp.lastEvaluatedKey)
+            setPageRetries(0)
         } catch {
             setError(true)
         } finally {
@@ -166,30 +172,37 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     // until the server page confirms them (then the mark clears).
     const optimisticMembersRef = React.useRef<Map<string, ConversationSummary[]>>(new Map())
 
+    // Fetches a project's members from [startKey] through its last page, so an
+    // expanded project always shows all of them (there is no Load more row)
     const fetchProjectConversations = useCallback(async (projectId: string, startKey?: string | null) => {
         if (!isAuthenticated) return
         try {
             const token = await getAccessTokenSilently()
-            const resp = await getProjectConversations(token, projectId, PROJECT_PAGE_SIZE, startKey)
-            // Read the payload BEFORE setState: a malformed response must blow
-            // up here inside the catch, not later inside React's updater
-            const fetched = resp.conversations
-            const nextCursor = resp.lastEvaluatedKey
-            hasLoadedRef.current = true
-            const pending = optimisticMembersRef.current.get(projectId) ?? []
-            const confirmed = new Set(fetched.map(c => c.conversationId))
-            const stillPending = pending.filter(c => !confirmed.has(c.conversationId))
-            if (stillPending.length !== pending.length) {
-                optimisticMembersRef.current.set(projectId, stillPending)
-            }
-            setProjectItems(prev => {
-                const existing = prev[projectId] ?? []
-                const merged = startKey
-                    ? [...existing, ...fetched.filter(c => !existing.some(e => e.conversationId === c.conversationId))]
-                    : [...stillPending, ...fetched]
-                return { ...prev, [projectId]: merged }
-            })
-            setProjectCursors(prev => ({ ...prev, [projectId]: nextCursor }))
+            let cursor = startKey
+            do {
+                const resp = await getProjectConversations(token, projectId, PROJECT_PAGE_SIZE, cursor)
+                // Read the payload BEFORE setState: a malformed response must blow
+                // up here inside the catch, not later inside React's updater
+                const fetched = resp.conversations
+                const nextCursor = resp.lastEvaluatedKey
+                const appending = !!cursor
+                hasLoadedRef.current = true
+                const pending = optimisticMembersRef.current.get(projectId) ?? []
+                const confirmed = new Set(fetched.map(c => c.conversationId))
+                const stillPending = pending.filter(c => !confirmed.has(c.conversationId))
+                if (stillPending.length !== pending.length) {
+                    optimisticMembersRef.current.set(projectId, stillPending)
+                }
+                setProjectItems(prev => {
+                    const existing = prev[projectId] ?? []
+                    const merged = appending
+                        ? [...existing, ...fetched.filter(c => !existing.some(e => e.conversationId === c.conversationId))]
+                        : [...stillPending, ...fetched]
+                    return { ...prev, [projectId]: merged }
+                })
+                if (nextCursor === cursor) break
+                cursor = nextCursor
+            } while (cursor)
         } catch {
             // Keep the cached members; a failed project refresh must not take
             // down the sidebar
@@ -401,6 +414,15 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     }, [projects, upsertIntoProjectItems])
 
     const handleLoadMore = () => fetchPage(lastKey)
+
+    useEffect(() => {
+        if (!error || !hasMore || !lastKey || pageRetries >= PAGE_RETRY_DELAYS_MS.length) return
+        const timer = setTimeout(() => {
+            setPageRetries(n => n + 1)
+            void fetchPage(lastKey)
+        }, PAGE_RETRY_DELAYS_MS[pageRetries])
+        return () => clearTimeout(timer)
+    }, [error, hasMore, lastKey, pageRetries, fetchPage])
 
     const handleNavigate = (convId: string) => {
         navigate(`/chat/${convId}`)
@@ -691,18 +713,6 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
             !!activeId &&
             [...project.pinned, ...project.recent].some(c => c.conversationId === activeId)
         const expandEpoch = expandEpochs[project.id]
-        // Older members stream in on demand: the endpoint pages at
-        // PROJECT_PAGE_SIZE, so a trailing row fetches the next page while a
-        // cursor remains
-        const loadMoreCursor = projectCursors[project.id]
-        const loadMoreRow: SidebarListItem[] = loadMoreCursor
-            ? [{
-                id: `project-${project.id}-load-more`,
-                label: t('conversation.conversationHistory.loadMore'),
-                onSelect: () => fetchProjectConversations(project.id, loadMoreCursor),
-                testId: `conv-history-project-load-more-${project.id}`,
-            }]
-            : []
         // A project whose members were never fetched (or cached) must still be
         // expandable — the library only renders expand semantics when there is
         // something inside, and expanding is exactly what triggers the lazy
@@ -752,11 +762,11 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
                         items: toTreeRows(project.pinned, true),
                     }]
                     : []),
-                ...(project.recent.length > 0 || loadMoreRow.length > 0 || loadingRow.length > 0
+                ...(project.recent.length > 0 || loadingRow.length > 0
                     ? [{
                         id: `project-${project.id}-recent`,
                         label: t('conversation.conversationHistory.recent'),
-                        items: [...toTreeRows(project.recent, false), ...loadMoreRow, ...loadingRow],
+                        items: [...toTreeRows(project.recent, false), ...loadingRow],
                     }]
                     : []),
             ],
@@ -897,8 +907,9 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
                         testIds={{ list: 'history-scroll-list', endSentinel: 'history-end-sentinel' }}
                         // Older pages stream in as the end of the list nears;
                         // paused while a fetch runs and after a failure —
-                        // auto-retrying a failing request would loop, so the
-                        // footer button below is the post-failure retry.
+                        // re-arming on a failing request would loop, so a
+                        // failed page retries itself with backoff instead
+                        // (PAGE_RETRY_DELAYS_MS).
                         // Collapsed Recents has no visible end to reach —
                         // without this gate, the panel's own end-sentinel
                         // sits in view of a now-tiny scroll area and the
@@ -910,14 +921,6 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
                         errorText={t('conversation.conversationHistory.failedToLoad')}
                         emptyText={t('conversation.conversationHistory.noConversationsYet')}
                         listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
-                        footer={hasMore && recentsVisible && (isLoading || error) && (
-                            <SidebarListLoadMore
-                                label={isLoading ? t('conversation.conversationHistory.loading') : t('conversation.conversationHistory.loadMore')}
-                                onClick={handleLoadMore}
-                                disabled={isLoading}
-                                testId="conv-history-load-more"
-                            />
-                        )}
                     />
                 }
             />
