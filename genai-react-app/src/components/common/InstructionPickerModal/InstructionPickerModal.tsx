@@ -24,7 +24,7 @@ export default function InstructionPickerModal({
     onSelect,
 }: InstructionPickerModalProps) {
     const { t } = useTranslation()
-    const { getAccessTokenSilently, customerId } = useAuth()
+    const { getAccessTokenSilently, customerId, isAuthenticated } = useAuth()
 
     const [query, setQuery] = useState('')
     const [recent, setRecent] = useState<InstructionResponse[]>([])
@@ -71,9 +71,9 @@ export default function InstructionPickerModal({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, customerId])
 
-    // Debounced server-side search
+    // Debounced server-side search, for signed-in users only
     useEffect(() => {
-        if (!isOpen || !isSearching) return
+        if (!isOpen || !isSearching || !isAuthenticated) return
         let cancelled = false
         const timer = setTimeout(() => {
             void (async () => {
@@ -99,7 +99,7 @@ export default function InstructionPickerModal({
             clearTimeout(timer)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, isSearching, query])
+    }, [isOpen, isSearching, query, isAuthenticated])
 
     if (!isOpen) return null
 
@@ -126,7 +126,11 @@ export default function InstructionPickerModal({
 
                 <h4 className={styles.listTitle}>{listTitle}</h4>
 
-                {isSearching && setupError ? (
+                {isSearching && !isAuthenticated ? (
+                    <p className={styles.stateText} data-testid="instruction-picker-sign-in">
+                        {t('conversation.instructionPicker.signInToSearch')}
+                    </p>
+                ) : isSearching && setupError ? (
                     <p className={styles.stateText} data-testid="instruction-picker-not-set-up">
                         {t(searchSetupMessageKey(setupError.reason))}
                         <Link to={searchSetupPath(setupError.reason)} onClick={onClose} className={styles.stateLink}>
