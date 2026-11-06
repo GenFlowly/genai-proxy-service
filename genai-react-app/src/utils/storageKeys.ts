@@ -20,9 +20,10 @@
  *   'settings_sidebar_width_rem', 'memory_sidebar_width_rem',
  *   'agentsCategorySidebarWidth'
  *
- * External writer bound to this convention: component-library Request.tsx
- * builds `${customerId}_prompt_editor_content_conv-<blockId>` draft keys
- * itself — StorageSuffix.promptEditorContentPrefix must stay in sync with it.
+ * Leftovers only: component-library Request.tsx before 0.1.125 kept
+ * `${customerId}_prompt_editor_content_conv-<blockId>` drafts. Nothing reads or
+ * writes them now; New Chat still sweeps them (StorageSuffix.promptEditorContentPrefix)
+ * because they hold prompt text.
  */
 export function customerKey(customerId: string, suffix: string): string {
     return `${customerId}_${suffix}`

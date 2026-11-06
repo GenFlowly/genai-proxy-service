@@ -12,7 +12,7 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
 | [MEM-006](#mem-006) | Low | Fixed (verified live) | Web | The shared-memory delete dialog's three buttons wrap untidily |
 | [MEM-007](#mem-007) | Medium | Won't fix (user, 2026-11-06) | Backend | Memories never get vectors when the conversations embedding model is multimodal |
 | [MEM-008](#mem-008) | High | Fixed (verified live) | Backend | No use of a memory was ever recorded: no usage rows, hit counter stuck at 0 |
-| [MEM-009](#mem-009) | Medium | Fixed in library (verified live), unpublished | Web | A new chat's sent first message comes back as the next new chat's draft |
+| [MEM-009](#mem-009) | Medium | Fixed (library 0.1.125, web bumped) | Web | A new chat's sent first message comes back as the next new chat's draft |
 | [MEM-010](#mem-010) | Medium | Fixed (verified live) | Both | After a conversation is deleted, "Used N×" stays but the usage log says "Not used in any reply yet" |
 | [MEM-011](#mem-011) | Low | Fixed | Web | AI Settings still says the priority 1 provider writes "note titles" |
 | [MEM-012](#mem-012) | Low | Fixed (verified live) | Web | Delete in the mobile actions sheet isn't red |
@@ -130,7 +130,7 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
   - after sending a first message, a fresh `/chat` opened empty.
 
   The published copy was put back afterwards.
-- **To ship:** commit the library to `main`, which publishes it, then bump the web app to that version. Waiting for your go-ahead.
+- **Shipped (user: "yes", 2026-11-06):** library commit 70e7661 on component-library `main`, published as 0.1.125; the web app is bumped to it on `development` (PR #335). The admin panel still pins 0.1.117 and keeps drafts until its next bump.
 
 ## MEM-010
 

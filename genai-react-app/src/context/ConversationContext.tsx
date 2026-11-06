@@ -576,7 +576,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     const resetConversation = useCallback(() => {
         navigate('/chat')
         if (customerId) {
-            // Clear all prompt editor content for this user from localStorage
+            // Drafts older component-library versions left in localStorage
             Object.keys(localStorage).forEach(key => {
                 if (key.startsWith(customerKey(customerId, StorageSuffix.promptEditorContentPrefix))) {
                     localStorage.removeItem(key)
