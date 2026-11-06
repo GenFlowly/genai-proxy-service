@@ -36,7 +36,10 @@ jest.mock('react-router-dom', () => ({
 }));
 
 // Mock providers to avoid complexity
-jest.mock('../context/AuthContext', () => ({ AuthProvider: ({ children }: any) => children }));
+jest.mock('../context/AuthContext', () => ({
+  AuthProvider: ({ children }: any) => children,
+  useAuth: () => ({ isLoading: false }),
+}));
 jest.mock('../context/ThemeContext', () => ({ ThemeProvider: ({ children }: any) => children }));
 jest.mock('../AppContent', () => () => null);
 
