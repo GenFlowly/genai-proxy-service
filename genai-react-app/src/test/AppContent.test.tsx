@@ -87,14 +87,14 @@ describe('AppContent', () => {
         })
     })
 
-    test('shows loading indicator while auth is loading', () => {
+    test('renders nothing while auth is loading, leaving the boot splash in view', () => {
         mockUseAuth.mockReturnValue({ isLoading: true })
-        render(withQueryClient(
+        const { container } = render(withQueryClient(
             <MemoryRouter>
                 <AppContent />
             </MemoryRouter>
         ))
-        expect(screen.getByText('Loading...')).toBeInTheDocument()
+        expect(container).toBeEmptyDOMElement()
     })
 
     test('/ redirects to /chat', () => {
