@@ -235,6 +235,11 @@
             "notSetUpVectorDb": "Search isn't set up. Connect a vector DB to search.",
             "notSetUpEmbeddingKey": "Search isn't set up. Add an embedding key to search.",
             "openSettings": "Open Settings"
+        },
+        "deleteConfirm": {
+            "cancel": "Cancel",
+            "delete": "Delete",
+            "deleting": "Deleting..."
         }
     },
     "conversation": {
@@ -262,7 +267,7 @@
         "conversationHistory": {
             "history": "History",
             "untitledConversation": "Untitled conversation",
-            "archiveConversation": "Archive conversation",
+            "deleteConversation": "Delete conversation",
             "createProject": "Create",
             "createProjectFailed": "Failed to create project",
             "creatingProject": "Creating…",
@@ -297,7 +302,10 @@
             "removedFromProject": "Removed from project",
             "unpinConversation": "Unpin conversation",
             "unpinFailed": "Failed to unpin conversation",
-            "unpinnedToast": "Conversation unpinned"
+            "unpinnedToast": "Conversation unpinned",
+            "deleteConversationTitle": "Delete this conversation?",
+            "deleteConversationConfirm": "It's deleted for good: its messages, files and search index, and for anyone you shared it with. Facts learned from it stay in Settings > Defaults > Learned facts.",
+            "deleteFailed": "Couldn't delete the conversation. Please try again."
         },
         "request": {
             "generate": "Generate",
@@ -626,7 +634,37 @@
             "usernameSection": "Username",
             "usernameUpdateFailedMessage": "Failed to update username",
             "usernameUpdatedMessage": "Username updated successfully!",
-            "yourUsername": "Your Username"
+            "yourUsername": "Your Username",
+            "deleteData": {
+                "title": "Delete your data",
+                "keysTitle": "Delete all API keys",
+                "keysDescription": "Removes every key and connection you added: AI providers, embedding, vector database, web search and connectors.",
+                "keysButton": "Delete all keys",
+                "keysConfirmTitle": "Delete all API keys?",
+                "keysConfirmBody": "Chat, search and indexing stop working until you add keys again. Data already in your vector database stays there.",
+                "keysConfirmButton": "Delete all keys",
+                "keysDeleted_one": "Deleted {{count}} key.",
+                "keysDeleted_other": "Deleted {{count}} keys.",
+                "keysDeletedNone": "There were no keys to delete.",
+                "keysError": "Couldn't delete your keys. Please try again.",
+                "accountTitle": "Delete account",
+                "accountDescription": "Permanently deletes your account and everything in it.",
+                "accountButton": "Delete account",
+                "accountConfirmTitle": "Delete your account?",
+                "accountConfirmIntro": "This permanently deletes:",
+                "accountConfirmConversations": "Your conversations, including shared ones. Their links stop working.",
+                "accountConfirmContent": "Your notes, learned facts, instructions, agents and files.",
+                "accountConfirmKeys": "Your API keys and connections.",
+                "accountConfirmVectors": "What we stored in your vector database. If we can't reach it, delete that data there yourself.",
+                "accountConfirmKept": "Messages you wrote in conversations other people shared with you stay in those conversations.",
+                "accountConfirmUndo": "This can't be undone. If you sign in again, you start with a new, empty account.",
+                "accountConfirmPrompt": "Type {{word}} to confirm",
+                "accountConfirmButton": "Delete account",
+                "accountError": "Couldn't delete your account. Please try again.",
+                "deleting": "Deleting...",
+                "cancel": "Cancel",
+                "loginFirst": "Please log in first."
+            }
         },
         "settingsPage": {
             "sectionAi": "AI Settings",
@@ -1007,11 +1045,14 @@
             "newChat": "New Chat"
         },
         "savedNotesWidget": {
-            "archiveNote": "Archive note",
+            "deleteNote": "Delete note",
             "couldNotLoadNotes": "Could not load notes",
             "noSavedNotesYet": "No saved notes yet",
             "title": "Saved Notes",
-            "untitled": "Untitled"
+            "untitled": "Untitled",
+            "deleteNoteTitle": "Delete this note?",
+            "deleteNoteConfirm": "It's deleted for good, including from search. Facts learned from it stay in Settings > Defaults > Learned facts.",
+            "deleteFailed": "Couldn't delete the note. Please try again."
         },
         "threadPromptItem": {
             "newPrompt": "New prompt"

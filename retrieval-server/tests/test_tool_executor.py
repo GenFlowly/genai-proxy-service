@@ -431,10 +431,11 @@ class SpillTests(unittest.IsolatedAsyncioTestCase):
             self.fail = fail
             self.writes: dict[str, bytes] = {}
 
-        def put(self, key, data, content_type):
+        def put(self, key, data, content_type, tags=None):
             if self.fail:
                 raise RuntimeError("s3 down")
             self.writes[key] = data
+            self.tags = tags
 
     async def _run_with_store(self, state, tools, store):
         from graph.tools_runtime import make_tool_context
@@ -465,6 +466,8 @@ class SpillTests(unittest.IsolatedAsyncioTestCase):
         [key] = store.writes
         self.assertIn("/results/big_1.txt", key)
         self.assertEqual(len(store.writes[key]), 20_002)
+        # Scratch carries the tag the bucket's lifecycle rule expires.
+        self.assertEqual(store.tags, {"retention": "scratch"})
 
         content = out["loop_messages"][1]["content"]
         self.assertLess(len(content), 9_000)

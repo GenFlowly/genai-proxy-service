@@ -232,7 +232,7 @@ Deleting or archiving a conversation ends its public link and its shares.
 | Data | How long |
 |---|---|
 | **Conversations, notes, attachments and generated files** | Until you delete them or your account. ⛔R3 |
-| **Deleted items** | Held in Trash for 30 days, or removed immediately if you choose "Delete now". Then permanently erased from our active systems. ⛔R3 |
+| **Deleted items** | Erased from our active systems when you delete them. Copies in backups expire within 35 days. ⛔R3 |
 | **Memories** | Until you delete them or your account. |
 | **Temporary files used by AI tools** | 7 days. ⛔R18 |
 | **API keys and connection details** | Until you remove them or delete your account. ⛔R5 |
@@ -266,10 +266,10 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 | Delete a conversation or note | The item's menu ⛔R3 |
 | Delete one learned fact, delete them all, or turn memory off | The facts listed under a reply, and Settings > Defaults > Learned facts ⛔R7 |
 | Turn indexing off and remove indexed data | Settings ⛔R8 |
-| Remove API keys | Settings ⛔R5 |
+| Remove all your API keys | Settings > Profile ⛔R5 |
 | Stop sharing a conversation | Share menu |
 | Export your data | Settings ⛔R4 |
-| Delete your account | Settings ⛔R4 |
+| Delete your account | Settings > Profile ⛔R4 |
 
 **By law.** Depending on where you live, you may have the right to access, correct, delete, or receive a copy of your personal information, to restrict or object to how we use it, and to withdraw consent. To use these rights, contact `[PRIVACY EMAIL]`. We'll respond within 30 days, and we won't treat you differently for using them. If you're unhappy with our response, you can complain to your local data protection authority.
 
@@ -318,9 +318,9 @@ Email: `[PRIVACY EMAIL]`
 |---|---|---|---|
 | ⛔R1 | No content in logs | Step Functions logs and history, and the dead-letter queue, hold full text. **Fixed in PR #331, not yet in production.** Once it deploys, only history from earlier runs holds text, for up to 90 days. The Grafana role still needs narrowing. | "To index your content, our background system temporarily holds its full text, including in workflow history for up to 90 days and in failure queues for up to 14 days." Also narrow the Grafana role, or disclose that Grafana Labs can access these logs. |
 | ⛔R2 | Public links reveal only messages and replies | Trace data can reveal note and memory text, and your name and picture are shown | "A public link can also reveal the AI's activity trace, which may include text from your notes, as well as your name and picture." **Fix this rather than publish that sentence.** |
-| ⛔R3 | Real deletion, with Trash | Archive only. Content is kept indefinitely and can still be used in later AI replies. | "You can archive conversations and notes, which hides them. Archived content stays on our servers and may still be retrieved for later replies. To request deletion, contact `[PRIVACY EMAIL]`." You would need to fulfil those requests by hand. |
-| ⛔R4 | Self-service export and account deletion | Neither exists. **Apple requires in-app deletion, so this blocks the iOS release.** | "To delete your account or get a copy of your data, contact `[PRIVACY EMAIL]`." |
-| ⛔R5 | Remove any key | Only tool keys can be removed | "You can replace a stored key, or revoke it with the provider. To remove it from our systems, contact `[PRIVACY EMAIL]`." |
+| ⛔R3 | Permanent deletion, everywhere | Archive only. Content is kept indefinitely and can still be used in later AI replies. **Fixed on `development`, not yet in production**: delete is permanent, with no Trash. | "You can archive conversations and notes, which hides them. Archived content stays on our servers and may still be retrieved for later replies. To request deletion, contact `[PRIVACY EMAIL]`." You would need to fulfil those requests by hand. |
+| ⛔R4 | Self-service export and account deletion | Deletion is built on `development` for the web app, not yet in production. Export doesn't exist. **Apple requires in-app deletion, so the iOS app still blocks its release.** The Auth0 login is deleted only once Management API credentials are configured. | "To delete your account or get a copy of your data, contact `[PRIVACY EMAIL]`." |
+| ⛔R5 | Remove any key | "Delete all keys" is built on `development`, not yet in production. A single key still can't be removed. | "You can replace a stored key, or revoke it with the provider. To remove it from our systems, contact `[PRIVACY EMAIL]`." |
 | ⛔R6 | Nothing is indexed without an embedding provider and vector database | Text enters the pipeline anyway | Delete the sentence, and rely on the R1 interim wording. |
 | ⛔R7 | Memory on by default, with three switches and "Delete all" | On by default, no switch. **Fixed on development, not yet in production.** | "Memory is on by default. It sends excerpts of your chats and notes to an AI provider and your embedding provider. To turn it off, contact `[PRIVACY EMAIL]`." |
 | ⛔R8 | Indexing off by default, with a switch | Always attempted | "If you connect an embedding provider and a vector database, your chats and notes are indexed automatically. There is no setting to turn this off yet." |

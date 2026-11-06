@@ -22,7 +22,6 @@ import com.genflowly.activity.project.registerProjectRoutes
 import com.genflowly.activity.search.registerSearchRoutes
 import com.genflowly.activity.conversation.registerForkConversationRoutes
 import com.genflowly.activity.conversation.registerPinConversationRoutes
-import com.genflowly.activity.conversation.registerUnarchiveConversationRoutes
 import com.genflowly.activity.conversation.registerUnpinConversationRoutes
 import com.genflowly.activity.customer.registerCustomerProfileSettingsRoutes
 import com.genflowly.activity.customer.registerGetProfileRoutes
@@ -58,6 +57,7 @@ import com.genflowly.activity.admin.registerUsageRateCardRoutes
 import com.genflowly.activity.usage.registerUsageRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
+import com.genflowly.activity.account.registerAccountRoutes
 import com.genflowly.activity.memory.registerMemoryRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
@@ -125,7 +125,6 @@ object Routes {
     const val GET_AI_USAGE = "$API_V1/message/usage"
     const val GET_CUSTOMER_CONVERSATIONS_PAGINATED = "$API_V1/conversations"
     const val DELETE_CONVERSATION = "$API_V1/conversation/{conversationId}"
-    const val UNARCHIVE_CONVERSATION = "$API_V1/conversation/unarchive"
     // Flat paths with ?conversationId= query params — path-embedded ids fragment
     // the per-route metrics (development.md "API metrics & dashboards").
     const val PIN_CONVERSATION = "$API_V1/conversation/pin"
@@ -210,6 +209,9 @@ object Routes {
     const val CREATE_ATTACHMENT = "$API_V1/attachments"
     const val GET_ATTACHMENT_URL = "$API_V1/attachments/url"
 
+    const val DELETE_ACCOUNT = "$API_V1/account"
+    const val DELETE_CREDENTIALS = "$API_V1/credentials"
+
     const val GET_MEMORIES = "$API_V1/memories"
     const val DELETE_MEMORY = "$API_V1/memories/{memoryId}"
     const val GET_LEARNED_FACTS = "$API_V1/conversation/learned-facts"
@@ -246,6 +248,7 @@ fun Application.configureRouting(
     projectService: com.genflowly.service.ProjectService,
     usageSummaryService: com.genflowly.service.UsageSummaryService,
     usageRateCardRepository: com.genflowly.repository.UsageRateCardRepository,
+    accountDeletionService: com.genflowly.service.AccountDeletionService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -306,7 +309,6 @@ fun Application.configureRouting(
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationManagementService)
         registerDeleteConversationRoutes(customerProfileService, conversationManagementService)
-        registerUnarchiveConversationRoutes(customerProfileService, conversationManagementService)
         registerPinConversationRoutes(customerProfileService, conversationManagementService)
         registerUnpinConversationRoutes(customerProfileService, conversationManagementService)
         registerForkConversationRoutes(customerProfileService, conversationManagementService)
@@ -333,6 +335,7 @@ fun Application.configureRouting(
         registerAttachmentRoutes(attachmentService, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
         registerMemoryRoutes(memoryService, customerProfileService, conversationService)
+        registerAccountRoutes(accountDeletionService, customerCredentialsService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService

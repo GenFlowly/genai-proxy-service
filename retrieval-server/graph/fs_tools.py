@@ -13,9 +13,12 @@ files. Tenant isolation holds by construction: the prefix is built by the host
 from ToolContext (customer_id + runtime["fs_prefix"]), never from a model
 argument, and paths are validated so no traversal can escape it.
 
-Request-scoped by design (v1): nothing is cleaned up eagerly — the bucket's
-lifecycle policy owns expiry — but no later request can address an earlier
-namespace. Cross-conversation persistence is a separate product decision.
+Request-scoped by design (v1): nothing is cleaned up eagerly, and no later
+request can address an earlier namespace. Every scratch write carries
+SCRATCH_TAGS, and the attachments bucket's lifecycle rule expires objects with
+that tag (genai-proxy-server-cdk s3-stack.ts). Nothing records which
+conversation a namespace belonged to, so expiry is what removes them.
+Cross-conversation persistence is a separate product decision.
 
 Lives in graph/ (not graph_tools/) with the other server-local tools; the
 storage backend itself stays the generic ArtifactStore.
@@ -27,6 +30,9 @@ import re
 from graph_tools.base import GraphTool, ToolContext, ToolResult
 
 logger = logging.getLogger(__name__)
+
+# Object tags on every scratch write; the bucket's lifecycle rule matches them.
+SCRATCH_TAGS = {"retention": "scratch"}
 
 _MAX_FILE_BYTES = 2_000_000
 _DEFAULT_READ_CHARS = 6_000
@@ -110,7 +116,7 @@ class FsWriteTool(GraphTool):
                 )
             )
         try:
-            context.store.put(f"{prefix}{path}", data, "text/plain; charset=utf-8")
+            context.store.put(f"{prefix}{path}", data, "text/plain; charset=utf-8", tags=SCRATCH_TAGS)
         except Exception as e:
             logger.error("fs_write: FAILED for %s — %s", path, e, exc_info=True)
             return ToolResult(

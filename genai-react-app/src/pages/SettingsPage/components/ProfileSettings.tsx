@@ -4,6 +4,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { PillButton } from '@genflowly/component-library';
 import { updateUsername, updateDiscoverability } from '../../../services/userService';
 import { useProfile } from '../../../hooks/queries/useProfile';
+import { DeleteDataSettings } from './DeleteDataSettings';
 import styles from './ProfileSettings.module.scss';
 
 export function ProfileSettings(): React.ReactElement {
@@ -137,6 +138,7 @@ export function ProfileSettings(): React.ReactElement {
                     </div>
                 </div>
 
+                <DeleteDataSettings />
             </div>
         </div>
     );

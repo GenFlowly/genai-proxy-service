@@ -12,6 +12,8 @@ from encoding_library.utils.embedding_utils import (
 from encoding_library.utils.model_registry import parse_collection_description, resolve_model
 from encoding_library.utils.vector_db import collection_data_type, customer_filter, get_milvus_client
 
+from graph.visibility import visible_results
+
 logger = logging.getLogger(__name__)
 
 _embedding_model_cache: dict[tuple[str, str], Any] = {}
@@ -131,7 +133,11 @@ async def search_knowledge(
                 filter=customer_filter(customer_id),
                 limit=top_n,
                 search_params=search_params,
-                output_fields=["note_value", "title", "subject", "client", "custom_topic", "custom_resolution"],
+                # The source keys let visible_results check each hit's row.
+                output_fields=[
+                    "note_value", "title", "subject", "client", "custom_topic", "custom_resolution",
+                    "conversation_key", "note_key",
+                ],
             )
 
             hits_found = 0
@@ -153,6 +159,7 @@ async def search_knowledge(
 
             logger.info("Node retrieval: collection '%s' — %d hits kept, %d discarded", collection_name, hits_found, hits_discarded)
 
+    all_results = visible_results(customer_id, all_results)
     all_results.sort(key=lambda x: x["distance"], reverse=True)
     top_results = all_results[:top_n]
     logger.info("Node retrieval: END — %d total results returned", len(top_results))

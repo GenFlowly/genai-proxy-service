@@ -22,6 +22,17 @@ export class S3Stack extends Stack {
             enforceSSL: true,
             // Customer images: never auto-delete, and keep the bucket if the stack is torn down
             removalPolicy: RemovalPolicy.RETAIN,
+            lifecycleRules: [
+                {
+                    // Agent scratch files (retrieval-server graph/fs_tools.py tags
+                    // them) belong to one request, which no later request can
+                    // address, and nothing records their conversation, so a
+                    // conversation delete can't find them: they expire instead.
+                    id: 'expire-agent-scratch',
+                    tagFilters: { retention: 'scratch' },
+                    expiration: cdk.Duration.days(1),
+                },
+            ],
             cors: [
                 {
                     // Browser uploads/downloads go through presigned URLs, which carry

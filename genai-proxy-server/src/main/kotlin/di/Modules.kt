@@ -174,6 +174,8 @@ fun appModule(): Module = module {
     single { NotesRepository(get(), get()) }
     single { com.genflowly.repository.MemoryRepository(get(), get()) }
     single { com.genflowly.repository.VectorSyncPendingRepository(get(), get()) }
+    single { com.genflowly.repository.PurgeJobRepository(get()) }
+    single { com.genflowly.repository.PurgeRepository(get(), get()) }
     single { com.genflowly.repository.ProjectRepository(get(), get()) }
     single { InstructionRepository(get(), get()) }
     single { GraphRepository(get(), get()) }
@@ -211,7 +213,7 @@ fun appModule(): Module = module {
     single { CustomerProfileService(get(), get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get(), get(), get()) }
-    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.ProjectService(get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryService(get(), get(), get(), get()) }
@@ -223,6 +225,29 @@ fun appModule(): Module = module {
     }
     single { com.genflowly.service.ConversationIndexingService(get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.VectorRetryService(get(), get(), get(), get()) }
+    single { com.genflowly.providers.CustomerDocumentsPurger(get(), get<AppConfig>().customerDocumentsBucket) }
+    single { com.genflowly.providers.Auth0ManagementClient(get(), get<AppConfig>().auth0Management) }
+    single { com.genflowly.service.PurgeJobRunner(get()) }
+    single {
+        com.genflowly.service.AccountDeletionService(
+            get(), get(), get(), get(), get(), get(), get(), get(), get()
+        )
+    }
+    single {
+        com.genflowly.service.ContentDeletionService(get(), get(), get(), get(), get(), get(), get())
+    }
+    single {
+        com.genflowly.service.PurgeJobWorker(
+            get(),
+            get(),
+            mapOf(
+                com.genflowly.repository.PurgeJobType.ACCOUNT to get<com.genflowly.service.AccountDeletionService>(),
+                com.genflowly.repository.PurgeJobType.CONVERSATION to get<com.genflowly.service.ContentDeletionService>(),
+                com.genflowly.repository.PurgeJobType.NOTE to get<com.genflowly.service.ContentDeletionService>(),
+            ),
+            get()
+        )
+    }
     single { com.genflowly.service.ExchangeSideEffects(get(), get()) }
     single { com.genflowly.service.UnifiedSearchService(get(), get(), get(), get(), get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }

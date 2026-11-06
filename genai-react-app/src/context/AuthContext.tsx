@@ -287,6 +287,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         picture: customerPicture, // Strictly prefer backend picture; undefined if missing
     } : null
 
+    const resyncAccount = useCallback(() => {
+        setOnboardAttempt(attempt => attempt + 1)
+    }, [])
+
     const refreshInstructions = useCallback(async () => {
         try {
             let token = ""
@@ -394,6 +398,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         updateAiConfigPreferences,
         customerInstructions,
         refreshInstructions,
+        resyncAccount,
         updateInstruction,
         customerName,
         customerPicture,

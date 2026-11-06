@@ -34,6 +34,7 @@ class ConversationManagementService(
     private val sharedUsersResolver: SharedUsersResolver,
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
+    private val contentDeletionService: ContentDeletionService,
     private val appScope: AppScope
 ) {
     private val logger = LoggerFactory.getLogger("ConversationManagementService")
@@ -157,25 +158,36 @@ class ConversationManagementService(
         conversationRepository.updateConversationTitle(conversationId, owner.customerId, title)
     }
 
-    suspend fun archiveConversation(
-        conversationId: String,
-        customerId: String
-    ) {
-        requireEditOrOwner(conversationId, customerId, action = "archive")
-        val owner = conversationRepository.getConversationById(conversationId)
-            ?: throw ConversationAccessDeniedException("Conversation not found")
-        conversationRepository.archiveConversation(conversationId, owner.customerId)
-        shareRepository.unshareAllConversationWithCustomer(conversationId)
+    enum class DeleteResult {
+        /** The owner deleted it, for everyone. */
+        DELETED,
+        /** Someone it was shared with removed it from their own history; the owner keeps it. */
+        LEFT_SHARE
     }
 
-    suspend fun unarchiveConversation(
+    /**
+     * The owner's delete is permanent and reaches everywhere the conversation
+     * is stored (see [ContentDeletionService]); anyone it was shared with only
+     * removes their own access. Throws [SecurityException] when the caller
+     * has no access.
+     */
+    suspend fun deleteConversation(
         conversationId: String,
         customerId: String
-    ) {
-        requireEditOrOwner(conversationId, customerId, action = "unarchive")
-        val owner = conversationRepository.getConversationById(conversationId)
-            ?: throw ConversationAccessDeniedException("Conversation not found")
-        conversationRepository.unarchiveConversation(conversationId, owner.customerId)
+    ): DeleteResult {
+        return when (conversationService.getConversationRole(conversationId, customerId)) {
+            ShareRole.OWNER -> {
+                val parentId = conversationRepository.getConversationAttributes(conversationId, customerId)
+                    ?.parentConversationId
+                contentDeletionService.requestConversationDeletion(customerId, conversationId, parentId)
+                DeleteResult.DELETED
+            }
+            ShareRole.EDIT, ShareRole.VIEW -> {
+                shareRepository.unshareConversationWithCustomer(conversationId, customerId)
+                DeleteResult.LEFT_SHARE
+            }
+            null -> throw SecurityException("Customer $customerId cannot delete conversation $conversationId")
+        }
     }
 
     /**

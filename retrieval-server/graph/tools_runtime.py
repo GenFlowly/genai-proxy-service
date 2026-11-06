@@ -185,8 +185,8 @@ class _LazyAttachmentStore:
             self._store = S3ArtifactStore(bucket)
         return self._store
 
-    def put(self, key: str, data: bytes, content_type: str) -> None:
-        self._backing().put(key, data, content_type)
+    def put(self, key: str, data: bytes, content_type: str, tags: dict[str, str] | None = None) -> None:
+        self._backing().put(key, data, content_type, tags=tags)
 
     def get(self, key: str) -> bytes:
         return self._backing().get(key)

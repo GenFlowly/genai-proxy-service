@@ -6,10 +6,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mu.KLogger
 import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.model.Delete
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
 import software.amazon.awssdk.services.s3.presigner.S3Presigner
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest
@@ -74,7 +78,40 @@ class S3Provider(
         }
     }
 
+    /** False when ATTACHMENTS_BUCKET is unset (a local run without S3). */
+    val isConfigured: Boolean get() = bucket.isNotBlank()
+
+    /** Every key under [prefix]. */
+    suspend fun listKeys(prefix: String): List<String> = withContext(Dispatchers.IO) {
+        requireBucket()
+        s3Client.listObjectsV2Paginator(ListObjectsV2Request.builder().bucket(bucket).prefix(prefix).build())
+            .contents()
+            .map { it.key() }
+    }
+
+    /** Deletes [keys], up to 1,000 per request. Returns the keys S3 failed to delete. */
+    suspend fun deleteObjects(keys: List<String>): List<String> = withContext(Dispatchers.IO) {
+        requireBucket()
+        keys.distinct().chunked(MAX_KEYS_PER_DELETE).flatMap { batch ->
+            s3Client.deleteObjects(
+                DeleteObjectsRequest.builder()
+                    .bucket(bucket)
+                    .delete(
+                        Delete.builder()
+                            .objects(batch.map { ObjectIdentifier.builder().key(it).build() })
+                            .quiet(true)
+                            .build()
+                    )
+                    .build()
+            ).errors().map { it.key() }
+        }
+    }
+
     private fun requireBucket() {
         check(bucket.isNotBlank()) { "ATTACHMENTS_BUCKET environment variable is not set" }
+    }
+
+    private companion object {
+        const val MAX_KEYS_PER_DELETE = 1000
     }
 }

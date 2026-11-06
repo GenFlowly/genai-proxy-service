@@ -87,6 +87,29 @@ def _claim_note(customer_id: str, note_key: str, batch_marker: str) -> bool:
         raise
 
 
+def _stamp_batch(batch_id: str, refs: List[Dict[str, Any]]) -> None:
+    """Stamp batch_id + the note's document key onto each claimed note (O(1)
+    lookup). A note deleted since it was claimed stays deleted, without
+    undoing the batch for the others; the store step skips its results."""
+    for ref in refs:
+        try:
+            dynamodb.update_item(
+                TableName=CUSTOMER_NOTES_TABLE,
+                Key={"customerId": {"S": ref["customer_id"]}, "noteKey": {"S": ref["note_key"]}},
+                UpdateExpression="SET embedding_batch_id = :b, embedding_s3_key = :k, embedding_updated_at = :now",
+                ExpressionAttributeValues={
+                    ":b": {"S": batch_id},
+                    ":k": {"S": ref["s3_key"]},
+                    ":now": {"S": _now()},
+                },
+                ConditionExpression="attribute_exists(noteKey)",
+            )
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                raise
+            logger.info(f"Note {ref['note_key']} was deleted after it was claimed for batch {batch_id}")
+
+
 def _reset_note(customer_id: str, note_key: str) -> None:
     """Roll a note back to pending (used if job submission fails after claiming)."""
     try:
@@ -96,6 +119,8 @@ def _reset_note(customer_id: str, note_key: str) -> None:
             UpdateExpression="SET #es = :pending, embedding_updated_at = :now REMOVE embedding_batch_id",
             ExpressionAttributeNames={"#es": "embedding_status"},
             ExpressionAttributeValues={":pending": {"S": "pending"}, ":now": {"S": _now()}},
+            # A note deleted meanwhile must stay deleted.
+            ConditionExpression="attribute_exists(noteKey)",
         )
     except Exception as e:
         logger.error(f"Failed to reset note {note_key} to pending: {e}")
@@ -257,18 +282,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             continue
         try:
             batch_id = _submit_group(customer_id, model_name, customer_keys[customer_id], g["states"], g["refs"])
-            # Stamp batch_id + the note's document key onto each claimed note (O(1) lookup)
-            for ref in g["refs"]:
-                dynamodb.update_item(
-                    TableName=CUSTOMER_NOTES_TABLE,
-                    Key={"customerId": {"S": ref["customer_id"]}, "noteKey": {"S": ref["note_key"]}},
-                    UpdateExpression="SET embedding_batch_id = :b, embedding_s3_key = :k, embedding_updated_at = :now",
-                    ExpressionAttributeValues={
-                        ":b": {"S": batch_id},
-                        ":k": {"S": ref["s3_key"]},
-                        ":now": {"S": _now()},
-                    },
-                )
+            _stamp_batch(batch_id, g["refs"])
             submitted_jobs += 1
             notes_submitted += len(g["refs"])
             logger.info(f"Submitted batch {batch_id}: {len(g['refs'])} note(s), model={model_name}.")

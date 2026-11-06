@@ -475,4 +475,19 @@ class CustomerCredentialsService(
     suspend fun removeToolCredentials(customerId: String, toolType: String) {
         customerCredentialsRepository.deleteCustomerToolCredentials(customerId, toolType)
     }
+
+    /**
+     * Removes every key and credential the customer stored: AI and embedding
+     * keys, the vector DB connection, and tool and connector credentials.
+     * Tools keep their non-secret settings. Vectors already in the customer's
+     * vector DB stay there. Returns how many credentials were removed.
+     */
+    suspend fun deleteAllCredentials(customerId: String): Int {
+        val keys = customerCredentialsRepository.deleteAllCustomerApiKeys(customerId)
+        val vectorDb = if (customerCredentialsRepository.deleteCustomerVectorDBConfig(customerId)) 1 else 0
+        val tools = customerCredentialsRepository.removeAllToolCredentials(customerId)
+        val removed = keys + vectorDb + tools
+        logger.info { "Removed $removed credential(s) for customer $customerId" }
+        return removed
+    }
 }

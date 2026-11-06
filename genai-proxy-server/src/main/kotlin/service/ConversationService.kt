@@ -10,11 +10,13 @@ import com.genflowly.models.api.MessageSender
 import com.genflowly.models.api.PromptAndResponse
 import com.genflowly.models.api.MessageUsageResponse
 import com.genflowly.models.api.VendorUsageTotals
+import com.genflowly.observability.Metrics
 import com.genflowly.repository.ConversationRepository
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.PendingRun
 import com.genflowly.repository.ProjectRepository
 import com.genflowly.repository.ShareRepository
+import com.genflowly.repository.TouchResult
 import com.genflowly.utils.MemoryRedaction
 import org.slf4j.LoggerFactory
 
@@ -362,7 +364,13 @@ class ConversationService(
         val updateSequenceMessage =
             updateSequenceOfMessageInConversation(message)
         conversationRepository.createMessage(updateSequenceMessage)
-        touchConversationForMessage(message)
+        if (!touchConversationForMessage(message)) {
+            // The conversation was deleted while this message was being made
+            // (typically a reply still generating): nothing may store it now.
+            conversationRepository.deleteMessage(message.conversationId, updateSequenceMessage.messageId)
+            Metrics.count("conversation_late_message_dropped_total")
+            logger.info("Dropped message ${updateSequenceMessage.messageId}: conversation ${message.conversationId} was deleted")
+        }
         return updateSequenceMessage.messageId
     }
 
@@ -371,15 +379,17 @@ class ConversationService(
      * activity. The Conversation row is keyed by the OWNER's customerId; for a
      * message from a share recipient the first touch misses (condition guard),
      * so resolve the owner and touch their row instead. Best-effort — never
-     * fails the message write.
+     * fails the message write. Returns false only when the conversation is
+     * known to be gone.
      */
-    private suspend fun touchConversationForMessage(message: Message) {
+    private suspend fun touchConversationForMessage(message: Message): Boolean {
         val vendors = message.aiConfig.map { it.aiVendor.name }.toSet()
-        if (conversationRepository.touchConversation(message.customerId, message.conversationId, vendors)) return
+        val own = conversationRepository.touchConversation(message.customerId, message.conversationId, vendors)
+        if (own != TouchResult.NO_ROW) return true
         val ownerCustomerId = conversationRepository.getConversationById(message.conversationId)?.customerId
-        if (ownerCustomerId != null && ownerCustomerId != message.customerId) {
-            conversationRepository.touchConversation(ownerCustomerId, message.conversationId, vendors)
-        }
+            ?: return false
+        if (ownerCustomerId == message.customerId) return false
+        return conversationRepository.touchConversation(ownerCustomerId, message.conversationId, vendors) != TouchResult.NO_ROW
     }
 
     private suspend fun updateSequenceOfMessageInConversation(message: Message):

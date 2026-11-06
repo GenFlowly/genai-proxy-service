@@ -7,7 +7,7 @@ import { useToast } from '../../../context/ToastContext'
 import {
     getCustomerConversations,
     getPinnedConversations,
-    archiveConversation,
+    deleteConversation,
     pinConversation,
     unpinConversation,
     getProjects,
@@ -18,6 +18,7 @@ import {
 } from '../../../services/conversationHistoryService'
 import { ConversationSummary, ForkConversationResponse, Project } from '../../../models/conversationHistory.models'
 import { CollapsedVendorBrandName } from '../../common/BrandName/BrandName'
+import { DeleteConfirmModal } from '../../common/DeleteConfirmModal/DeleteConfirmModal'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { CONVERSATION_FORKED_EVENT } from '../../../constants/events'
@@ -90,6 +91,9 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     const [newProjectName, setNewProjectName] = useState('')
     const [isCreatingProject, setIsCreatingProject] = useState(false)
     const [moveTarget, setMoveTarget] = useState<ConversationSummary | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<ConversationSummary | null>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [deleteError, setDeleteError] = useState<string | null>(null)
 
     // The library's collapsible groups are uncontrolled (defaultExpanded is
     // read on mount), so force-expanding a project when a conversation is
@@ -316,7 +320,7 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
         }
     }, [projects, projectItems, activeId, activeProjectId, ensureProjectLoaded])
 
-    // Mirror every loaded/mutated state (fetch, archive, pin, title patch) to
+    // Mirror every loaded/mutated state (fetch, delete, pin, title patch) to
     // the cache so the next mount paints instantly
     useEffect(() => {
         if (!hasLoadedRef.current) return
@@ -429,22 +433,27 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
         onSelect?.()
     }
 
-    const handleArchive = async (e: React.MouseEvent, convId: string) => {
-        e.stopPropagation()
+    // Deleting is permanent, so it always asks first
+    const handleDelete = async () => {
+        if (!deleteTarget) return
+        const convId = deleteTarget.conversationId
+        setIsDeleting(true)
+        setDeleteError(null)
         try {
             const token = await getAccessTokenSilently()
-            await archiveConversation(token, convId)
+            await deleteConversation(token, convId)
             setItems(prev => prev.filter(c => c.conversationId !== convId))
-            // The pinned and project endpoints exclude archived conversations,
-            // so drop it from those local lists too
             setPinned(prev => prev.filter(c => c.conversationId !== convId))
             removeFromProjectItems(convId)
-            // If the archived conversation is currently active, navigate away
+            setDeleteTarget(null)
             if (convId === activeId) {
                 navigate('/chat')
             }
         } catch (err) {
-            console.error('Failed to archive conversation:', err)
+            console.error('Failed to delete conversation:', err)
+            setDeleteError(t('conversation.conversationHistory.deleteFailed'))
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -659,11 +668,15 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
                     testId: `conv-${isPinned ? 'unpin' : 'pin'}-btn-${conv.conversationId}`,
                 },
                 {
-                    icon: <Icon src={ICONS.ARCHIVE} size={14} aria-hidden={true} />,
-                    label: t('conversation.conversationHistory.archiveConversation'),
+                    icon: <Icon src={ICONS.TRASH} size={14} aria-hidden={true} />,
+                    label: t('conversation.conversationHistory.deleteConversation'),
                     tone: 'muted' as const,
-                    onClick: (e: React.MouseEvent) => handleArchive(e, conv.conversationId),
-                    testId: `conv-archive-btn-${conv.conversationId}`,
+                    onClick: (e: React.MouseEvent) => {
+                        e.stopPropagation()
+                        setDeleteError(null)
+                        setDeleteTarget(conv)
+                    },
+                    testId: `conv-delete-btn-${conv.conversationId}`,
                 },
             ],
         }
@@ -1004,6 +1017,17 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
                     </div>
                 )}
             </Modal>
+
+            <DeleteConfirmModal
+                isOpen={deleteTarget != null}
+                title={t('conversation.conversationHistory.deleteConversationTitle')}
+                message={t('conversation.conversationHistory.deleteConversationConfirm')}
+                isDeleting={isDeleting}
+                error={deleteError}
+                onConfirm={handleDelete}
+                onCancel={() => setDeleteTarget(null)}
+                data-testid="delete-conversation"
+            />
         </>
     )
 }
