@@ -65,7 +65,7 @@ describe('NavbarMenu Component', () => {
         expect(memoryLink.className).toMatch(/activeNavLink/);
     });
 
-    test('keeps left sidebar expanded for Memory, collapses it for other links', async () => {
+    test('every link collapses the left sidebar, Memory included', async () => {
         const SidebarProbe = () => {
             const { useLayout } = require('../../../../context/LayoutContext');
             const { isLeftSidebarExpanded } = useLayout();
@@ -81,11 +81,10 @@ describe('NavbarMenu Component', () => {
             </MemoryRouter>
         );
 
-        // Clicking Memory (even when already on /memory) must keep the sidebar expanded
+        // The Memory page draws its own sidebar, so no link leaves the layout's open
         await userEvent.click(screen.getByTestId('navbar-item-memory'));
-        expect(screen.getByTestId('sidebar-state')).toHaveTextContent('EXPANDED');
+        expect(screen.getByTestId('sidebar-state')).toHaveTextContent('COLLAPSED');
 
-        // Clicking any other link collapses it
         await userEvent.click(screen.getByTestId('navbar-item-chat'));
         expect(screen.getByTestId('sidebar-state')).toHaveTextContent('COLLAPSED');
     });

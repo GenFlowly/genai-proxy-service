@@ -82,7 +82,7 @@ describe('AISettings', () => {
         render(withQueryClient(<AISettings />));
 
         expect(screen.getByTestId('ai-settings-primary-note')).toHaveTextContent(
-            'Your priority 1 provider also writes chat and note titles and learns facts about you'
+            'Your priority 1 provider also writes chat titles and learns facts about you'
         );
     });
 

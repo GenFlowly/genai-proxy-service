@@ -156,6 +156,8 @@ class SearchMemoriesTool(GraphTool):
             _get_cached_memories,
             _memory_collections,
             _milvus_client,
+            kind_here,
+            record_usage,
         )
         from encoding_library.utils.vector_db import customer_filter
 
@@ -172,7 +174,15 @@ class SearchMemoriesTool(GraphTool):
             count("memory_recall_failure_total", source="tool")
             logger.error("search_memories: memory load FAILED — %s", e, exc_info=True)
             return failure
-        by_key = {m["memoryId"]: m for m in memories if m.get("text") and m.get("memoryId")}
+        # Profile memories plus this conversation's project's: other
+        # projects' memories are siloed and never searchable from here.
+        memory_context = context.runtime.get("memory_context")
+        project_id = (memory_context or {}).get("project_id")
+        by_key = {
+            m["memoryId"]: m
+            for m in memories
+            if m.get("text") and m.get("memoryId") and kind_here(m, project_id)
+        }
         if not by_key:
             return ToolResult(
                 content=(
@@ -194,7 +204,7 @@ class SearchMemoriesTool(GraphTool):
                 )
             best_score: dict[str, float] = {}
             for (model_type, model_name), collection_names in grouped.items():
-                vector = _embed_query(query, model_type, model_name)
+                vector = _embed_query(context.customer_id, query, model_type, model_name)
                 if vector is None:
                     count("embedding_failure_total", source="memory_tool", model=model_name or "")
                     logger.error(
@@ -208,9 +218,10 @@ class SearchMemoriesTool(GraphTool):
                         data=[vector],
                         # Shared collection: scope to this customer's rows.
                         filter=customer_filter(context.customer_id),
-                        # Over-fetch: stale vectors (deleted memories) drop out
-                        # in the DynamoDB join below, so the cap must survive it.
-                        limit=max(top_k * 2, 8),
+                        # Over-fetch: stale vectors (deleted memories) and other
+                        # projects' memories drop out in the DynamoDB join
+                        # below, so the cap must survive it.
+                        limit=max(top_k * 4, 16),
                         search_params=_RECALL_SEARCH_PARAMS,
                         output_fields=["memory_key"],
                     )
@@ -239,6 +250,7 @@ class SearchMemoriesTool(GraphTool):
                     "not mentioned this in remembered conversations."
                 )
             )
+        record_usage(memory_context, context.customer_id, [(key, "search") for key, _ in ranked], "tool")
         return ToolResult(
             content=_render_results(query, [(by_key[key], score) for key, score in ranked])
         )

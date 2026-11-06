@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -14,9 +15,16 @@ from graph.state import RetrievalState
 logger = logging.getLogger(__name__)
 
 # CustomerMemory table: PK=customerId, SK=memoryId ("MEM#" prefix for memory
-# items). Attributes: text, kind (CORE/EPISODIC), updatedAt.
+# items). Attributes: text, kind (CORE/EPISODIC), placements, updatedAt.
+# placements maps "PROFILE" or a project id to the memory's kind there; rows
+# written before placements existed have none and apply in Profile with
+# their kind.
 _TABLE_NAME = "CustomerMemory"
 _MEMORY_ITEM_PREFIX = "MEM#"
+_PROFILE_PLACEMENT = "PROFILE"
+# Usage-log rows, one per memory and reply: "MEMUSE#<uuid>#<turnStartedAt>#
+# <responseMessageId>" (the proxy reads them with the same key format).
+_MEMORY_USAGE_PREFIX = "MEMUSE#"
 
 _DEFAULT_MAX_MEMORIES = 20
 
@@ -96,6 +104,86 @@ def _get_cached_memories(customer_id: str) -> list[dict]:
     memories = _load_memories(customer_id)
     _memory_cache.set(customer_id, memories)
     return memories
+
+
+def kind_here(item: dict, project_id: Optional[str]) -> Optional[str]:
+    """The memory's kind in this conversation: its Profile kind, else its kind
+    in the conversation's project, else None — it doesn't apply here, and a
+    project's memories stay inside that project."""
+    placements = item.get("placements")
+    if not placements:
+        return item.get("kind")
+    if _PROFILE_PLACEMENT in placements:
+        return placements[_PROFILE_PLACEMENT]
+    if project_id and project_id in placements:
+        return placements[project_id]
+    return None
+
+
+def _write_usage(customer_id: str, memory_context: dict, used: list[tuple[str, str]], source: str) -> None:
+    """One usage row per memory plus its hit counter, in one transaction each.
+    The row's key names the reply, so a retried or failed-over call for the
+    same reply is refused by the condition instead of counting twice."""
+    # The resource's client serializes plain Python values itself; typed
+    # {"S": ...} values would be stored (and ADDed) as maps.
+    client = _get_dynamodb().meta.client
+    turn = memory_context["turn_started_at"]
+    message_id = memory_context["response_message_id"]
+    recorded = 0
+    for memory_id, how in used:
+        usage_item = {
+            "customerId": customer_id,
+            "memoryId": f"{_MEMORY_USAGE_PREFIX}{memory_id[len(_MEMORY_ITEM_PREFIX):]}#{turn}#{message_id}",
+            "conversationId": memory_context["conversation_id"],
+            "messageId": message_id,
+            "usedAt": turn,
+            "how": how,
+        }
+        if memory_context.get("project_id"):
+            usage_item["projectId"] = memory_context["project_id"]
+        try:
+            client.transact_write_items(TransactItems=[
+                {"Put": {
+                    "TableName": _TABLE_NAME,
+                    "Item": usage_item,
+                    "ConditionExpression": "attribute_not_exists(memoryId)",
+                }},
+                {"Update": {
+                    "TableName": _TABLE_NAME,
+                    "Key": {"customerId": customer_id, "memoryId": memory_id},
+                    "UpdateExpression": "ADD hitCount :one SET lastUsedAt = :at",
+                    "ConditionExpression": "attribute_exists(memoryId)",
+                    "ExpressionAttributeValues": {":one": 1, ":at": turn},
+                }},
+            ])
+            recorded += 1
+        except Exception as e:
+            code = getattr(e, "response", {}).get("Error", {}).get("Code")
+            if code == "TransactionCanceledException":
+                # Already counted for this reply, or the memory was deleted.
+                continue
+            count("memory_usage_write_failure_total", source=source)
+            logger.warning("Could not record usage of memory %s for %s: %s", memory_id, customer_id, e)
+    if recorded:
+        count("memory_usage_recorded_total", recorded, source=source)
+
+
+def record_usage(
+    memory_context: Optional[dict], customer_id: str, used: list[tuple[str, str]], source: str
+) -> None:
+    """Logs that [used] memories (memoryId, "core" | "recalled" | "search")
+    were sent to the model for this reply, off the event loop and without
+    waiting: usage logging must never slow down or break generation. A
+    request without a memory context (internal calls, voice, evals) logs
+    nothing."""
+    if not used or not memory_context:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _write_usage(customer_id, memory_context, used, source)
+        return
+    loop.run_in_executor(None, _write_usage, customer_id, memory_context, list(used), source)
 
 
 # ── EPISODIC recall (vector search over the shared memory collections) ──
@@ -236,10 +324,10 @@ def _recall_episodic(
                 data=[vector],
                 # Shared collection: scope to this customer's rows.
                 filter=customer_filter(customer_id),
-                # Over-fetch: shown-CORE hits (already injected) and stale
-                # vectors are dropped after the search, so the floor must
-                # survive that.
-                limit=max(top_k * 2, 8),
+                # Over-fetch: shown-CORE hits (already injected), stale
+                # vectors and other projects' memories are dropped after the
+                # search, so the floor must survive that.
+                limit=max(top_k * 4, 16),
                 search_params=_RECALL_SEARCH_PARAMS,
                 output_fields=["memory_key"],
             )
@@ -324,6 +412,11 @@ def memory(node_id: Optional[str] = None):
     memory_enabled=true (the proxy server's consent decision — the request's
     "use learned preferences" flag AND the account-level memory setting).
 
+    Scope: only Profile memories and the conversation's project's (from
+    memory_context) apply, each with its kind there. Every memory injected or
+    recalled is logged once per reply in the memory's usage log, with its hit
+    counter, in the background.
+
     Config (all optional): max_memories (default 20), recall_top_k (default 4,
     0 disables recall), recall_min_score (default 0.5), recall_recency_weight
     (default 0.2, 0 restores pure-cosine ranking), recall_half_life_days
@@ -361,7 +454,11 @@ def memory(node_id: Optional[str] = None):
             logger.exception("Failed to load memories for %s; proceeding without", state["customer_id"])
             return {}
 
-        core = [i for i in memories if i.get("kind") == "CORE" and i.get("text")]
+        # Profile memories plus the conversation's project's, each with its
+        # kind here; other projects' memories never reach this conversation.
+        project_id = (state.get("memory_context") or {}).get("project_id")
+        here = [(i, kind) for i in memories if i.get("text") and (kind := kind_here(i, project_id))]
+        core = [i for i, kind in here if kind == "CORE"]
         core.sort(key=lambda i: i.get("updatedAt", ""), reverse=True)
         overflow_core = [i for i in core[max_memories:] if i.get("memoryId")]
         if overflow_core:
@@ -376,8 +473,8 @@ def memory(node_id: Optional[str] = None):
             )
         recallable_by_key = {
             i["memoryId"]: i
-            for i in memories
-            if i.get("kind") != "CORE" and i.get("text") and i.get("memoryId")
+            for i, kind in here
+            if kind != "CORE" and i.get("memoryId")
         }
         recallable_by_key.update({i["memoryId"]: i for i in overflow_core})
 
@@ -398,6 +495,10 @@ def memory(node_id: Optional[str] = None):
                     "EPISODIC recall failed for %s; continuing with CORE only",
                     state["customer_id"],
                 )
+
+        used = [(i["memoryId"], "core") for i in core[:max_memories] if i.get("memoryId")]
+        used += [(r["memory"]["memoryId"], "recalled") for r in recalled]
+        record_usage(state.get("memory_context"), state["customer_id"], used, "node")
 
         block = _render_block(core, max_memories, recalled)
         if not block:

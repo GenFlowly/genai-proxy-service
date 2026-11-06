@@ -360,6 +360,8 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         # it is bound without consent (notably subagents, whose state pins
         # memory_enabled=False).
         "memory_enabled": bool(state.get("memory_enabled")),
+        # Scope and usage-log keys for search_memories (see MemoryContext).
+        "memory_context": state.get("memory_context"),
     })
 
     # The assistant turn that made the calls, replayed to the model next

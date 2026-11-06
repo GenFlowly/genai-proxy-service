@@ -467,7 +467,7 @@
             "searchAgents": "Search agents",
             "searchChats": "Search chats",
             "searchFailed": "Search failed. Try again.",
-            "searchNotes": "Search notes",
+            "searchMemories": "Search memories",
             "searchResults": "Results",
             "searchSettings": "Search settings",
             "account": "Account",
@@ -495,15 +495,168 @@
             "moreActions": "More actions"
         }
     },
-    "notes": {
-        "notesHeader": {
-            "newNote": "New Note",
-            "saveError": "Couldn't save. Retrying…",
-            "savedAt": "Saved at {{time}}",
+    "memoryPage": {
+        "title": "Memory",
+        "kinds": {
+            "core": "Core",
+            "episodic": "Episodic"
+        },
+        "menu": {
+            "profileMemories": "Profile memories",
+            "projects": "Projects",
+            "noProjects": "No projects yet",
+            "projectsFailed": "Couldn't load your projects",
+            "untitled": "Memory"
+        },
+        "scopes": {
+            "coreTitle": "Core memories",
+            "episodicTitle": "Episodic memories",
+            "coreSubtitle": "Profile · included in every conversation",
+            "episodicSubtitle": "Profile · recalled when a conversation calls for it",
+            "projectSubtitle": "Project · used only in this project's conversations",
+            "profile": "Profile",
+            "unknownProject": "Project"
+        },
+        "list": {
+            "addMemory": "Add memory",
+            "loading": "Loading memories",
+            "loadFailed": "Couldn't load your memories.",
+            "retry": "Try again",
+            "emptyProfileTitle": "Nothing here yet",
+            "emptyProfileText": "Facts learned from your conversations appear here, and you can add your own.",
+            "emptyProjectTitle": "No memories in this project yet",
+            "emptyProjectText": "Facts learned from conversations in this project appear here. They are only used inside the project.",
+            "used": "Used",
+            "times": "{{count}}×",
+            "version": "v{{version}}",
+            "usedSummary_one": "used {{count}}×",
+            "usedSummary_other": "used {{count}}×",
+            "versionSummary": "version {{version}}",
+            "actions": "Memory actions",
+            "closeActions": "Close actions",
+            "edit": "Edit",
+            "moveTo": "Move to…",
+            "copyToProject": "Copy to project…",
+            "delete": "Delete"
+        },
+        "versions": {
+            "title": "Versions",
+            "version": "Version {{version}}",
+            "latest": "Latest"
+        },
+        "detail": {
+            "editMemory": "Edit memory",
+            "appliesIn": "Applies in",
+            "usedSummary": "Used {{count}}× · last on {{date}}",
+            "neverUsed": "Not used in a reply yet",
+            "textLabel": "Memory text",
+            "hintLatest": "Saving creates version {{next}}. Earlier versions are never changed.",
+            "hintOld": "Viewing version {{version}}. Saving this text creates version {{next}}; version {{version}} stays as it is.",
+            "save": "Save as version {{next}}",
             "saving": "Saving…",
-            "untitledNote": "Untitled Note",
-            "updatedAtDateTime": "Updated {{date}} at {{time}}",
-            "updatedAtTime": "Updated at {{time}}"
+            "saved": "Saved as version {{version}}",
+            "saveFailed": "Couldn't save the memory.",
+            "conflict": "A newer version was saved while you were editing. It's listed now, and your text is still here.",
+            "logs": "Memory logs",
+            "changeLog": "Change log",
+            "usageLog": "Usage log",
+            "changeLogHelp": "How this memory was learned and every change since. Entries are permanent: moving or copying the memory only changes where it applies.",
+            "usageLogHelp": "Each time this memory was sent to a model, with the conversation and the message it was used for.",
+            "notFound": "This memory doesn't exist anymore.",
+            "loadFailed": "Couldn't load this memory.",
+            "backToList": "Back to memories"
+        },
+        "changes": {
+            "learned": "Learned from a conversation",
+            "learnedNote": "Learned from a note",
+            "updated": "Updated from a conversation",
+            "updatedNote": "Updated from a note",
+            "addedByYou": "Added by you",
+            "editedByYou": "Edited by you",
+            "moved": "Moved by you",
+            "copied": "Copied by you",
+            "removedFromProject": "Removed from a project",
+            "removedInConversation": "Removed from this project in a conversation",
+            "legacy": "Learned before changes were recorded",
+            "legacyNote": "History before {{date}} wasn't recorded.",
+            "noVersion": "No new version",
+            "conversation": "Conversation",
+            "message": "Message",
+            "note": "Note",
+            "fromNote": "A note you wrote",
+            "youSaid": "You said",
+            "reason": "Reason",
+            "before": "Before",
+            "after": "After",
+            "text": "Text",
+            "from": "From",
+            "to": "To",
+            "nowhere": "—",
+            "untitledConversation": "Untitled conversation",
+            "deletedConversation": "Deleted conversation"
+        },
+        "usage": {
+            "loading": "Loading…",
+            "loadFailed": "Couldn't load the usage log.",
+            "empty": "Not used in any reply yet.",
+            "howCore": "Core",
+            "howRecalled": "Recalled",
+            "howSearch": "Memory search",
+            "showing": "Showing the latest {{shown}} of {{total}}",
+            "loadMore": "Load more"
+        },
+        "move": {
+            "moveTitle": "Move memory",
+            "copyTitle": "Copy memory",
+            "mode": "Move or copy",
+            "move": "Move",
+            "copy": "Copy",
+            "appliesIn": "Applies in {{place}}",
+            "moveExplain": "Changes where this memory applies. Its versions and change log stay exactly as they are.",
+            "moveToProfileExplain": "Profile memories apply in every conversation, so this memory leaves its projects. Its versions and change log stay exactly as they are.",
+            "copyExplain": "Adds a reference to the same memory in another project. Both projects share its text, versions and change log.",
+            "whereItApplies": "Where it applies",
+            "kind": "Kind",
+            "currentlyHere": "Now here, as {{kind}}",
+            "alreadyHere": "Already here",
+            "chooseWhere": "Choose where",
+            "confirmMove": "Move to {{place}} · {{kind}}",
+            "confirmCopy": "Copy to {{place}} · {{kind}}",
+            "noOtherProjects": "There are no other projects to copy it to.",
+            "cancel": "Cancel",
+            "moved": "Memory moved",
+            "copied": "Memory copied",
+            "failed": "Couldn't move the memory.",
+            "coreHelpProfile": "Core: included in every conversation.",
+            "coreHelpProject": "Core: included in every conversation in this project.",
+            "episodicHelpProfile": "Episodic: recalled only when a conversation calls for it.",
+            "episodicHelpProject": "Episodic: recalled only when a conversation in this project calls for it."
+        },
+        "delete": {
+            "title": "Delete memory",
+            "confirm": "Delete this memory with its versions and logs? This can't be undone.",
+            "sharedConfirm_one": "This memory is shared with 1 other project. Remove it from this project only, or delete it everywhere?",
+            "sharedConfirm_other": "This memory is shared with {{count}} other projects. Remove it from this project only, or delete it everywhere?",
+            "removeHere": "Remove from this project",
+            "deleteEverywhere": "Delete everywhere",
+            "delete": "Delete",
+            "deleting": "Deleting…",
+            "deleted": "Memory deleted",
+            "removed": "Removed from this project",
+            "failed": "Couldn't delete the memory."
+        },
+        "newMemory": {
+            "title": "New memory",
+            "appliesIn": "Applies in",
+            "profileOption": "Profile (every conversation)",
+            "projectOption": "Project: {{name}}",
+            "kind": "Kind",
+            "text": "Memory",
+            "placeholder": "One fact per memory, for example: Prefers metric units.",
+            "hint": "Saved as version 1. The change log records it as added by you.",
+            "save": "Save memory",
+            "saving": "Saving…",
+            "failed": "Couldn't add the memory."
         }
     },
     "onboarding": {
@@ -589,7 +742,7 @@
             "save": "Save",
             "saveErrorToast": "Error saving API key.",
             "savingLabel": "Saving...",
-            "primaryProviderNote": "Your priority 1 provider also writes chat and note titles and learns facts about you, using a smaller model. If no priority is set, the first provider you added does this."
+            "primaryProviderNote": "Your priority 1 provider also writes chat titles and learns facts about you, using a smaller model. If no priority is set, the first provider you added does this."
         },
         "developerSettings": {
             "copiedToast": "API key copied to clipboard.",
@@ -1043,16 +1196,6 @@
         },
         "newChatWidget": {
             "newChat": "New Chat"
-        },
-        "savedNotesWidget": {
-            "deleteNote": "Delete note",
-            "couldNotLoadNotes": "Could not load notes",
-            "noSavedNotesYet": "No saved notes yet",
-            "title": "Saved Notes",
-            "untitled": "Untitled",
-            "deleteNoteTitle": "Delete this note?",
-            "deleteNoteConfirm": "It's deleted for good, including from search. Facts learned from it stay in Settings > Defaults > Learned facts.",
-            "deleteFailed": "Couldn't delete the note. Please try again."
         },
         "threadPromptItem": {
             "newPrompt": "New prompt"

@@ -25,7 +25,12 @@ class MemorySettingsTest {
     private val memoryRepo = mockk<MemoryRepository>()
     private val profiles = mockk<CustomerProfileRepository>()
     private val retrieval = mockk<RetrievalServerClient>()
-    private val service = MemoryService(memoryRepo, profiles, retrieval, AppScope())
+    private val purge = mockk<com.genflowly.repository.PurgeRepository>(relaxed = true)
+    private val service = MemoryService(
+        memoryRepo, profiles,
+        MemoryVectorService(memoryRepo, profiles, retrieval, mockk(relaxed = true)),
+        purge, mockk(), mockk(), AppScope()
+    )
 
     private fun stored(prefs: StoredMemoryPreferences) {
         coEvery { profiles.getMemoryPreferences("CU1") } returns prefs
@@ -76,6 +81,7 @@ class MemorySettingsTest {
         coVerify { memoryRepo.deleteMemory("CU1", "MEM#2") }
         coVerify(timeout = 5_000) { retrieval.deleteMemoryVectors("CU1", "MEM#1") }
         coVerify(timeout = 5_000) { retrieval.deleteMemoryVectors("CU1", "MEM#2") }
+        coVerify(timeout = 5_000) { purge.deleteAllMemoryHistory("CU1") }
     }
 
     @Test

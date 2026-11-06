@@ -1,7 +1,7 @@
-Existing memories (JSON array of {memoryId, kind, category, text}):
+Existing memories (JSON array of {memoryId, kind, appliesIn, category, text}):
 {{existingMemories}}
 
-New content (source: {{sourceType}}):
+New content (source: {{sourceType}}; conversation lines are numbered [n]):
 {{content}}
 
 Return the JSON operations object.

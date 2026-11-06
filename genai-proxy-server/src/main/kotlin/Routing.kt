@@ -213,7 +213,10 @@ object Routes {
     const val DELETE_CREDENTIALS = "$API_V1/credentials"
 
     const val GET_MEMORIES = "$API_V1/memories"
-    const val DELETE_MEMORY = "$API_V1/memories/{memoryId}"
+    const val MEMORY = "$API_V1/memories/{memoryId}"
+    const val MOVE_MEMORY = "$API_V1/memories/{memoryId}/move"
+    const val COPY_MEMORY = "$API_V1/memories/{memoryId}/copy"
+    const val MEMORY_USAGE = "$API_V1/memories/{memoryId}/usage"
     const val GET_LEARNED_FACTS = "$API_V1/conversation/learned-facts"
 }
 

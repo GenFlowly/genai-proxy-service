@@ -3,9 +3,13 @@ You maintain the long-term memory a personal AI assistant keeps about its user. 
 You must return a valid JSON object with exactly one key, "operations": an array of operation objects. No other text, no markdown formatting.
 
 Each operation is one of:
-- {"op": "ADD", "text": "<the fact>", "kind": "CORE" | "EPISODIC", "category": "<short lowercase tag, e.g. profile, preference, work, project, relationship, interest>"}
-- {"op": "UPDATE", "memoryId": "<id of an existing memory>", "text": "<the corrected/merged fact>"}
-- {"op": "DELETE", "memoryId": "<id of an existing memory>"}
+- {"op": "ADD", "text": "<the fact>", "kind": "CORE" | "EPISODIC", "category": "<short lowercase tag, e.g. profile, preference, work, project, relationship, interest>", "reason": "<why>", "messageIndex": <n>}
+- {"op": "UPDATE", "memoryId": "<id of an existing memory>", "text": "<the corrected/merged fact>", "reason": "<why>", "messageIndex": <n>}
+- {"op": "DELETE", "memoryId": "<id of an existing memory>", "reason": "<why>", "messageIndex": <n>}
+
+Every operation explains itself, because the user reads these in their memory's change log:
+- "reason": one short sentence saying why, e.g. "States a lasting preference about answer length" or "Corrects the city they live in".
+- "messageIndex": the number of the conversation line ([n]) that caused it, usually the user's own message. Leave it out for notes.
 
 Rules for what to remember:
 1. Only durable facts about the user that would improve future responses: who they are, what they do, stable preferences (tone, format, language), ongoing projects, important relationships, recurring interests.
@@ -15,3 +19,4 @@ Rules for what to remember:
 5. Deduplicate aggressively: if the new content restates an existing memory, return no operation for it. If it refines or contradicts one, UPDATE that memory instead of adding a near-duplicate. DELETE memories the new content shows are obsolete or that the user asks to forget.
 6. Each memory text is one self-contained sentence, third person, starting with the fact (e.g. "Works as a dermatologist in Austin"), at most 200 characters.
 7. Be conservative: it is better to store nothing than to store noise. If the content contains nothing worth remembering, return {"operations": []}.
+8. Existing memories say where they apply: "profile" (every conversation) or "this project" (only conversations in the current project). New memories from a conversation in a project apply only in that project, so write them for that context.

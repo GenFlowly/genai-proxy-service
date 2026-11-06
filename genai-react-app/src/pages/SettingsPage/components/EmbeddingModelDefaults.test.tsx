@@ -65,23 +65,17 @@ describe('EmbeddingModelDefaults', () => {
         expect(conversationsModels).not.toHaveTextContent('text-embedding-3-large');
         await userEvent.selectOptions(conversationsModels, 'voyage-4-large');
 
-        // Notes: OpenAI → text-embedding-3-large
-        await userEvent.selectOptions(
-            screen.getByTestId('embedding-vendor-select-notes'), EmbeddingVendor.OPENAI);
-        await userEvent.selectOptions(
-            screen.getByTestId('embedding-model-select-notes'), 'text-embedding-3-large');
-
         await userEvent.click(screen.getByTestId('save-default-embedding-model'));
 
         await waitFor(() => {
             expect(mockSavePreferences).toHaveBeenCalledWith('test-token', {
                 aiConfigPreferences: {
                     embeddingModelConversations: 'voyage-4-large',
-                    embeddingModelNotes: 'text-embedding-3-large',
                 },
             });
         });
         expect(mockShowToast).toHaveBeenCalledWith('Default embedding model saved');
+        expect(screen.queryByTestId('embedding-vendor-select-notes')).not.toBeInTheDocument();
     });
 
     test('changing the vendor clears the previously selected model', async () => {
@@ -96,15 +90,15 @@ describe('EmbeddingModelDefaults', () => {
         await waitFor(() => expect(mockModelsFetch).toHaveBeenCalled());
 
         await userEvent.selectOptions(
-            screen.getByTestId('embedding-vendor-select-notes'), EmbeddingVendor.VOYAGE);
-        await userEvent.selectOptions(screen.getByTestId('embedding-model-select-notes'), 'voyage-4');
+            screen.getByTestId('embedding-vendor-select-conversations'), EmbeddingVendor.VOYAGE);
+        await userEvent.selectOptions(screen.getByTestId('embedding-model-select-conversations'), 'voyage-4');
         await userEvent.selectOptions(
-            screen.getByTestId('embedding-vendor-select-notes'), EmbeddingVendor.OPENAI);
+            screen.getByTestId('embedding-vendor-select-conversations'), EmbeddingVendor.OPENAI);
 
-        expect(screen.getByTestId('embedding-model-select-notes')).toHaveValue('');
+        expect(screen.getByTestId('embedding-model-select-conversations')).toHaveValue('');
     });
 
-    test('prefills both categories from saved preferences with legacy fallback', async () => {
+    test('prefills conversations from saved preferences with legacy fallback', async () => {
         mockUseAuth.mockReturnValue(authValue({
             aiConfigPreferences: {
                 embeddingModel: 'voyage-4',
@@ -124,8 +118,6 @@ describe('EmbeddingModelDefaults', () => {
             // conversations falls back to the legacy single preference
             expect(screen.getByTestId('embedding-vendor-select-conversations')).toHaveValue(EmbeddingVendor.VOYAGE);
             expect(screen.getByTestId('embedding-model-select-conversations')).toHaveValue('voyage-4');
-            expect(screen.getByTestId('embedding-vendor-select-notes')).toHaveValue(EmbeddingVendor.OPENAI);
-            expect(screen.getByTestId('embedding-model-select-notes')).toHaveValue('text-embedding-3-large');
         });
     });
 

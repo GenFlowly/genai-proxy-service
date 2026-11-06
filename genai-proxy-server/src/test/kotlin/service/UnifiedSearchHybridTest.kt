@@ -146,7 +146,8 @@ class UnifiedSearchHybridTest {
         val results = service.search("CU1", "home office", 10, null)
 
         assertEquals(listOf("MEM#a"), results.map { it.key })
-        assertEquals("[memory] work", results[0].title)
+        assertEquals("Works from a home office.", results[0].title)
+        assertEquals("work", results[0].snippet)
     }
 
     @Test

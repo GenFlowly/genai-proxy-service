@@ -20,11 +20,6 @@ const SWITCHES: { key: MemorySwitch; label: string; description: string }[] = [
         description: 'settingsPage.learnedFacts.fromChatsDescription',
     },
     {
-        key: 'memoryLearnFromNotes',
-        label: 'settingsPage.learnedFacts.fromNotes',
-        description: 'settingsPage.learnedFacts.fromNotesDescription',
-    },
-    {
         key: 'memoryUseInReplies',
         label: 'settingsPage.learnedFacts.useInReplies',
         description: 'settingsPage.learnedFacts.useInRepliesDescription',
@@ -32,7 +27,7 @@ const SWITCHES: { key: MemorySwitch; label: string; description: string }[] = [
 ]
 
 /**
- * Settings > Defaults > Learned facts: the three memory switches and
+ * Settings > Defaults > Learned facts: the memory switches and
  * "Delete all learned facts". A switch is on until the user turns it off
  * (an unset preference means on, matching the backend) and saves as soon as
  * it changes. The save service writes the preferences store, so after a
