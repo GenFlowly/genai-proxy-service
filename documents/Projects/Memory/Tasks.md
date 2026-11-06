@@ -94,12 +94,11 @@ Status 2026-11-06: built and unit-tested on all four sides (proxy, retrieval ser
 ## Open questions
 
 1. **iOS fixes (MEM-005, 013, 014, 015, 016):** go ahead?
-2. **Publish the library fix for MEM-009?** Commit `Request.tsx` and its test to component-library `main`, which publishes it. Then bump the web app to that version (the admin panel uses the same composer and would get it on its next bump).
-3. **Counters on two real memories:** two of the dev test account's own Core memories say "Used 12×" with no usage rows. The 12 came from my test chats before the MEM-010 fix. Reset both to 0?
+2. **Counters on two real memories:** two of the dev test account's own Core memories say "Used 12×" with no usage rows. The 12 came from my test chats before the MEM-010 fix. Reset both to 0?
 
 ## Answered
 
 1. How to run acceptance (A1): rebuild the local containers (user, 2026-11-06). The user deleted the old images, and both containers were rebuilt fresh from this working tree. The compose file sits in the session scratchpad, not the repo, because the old `docker-compose.yml` was removed for holding a committed AWS key. Secrets come from `genai-proxy-server/.env` as before. Acceptance writes to the dev account: I only change memories and projects I create, prefixed "[acceptance]", and delete them afterwards.
 2. **MEM-010** (user, 2026-11-06): "fine with this". Deleting a conversation takes its uses off the hit counter. Done.
 3. **"Converation Agent" has no Memory node** (user, 2026-11-06): "thats a deprecated agent, ignore it".
-4. **MEM-007** (user, 2026-11-06): not an issue, because production uses voyage-4-large. **MEM-009:** "fix this, it should not read draft from localstorage". Fixed in the library, not yet published.
+4. **MEM-007** (user, 2026-11-06): not an issue, because production uses voyage-4-large. **MEM-009:** "fix this, it should not read draft from localstorage". Fixed in the library; publishing it and bumping the web app: "yes". Shipped as 0.1.125.
