@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -19,6 +20,10 @@ from encoding_library.utils.vector_db import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Customer ids are generated ids; anything else could widen the legacy
+# '{customer_id}_' collection prefix to other tenants' collections.
+CUSTOMER_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 router = APIRouter()
 
@@ -59,6 +64,15 @@ class EncodeConversationRequest(BaseModel):
 class DeleteInstructionVectorsRequest(BaseModel):
     customer_id: str
     instruction_key: str
+
+
+class DeleteConversationVectorsRequest(BaseModel):
+    customer_id: str
+    conversation_key: str
+
+
+class DeleteCustomerVectorsRequest(BaseModel):
+    customer_id: str
 
 
 def _escape_filter_value(value: str) -> str:
@@ -443,3 +457,85 @@ async def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
         logger.error("Failed to delete instruction vectors for customer=%s instruction_key=%s: %s",
                      req.customer_id, req.instruction_key, e, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete instruction vectors")
+
+
+@router.post("/delete-conversation-vectors")
+async def delete_conversation_vectors(req: DeleteConversationVectorsRequest):
+    """
+    Hard-delete every vector chunk of one conversation from the vector DB: the
+    shared 'conversation_{model}' collections (scoped to the customer's rows)
+    plus any not-yet-migrated legacy '{customer_id}_conversation*' collections.
+    Raises on failure so the caller retries.
+    """
+    if not req.customer_id or not req.conversation_key:
+        raise HTTPException(status_code=400, detail="customer_id and conversation_key are required")
+
+    logger.info("Deleting conversation vectors — customer=%s conversation_key=%s", req.customer_id, req.conversation_key)
+
+    try:
+        client = get_milvus_client(req.customer_id)
+        conversation_filter = f'conversation_key == "{_escape_filter_value(req.conversation_key)}"'
+
+        deleted_counts: dict[str, int] = {}
+        for collection_name, shared in _tenant_scoped_collections(
+            client, req.customer_id, "conversation", f"{req.customer_id}_conversation"
+        ):
+            scoped = customer_filter(req.customer_id, conversation_filter) if shared else conversation_filter
+            result = client.delete(collection_name=collection_name, filter=scoped)
+            deleted_counts[collection_name] = result.get("delete_count", 0) if hasattr(result, "get") else 0
+
+        logger.info(
+            "Deleted %s vectors of conversation_key=%s from %s collection(s)",
+            sum(deleted_counts.values()), req.conversation_key, len(deleted_counts),
+        )
+        return {"status": "success", "deleted": deleted_counts}
+    except VectorDBNotConfigured:
+        logger.info("No vector DB configured for customer %s; nothing to delete", req.customer_id)
+        return {"status": "success", "deleted": {}}
+    except Exception as e:
+        logger.error("Failed to delete conversation vectors for customer=%s conversation_key=%s: %s",
+                     req.customer_id, req.conversation_key, e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete conversation vectors")
+
+
+@router.post("/delete-customer-vectors")
+async def delete_customer_vectors(req: DeleteCustomerVectorsRequest):
+    """
+    Hard-delete every vector a customer owns in their vector DB, for account
+    deletion: their rows in each shared '{type}_{model}' collection, and their
+    legacy per-customer '{customer_id}_*' collections, which hold nobody else's
+    rows and are dropped. Raises on any failure so the caller retries; a
+    customer with no vector DB has nothing to delete.
+    """
+    if not req.customer_id or not CUSTOMER_ID_PATTERN.fullmatch(req.customer_id):
+        raise HTTPException(status_code=400, detail="A valid customer_id is required")
+
+    logger.info("Deleting all vectors — customer=%s", req.customer_id)
+
+    try:
+        client = get_milvus_client(req.customer_id)
+        legacy_prefix = f"{req.customer_id}_"
+        deleted: dict[str, int] = {}
+        dropped: list[str] = []
+        for collection_name in client.list_collections():
+            if collection_data_type(collection_name) is not None:
+                result = client.delete(collection_name=collection_name, filter=customer_filter(req.customer_id))
+                deleted[collection_name] = result.get("delete_count", 0) if hasattr(result, "get") else 0
+            elif collection_name.startswith(legacy_prefix):
+                client.drop_collection(collection_name=collection_name)
+                dropped.append(collection_name)
+
+        logger.info(
+            "Deleted %s vectors from %s shared collections and dropped %s legacy collections for customer %s",
+            sum(deleted.values()), len(deleted), len(dropped), req.customer_id,
+        )
+        count("vector_purge_customer_total", status="success")
+        return {"status": "success", "deleted": deleted, "dropped": dropped}
+    except VectorDBNotConfigured:
+        logger.info("No vector DB configured for customer %s; nothing to delete", req.customer_id)
+        count("vector_purge_customer_total", status="not_configured")
+        return {"status": "success", "deleted": {}, "dropped": []}
+    except Exception as e:
+        logger.error("Failed to delete all vectors for customer=%s: %s", req.customer_id, e, exc_info=True)
+        count("vector_purge_customer_total", status="failure")
+        raise HTTPException(status_code=500, detail="Failed to delete customer vectors")

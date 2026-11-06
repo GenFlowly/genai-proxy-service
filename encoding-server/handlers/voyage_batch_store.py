@@ -1,9 +1,30 @@
 import logging
+import os
 from typing import Dict, Any, List, Tuple
+
+import boto3
 
 from handlers.store_embeddings_lambda import handler as store_embeddings_handler
 
 logger = logging.getLogger()
+
+_dynamodb = None
+
+
+def _note_exists(customer_id: str, note_key: str) -> bool:
+    """Whether the note still exists and isn't soft-deleted. A Voyage batch
+    can finish hours after a note in it was deleted; its vectors must not be
+    stored then."""
+    global _dynamodb
+    if _dynamodb is None:
+        _dynamodb = boto3.client("dynamodb", region_name=os.getenv("AWS_REGION", "us-east-1"))
+    item = _dynamodb.get_item(
+        TableName=os.getenv("CUSTOMER_NOTES_TABLE", "CustomerNotes"),
+        Key={"customerId": {"S": customer_id}, "noteKey": {"S": note_key}},
+        ProjectionExpression="noteKey, is_delete",
+        ConsistentRead=True,
+    ).get("Item")
+    return bool(item) and not item.get("is_delete", {}).get("BOOL", False)
 
 
 def store_batch_results(
@@ -21,6 +42,12 @@ def store_batch_results(
     stored_batches = 0
     missing_chunks = 0
     for bi, batch_state in enumerate(batches):
+        raw = batch_state.get("raw_data") or {}
+        note_key = raw.get("note_key") or raw.get("noteKey")
+        customer_id = batch_state.get("customer_id")
+        if batch_state.get("data_type") == "NOTE" and note_key and customer_id and not _note_exists(customer_id, note_key):
+            logger.info(f"Note {note_key} was deleted while its batch ran; not storing its vectors")
+            continue
         chunks = batch_state.get("data_chunks") or []
         embeddings = []
         for ci, chunk_text in enumerate(chunks):

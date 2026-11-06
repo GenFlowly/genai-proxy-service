@@ -11,7 +11,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 /**
  * A note sent for embedding is recorded as pending (so search keyword-matches
@@ -23,8 +25,9 @@ class NotesPendingEmbeddingTest {
     private val notesRepository = mockk<NotesRepository>(relaxed = true)
     private val credentials = mockk<CustomerCredentialsRepository>()
     private val pending = mockk<VectorSyncPendingRepository>(relaxed = true)
+    private val contentDeletion = mockk<ContentDeletionService>(relaxed = true)
     private val service = NotesService(
-        mockk(relaxed = true), mockk(relaxed = true), notesRepository, mockk(relaxed = true),
+        mockk(relaxed = true), contentDeletion, notesRepository, mockk(relaxed = true),
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), credentials, pending, AppScope()
     )
 
@@ -66,11 +69,20 @@ class NotesPendingEmbeddingTest {
     }
 
     @Test
-    fun `deleting a note forgets its pending row`() = runTest {
-        coEvery { notesRepository.softDeleteNote("CU1", "N1") } returns true
+    fun `deleting a note deletes it permanently`() = runTest {
+        coEvery { notesRepository.getNote("CU1", "N1") } returns mapOf("noteKey" to AttributeValue.builder().s("N1").build())
 
         service.deleteNote("CU1", "N1")
 
-        coVerify(timeout = 2000) { pending.clear("CU1", PendingVectorType.NOTE, "N1") }
+        coVerify { contentDeletion.requestNoteDeletion("CU1", "N1") }
+    }
+
+    @Test
+    fun `deleting a note that doesn't exist is a not-found`() = runTest {
+        coEvery { notesRepository.getNote("CU1", "N1") } returns null
+
+        assertFailsWith<NoteNotFoundException> { service.deleteNote("CU1", "N1") }
+
+        coVerify(exactly = 0) { contentDeletion.requestNoteDeletion(any(), any()) }
     }
 }

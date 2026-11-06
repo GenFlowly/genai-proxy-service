@@ -7,7 +7,7 @@ import { useConversation } from '../../../../context/ConversationContext'
 import {
     getCustomerConversations,
     getPinnedConversations,
-    archiveConversation,
+    deleteConversation,
     pinConversation,
     unpinConversation,
     getProjects,
@@ -483,8 +483,8 @@ describe('ConversationHistoryComponent', () => {
         expect(screen.queryByText('Some Title')).not.toBeInTheDocument()
     })
 
-    test('archives a conversation when archive button is clicked', async () => {
-        ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+    test('deletes a conversation after the user confirms', async () => {
+        ;(deleteConversation as jest.Mock).mockResolvedValue(undefined)
 
         render(<ConversationHistoryComponent />)
 
@@ -492,11 +492,11 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
-        const archiveBtn = screen.getByTestId('conv-archive-btn-conv-1')
-        fireEvent.click(archiveBtn)
+        fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
+        fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
         await waitFor(() => {
-            expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+            expect(deleteConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
         })
 
         // Wait for it to be removed from the list
@@ -505,9 +505,9 @@ describe('ConversationHistoryComponent', () => {
         })
     })
 
-    test('navigates to /chat if the archived conversation is the active one', async () => {
+    test('navigates to /chat if the deleted conversation is the active one', async () => {
         setupMocks({ conversationId: 'conv-1', conversationTitle: null, activeId: 'conv-1' })
-        ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+        ;(deleteConversation as jest.Mock).mockResolvedValue(undefined)
 
         render(<ConversationHistoryComponent />)
 
@@ -515,11 +515,11 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
-        const archiveBtn = screen.getByTestId('conv-archive-btn-conv-1')
-        fireEvent.click(archiveBtn)
+        fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
+        fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
         await waitFor(() => {
-            expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+            expect(deleteConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
         })
 
         await waitFor(() => {
@@ -527,9 +527,9 @@ describe('ConversationHistoryComponent', () => {
         })
     })
 
-    test('does not navigate to / if the archived conversation is not the active one', async () => {
+    test('does not navigate away if the deleted conversation is not the active one', async () => {
         setupMocks({ conversationId: 'conv-2', conversationTitle: null, activeId: 'conv-2' })
-        ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+        ;(deleteConversation as jest.Mock).mockResolvedValue(undefined)
 
         render(<ConversationHistoryComponent />)
 
@@ -537,11 +537,11 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
-        const archiveBtn = screen.getByTestId('conv-archive-btn-conv-1')
-        fireEvent.click(archiveBtn)
+        fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
+        fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
         await waitFor(() => {
-            expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+            expect(deleteConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
         })
 
         await waitFor(() => {
@@ -549,6 +549,43 @@ describe('ConversationHistoryComponent', () => {
         })
 
         expect(mockNavigate).not.toHaveBeenCalledWith('/')
+    })
+
+    test('nothing is deleted until the user confirms, and cancel closes the dialog', async () => {
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        })
+
+        fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
+        expect(screen.getByTestId('delete-conversation')).toHaveTextContent("It's deleted for good")
+        expect(deleteConversation).not.toHaveBeenCalled()
+
+        fireEvent.click(screen.getByTestId('delete-conversation-cancel'))
+
+        expect(screen.queryByTestId('delete-conversation')).not.toBeInTheDocument()
+        expect(deleteConversation).not.toHaveBeenCalled()
+        expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+    })
+
+    test('a failed delete keeps the conversation and the dialog, and says so', async () => {
+        ;(deleteConversation as jest.Mock).mockRejectedValue(new Error('Failed to delete conversation: Bad Gateway'))
+
+        render(<ConversationHistoryComponent />)
+
+        await waitFor(() => {
+            expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        })
+
+        fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
+        fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
+
+        await waitFor(() => {
+            expect(screen.getByRole('alert')).toHaveTextContent("Couldn't delete the conversation")
+        })
+        expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
+        expect(mockNavigate).not.toHaveBeenCalledWith('/chat')
     })
 
     describe('pinned conversations', () => {
@@ -655,13 +692,13 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-pin-btn-conv-9')).toBeInTheDocument()
         })
 
-        test('archiving a pinned conversation removes it from the Pinned section', async () => {
+        test('deleting a pinned conversation removes it from the Pinned section', async () => {
             mockGetPinnedConversations.mockResolvedValue({
                 conversations: [
                     { conversationId: 'conv-1', title: 'First Chat', createdAt: null, updatedAt: null, pinnedAt: '2026-08-30T00:00:00Z' },
                 ],
             })
-            ;(archiveConversation as jest.Mock).mockResolvedValue(undefined)
+            ;(deleteConversation as jest.Mock).mockResolvedValue(undefined)
 
             render(<ConversationHistoryComponent />)
 
@@ -669,10 +706,11 @@ describe('ConversationHistoryComponent', () => {
                 expect(screen.getByText('Pinned')).toBeInTheDocument()
             })
 
-            fireEvent.click(screen.getByTestId('conv-archive-btn-conv-1'))
+            fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
+            fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
             await waitFor(() => {
-                expect(archiveConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+                expect(deleteConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
             })
             await waitFor(() => {
                 expect(screen.queryByText('Pinned')).not.toBeInTheDocument()

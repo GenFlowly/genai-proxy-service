@@ -455,6 +455,9 @@ fun Application.module() {
     // Vector retry sweep: re-embeds conversation exchanges and memories whose
     // embed never reached the vector DB, with backoff.
     get<com.genflowly.service.VectorRetryService>().start()
+    // Deletion job sweep: resumes account, conversation and note deletions a
+    // restart or failure interrupted, and runs each one's final sweep.
+    get<com.genflowly.service.PurgeJobWorker>().start()
     val exchangeSideEffects = get<com.genflowly.service.ExchangeSideEffects>()
     val unifiedSearchService = get<com.genflowly.service.UnifiedSearchService>()
 
@@ -464,5 +467,6 @@ fun Application.module() {
     val projectService = get<com.genflowly.service.ProjectService>()
     val usageSummaryService = get<com.genflowly.service.UsageSummaryService>()
     val usageRateCardRepository = get<com.genflowly.repository.UsageRateCardRepository>()
-    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, usageSummaryService, usageRateCardRepository, appConfig)
+    val accountDeletionService = get<com.genflowly.service.AccountDeletionService>()
+    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, usageSummaryService, usageRateCardRepository, accountDeletionService, appConfig)
 }

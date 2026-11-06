@@ -208,6 +208,29 @@ An **action** is an internal generation flow the server runs on the user's behal
 4. Template syntax caveat: the local single-call path renders `{{var}}` (`PromptTemplateRenderer`); the LangGraph path substitutes single-brace `{var}` in node prompts (`retrieval-server/routes/retrieve.py`). Agents built in the UI should use single-brace placeholders in their input templates.
 5. Emit the standard metrics for the new flow (see Observability below) and never log prompt content in production.
 
+## Deleting user data
+
+Deleting a conversation or a note is permanent and reaches everywhere it is stored; so does deleting an account. There is no archive and no restore. The code:
+
+- `service/ContentDeletionService.kt` deletes one conversation or note.
+- `service/AccountDeletionService.kt` deletes an account.
+- Each deletion is a job in the `PurgeJobs` table, with one row per account, conversation or note. `PurgeJobWorker` resumes a job a restart or failure interrupted, with backoff, and runs its final sweep 15 minutes later.
+
+Rules for new code:
+
+- **A new store of conversation, note or account data must be deleted too.** Add it to the matching stage in `ContentDeletionService` or `AccountDeletionService`, with a test. The test should cover what "everywhere" means today:
+  - DynamoDB rows and their bookkeeping rows (vector-sync queue, memory-extraction progress, instruction usage).
+  - Attachment files.
+  - Vectors in the customer's vector DB.
+  - Batch-mode note documents.
+- **A write must never bring a deleted row back.** An `UpdateItem` on a missing key creates the item. So a write to a row that might have been deleted (anything after the request that created it, such as a title, a pending-run cleanup, a learned-facts marker, or an encoding-pipeline "synced" flag) needs `attribute_exists(<key>)` in its condition, and must treat the conditional failure as "deleted". A message saved into a deleted conversation is removed again by `ConversationService.addMessageInConversation`.
+- **A search must check each hit against its source row.** Vectors can outlive their source until a delete reaches the customer's vector DB:
+  - The search screen checks rows in `UnifiedSearchService`.
+  - Agent knowledge search checks them in `retrieval-server/graph/visibility.py`.
+  - A new vector-backed read needs the same check.
+- **Files are shared along forks.** A fork copies its messages' file references, so a file is deleted only once no conversation in its fork tree still references it.
+- **Agent scratch files expire.** Nothing records which conversation an agent's scratch folder belongs to. They're tagged `retention=scratch` and the attachments bucket expires them after a day; see `genai-proxy-server-cdk/lib/s3-stack.ts`.
+
 ## Observability — metrics & logging conventions
 
 All services follow ONE set of metric-naming and dimension conventions, pinned here and implemented for Python in `encoding-library/src/encoding_library/observability/`. Dashboards and alarms live in Grafana (fed by Fly Prometheus for the Fly apps and CloudWatch for the lambdas), so a metric must mean the same thing no matter which service emitted it.

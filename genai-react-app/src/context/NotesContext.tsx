@@ -8,7 +8,7 @@ interface NotesContextType {
     clearActiveNote: () => void
     // "New Note" action: clears the active note AND signals the editor to
     // start a fresh session even when no note was active. Unlike
-    // clearActiveNote (archive), pending edits are saved, not dropped.
+    // clearActiveNote (delete), pending edits are saved, not dropped.
     startNewNote: () => void
     // Bumped by startNewNote so the editor can react to repeated requests
     newNoteRequestId: number

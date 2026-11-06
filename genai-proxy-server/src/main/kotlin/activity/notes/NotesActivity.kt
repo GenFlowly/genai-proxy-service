@@ -101,8 +101,8 @@ fun Route.registerNotesRoutes(
         delete("/api/v1/notes/{noteKey}", {
             tags("Notes")
             summary = "Delete a note"
-            description = "Soft-deletes the note in DynamoDB (is_delete=true) and hard-deletes its " +
-                    "embeddings from the vector DB. " +
+            description = "Permanently deletes the note: its row, its batch-mode document and its vectors. " +
+                    "It can't be restored. " +
                     "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
             request {
                 pathParameter<String>("noteKey") {

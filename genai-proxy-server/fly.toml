@@ -11,6 +11,9 @@ primary_region = "iad"
   APP_ENV = "development"
   # Dev logs the full INFO narrative (logback: ${LOG_LEVEL:-INFO})
   LOG_LEVEL = "INFO"
+  # Batch-mode note documents, purged on account deletion (versioned bucket
+  # owned by the encoding service's stacks)
+  CUSTOMER_DOCUMENTS_BUCKET = "genflowly-development-customer-documents"
 
 [http_service]
   internal_port = 8080

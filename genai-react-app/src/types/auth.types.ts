@@ -54,6 +54,8 @@ export interface AuthContextType {
     ) => void;
     customerInstructions: InstructionResponse[];
     refreshInstructions: () => Promise<void>;
+    /** Re-runs the /onboard sync, e.g. after a change that invalidates the cached key statuses. */
+    resyncAccount: () => void;
     updateInstruction: (instruction: InstructionResponse) => void;
     customerName?: string;
     customerPicture?: string;

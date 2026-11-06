@@ -2,6 +2,7 @@ import os
 import logging
 from typing import Dict, Any, List, Optional
 
+from botocore.exceptions import ClientError
 from encoding_library.chunkers.enums import ChunkingType
 from encoding_library.models.memory_request_internal_state import MemoryRequestInternalState
 from encoding_library.observability import count, set_request_id, setup_logging, track
@@ -239,11 +240,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         ExpressionAttributeValues={
                             ':val': {'BOOL': True},
                             ':ids': {'L': [{'S': str(mid)} for mid in milvus_ids]}
-                        }
+                        },
+                        # A note deleted meanwhile must stay deleted: an update
+                        # on a missing item would create a bare row.
+                        ConditionExpression="attribute_exists(noteKey)",
                     )
                     logger.info(f"Successfully updated DDB for noteKey {note_key} with {len(milvus_ids)} milvus_ids")
                 else:
                     logger.warning("note_key missing in raw_data, skipping DDB update")
+            except ClientError as e:
+                if e.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                    # Its deletion job removes the vectors just stored.
+                    count("vector_store_note_deleted_total")
+                    logger.info(f"Note {note_key} was deleted while it was being stored; not marking it synced")
+                else:
+                    count("vector_store_ddb_writeback_failure_total", data_type="NOTE")
+                    logger.error(f"Failed to update DDB for NOTE: {str(e)}")
             except Exception as e:
                 # Swallowed by design (the vectors ARE stored), but counted:
                 # the note is never marked synced, so unalarmed failures here

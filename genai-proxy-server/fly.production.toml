@@ -12,6 +12,9 @@ primary_region = "iad"
   # Production logs problems only (logback: ${LOG_LEVEL:-INFO}); user content
   # is additionally gated off by APP_ENV — see development.md "Logging policy"
   LOG_LEVEL = "WARN"
+  # Batch-mode note documents, purged on account deletion (versioned bucket
+  # owned by the encoding service's stacks)
+  CUSTOMER_DOCUMENTS_BUCKET = "genflowly-production-customer-documents"
 
 [http_service]
   internal_port = 8080
