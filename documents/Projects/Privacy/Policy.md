@@ -1,5 +1,5 @@
 > [!warning] DRAFT: do not publish yet
-> This draft describes the app **after the P0 fixes in [Recommendations.md](Recommendations.md)**. Sentences marked ⛔ are **not true today**. Before publishing, clear each one using Appendix A, which also gives accurate wording to use if you need to publish before a fix ships.
+> This draft describes the app **after the remaining fixes in [Recommendations.md](Recommendations.md)**. Sentences marked ⛔ are **not true in production today**. Before publishing, clear each one using Appendix A, which also gives accurate wording to use if you need to publish before a fix ships.
 >
 > Delete this notice, all ⛔ markers and both appendices before publishing. Text in `[BRACKETS]` needs your input. Have a lawyer review the final text.
 
@@ -14,19 +14,21 @@ Unbiase AI ("Unbiase AI", "we", "us") is operated by `[LEGAL ENTITY]`, `[ADDRESS
 
 - **We don't sell your data, show ads, or use your content to train AI models.**
 - **There are no analytics or advertising trackers in our apps.**
-- **Your content goes where you send it.** Messages go to the AI providers you choose. Background features such as titles and memory use your primary provider, the one you rank first in Settings. Other services only receive your content if you connect them. Memory is on by default, and you can turn it off in Settings. ⛔R7 ⛔R8 ⛔R9
-- **You stay in control.** You can delete your conversations, notes, memories, API keys and account at any time. ⛔R3 ⛔R4 ⛔R5
+- **Where your content goes depends on the mode you use.** With Bring Your Own Key, it goes only to the services you connect, under your own accounts. With Pay-as-you-go, it goes to AI and embedding providers we've chosen. We aim to use zero data retention with each of them, so they don't keep your content after replying, but we can't guarantee it. None of them may train on your content. ⛔M1-M10
+- **Memory is on by default, and you control it.** You can see, edit and delete everything it has learned, and turn it off in Settings.
+- **You stay in control.** You can delete your conversations, memories, API keys and account at any time.
 - **Your content is encrypted in transit and at rest, but it is not end-to-end encrypted.** Our servers process it to run the app.
 
 ## Which section applies to you
 
-Unbiase AI has two modes. **Section 1** covers Bring Your Own Key, **Section 2** covers Paid mode, and **"Terms for both modes"** applies to everyone.
+Unbiase AI has two modes. **Section 1** covers Bring Your Own Key, **Section 2** covers Pay-as-you-go, and **"Terms for both modes"** applies to everyone.
 
-| | **Bring Your Own Key (BYOK)** | **Paid mode** (not yet available) |
+| | **Bring Your Own Key (BYOK)** | **Pay-as-you-go** (not yet available) |
 |---|---|---|
 | **Whose AI accounts are used** | Yours, with keys you provide | Ours |
-| **Who pays the AI providers** | You pay them directly | You pay us |
+| **Who pays the AI providers** | You pay them directly | You pay us for what you use |
 | **Who the providers have a contract with** | You | Us |
+| **Who sets the providers' data controls** | You, in your own provider accounts | We do: zero data retention where we can get it (best effort), and no training |
 | **Where search indexes are stored** | A vector database you connect | A database we operate |
 | **Our access to your provider accounts** | We use your keys only as this policy describes | Not applicable |
 
@@ -38,7 +40,7 @@ BYOK is the most private way to use Unbiase AI. You choose every provider that r
 
 ### 1.1 How BYOK works
 
-You give us API keys for the services you want to use. We use those keys to send your requests to those services and return the results. We never run your requests on our own provider keys, and we never fall back to a shared key, shared vector database or shared search account. If you haven't connected a service, the features that need it simply don't work.
+You give us API keys for the services you want to use. We use those keys to send your requests to those services and return the results. We never run your requests on the provider accounts we use for Pay-as-you-go, and we never fall back to a shared key, shared vector database or shared search account. If you haven't connected a service, the features that need it simply don't work.
 
 Your relationship with each provider is your own. Its terms and privacy policy apply to whatever it receives, and we don't control what it does with that data.
 
@@ -46,19 +48,19 @@ Your relationship with each provider is your own. Its terms and privacy policy a
 
 | When you... | What is sent | Where it goes |
 |---|---|---|
-| **Send a chat message** | Your message, earlier messages in that conversation, your instruction, attachments, and any memories or notes used for that reply | The AI provider or providers you selected, using your key |
+| **Send a chat message** | Your message, earlier messages in that conversation, your instruction, attachments, and anything the AI looks up for that reply, such as memories, earlier conversations or notes | The AI provider or providers you selected, using your key |
 | **Change provider in a conversation** | The same, including earlier messages and attachments | The newly selected provider |
-| **Start a chat or save an untitled note** | The first message, or up to the first 4,000 characters of the note, to create a title | Your primary provider: the one ranked priority 1 in Settings, or the first one you added if you haven't ranked any ⛔R9 |
-| **Create or use an instruction** | The instruction's text, to suggest an icon and category | Your primary provider ⛔R9 |
-| **Use memory** (on by default, with separate switches for learning from chats, learning from notes, and using what it learned ⛔R7) | Excerpts from chats and notes, and your existing memories, to learn and update facts about you. Each memory, and each message you send while memory is on, is also sent for lookup. | Your primary provider, your embedding provider and your vector database. Memories used in a reply go to the provider you chat with. |
-| **Turn on indexing** (off by default ⛔R8) | Your chats and notes | Your embedding provider and your vector database, where the text is stored in readable form |
+| **Start a chat** | The first message and the instruction's name, to create a title | Your primary provider: the one ranked priority 1 in Settings, or the first one you added if you haven't ranked any |
+| **Create or use an instruction** | The instruction's text, to suggest an icon and category | Your primary provider |
+| **Use memory** (on by default, with separate switches for learning from your chats and for using what it learned in replies) | After each reply, the latest messages in the conversation and the memories you already have, to learn new facts about you and update existing ones. Each memory is also indexed so it can be found, and while memory is on, each message you send is used to look up relevant memories. | Learning: your primary provider. Indexing and lookup: your embedding provider and your vector database. Memories used in a reply go to the provider you chat with: core memories in every conversation, others only when relevant, and a project's memories only in that project's conversations. |
+| **Turn on indexing** (off by default ⛔R8) | Your chats | Your embedding provider and your vector database, where the text is stored in readable form |
 | **Search your content** | Your search words | Your embedding provider and your vector database |
 | **Use an assistant that can search the web**, if you connected a search key | Search terms written by the AI, which may reflect your conversation | Your web search provider (currently Tavily) |
 | **Connect your own tool, MCP server or API** | Inputs the AI writes for that tool, which may reflect your conversation | The service you connected |
 | **Use voice through the API** | Your audio and conversation context. Transcripts are saved as messages. | OpenAI or Google, using your key |
 | **Add or save a key** | One small test request. Embedding keys also get a one-character test about once a week to check which models they can use. | That provider |
 
-If you haven't connected an embedding provider and a vector database, your chats and notes are not sent to our indexing system at all. ⛔R6
+If you haven't connected a vector database, your chats aren't sent for indexing at all.
 
 When a provider offers a per-request option not to store your content, we use it. ⛔R10
 
@@ -67,7 +69,7 @@ When a provider offers a per-request option not to store your content, we use it
 - **Storage.** Your keys are encrypted with AWS Key Management Service before they are stored.
 - **Use.** They are decrypted only in server memory, to make the requests described in section 1.2.
 - **Visibility.** We never show a stored key again after you save it, and we don't share it with anyone except the provider it belongs to.
-- **Removal.** You can remove any key at any time in Settings. ⛔R5 Removing a key doesn't delete anything that provider already holds.
+- **Removal.** You can delete all your stored keys and connections at once in Settings > Profile > Delete your data. Deleting a key doesn't delete anything that provider already holds, and data already in your vector database stays there.
 
 ### 1.4 What your providers do with your content
 
@@ -104,28 +106,30 @@ You can also connect other providers through our catalog. The same principle app
 
 ### 1.5 What we keep in BYOK mode
 
-We store your conversations, notes, memories and attachments on our servers so you can reach them from any device. "How long we keep your data" explains how long, and how to delete them.
+We store your conversations, memories and attachments on our servers so you can reach them from any device. "How long we keep your data" explains how long, and how to delete them.
+
+**Notes from earlier versions.** Earlier versions of the app had a notes editor. Notes saved with it are still stored, and the AI can still find them when it searches your content for a reply. `[HOW TO DELETE THEM]` ⛔N1
 
 Your search index lives in **your** vector database, not ours. When you delete something, we also ask your vector database to delete it, as long as your connection details still work. If you have already removed them, or they have stopped working, you will need to delete that data from your vector database yourself.
 
 ### 1.6 Our commitments in BYOK mode
 
 1. We send your content only to services you have connected, for the purposes described above.
-2. Memory is on by default. You can turn off learning from chats, learning from notes, and using what it learned, each on its own. Other features that send your content to extra services are off until you turn them on. ⛔R7 ⛔R8
-3. Background tasks run only on your primary provider. If it fails, they don't move to another provider. ⛔R9
+2. Memory is on by default. You can turn off learning from your chats, and using what it learned in replies, each on its own. Indexing your chats for search is off until you turn it on. ⛔R8
+3. Background tasks run only on your primary provider. If it fails, they don't move to another provider.
 4. We don't use our own provider accounts for your requests.
 5. We don't use your content to train AI models, and we don't sell it.
 
 ---
 
-## Section 2: Paid mode
+## Section 2: Pay-as-you-go
 
-> [!note] Paid mode is not available yet
-> This section describes how Paid mode will work. It takes effect only when Paid mode launches, and we will update it first with the actual provider list. ⛔M1-M10
+> [!note] Pay-as-you-go is not available yet
+> This section describes how Pay-as-you-go will work. It takes effect only when Pay-as-you-go launches, and we will update it first with the actual provider list. ⛔M1-M10
 
-### 2.1 How Paid mode differs
+### 2.1 How Pay-as-you-go differs
 
-In Paid mode you don't need your own provider accounts. We hold the contracts and API keys, and you pay us. This means **we choose the providers**, and they process your content on our behalf.
+In Pay-as-you-go you don't need your own provider accounts. We hold the contracts and API keys with third-party AI providers: the language models that write replies, and the embedding models that power search and memory. You pay us for what you use. This means **we choose the providers**, and they process your content on our behalf, as our sub-processors.
 
 ### 2.2 Where your content goes
 
@@ -133,21 +137,24 @@ Your content follows the same paths as in section 1.2, except that the services 
 
 | Purpose | Provider | Receives |
 |---|---|---|
-| AI responses | `[PROVIDER LIST]` | Your messages, history, instructions, attachments, and memories or notes used for that reply |
-| Search indexing and embeddings | `[PROVIDER]` | Text from chats and notes you choose to index, and your search words |
-| Vector database | `[PROVIDER]` | Indexed text and related data, kept in a database shared between customers and separated by account |
+| AI replies | `[PROVIDER LIST]` | Your messages, history, instructions, attachments, and anything the AI looks up for that reply |
+| Titles, memory and other background tasks | `[PROVIDER]` | What section 1.2 describes for these tasks |
+| Embeddings, for search and memory | `[PROVIDER]` | Text from chats you index, your memories, your search words, and the messages used to look up memories |
+| Vector database | `[PROVIDER]` | Indexed text, memories and related data, kept in a database shared between customers and separated by account |
 | Web search | `[PROVIDER]` | Search terms written by the AI |
 | Payments | `[PAYMENT PROCESSOR]` | Your name, email, billing details and payment method |
 
-### 2.3 Our commitments on providers
+### 2.3 How we limit what providers keep
 
-We use a provider in Paid mode only if it agrees in writing:
+Every provider we use in Pay-as-you-go must agree in writing to process your content only to provide the service to us. ⛔M9 On top of that:
 
-- **not to use your content to train its models,**
-- **to process your content only to provide the service,** and
-- **to delete it within `[X]` days**, or to keep nothing where zero retention is available.
+- **Zero data retention, on a best-effort basis.** We aim to use zero data retention with every provider, so that it doesn't store your prompts or its responses once it has replied. We turn it on wherever a provider makes it available to us. This is not a guarantee: not every provider or feature offers it, a provider can change its terms, and we rely on each provider to keep its own commitment. ⛔M1
+- **No training.** None of our providers may use your content to train or improve their models. Where a provider's terms would otherwise allow it, we opt out before sending it any content. We don't use free tiers. ⛔M2 ⛔M3
+- **Short retention everywhere else.** Some providers don't offer zero data retention, offer it only for some features, or haven't approved it for us yet. They may keep prompts and responses for up to `[30]` days to detect abuse, and then delete them. ⛔M1
+- **Models that need retention are marked.** A few models are only available if the provider keeps content for a period, for example 30 days. We mark these in the model picker, so you can choose another model. ⛔M11
+- **Safety and legal exceptions.** Even with zero data retention, a provider may keep content that its automated safety systems flag, and its staff may review it. Some providers keep flagged content for up to two years. Providers may also keep content where the law requires it.
 
-Providers may keep some data for a limited time to detect abuse, as their terms allow. We list each provider and its retention period at `[SUB-PROCESSOR PAGE]`, and we'll give `[30]` days' notice before adding one. We can't guarantee that deleting your data from our systems also removes what a provider holds during that period.
+We list each provider at `[SUB-PROCESSOR PAGE]`, with whether zero data retention is on, how long it may keep content, and where it processes it. We'll give `[30]` days' notice before adding one. We can't guarantee that deleting your data from our systems also removes what a provider holds during its retention period.
 
 ### 2.4 Payment information
 
@@ -155,12 +162,12 @@ Our payment processor handles your card details, and we don't store them. We kee
 
 ### 2.5 Abuse prevention
 
-Because requests run under our accounts, we are responsible for how the service is used. `[DESCRIBE AUTOMATED CHECKS, WHEN FLAGGED CONTENT MAY BE REVIEWED AND BY WHOM, AND HOW LONG IT IS KEPT]`
+Because requests run under our accounts, we are responsible for how the service is used. We send providers a pseudonymous identifier for your account, never your name or email. ⛔M6 `[DESCRIBE AUTOMATED CHECKS, WHEN FLAGGED CONTENT MAY BE REVIEWED AND BY WHOM, AND HOW LONG IT IS KEPT]`
 
 ### 2.6 Switching between modes
 
-- **BYOK to Paid.** We won't copy data from your own vector database. Anything you want searchable in Paid mode is indexed again only after you agree.
-- **Paid to BYOK.** We'll offer to delete your data from the vector database we operate.
+- **BYOK to Pay-as-you-go.** We won't copy data from your own vector database. Anything you want searchable in Pay-as-you-go is indexed again only after you agree.
+- **Pay-as-you-go to BYOK.** We'll offer to delete your data from the vector database we operate.
 - **No silent mixing.** If a BYOK key is missing, your request fails. It never falls back to our accounts.
 
 ---
@@ -172,12 +179,12 @@ Because requests run under our accounts, we are responsible for how the service 
 | Category | Examples | Where it comes from |
 |---|---|---|
 | **Account** | Sign-in identifier, email, name, profile picture link, username, whether you're discoverable | Your sign-in provider and you |
-| **Content** | Messages, AI replies, instructions, agents, projects, notes, attachments, generated files, memories, tool results, and traces of the AI's reasoning and tool use | You and the AI services you use |
+| **Content** | Messages, AI replies, instructions, agents, projects, attachments, generated files, memories (with their earlier versions, where each was learned, and which replies used it), tool results, traces of the AI's reasoning and tool use, and notes saved in earlier versions of the app | You and the AI services you use |
 | **Credentials** | Provider, vector database and tool keys (encrypted), and developer API keys | You |
 | **Settings** | Model choices and feature preferences | You |
 | **Usage** | Token counts, estimated costs, and counts of searches and database operations, grouped by day | Generated as you use the app |
 | **Technical** | Request IDs, error messages and timestamps | Generated automatically |
-| **Payment** (Paid mode only) | Billing details, handled by our payment processor | You |
+| **Payment** (Pay-as-you-go only) | Billing details, handled by our payment processor | You |
 
 Our application doesn't store your IP address. The infrastructure providers listed below process it to deliver the service and may keep it in their own logs.
 
@@ -188,10 +195,10 @@ We don't ask you to provide sensitive information. If you include it in your con
 | Purpose | Legal basis (where applicable) |
 |---|---|
 | Provide the app: run your requests, store and show your content, keep you signed in | Performance of our contract with you |
-| Memory, which is on by default | Our legitimate interest in personalizing your replies. You can object by turning it off in Settings ⛔R7 |
+| Memory, which is on by default | Our legitimate interest in personalizing your replies. You can object by turning it off in Settings |
 | Provide optional features you turn on, such as indexing and web search | Your consent, which you can withdraw in Settings ⛔R8 |
 | Keep the service secure and reliable: fix errors, prevent abuse, monitor performance | Our legitimate interest in running a secure service |
-| Show you your usage and costs, and bill you in Paid mode | Performance of our contract |
+| Show you your usage and costs, and bill you in Pay-as-you-go | Performance of our contract |
 | Meet legal obligations | Legal obligation |
 
 ### What we don't do
@@ -200,7 +207,7 @@ We don't ask you to provide sensitive information. If you include it in your con
 - We don't use your content to train AI models.
 - We don't show ads.
 - We don't use analytics or advertising trackers in our apps.
-- We don't write your messages or notes to our logs. Our logs contain identifiers and error information. ⛔R1 ⛔R19
+- We don't write your messages, memories or other content to our logs. Our logs contain identifiers and error information. ⛔R1 ⛔R19
 
 ### Companies that help us run the app
 
@@ -210,8 +217,10 @@ We don't ask you to provide sensitive information. If you include it in your con
 | **Fly.io** (United States) | Runs our servers | Your content and keys in memory while processing requests |
 | **Cloudflare** (global network) | Website hosting and delivery, security, routing of web app requests | Web app traffic, including your content in transit, and your IP address |
 | **Auth0 by Okta** (United States) | Sign-in | Your sign-in details, email, name, picture, and login records |
-| **Grafana Labs** | Service health dashboards and alerts | Performance metrics, which contain no content ⛔R1 |
+| **Grafana Labs** | Service health dashboards and alerts | Performance metrics and operational logs, which contain no content ⛔R1 ⛔R19 |
 | **Apple** | iOS app distribution | As described in Apple's own terms. We don't send it your content. |
+
+In Pay-as-you-go, the providers in section 2.2 also process your content on our behalf.
 
 We require these companies to protect your information to at least the standard in this policy. ⛔Q10 We may also disclose information if the law requires it, to protect people's rights and safety, or as part of a merger or sale of our business, in which case this policy continues to apply unless we notify you otherwise.
 
@@ -219,29 +228,30 @@ We require these companies to protect your information to at least the standard 
 
 - **Public links.** Anyone with the link can read the conversation's messages and replies, without signing in. It doesn't reveal your notes, memories or the AI's internal reasoning and tool activity, and your name is hidden unless you choose to show it. ⛔R2 Search engines are asked not to index these pages. ⛔R2 Anything you share publicly may be copied by others. If you allow editing on a public link, anyone signed in who has the link can add to the conversation.
 - **Sharing with specific people.** They can see the conversation, including prompts you wrote and replies you received.
-- **Continuing a shared conversation.** When someone with edit access continues a conversation, its history is sent to the AI provider they use, under their own account.
+- **Continuing a shared conversation.** When someone with edit access continues a conversation, its history is sent to the AI provider they use, under their own account, or under ours if they use Pay-as-you-go.
 - **Forks.** Someone with access to a conversation can copy it into their own account. **That copy remains theirs, even if you later delete the original or stop sharing it.**
 - **Instructions and agents.** The ones you share become visible to the people you share them with.
 - **Being discoverable.** This is off by default. If you turn it on, other users can find your username, name and picture when sharing.
 - **Connected tools and services.** Anything you connect receives what section 1.2 describes.
 
-Deleting or archiving a conversation ends its public link and its shares.
+Deleting a conversation ends its public link and its shares. If someone shared a conversation with you, deleting it removes only your own access.
 
 ### How long we keep your data
 
 | Data | How long |
 |---|---|
-| **Conversations, notes, attachments and generated files** | Until you delete them or your account. ⛔R3 |
-| **Deleted items** | Erased from our active systems when you delete them. Copies in backups expire within 35 days. ⛔R3 |
-| **Memories** | Until you delete them or your account. |
-| **Temporary files used by AI tools** | 7 days. ⛔R18 |
-| **API keys and connection details** | Until you remove them or delete your account. ⛔R5 |
+| **Conversations, attachments and generated files** | Until you delete them or your account. |
+| **Notes saved in earlier versions of the app** | Until you delete them or your account. ⛔N1 |
+| **Deleted items** | Erased from our active systems shortly after you delete them. Copies in backups expire within 35 days. |
+| **Memories** | Until you delete them or your account. A memory keeps its earlier versions and its history until it is deleted. Deleting a conversation doesn't delete the memories learned from it. |
+| **Temporary files used by AI tools** | 1 day. ⛔R18 |
+| **API keys and connection details** | Until you delete them or your account. |
 | **Account details** | Until you delete your account. ⛔R4 |
 | **Backups** | Deleted data can remain in encrypted backups for up to 35 more days, then it is gone. ⛔R17 |
 | **Operational logs** (no content) | 30 days. ⛔R18 |
-| **Usage totals** | For the life of your account. In Paid mode, billing records are kept as section 2.4 describes. |
+| **Usage totals** | For the life of your account. In Pay-as-you-go, billing records are kept as section 2.4 describes. |
 | **Copies on your device** | Until you sign out. |
-| **Providers you use** | Set by each provider's own terms. We can't delete what they hold. |
+| **Providers you use** | In BYOK, set by each provider's own terms, and we can't delete what they hold. In Pay-as-you-go, as section 2.3 describes. |
 
 ### Security
 
@@ -263,13 +273,15 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 | You can... | Where |
 |---|---|
 | See your profile and change your username | Settings |
-| Delete a conversation or note | The item's menu ⛔R3 |
-| Delete one learned fact, delete them all, or turn memory off | The facts listed under a reply, and Settings > Defaults > Learned facts ⛔R7 |
+| Delete a conversation | The conversation's menu |
+| See, edit and delete what memory has learned, and see where each fact came from and which replies used it | The Memory page |
+| Turn memory off, or delete everything it has learned | Settings > Defaults > Learned facts |
+| Delete notes saved in earlier versions of the app | `[WHERE]` ⛔N1 |
 | Turn indexing off and remove indexed data | Settings ⛔R8 |
-| Remove all your API keys | Settings > Profile ⛔R5 |
+| Delete all your API keys | Settings > Profile > Delete your data |
 | Stop sharing a conversation | Share menu |
 | Export your data | Settings ⛔R4 |
-| Delete your account | Settings > Profile ⛔R4 |
+| Delete your account | Settings > Profile > Delete your data |
 
 **By law.** Depending on where you live, you may have the right to access, correct, delete, or receive a copy of your personal information, to restrict or object to how we use it, and to withdraw consent. To use these rights, contact `[PRIVACY EMAIL]`. We'll respond within 30 days, and we won't treat you differently for using them. If you're unhappy with our response, you can complain to your local data protection authority.
 
@@ -279,7 +291,7 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 
 ### International transfers
 
-We're based in `[COUNTRY]`, and our main systems are in the United States (AWS and Fly.io in the Virginia region). Cloudflare operates a global network. In BYOK mode your content also goes wherever your chosen providers and vector database are located. Where the law requires it, we use appropriate safeguards for transfers, such as Standard Contractual Clauses. `[CONFIRM]`
+We're based in `[COUNTRY]`, and our main systems are in the United States (AWS and Fly.io in the Virginia region). Cloudflare operates a global network. In BYOK mode your content also goes wherever your chosen providers and vector database are located. In Pay-as-you-go, our providers process it in the locations listed at `[SUB-PROCESSOR PAGE]`. Where the law requires it, we use appropriate safeguards for transfers, such as Standard Contractual Clauses. `[CONFIRM]`
 
 ### Children
 
@@ -291,11 +303,11 @@ We don't use advertising or analytics cookies.
 
 - **Sign-in.** Auth0 uses cookies to keep you signed in.
 - **Security.** Cloudflare may use cookies and a small script to detect automated traffic.
-- **Your browser's local storage.** The web app stores sign-in tokens, saved note content, conversation titles, instructions, drafts and display preferences so that the app loads quickly. Signing out clears everything except your theme choice. Please sign out on shared devices.
+- **Your browser's local storage.** The web app stores sign-in tokens, your memories, conversation titles, instructions, agents and display preferences so that the app loads quickly. Signing out clears everything except your theme choice. Please sign out on shared devices.
 
 ### Mobile app
 
-The iOS app stores conversation history, notes, instructions and drafts on your device so that they open quickly, and keeps sign-in tokens in the iOS Keychain. Signing out clears this data, apart from your theme choice. The camera is used only if you take a photo to attach. The app doesn't track you across other companies' apps or websites.
+The iOS app stores conversation history, memories, instructions and unsent drafts on your device so that they open quickly, and keeps sign-in tokens in the iOS Keychain. Signing out clears this data, apart from your theme choice. The camera is used only if you take a photo to attach. The app doesn't track you across other companies' apps or websites.
 
 Before your content is first sent to a third-party AI provider, the app asks for your permission and tells you which provider will receive it. ⛔R12
 
@@ -312,29 +324,60 @@ Email: `[PRIVACY EMAIL]`
 
 ## Appendix A: Publication gate
 
-**Delete before publishing.** Each row is a promise in the draft that the code doesn't keep today, as of 2026-11-05. To clear a row, ship the fix and verify it. To publish before a fix, replace the promise with the interim wording, which is accurate today.
+**Delete before publishing.** Each row is a promise in the draft that production doesn't keep yet, as of 2026-11-06. To clear a row, ship the fix and verify it. To publish before a fix, replace the promise with the interim wording, which is accurate today.
 
 | Marker | The draft promises | Today | Interim wording if publishing first |
 |---|---|---|---|
-| ⛔R1 | No content in logs | Step Functions logs and history, and the dead-letter queue, hold full text. **Fixed in PR #331, not yet in production.** Once it deploys, only history from earlier runs holds text, for up to 90 days. The Grafana role still needs narrowing. | "To index your content, our background system temporarily holds its full text, including in workflow history for up to 90 days and in failure queues for up to 14 days." Also narrow the Grafana role, or disclose that Grafana Labs can access these logs. |
-| ⛔R2 | Public links reveal only messages and replies | Trace data can reveal note and memory text, and your name and picture are shown | "A public link can also reveal the AI's activity trace, which may include text from your notes, as well as your name and picture." **Fix this rather than publish that sentence.** |
-| ⛔R3 | Permanent deletion, everywhere | Archive only. Content is kept indefinitely and can still be used in later AI replies. **Fixed on `development`, not yet in production**: delete is permanent, with no Trash. | "You can archive conversations and notes, which hides them. Archived content stays on our servers and may still be retrieved for later replies. To request deletion, contact `[PRIVACY EMAIL]`." You would need to fulfil those requests by hand. |
-| ⛔R4 | Self-service export and account deletion | Deletion is built on `development` for the web app, not yet in production. Export doesn't exist. **Apple requires in-app deletion, so the iOS app still blocks its release.** The Auth0 login is deleted only once Management API credentials are configured. | "To delete your account or get a copy of your data, contact `[PRIVACY EMAIL]`." |
-| ⛔R5 | Remove any key | "Delete all keys" is built on `development`, not yet in production. A single key still can't be removed. | "You can replace a stored key, or revoke it with the provider. To remove it from our systems, contact `[PRIVACY EMAIL]`." |
-| ⛔R6 | Nothing is indexed without an embedding provider and vector database | Text enters the pipeline anyway | Delete the sentence, and rely on the R1 interim wording. |
-| ⛔R7 | Memory on by default, with three switches and "Delete all" | On by default, no switch. **Fixed on development, not yet in production.** | "Memory is on by default. It sends excerpts of your chats and notes to an AI provider and your embedding provider. To turn it off, contact `[PRIVACY EMAIL]`." |
-| ⛔R8 | Indexing off by default, with a switch | Always attempted | "If you connect an embedding provider and a vector database, your chats and notes are indexed automatically. There is no setting to turn this off yet." |
-| ⛔R9 | Background tasks run only on your primary provider | They prefer OpenAI, then any stored key. **Fixed on development, not yet in production.** | "Background tasks such as titles and memory may use any provider you've added a key for, even if it isn't the one you chose for that chat." |
-| ⛔R10 | We use "don't store" options | `store` not set for OpenAI | Delete the sentence. |
+| ⛔R1 | No content in logs | **Live since 2026-11-05** (PRs #331 and #332): the pipeline carries only IDs, and production workflow logs record errors without data. The trigger lambda, which strips text from old-format messages, still runs its 2026-10-10 image until the CDK tag fix (`e258f3a3`, committed on `development`) deploys, so don't redrive the dead-letter queue before then. Copies made before 2026-11-05 age out: CloudWatch and the dead-letter queue by 2026-11-12, and workflow history by 2027-02-04 unless an AWS support case shortens it. The Grafana role still has `CloudWatchReadOnlyAccess` (checked 2026-11-06). | "Content indexed before 6 November 2026 may remain in our background system's workflow history until 4 February 2027, when it is deleted automatically." After 2026-11-12 that is the only copy left. Also narrow the Grafana role. |
+| ⛔R2 | Public links reveal only messages and replies, hide your name, and aren't indexed | Not built (checked 2026-11-06). Trace data can reveal note, memory and past-chat text, your name and picture are shown, and `robots.txt` allows indexing. | "A public link can also reveal the AI's activity trace, which may include text from your notes, memories and earlier conversations, as well as your name and picture." **Fix this rather than publish that sentence.** |
+| ⛔R4 | Self-service export, and account deletion that also removes your sign-in | Deletion is live on the web (PR #334, 2026-11-06). The iOS app has it in its uncommitted build, and Apple requires it before release. Export doesn't exist. The Auth0 login survives deletion, because `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET` aren't set in either GitHub environment (checked 2026-11-06). Check the open items under R3 and R4 in Recommendations.md before clearing this row. | "To get a copy of your data, contact `[PRIVACY EMAIL]`." For the login, adding the three secrets is the whole fix. Until then add: "Your sign-in record with Auth0 is deleted on request." |
+| ⛔R8 | Indexing off by default, with a switch | Not built. Indexing starts on its own once a vector database is connected. | "If you connect a vector database, your chats are indexed automatically. There is no setting to turn this off yet." |
+| ⛔R10 | We use "don't store" options | Not built: `store` isn't set for OpenAI, so it keeps Responses API state for 30 days. | Delete the sentence. Pay-as-you-go needs this fix too, unless OpenAI approves zero data retention, which forces `store` off. |
 | ⛔R11 | Key facts shown when adding a key | Not shown | Delete the sentence. **Keep the Voyage, Google, Tavily and DeepSeek examples.** |
 | ⛔R12 | Permission requested before first use | No consent step. **Apple requires this.** | Remove the sentence. Blocks the iOS release. |
-| ⛔R16 | Staff access is logged | No CloudTrail trail | Delete "and is logged". |
-| ⛔R17 | Backups last up to 35 days | True where backups are on. Core tables have them off. | Accurate as a maximum, but fix the drift. |
-| ⛔R18 | Scratch files 7 days, logs 30 days | Scratch files are kept forever, and Lambda logs never expire | "Temporary tool files and operational logs are currently kept indefinitely." |
+| ⛔R16 | Staff access is logged | No CloudTrail trail in production (checked 2026-11-06) | Delete "and is logged". |
+| ⛔R17 | Backups last up to 35 days | True where backups are on. Point-in-time backups are still off on `Message`, `Conversation`, `CustomerProfile` and `CustomerVendorApiKeys` (checked 2026-11-06). | Accurate as a maximum, but fix the drift. |
+| ⛔R18 | Scratch files 1 day, logs 30 days | Scratch files written since 2026-11-06 expire after 1 day (the bucket rule is live, checked 2026-11-06). Older ones carry no tag, so they stay until deleted once. Lambda log groups never expire (checked 2026-11-06). | "Temporary tool files created before 6 November 2026 and operational logs are currently kept indefinitely." |
 | ⛔R19 | No content in logs (also) | Some error lines could contain fragments | Add: "Rarely, an error message from a provider may include a short fragment of your content." |
+| ⛔N1 | Old notes can be deleted in the app | Since PR #335 (live 2026-11-06), the web app can't list, open or delete notes, and the iOS app follows in its uncommitted build. Saved notes stay in DynamoDB and the vector database, and `search_knowledge_base` still returns them in replies. Deleting the account still removes them. | "To delete notes you saved in earlier versions of the app, delete your account or contact `[PRIVACY EMAIL]`." To clear it, pick one: delete every note after notice and stop the knowledge search returning notes, or add "Delete all notes" to Settings > Profile > Delete your data. |
 | ⛔Q6 | Staff access only for these reasons | Needs your confirmation | Edit to match actual practice. |
 | ⛔Q10 | Third parties protect data to the same standard | Needs confirmation that DPAs are in place. Apple asks for this statement. | Sign the DPAs. Most are self-serve. |
-| ⛔M1-M10 | All of Section 2 | Paid mode doesn't exist | Omit Section 2, or publish it marked "coming soon" and keep the notice. |
+| ⛔M1-M10 | All of Section 2 (Recommendations.md calls it Paid mode) | Pay-as-you-go doesn't exist. Before launch, choose the providers, turn on or apply for zero data retention, and set the opt-outs. The next table shows what each provider offers. | Omit Section 2, or publish it marked "coming soon" and keep the notice. |
+| ⛔M11 | Models that need retention are marked in the model picker | Not built. Some models can't run under zero data retention (see the next table). | Don't offer those models in Pay-as-you-go, or delete the sentence and name them in section 2.3. |
+
+**Cleared since the first draft**, each checked in production on 2026-11-06:
+
+- **R3 (delete):** Permanent delete of conversations went live with PR #334. Notes are covered by N1 instead.
+- **R5 (keys):** "Delete all API keys" went live with PR #334. Removing a single key is still not possible, but the draft no longer promises it.
+- **R6 (indexing):** Accounts with no vector database are skipped, since PR #332. The sentence now says only that.
+- **R7 (memory):** The switches went live with PR #332, and PR #335 hid "Learn from notes".
+- **R9 (background tasks):** They run on the priority-1 provider only, since PR #332.
+
+### Pay-as-you-go: zero data retention and training, by provider
+
+Checked 2026-11-06 on each provider's own pages, except where marked "secondary". These terms change, so check them again before signing.
+
+| Provider | Training on API content | Zero data retention (ZDR) | Without ZDR | Watch out for |
+|---|---|---|---|---|
+| **OpenAI** | Off unless you opt in | On request, if OpenAI approves (through sales), per organization or project. Covers Responses, Chat Completions, Embeddings, Realtime and audio, and forces `store` off. | Abuse logs up to 30 days. Responses API state 30 days unless `store=false` (R10). | ZDR doesn't cover Files, Batch, Assistants, vector stores or Conversations. Images and files flagged by its child-safety classifier are kept for review even under ZDR. |
+| **Anthropic** | Never without express permission | By arrangement with sales, per organization. Covers the Messages and Token Counting APIs. | The privacy center says content is deleted within 30 days (updated 2026-07-01). The API docs say it isn't kept by default, except for Covered Models. Confirm which applies before quoting a number. | Claude Fable 5 and 5.1 and Claude Mythos 5 and 5.1 require 30-day retention, so they can't run under ZDR (M11). Flagged content is kept up to 2 years and safety scores up to 7 years, whatever the arrangement. |
+| **Google Gemini Developer API** (paid tier) | Off on the paid tier. The free tier trains. | No formal ZDR. Google points to Vertex AI for guaranteed ZDR. | Prompts are logged for abuse monitoring for a "limited period". Google's ZDR page gives no length, and secondary sources say 55 days, which exceeds the draft's `[30]`. | Grounding with Google Search or Maps stores data 30 days, and that can't be turned off. Files, explicit caching and the Interactions API store data unless you avoid them or set `store=false`. |
+| **Google Vertex AI** | Off | Request an abuse-monitoring exception, and avoid the features that log | Abuse-monitoring logs | Google says some advanced features still log. |
+| **Amazon Bedrock** | Off, and model providers can't see prompts or replies | Self-serve: set `data_retention_mode` to `none` per Region, and enforce it with a service control policy | Depends on the model's default. AWS may keep data for abuse detection. | Claude Fable 5 and 5.1 need `aws_review` (AWS keeps content up to 30 days for human review), so they're unavailable under `none`. Keep model invocation logging off. |
+| **Mistral** | Separate opt-out setting | On request, at Mistral's discretion, on paid plans, for stateless endpoints including chat and embeddings | 30 days (secondary) | ZDR doesn't cover Labs models, agents, conversations, batch, files or libraries. Turn off Studio Observability. |
+| **xAI** | Never without explicit permission | Self-serve: a team admin turns it on in the Console under Team Settings, for every key on the team. Stored Files and Collections must be deleted first. | 30 days, kept for auditing suspected abuse | ZDR switches off the stateful Responses API, Files and Collections, and the Batch API. The default endpoint doesn't guarantee a region: `us.api.x.ai` keeps processing in the US, for some models only, at 10% higher prices. Its docs now name the company SpaceXSI. |
+| **Voyage AI** (embeddings) | **On unless you opt out.** Opting out needs an organization admin and a payment method, and it can't be undone in the dashboard. | Opting out gives what Voyage calls "zero-day retention": data is deleted once processed. | Kept, and can be used for training | Opt out on the organization before the first request (M2). |
+| **Cohere** (embeddings) | Opt-out flag in the dashboard. The default isn't stated (secondary). | Enterprise customers who make extra usage commitments | Up to 30 days | |
+| **Tavily** (web search) | "Allow use of query data" setting. When it's off, queries aren't stored or used. | Not offered separately | | Turn the setting off on our account (M2). |
+
+**Before the first Pay-as-you-go request:**
+
+1. Turn ZDR on where it's self-serve: the xAI Console (Team Settings) and Bedrock (`data_retention_mode: none`). Apply for it with OpenAI, Anthropic, Mistral and Cohere, which grant it on request.
+2. Opt out of training wherever it's a setting: Voyage, Cohere, Mistral and Tavily.
+3. Use paid tiers only (M3).
+4. Set `store=false` on every OpenAI call (R10). Use only the endpoints ZDR covers.
+5. On Gemini, don't use grounding with Search or Maps, explicit caching or the Files API, or use Vertex AI with the exception.
+6. Record each provider's ZDR status and approval date, its retention without ZDR, and its training status. That record becomes the public sub-processor page.
 
 ### Check before publishing
 
@@ -342,16 +385,19 @@ Email: `[PRIVACY EMAIL]`
 - **Voice.** Remove the row in section 1.2 if you won't offer voice through the API at launch.
 - **Vector databases.** Confirm no user's connection points to a cluster you own (Recommendations.md Q9). Otherwise "your vector database" isn't true for that user.
 - **iOS crash reporting.** The Sentry package is included but switched off. If you enable it, add Sentry to the companies table.
+- **Old notes.** Decide N1, then fill in `[HOW TO DELETE THEM]` and `[WHERE]`.
 
 ### Words to avoid
 
 Don't use "end-to-end encrypted", "zero-knowledge", "we can't read your data", "fully private" or "anonymous" anywhere, including marketing, unless the feature really delivers that for the data in question. Today none of them would be true. Regulators treat privacy claims that don't match behaviour as deceptive.
 
+Don't say a provider has "zero data retention" unless ZDR is on for our account and covers every feature we use with that provider. Never present it as a guarantee, in the app or in marketing: section 2.3 promises best effort.
+
 ### Optional paragraphs for later
 
 Add these when the features ship (see section 7.1 of Recommendations.md).
 
-- **Auto-delete (B1):** "You can have conversations and notes deleted automatically after 30, 90 or 365 days."
+- **Auto-delete (B1):** "You can have conversations deleted automatically after 30, 90 or 365 days."
 - **Temporary chats (B2):** "Temporary chats aren't saved on our servers, indexed or used for memory. They are still sent to the AI provider you select, and that provider's terms apply."
 - **Per-user encryption (B3):** "Your content is encrypted with a key unique to your account. When you delete your account we destroy that key, which makes any remaining copies, including backups, unreadable."
 - **Device-only keys (B4):** "You can keep an API key only on your device. It is sent with each request and is not stored on our servers. Background features that need your key won't run."
@@ -365,6 +411,7 @@ Add these when the features ship (see section 7.1 of Recommendations.md).
 3. **Naming specific vendor practices in section 1.4.** This is useful for users but needs regular upkeep. Consider moving it to a help page with a link from here.
 4. **Provider privacy links.** The OpenAI and xAI privacy pages refused automated checks, so open those two by hand to confirm they work. The rest returned a page when checked on 2026-11-05.
 5. **Legal bases, age limits, transfer safeguards and regional rights.** These are placeholders until you confirm the entity and target markets (Recommendations.md Q1).
-6. **Paid mode.** Section 2 needs review against real vendor contracts, including the abuse-monitoring text in section 2.5.
+6. **Pay-as-you-go.** Section 2 needs review against the real vendor contracts and ZDR settings, including the abuse-monitoring text in section 2.5. Each "zero data retention" claim must match an approval or setting that is actually on. Confirm that calling ZDR best effort is clear enough, and that marketing never states it more strongly than section 2.3 does.
 7. **Terms of Service.** This policy assumes separate terms will exist. None do today.
 8. **Memory is on by default.** The draft relies on legitimate interests for memory, because consent under GDPR must be opt-in. Confirm that basis, or switch memory to opt-in for users in regions where it doesn't hold.
+9. **Providers' own use of flagged content.** In Pay-as-you-go, providers act as our processors, but they keep flagged content for their own safety purposes. Confirm whether that makes them independent controllers for that data, and if so, say so in section 2.3.
