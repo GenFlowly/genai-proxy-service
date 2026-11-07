@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["FQ229A9NBM.com.unbiase.ai"],
+        "components": [{ "/": "/chat/*" }]
+      }
+    ]
+  }
+}
