@@ -50,6 +50,27 @@ data class MemoryContext(
     val turn_started_at: String,
 )
 
+/**
+ * The customer's entitlements, so the retrieval-server binds only tools the
+ * customer can use: knowledge and memory search need a vector DB and an
+ * embedding key, web search needs a web search key. Absent when unknown;
+ * every tool is then bound and finds out for itself.
+ */
+@Serializable
+data class EntitlementsPayload(
+    val is_vector_db_storing_enabled: Boolean,
+    val is_embedding_creation_enabled: Boolean,
+    val is_web_search_enabled: Boolean,
+) {
+    companion object {
+        fun of(entitlements: com.genflowly.models.CustomerEntitlements) = EntitlementsPayload(
+            is_vector_db_storing_enabled = entitlements.isVectorDbStoringEnabled,
+            is_embedding_creation_enabled = entitlements.isEmbeddingCreationEnabled,
+            is_web_search_enabled = entitlements.isWebSearchEnabled,
+        )
+    }
+}
+
 @Serializable
 private data class RetrievalAgentPayload(
     val customer_id: String,
@@ -83,7 +104,8 @@ private data class RetrievalAgentPayload(
      * End user's per-request reasoning depth ("none"|"low"|"medium"|"high");
      * overrides the response generator's node-config thinking_level.
      */
-    val thinking_level: String? = null
+    val thinking_level: String? = null,
+    val entitlements: EntitlementsPayload? = null
 )
 
 @Serializable
@@ -316,7 +338,8 @@ class RetrievalServerClient(
         requestSource: String,
         graphId: String? = null,
         thinkingLevel: String? = null,
-        memoryContext: MemoryContext? = null
+        memoryContext: MemoryContext? = null,
+        entitlements: com.genflowly.models.CustomerEntitlements? = null
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
@@ -339,7 +362,8 @@ class RetrievalServerClient(
             memory_context = memoryContext.takeIf { memoryEnabled },
             request_source = requestSource,
             graph_id = graphId,
-            thinking_level = thinkingLevel
+            thinking_level = thinkingLevel,
+            entitlements = entitlements?.let(EntitlementsPayload::of)
         )
     )
 
@@ -364,10 +388,11 @@ class RetrievalServerClient(
         requestSource: String = "conversation",
         graphId: String? = null,
         thinkingLevel: String? = null,
-        memoryContext: MemoryContext? = null
+        memoryContext: MemoryContext? = null,
+        entitlements: com.genflowly.models.CustomerEntitlements? = null
     ): RetrievalResult {
         logger.info { "Calling retrieval-server (non-streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = false, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext, entitlements = entitlements)
         return try {
             val response: HttpResponse = httpClient.post("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)
@@ -527,10 +552,11 @@ class RetrievalServerClient(
         requestSource: String = "conversation",
         graphId: String? = null,
         thinkingLevel: String? = null,
-        memoryContext: MemoryContext? = null
+        memoryContext: MemoryContext? = null,
+        entitlements: com.genflowly.models.CustomerEntitlements? = null
     ): Flow<StreamChunk> = channelFlow {
         logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext, entitlements = entitlements)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)

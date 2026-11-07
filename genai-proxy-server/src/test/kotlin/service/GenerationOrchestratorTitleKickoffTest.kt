@@ -41,7 +41,8 @@ class GenerationOrchestratorTitleKickoffTest {
         AppScope(),
         mockk(relaxed = true),          // runsClient
         mockk(relaxed = true),          // appConfig
-        managementService
+        managementService,
+        entitlementServiceWith()
     )
 
     init {

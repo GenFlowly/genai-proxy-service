@@ -38,7 +38,13 @@ class UnifiedSearchHybridTest {
     private val notes = mockk<NotesRepository>(relaxed = true)
     private val memories = mockk<MemoryRepository>(relaxed = true)
     private val pending = mockk<VectorSyncPendingRepository>()
-    private val service = UnifiedSearchService(retrieval, conversations, notes, memories, pending)
+    private var entitlements = ALL_ENTITLEMENTS
+    private val service = UnifiedSearchService(
+        retrieval, conversations, notes, memories, pending,
+        CustomerEntitlementService(
+            mockk { coEvery { getEntitlements(any()) } answers { entitlements } }, mockk(), mockk()
+        )
+    )
 
     private fun item(type: PendingVectorType, key: String, conversationId: String? = null) = PendingVectorItem(
         customerId = "CU1", type = type, key = key, conversationId = conversationId,
@@ -191,5 +197,18 @@ class UnifiedSearchHybridTest {
             SearchNotConfiguredException(SearchSetupReason.VECTOR_DB, "No vector DB")
 
         assertThrows<SearchNotConfiguredException> { service.search("CU1", "home office", 10, null) }
+    }
+
+    @Test
+    fun `a customer without a vector DB or an embedding key is told before anything is searched`() = runTest {
+        entitlements = ALL_ENTITLEMENTS.copy(isVectorDbStoringEnabled = false)
+        val noVectorDb = assertThrows<SearchNotConfiguredException> { service.search("CU1", "home office", 10, null) }
+        entitlements = ALL_ENTITLEMENTS.copy(isEmbeddingCreationEnabled = false)
+        val noEmbeddingKey = assertThrows<SearchNotConfiguredException> { service.search("CU1", "home office", 10, null) }
+
+        assertEquals(SearchSetupReason.VECTOR_DB, noVectorDb.reason)
+        assertEquals(SearchSetupReason.EMBEDDING_KEY, noEmbeddingKey.reason)
+        coVerify(exactly = 0) { retrieval.search(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { pending.listPending(any(), any(), any()) }
     }
 }

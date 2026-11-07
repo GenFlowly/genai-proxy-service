@@ -121,6 +121,28 @@ class MemoryNodeScopeTests(unittest.IsolatedAsyncioTestCase):
                     ("MEM#hereEpisodic", "recalled")]),
         )
 
+    async def test_without_vector_search_only_core_memories_apply_and_nothing_is_embedded(self):
+        state = {
+            "customer_id": "cust-1", "memory_enabled": True, "original_query": "when is the report due?",
+            "node_configs": {}, "model_type": None, "model_name": None, "memory_context": _CONTEXT,
+            "entitlements": {"is_vector_db_storing_enabled": True, "is_embedding_creation_enabled": False},
+        }
+        embed = MagicMock(return_value=[0.1, 0.2])
+        milvus = MagicMock()
+        with (
+            patch.object(memory_mod, "_get_cached_memories", return_value=_MEMORIES),
+            patch.object(memory_mod, "_milvus_client", milvus),
+            patch.object(memory_mod, "_memory_collections", return_value=_COLLECTIONS),
+            patch.object(memory_mod, "_embed_query", embed),
+            patch.object(memory_mod, "record_usage", MagicMock()),
+        ):
+            result = await memory("NODE1")(state)
+
+        self.assertIn("Lives in Lisbon.", result["memories_block"])
+        self.assertEqual(result["scratch"]["memory_stats"]["recalled"], 0)
+        embed.assert_not_called()
+        milvus.assert_not_called()
+
     async def test_a_conversation_outside_projects_gets_profile_only(self):
         result, recorded = await self._run({**_CONTEXT, "project_id": None})
 

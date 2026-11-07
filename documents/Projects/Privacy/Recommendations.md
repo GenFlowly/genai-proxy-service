@@ -287,7 +287,7 @@ The production DLQ held **381 messages** when checked. I read the count only. Ea
   - The trigger is meant to strip text from messages queued in the old format. In both stages it still runs the image it resolved on 2026-10-10.
   - Its CDK named the mutable `parse-and-chunk-latest` tag, which never changes the template, so CloudFormation never updated the function.
   - New note, chat, instruction and memory messages carry no text, so this matters only for old messages. Until the fix deploys, don't redrive the dead-letter queue: the old trigger would copy any text in it into new execution history for another 90 days.
-  - Fixed on `development` in `e258f3a3`, not yet pushed or deployed: `stepfunctions-v2-stack.ts` now takes the commit's tag, like the other lambdas. Pushing it deploys dev, and merging to `main` deploys production.
+  - Fixed in `e258f3a3`: `stepfunctions-v2-stack.ts` now takes the commit's tag, like the other lambdas. Live in dev since 2026-11-07 (the dev trigger runs `parse-and-chunk-7b7c939`). Merged to `main` in PR #337 on 2026-11-07; the production deploy was still running when checked.
 - **Still open:**
   - Step 2: the Grafana role still has `CloudWatchReadOnlyAccess`.
   - Step 4: the support case for 30-day history (7 days can't be configured).
@@ -416,7 +416,7 @@ A user can only overwrite a key with another valid one, or revoke it at the vend
 
 **Status (2026-11-06): "Delete all API keys" is live in production since 2026-11-06 (PR #334).** Settings > Profile removes every stored credential in one step (`DELETE /api/v1/credentials`): AI and embedding keys, the vector DB connection, and tool and connector credentials. Tools keep their non-secret settings. Removing a single key is still not possible.
 
-### R6. Text enters the pipeline even when it has nowhere to go
+### R6. Text enters the pipeline even when it has nowhere to go (fix built 2026-11-06, not deployed)
 
 **What happens.** `ConversationIndexingService.kt:55-88` and `NotesService.kt:143-163` never check whether the user has an embedding key or a vector database. For a chat-only BYOK user, text still goes through SQS, Step Functions and CloudWatch. The embedding step then raises an error (`create_and_store_lambda.py:68,78,228`), and the original message lands in the DLQ for 14 days.
 
@@ -425,6 +425,15 @@ This is the likely source of some of the 381 production messages, though I didn'
 **Fix:** check both before sending and skip quietly if either is missing. In the Lambda, treat these two errors as a clean no-op rather than a failure.
 
 **Effort:** S.
+
+**Status (2026-11-06): built, not yet deployed.** Each profile now carries three entitlement flags, kept in step with the customer's credentials: `isVectorDbStoringEnabled` (a vector DB is connected), `isEmbeddingCreationEnabled` (a stored embedding key can embed) and `isWebSearchEnabled` (a web search key is stored). Saving or removing any key or connection re-derives them, and a profile from before the flags gets them on its first read.
+
+- **Nothing is sent without both storage flags.** Chats, notes, instructions and memories skip the pipeline, and their retries stop. Search answers "not set up" without calling the retrieval server.
+- **Tools fail fast.** Knowledge and memory search are never offered to the model without both storage flags, nor web search without its key. Memory recall falls back to core memories.
+- **The pipeline checks too.** The store step and the retrieval server's encode endpoints look up the vector DB before embedding anything. A missing vector DB or key ends the message instead of failing it into the dead-letter queue (`vector_store_skipped_total`).
+- **Still open:**
+  - A flag read that fails lets the text through, so a DynamoDB error never drops indexing. The pipeline then skips it.
+  - Email ingestion isn't gated by the flags (see R25).
 
 ### R7. Memory is on by default with no off switch (switches live 2026-11-05)
 
@@ -724,7 +733,7 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Rotate the admin key from git history | R16 | S |
 | Turn off Step Functions execution data (**live since 2026-11-05**), delete existing log streams, narrow the Grafana role | R1 | S |
 | Open the AWS support case to shorten execution history | R1 | S |
-| Skip indexing when no embedding key or vector DB exists | R6 | S |
+| Skip indexing when no embedding key or vector DB exists. **Built 2026-11-06, not deployed** (entitlement flags). | R6 | S |
 | Allow-list thinking-step fields for non-authors and hide identity | R2 | S |
 | Stop archived content reaching AI providers. **Live since 2026-11-06.** | R3 step 1 | S |
 | Set OpenAI `store=False`, after testing tool rounds | R10 | S |
@@ -742,7 +751,7 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Provider facts, Voyage acknowledgement, delete batch files | R11 | S-M |
 | Real delete (permanent, no Trash: decided), purge jobs, scratch expiry, vector purge fix. **Live since 2026-11-06**; Lambda log retention (R18) open | R3, R18 | M-L |
 | Account deletion (**live since 2026-11-06**) and export (open) | R4 | M-L |
-| Send IDs instead of text through the pipeline. **Live since 2026-11-05**, except the trigger lambda (its CDK tag fix, `e258f3a3`, is committed on `development` but not deployed). | R1 step 3 | M |
+| Send IDs instead of text through the pipeline. **Live since 2026-11-05**, except the trigger lambda (its CDK tag fix, `e258f3a3`, merged in PR #337, was still deploying to production when checked on 2026-11-07). | R1 step 3 | M |
 | Close the logging gaps | R19 | S |
 | `/privacy`, `/terms`, consent screen, iOS privacy manifest | R12 | S-M |
 | **Clear the gate in Policy.md, get legal review, publish** | | |

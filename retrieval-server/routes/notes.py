@@ -204,6 +204,9 @@ async def encode_memory(req: EncodeMemoryRequest):
     )
 
     try:
+        # The vector DB first: without one the text has nowhere to go, so it
+        # is never sent to the embedding provider.
+        client = get_milvus_client(req.customer_id)
         encoder = customer_embedding_model(req.customer_id, model_type, model_name)
         embeddings = create_embeddings([req.memory_value], encoder, customer_id=req.customer_id)
         if not embeddings or not embeddings[0].get("vector"):
@@ -211,7 +214,6 @@ async def encode_memory(req: EncodeMemoryRequest):
             raise RuntimeError(f"embedding returned no vector (model {model_type}/{model_name})")
         vector = embeddings[0]["vector"]
 
-        client = get_milvus_client(req.customer_id)
         schema, index_params = _memory_collection_schema(
             dim=len(vector),
             description=build_collection_description(model_type, model_name, len(vector)),
@@ -315,6 +317,9 @@ async def encode_conversation(req: EncodeConversationRequest):
     )
 
     try:
+        # The vector DB first: without one the text has nowhere to go, so it
+        # is never sent to the embedding provider.
+        client = get_milvus_client(req.customer_id)
         chunk_size, chunk_overlap = get_chunking_params(model_type, model_name)
         chunks = create_chunks(req.text, None, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         encoder = customer_embedding_model(req.customer_id, model_type, model_name)
@@ -323,7 +328,6 @@ async def encode_conversation(req: EncodeConversationRequest):
             count("embedding_failure_total", source="encode_conversation", model=model_name)
             raise RuntimeError(f"embedding returned no vector (model {model_type}/{model_name})")
 
-        client = get_milvus_client(req.customer_id)
         dim = len(embeddings[0]["vector"])
         schema, index_params = _conversation_collection_schema(
             dim=dim,

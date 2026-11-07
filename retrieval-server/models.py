@@ -126,6 +126,15 @@ class MemoryContext(BaseModel):
     turn_started_at: str
 
 
+class Entitlements(BaseModel):
+    """What the customer's stored credentials make possible (the proxy's
+    CustomerEntitlements). Tools that need a setting the customer lacks are
+    never bound, so the model can't call them."""
+    is_vector_db_storing_enabled: bool = False
+    is_embedding_creation_enabled: bool = False
+    is_web_search_enabled: bool = False
+
+
 class RetrieveRequest(BaseModel):
     customer_id: str
     client: str
@@ -173,6 +182,9 @@ class RetrieveRequest(BaseModel):
     # node config's thinking_level; pipeline nodes ignore it. Invalid values
     # are warned-and-ignored downstream (llm_node), never an error.
     thinking_level: Optional[str] = None
+    # None when the caller sent none (voice, older proxies): every tool is
+    # bound and finds a missing setting out for itself.
+    entitlements: Optional[Entitlements] = None
 
 
 class RunRequest(BaseModel):
@@ -203,6 +215,8 @@ class RunRequest(BaseModel):
     graph_id: Optional[str] = None
     # Same semantics as RetrieveRequest.thinking_level.
     thinking_level: Optional[str] = None
+    # Same semantics as RetrieveRequest.entitlements.
+    entitlements: Optional[Entitlements] = None
     # Optional client-supplied run id for idempotency / rediscovery. When set it
     # becomes the DBOS workflow id (a duplicate re-attaches to the same run
     # instead of starting a new one). Server-generated when omitted.

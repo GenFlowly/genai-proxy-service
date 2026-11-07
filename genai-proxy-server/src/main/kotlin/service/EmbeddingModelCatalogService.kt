@@ -52,7 +52,8 @@ class EmbeddingModelCatalogService(
     private val customerCredentialsRepository: CustomerCredentialsRepository,
     private val embeddingModelCatalogRepository: EmbeddingModelCatalogRepository,
     private val retrievalServerClient: RetrievalServerClient,
-    private val appScope: CoroutineScope
+    private val appScope: CoroutineScope,
+    private val customerEntitlementService: CustomerEntitlementService
 ) {
     companion object {
         private val STALE_AFTER: Duration = Duration.ofDays(7)
@@ -166,6 +167,7 @@ class EmbeddingModelCatalogService(
                     customerId, vendor.name, emptyList(), fingerprint(decryptedKey), authFailed = true
                 )
             }.onFailure { logger.warn(it) { "Failed to persist auth-failed verdict for $customerId/$vendor" } }
+            refreshEntitlementsOnFlip(customerId, existing, authFailed = true)
             return EmbeddingCatalog.KeyCannotEmbed
         }
         if (result.error != null) {
@@ -183,9 +185,26 @@ class EmbeddingModelCatalogService(
                 customerId, vendor.name, merged, fingerprint(decryptedKey), authFailed = false
             )
         }.onFailure { logger.warn(it) { "Failed to persist probed embedding models for $customerId/$vendor" } }
+        refreshEntitlementsOnFlip(customerId, existing, authFailed = false)
 
         logger.info { "Probed ${merged.size} embedding models for $customerId/$vendor" }
         return EmbeddingCatalog.Models(merged)
+    }
+
+    /**
+     * Whether a key can embed feeds the customer's embedding entitlement, so a
+     * verdict that changed re-derives it. A refresh that fails leaves the flag
+     * for the next credential change or probe.
+     */
+    private suspend fun refreshEntitlementsOnFlip(customerId: String, existing: ProbedModels?, authFailed: Boolean) {
+        if ((existing?.authFailed ?: false) == authFailed) return
+        try {
+            customerEntitlementService.refresh(customerId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) { "Failed to refresh entitlements for $customerId after the embedding probe" }
+        }
     }
 
     /** Decrypts the customer's stored key for [vendor], or null when unset. */
