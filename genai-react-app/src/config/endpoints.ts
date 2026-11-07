@@ -24,6 +24,7 @@ export const endpoints = {
     getProviders: `${BASE}${API_PREFIX}/providers`,
     saveAIConfig: `${BASE}${API_PREFIX}/save-ai-config`,
     createInstruction: `${BASE}${API_PREFIX}/instruction`,
+    instructionUsage: (instructionId: string) => `${BASE}${API_PREFIX}/instruction/${encodeURIComponent(instructionId)}/usage`,
     getCustomerInstructions: `${BASE}${API_PREFIX}/instructions`,
     searchInstructions: `${BASE}${API_PREFIX}/instructions/search`,
     search: `${BASE}${API_PREFIX}/search`,

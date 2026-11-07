@@ -47,6 +47,7 @@ import com.genflowly.activity.instruction.registerGetCustomerInstructionListRout
 import com.genflowly.activity.instruction.registerSearchInstructionsRoutes
 import com.genflowly.activity.instruction.registerGetRecentInstructionsRoutes
 import com.genflowly.activity.instruction.registerGetInstructionSharedUsersRoutes
+import com.genflowly.activity.instruction.registerGetInstructionUsageRoutes
 import com.genflowly.activity.instruction.registerGetInstructionVersionRoutes
 import com.genflowly.activity.developer.registerDeveloperApiKeysRoutes
 import com.genflowly.activity.admin.registerDefaultGraphRoutes
@@ -119,6 +120,7 @@ object Routes {
     const val SEARCH_INSTRUCTIONS = "$API_V1/instructions/search"
     const val GET_RECENT_INSTRUCTIONS = "$API_V1/instructions/recent"
     const val GET_CUSTOMER_INSTRUCTION_VERSION = "$API_V1/instruction/version"
+    const val INSTRUCTION_USAGE = "$API_V1/instruction/{instructionId}/usage"
     const val CREATE_CONVERSATION_TITLE = "$API_V1/conversation/title"
     const val CREATE_CONVERSATION_SHARE = "$API_V1/conversation/share"
     const val GET_CONVERSATION_SHARED_USERS = "$API_V1/conversation/shared"
@@ -242,6 +244,7 @@ fun Application.configureRouting(
     requestAgentMapAdminService: com.genflowly.service.RequestAgentMapAdminService,
     customerRequestAgentMapService: com.genflowly.service.CustomerRequestAgentMapService,
     memoryService: com.genflowly.service.MemoryService,
+    instructionUsageService: com.genflowly.service.InstructionUsageService,
     exchangeSideEffects: com.genflowly.service.ExchangeSideEffects,
     unifiedSearchService: com.genflowly.service.UnifiedSearchService,
     nodePresetService: com.genflowly.service.NodePresetService,
@@ -308,6 +311,7 @@ fun Application.configureRouting(
         registerGetRecentInstructionsRoutes(instructionService, customerProfileService)
         registerGetInstructionVersionRoutes(instructionService, customerProfileService)
         registerGetInstructionSharedUsersRoutes(instructionService, customerProfileService)
+        registerGetInstructionUsageRoutes(instructionUsageService, customerProfileService)
         registerCreateConversationTitleRoutes(conversationManagementService, customerProfileService)
         registerGetAIUsageActivityRoutes(conversationService, customerProfileService)
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationManagementService)
