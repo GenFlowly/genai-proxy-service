@@ -30,4 +30,8 @@ data class AIConfigPreferences(
     val memoryLearnFromChats: Boolean? = null,
     val memoryLearnFromNotes: Boolean? = null,
     val memoryUseInReplies: Boolean? = null,
+    // Index chats for search (Settings > Defaults > Search index). Null =
+    // never set, which means off; null on a save leaves the stored value
+    // unchanged.
+    val indexChats: Boolean? = null,
 )

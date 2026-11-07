@@ -1282,6 +1282,26 @@
             "deleteErrorToast": "Couldn't delete learned facts. Please try again.",
             "saveErrorToast": "Couldn't save the setting. Please try again.",
             "loginFirstToast": "Please log in first."
+        },
+        "chatIndexing": {
+            "title": "Search index",
+            "subtitle": "Chats you index can be found by search, and by the assistant in later conversations. Each indexed exchange goes to your embedding provider, and its text is stored in your vector database.",
+            "indexChats": "Index my chats",
+            "indexChatsDescription": "Off until you turn it on. Needs a connected vector database and an embedding key.",
+            "deleteIndexed": "Delete indexed chats",
+            "deleteTitle": "Delete indexed chats?",
+            "deleteConfirm": "This removes every chat stored in your vector database for search. Your conversations stay in your history.",
+            "deleteConfirmButton": "Delete",
+            "turnOffTitle": "Stop indexing your chats?",
+            "turnOffConfirm": "New chats won't be indexed. Chats already indexed stay in your vector database, and search can still find them, unless you delete them too.",
+            "stopIndexing": "Stop indexing",
+            "stopAndDelete": "Stop and delete",
+            "cancel": "Cancel",
+            "working": "Working...",
+            "deletedToast": "Indexed chats deleted.",
+            "deleteErrorToast": "Couldn't delete indexed chats. Please try again.",
+            "saveErrorToast": "Couldn't save the setting. Please try again.",
+            "loginFirstToast": "Please log in first."
         }
     },
     "sidebar": {

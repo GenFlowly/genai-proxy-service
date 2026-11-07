@@ -59,6 +59,7 @@ import com.genflowly.activity.usage.registerUsageRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
 import com.genflowly.activity.attachment.registerAttachmentRoutes
 import com.genflowly.activity.account.registerAccountRoutes
+import com.genflowly.activity.indexing.registerIndexingRoutes
 import com.genflowly.activity.memory.registerMemoryRoutes
 import com.genflowly.activity.notes.registerNotesRoutes
 import com.genflowly.activity.voice.registerGetVoiceModelsRoutes
@@ -213,6 +214,7 @@ object Routes {
 
     const val DELETE_ACCOUNT = "$API_V1/account"
     const val DELETE_CREDENTIALS = "$API_V1/credentials"
+    const val INDEXED_CHATS = "$API_V1/indexing/chats"
 
     const val GET_MEMORIES = "$API_V1/memories"
     const val MEMORY = "$API_V1/memories/{memoryId}"
@@ -255,6 +257,7 @@ fun Application.configureRouting(
     usageSummaryService: com.genflowly.service.UsageSummaryService,
     usageRateCardRepository: com.genflowly.repository.UsageRateCardRepository,
     accountDeletionService: com.genflowly.service.AccountDeletionService,
+    conversationIndexingService: com.genflowly.service.ConversationIndexingService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -343,6 +346,7 @@ fun Application.configureRouting(
         registerNotesRoutes(notesService, customerProfileService)
         registerMemoryRoutes(memoryService, customerProfileService, conversationService)
         registerAccountRoutes(accountDeletionService, customerCredentialsService, customerProfileService)
+        registerIndexingRoutes(conversationIndexingService, customerProfileService)
         registerDeveloperApiKeysRoutes(developerApiKeyService, customerProfileService)
         registerSystemVendorApiKeysRoutes(
             systemApiKeyService, customerProfileService, aiModelsService, appConfig, modelCatalogService

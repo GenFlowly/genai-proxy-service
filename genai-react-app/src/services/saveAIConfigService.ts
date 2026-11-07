@@ -19,6 +19,8 @@ export interface SaveAIConfigPreferencesRequest {
         memoryLearnFromChats?: boolean
         memoryLearnFromNotes?: boolean
         memoryUseInReplies?: boolean
+        /** Whether new chats are indexed for search; omitted keeps the stored value. */
+        indexChats?: boolean
     }
     otherPreferences?: Record<string, string>
 }
