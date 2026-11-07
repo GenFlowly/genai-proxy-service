@@ -156,6 +156,11 @@
     padding-top: 1.5rem;
 }
 
+.footerLink {
+    width: 100%;
+    margin-bottom: 0.75rem;
+}
+
 .logoutButton {
     // Visuals come from the component library's PillButton (danger variant);
     // this only stretches it across the sidebar footer.

@@ -7,4 +7,8 @@ export const config = {
     backend: {
         baseUrl: process.env.REACT_APP_BACKEND_URL ?? 'https://api-development.genflowly.com',
     },
+    support: {
+        // The SupportStack API's POST URL; empty means this build can't send support requests.
+        requestUrl: process.env.REACT_APP_SUPPORT_API_URL ?? '',
+    },
 };

@@ -1,0 +1,71 @@
+name: Production Support API
+
+# Deploys the support form's API (API Gateway + Lambda + SNS email to the
+# support inbox): gen-ai-proxy-service-SupportStack in genai-proxy-server-cdk.
+# Self-triggered: runs only when that stack, its Lambda (or this workflow) change.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'genai-proxy-server-cdk/lib/support-stack.ts'
+      - 'genai-proxy-server-cdk/lambda/support/**'
+      - 'genai-proxy-server-cdk/bin/support.ts'
+      - '.github/workflows/prod-support-api.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  CDK_APP_PATH: genai-proxy-server-cdk
+  STAGE: production
+  # Every support request is emailed here. A new address gets a confirmation
+  # email from AWS and receives nothing until someone clicks its link.
+  SUPPORT_EMAILS: customer-support@genflowly.com
+
+jobs:
+  deploy:
+    name: Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test support Lambda
+        working-directory: ${{ env.CDK_APP_PATH }}/lambda/support
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create .npmrc file
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: |
+          echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
+
+      - name: Install CDK
+        run: npm install -g aws-cdk
+
+      - name: Install dependencies
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
+
+      - name: Deploy Support stack
+        working-directory: ${{ env.CDK_APP_PATH }}
+        run: cdk deploy gen-ai-proxy-service-SupportStack --app "npx ts-node --prefer-ts-exts bin/support.ts" --require-approval never
