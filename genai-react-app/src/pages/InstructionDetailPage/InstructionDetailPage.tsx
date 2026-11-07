@@ -1,237 +1,410 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../context/AuthContext';
-import { useAuth0 } from '@auth0/auth0-react';
+import React, { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { Icon, InputTextWithHint, PillButton, TextContainer, TextEditor, pageHeaderStyles } from '@genflowly/component-library'
+import {
+    ConversationList,
+    DetailColumns,
+    DetailRows,
+    DetailShell,
+    MoreMenu,
+    SideCard,
+    Timeline,
+    UsageStats,
+    detailStyles as styles,
+} from '../../components/DetailPage/DetailParts'
+import ShareModal, { VisibilityMode } from '../../components/common/ShareModal/ShareModal'
+import { ICONS } from '../../constants/icons'
+import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
+import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
+import { useInstructionSharedUsers, useInstructionUsage } from '../../hooks/queries/useInstructionDetail'
+import { InstructionResponse } from '../../models/instruction.models'
+import { SearchUserResponse } from '../../models/user.models'
 import {
     createInstruction,
+    deleteInstruction,
+    getInstructionSharedUsers,
     shareInstruction,
     unshareInstruction,
-    deleteInstruction,
-    getInstructionSharedUsers
-} from '../../services/instructionService';
-import {
-    InstructionEditor,
-    Breadcrumbs,
-    BreadcrumbItem,
-    PillButton,
-    pageHeaderStyles,
-    ScrollArea,
-} from '@genflowly/component-library';
-import ShareModal, { VisibilityMode } from '../../components/common/ShareModal/ShareModal';
-import { SearchUserResponse } from '../../models/user.models';
-import styles from './InstructionDetailPage.module.scss';
-import Navbar from '../../components/navbar/Navbar';
+} from '../../services/instructionService'
+import { formatServerDateOnly, formatServerTime } from '../../utils/timeUtils'
+import { instructionHistory, instructionPath, roleLabel, usageSummary, useInstructionPage } from './instructionDetail'
 
-export default function InstructionDetailPage() {
-    const { t } = useTranslation();
-    const { instructionId } = useParams<{ instructionId: string }>();
-    const navigate = useNavigate();
-    const { getAccessTokenSilently } = useAuth0();
-    const { customerInstructions, refreshInstructions, isAuthenticated, isInstructionsLoaded, loginWithRedirect, entitlements } = useAuth();
+// Longer instructions are clipped on a phone, with a button to show the rest.
+const CLIP_CHARS = 600
+const SIDE_CONVERSATIONS = 4
 
-    const isNew = instructionId === 'new';
-
-    const [name, setName] = useState('');
-    const [instructionText, setInstructionText] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-    const [role, setRole] = useState<'OWNER' | 'EDIT' | 'VIEW'>('OWNER');
-    // null = follow the latest version; a number pins an older version
-    const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
-
-    // Newest first; the page shows this as the version-history sidebar
-    const versionHistory = customerInstructions
-        .filter(i => i.id === instructionId)
-        .sort((a, b) => b.version - a.version);
-
-    // The version currently shown in the editor (pinned or latest)
-    const currentVersion = (selectedVersion !== null
-        ? versionHistory.find(v => v.version === selectedVersion)
-        : undefined) ?? versionHistory[0];
-
-    // Header trail: Instructions › <instruction name | Create Instruction>
-    const breadcrumbItems: BreadcrumbItem[] = [
-        {
-            label: t('instructionDetail.instructionDetailPage.breadcrumbInstructions'),
-            onClick: () => navigate('/instructions'),
-        },
-        {
-            label: isNew
-                ? t('instructionDetail.instructionDetailPage.createTitle')
-                : currentVersion?.name || t('instructionDetail.instructionDetailPage.editTitle'),
-        },
-    ];
-
-    useEffect(() => {
-        refreshInstructions();
-    }, [refreshInstructions]);
-
-    useEffect(() => {
-        setSelectedVersion(null);
-    }, [instructionId]);
-
-    useEffect(() => {
-        if (!isNew && instructionId) {
-            const matching = customerInstructions.filter(i => i.id === instructionId);
-            const latest = matching.sort((a, b) => b.version - a.version)[0];
-            const current = (selectedVersion !== null
-                ? matching.find(i => i.version === selectedVersion)
-                : undefined) ?? latest;
-
-            if (current) {
-                setName(current.name || '');
-                setInstructionText(current.instruction || '');
-                setRole(current.role || 'VIEW');
-            } else if (isInstructionsLoaded) {
-                if (!isAuthenticated) {
-                    loginWithRedirect({ appState: { returnTo: window.location.pathname } });
-                } else {
-                    alert(t('instructionDetail.instructionDetailPage.noAccessAlert'));
-                    navigate('/instructions');
-                }
-            }
-        } else if (isNew) {
-            if (isInstructionsLoaded && !isAuthenticated) {
-                loginWithRedirect({ appState: { returnTo: window.location.pathname } });
-            }
-            setRole('OWNER');
-        }
-    }, [instructionId, isNew, customerInstructions, selectedVersion, isInstructionsLoaded, isAuthenticated, loginWithRedirect, navigate, t]);
-
-    const handleSave = async () => {
-        if (!instructionText.trim()) return;
-        setIsLoading(true);
-        try {
-            const token = await getAccessTokenSilently();
-            const response = await createInstruction(token, {
-                instruction: instructionText,
-                instructionName: name || undefined,
-                existingInstructionId: isNew ? undefined : instructionId
-            });
-
-            if (response.id) {
-                // createInstruction already wrote the new version through to
-                // the instruction store; the refetch picks up server-side
-                // derivations (category/icon backfill).
-                refreshInstructions();
-                setSelectedVersion(null); // Jump back to the latest version
-                if (isNew || response.id !== instructionId) { // Handles branching
-                    navigate(`/instructions/${response.id}`, { replace: true });
-                }
-            }
-        } catch (error) {
-            console.error("Failed to save instruction", error);
-            alert(t('instructionDetail.instructionDetailPage.saveFailedAlert'));
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleShareSave = async (mode: VisibilityMode, users: SearchUserResponse[], removedUsers: SearchUserResponse[]) => {
-        setIsLoading(true);
-        try {
-            const token = await getAccessTokenSilently();
-            for (const user of users) {
-                await shareInstruction(token, instructionId!, user.customerId, user.role || 'VIEW');
-            }
-            for (const user of removedUsers) {
-                await unshareInstruction(token, instructionId!, user.customerId);
-            }
-            alert(t('instructionDetail.instructionDetailPage.shareUpdatedAlert'));
-        } catch (error) {
-            console.error("Failed to share instruction", error);
-            alert(t('instructionDetail.instructionDetailPage.shareFailedAlert'));
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleDelete = async () => {
-        if (!window.confirm(t('instructionDetail.instructionDetailPage.deleteConfirm'))) return;
-
-        setIsLoading(true);
-        try {
-            const token = await getAccessTokenSilently();
-            await deleteInstruction(token, instructionId!);
-            refreshInstructions();
-            navigate('/instructions');
-        } catch (error) {
-            console.error("Failed to delete instruction", error);
-            alert(t('instructionDetail.instructionDetailPage.deleteFailedAlert'));
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
+/** The emoji tile and name at the top of an instruction's card. */
+export function InstructionHead({ instruction }: { instruction: InstructionResponse }) {
     return (
-        <div className={styles.page}>
-            <Navbar />
-            <ScrollArea className={styles.pageContainer}>
-                <div className={pageHeaderStyles.header}>
-                    <Breadcrumbs items={breadcrumbItems} variant="onHeader" />
-                    <div className={pageHeaderStyles.actions}>
-                        {!isNew && role !== 'VIEW' && entitlements.canShare && (
+        <div className={styles.cardHead}>
+            {instruction.icon && (
+                <span className={styles.iconTile} role="img" aria-hidden="true" style={instruction.color ? { background: instruction.color } : undefined}>
+                    {instruction.icon}
+                </span>
+            )}
+            <h2 className={styles.cardTitle}>{instruction.name}</h2>
+        </div>
+    )
+}
+
+export function InstructionChips({ instruction }: { instruction: InstructionResponse }) {
+    if (!instruction.category && !instruction.tags?.length) return null
+    return (
+        <ul className={styles.chips} aria-label="Tags">
+            {instruction.category && <li className={`${styles.chip} ${styles.chipAccent}`}>{instruction.category}</li>}
+            {(instruction.tags ?? []).map(tag => <li key={tag} className={styles.chip}>#{tag}</li>)}
+        </ul>
+    )
+}
+
+function initials(user: SearchUserResponse): string {
+    const name = user.name || user.username || '?'
+    return name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
+}
+
+/**
+ * One instruction: its name, tags and text with one Edit action, who it is
+ * shared with, how you used it and its versions. Phones show the last three as
+ * rows that open their own pages; desktop shows the versions under the text
+ * and the rest beside it. `?version=N` shows an older version to restore.
+ */
+export default function InstructionDetailPage(): React.ReactElement {
+    const { t } = useTranslation()
+    const navigate = useNavigate()
+    const { isNarrow } = useResponsiveBreakpoints()
+    const { getAccessTokenSilently } = useAuth()
+    const { showToast } = useToast()
+    const { instructionId, versions, latest, shown, older, role, notFound, loading, canShare, refreshInstructions } = useInstructionPage()
+    const canEdit = role !== 'VIEW'
+    const usageQuery = useInstructionUsage(instructionId, !!latest)
+    const sharesQuery = useInstructionSharedUsers(instructionId, !!latest && canEdit)
+
+    const [editing, setEditing] = useState(false)
+    const [name, setName] = useState('')
+    const [text, setText] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [shareOpen, setShareOpen] = useState(false)
+    const [showFull, setShowFull] = useState(false)
+
+    useEffect(() => {
+        setEditing(false)
+        setShowFull(false)
+    }, [instructionId])
+
+    useEffect(() => {
+        document.title = latest?.name ? `${latest.name} | Instructions` : 'Instructions'
+    }, [latest?.name])
+
+    const latestPath = instructionPath(instructionId)
+    const nextVersion = (latest?.version ?? 0) + 1
+
+    const startEdit = () => {
+        if (!shown) return
+        if (isNarrow) {
+            navigate(instructionPath(instructionId, '/edit', older ? { version: String(shown.version) } : {}))
+            return
+        }
+        setName(shown.name)
+        setText(shown.instruction)
+        setEditing(true)
+    }
+
+    const save = async () => {
+        if (!text.trim()) return
+        setSaving(true)
+        try {
+            const created = await createInstruction(await getAccessTokenSilently(), {
+                instruction: text,
+                instructionName: name || undefined,
+                existingInstructionId: instructionId,
+            })
+            showToast(t('instructionDetail.page.saved', { version: created.version }))
+            setEditing(false)
+            refreshInstructions()
+            if (created.id !== instructionId) navigate(instructionPath(created.id), { replace: true })
+            else if (older) navigate(latestPath, { replace: true })
+        } catch (error) {
+            console.error('Failed to save instruction', error)
+            showToast(t('instructionDetail.instructionDetailPage.saveFailedAlert'))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const remove = async () => {
+        if (!window.confirm(t('instructionDetail.instructionDetailPage.deleteConfirm'))) return
+        try {
+            await deleteInstruction(await getAccessTokenSilently(), instructionId)
+            refreshInstructions()
+            navigate('/instructions')
+        } catch (error) {
+            console.error('Failed to delete instruction', error)
+            showToast(t('instructionDetail.instructionDetailPage.deleteFailedAlert'))
+        }
+    }
+
+    const saveShares = async (_mode: VisibilityMode, users: SearchUserResponse[], removed: SearchUserResponse[]) => {
+        try {
+            const token = await getAccessTokenSilently()
+            for (const user of users) await shareInstruction(token, instructionId, user.customerId, user.role || 'VIEW')
+            for (const user of removed) await unshareInstruction(token, instructionId, user.customerId)
+            showToast(t('instructionDetail.instructionDetailPage.shareUpdatedAlert'))
+            sharesQuery.refetch()
+        } catch (error) {
+            console.error('Failed to share instruction', error)
+            showToast(t('instructionDetail.instructionDetailPage.shareFailedAlert'))
+        }
+    }
+
+    const people = (sharesQuery.data ?? []).filter(user => user.customerId !== 'PUBLIC')
+    const isPublic = (sharesQuery.data ?? []).some(user => user.customerId === 'PUBLIC')
+    const sharingSummary = !canEdit
+        ? t('instructionDetail.page.sharedWithYouView')
+        : people.length === 0 && !isPublic
+            ? t('instructionDetail.page.onlyYou')
+            : isPublic ? t('instructionDetail.page.everyone') : t('instructionDetail.page.youAndOthers', { count: people.length })
+    const usage = usageQuery.data
+    const history = instructionHistory(versions, instructionId)
+    const long = (shown?.instruction.length ?? 0) > CLIP_CHARS
+    const clipped = isNarrow && long && !showFull
+
+    const textCard = shown && (
+        <section className={styles.card} aria-label={t('instructionDetail.page.title')} data-testid="instruction-card">
+            {editing ? (
+                <>
+                    <InputTextWithHint
+                        hint={t('instructionDetail.instructionDetailPage.nameHint')}
+                        placeholder={t('instructionDetail.instructionDetailPage.namePlaceholder')}
+                        value={name}
+                        onChange={(event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
+                    />
+                    <TextEditor id="instruction-inline-editor" value={text} onChange={setText} disableCache height="360px" fullWidth />
+                    <div className={styles.desktopActions}>
+                        <PillButton variant="secondary" label={t('instructionDetail.page.cancel')} onClick={() => setEditing(false)} disabled={saving} />
+                        <PillButton
+                            label={saving ? t('instructionDetail.instructionDetailPage.savingLabel') : t('instructionDetail.page.save', { next: nextVersion })}
+                            onClick={save}
+                            disabled={saving || !text.trim()}
+                            data-testid="instruction-save"
+                        />
+                    </div>
+                </>
+            ) : (
+                <>
+                    <InstructionHead instruction={shown} />
+                    <InstructionChips instruction={shown} />
+                    <div className={`${styles.markdown} ${clipped ? styles.clipped : ''}`} data-testid="instruction-text">
+                        <TextContainer content={shown.instruction} showCopyButton={false} />
+                    </div>
+                    {isNarrow && long && (
+                        <button type="button" className={styles.textToggle} onClick={() => setShowFull(value => !value)} aria-expanded={showFull}>
+                            {t(showFull ? 'instructionDetail.page.showLess' : 'instructionDetail.page.showFull')}
+                        </button>
+                    )}
+                    <div className={styles.cardFoot}>
+                        <span className={styles.footNote}>
+                            <strong>{t('instructionDetail.page.version', { version: shown.version })}</strong>
+                            {shown.createdAt ? ` · ${formatServerDateOnly(shown.createdAt)}` : ''}
+                        </span>
+                        {canEdit && (
                             <PillButton
-                                label={t('instructionDetail.instructionDetailPage.share')}
-                                variant="secondary"
-                                className={styles.shareButton}
-                                onClick={() => setIsShareModalOpen(true)}
-                                disabled={isLoading}
+                                variant={older ? 'primary' : 'secondary'}
+                                label={older ? t('instructionDetail.page.restore', { next: nextVersion }) : t('instructionDetail.page.edit')}
+                                onClick={startEdit}
+                                data-testid="instruction-edit"
                             />
                         )}
                     </div>
-                </div>
-                <InstructionEditor
-                    name={name}
-                    onNameChange={setName}
-                    instructionText={instructionText}
-                    onInstructionTextChange={setInstructionText}
-                    isNew={isNew}
-                    readOnly={role === 'VIEW'}
-                    isLoading={isLoading}
-                    canDelete={role === 'OWNER'}
-                    onSave={handleSave}
-                    onDelete={handleDelete}
-                    editorId="instruction-detail-editor"
-                    versions={versionHistory.map(v => ({
-                        version: v.version,
-                        details: v.name || undefined,
-                    }))}
-                    icon={currentVersion?.icon || undefined}
-                    color={currentVersion?.color || undefined}
-                    role={currentVersion?.role}
-                    category={currentVersion?.category || undefined}
-                    tags={currentVersion?.tags || undefined}
-                    selectedVersion={selectedVersion ?? versionHistory[0]?.version}
-                    onSelectVersion={setSelectedVersion}
-                    versionsLoading={!isNew && !isInstructionsLoaded && versionHistory.length === 0}
-                    labels={{
-                        delete: t('instructionDetail.instructionDetailPage.delete'),
-                        save: t('instructionDetail.instructionDetailPage.save'),
-                        saving: t('instructionDetail.instructionDetailPage.savingLabel'),
-                        readonlyBanner: t('instructionDetail.instructionDetailPage.readonlyBanner'),
-                        nameHint: t('instructionDetail.instructionDetailPage.nameHint'),
-                        namePlaceholder: t('instructionDetail.instructionDetailPage.namePlaceholder'),
-                        versionsTitle: t('instructionDetail.instructionDetailPage.versionsTitle'),
-                        versionsEmpty: t('instructionDetail.instructionDetailPage.versionsEmpty'),
-                        versionsError: t('instructionDetail.instructionDetailPage.versionsError'),
-                        accessLevel: t('instructionDetail.instructionDetailPage.accessLevel'),
-                        latestTooltip: t('instructionDetail.instructionDetailPage.latestTooltip'),
-                    }}
-                />
+                </>
+            )}
+        </section>
+    )
 
-                <ShareModal
-                    isOpen={isShareModalOpen}
-                    onClose={() => setIsShareModalOpen(false)}
-                    onSave={handleShareSave}
-                    entityId={!isNew ? instructionId : undefined}
-                    fetchSharedUsers={async (id) => {
-                        const token = await getAccessTokenSilently();
-                        return getInstructionSharedUsers(token, id);
-                    }}
-                />
-            </ScrollArea>
+    const olderBanner = older && shown && latest && (
+        <div className={styles.banner} role="status" data-testid="instruction-older">
+            <span>{t('instructionDetail.page.olderBanner', { version: shown.version, latest: latest.version })}</span>
+            <Link className={styles.bannerLink} to={latestPath}>{t('instructionDetail.page.backToLatest')}</Link>
         </div>
-    );
+    )
+
+    const usageItems = (usage?.conversations ?? []).map(conversation => ({
+        key: conversation.conversationId,
+        conversationId: conversation.conversationId,
+        title: conversation.title,
+        available: true,
+        meta: conversation.firstUsedAt ? t('instructionDetail.page.firstUsed', { date: formatServerDateOnly(conversation.firstUsedAt) }) : undefined,
+    }))
+
+    return (
+        <DetailShell
+            narrow={isNarrow}
+            title={t('instructionDetail.page.title')}
+            subtitle={latest ? roleLabel(role) : undefined}
+            menuItems={latest ? [
+                ...(canShare ? [{ label: t('instructionDetail.instructionDetailPage.share'), onClick: () => setShareOpen(true), 'data-testid': 'instruction-share' }] : []),
+                ...(role === 'OWNER' ? [{ label: t('instructionDetail.instructionDetailPage.delete'), onClick: remove, 'data-testid': 'instruction-delete' }] : []),
+            ] : undefined}
+            breadcrumbs={[
+                { label: t('instructionDetail.instructionDetailPage.breadcrumbInstructions'), onClick: () => navigate('/instructions') },
+                { label: latest?.name || t('instructionDetail.page.title') },
+            ]}
+            actions={latest ? (
+                <>
+                    {canShare && (
+                        <PillButton
+                            label={t('instructionDetail.instructionDetailPage.share')}
+                            icon={ICONS.SHARE}
+                            className={pageHeaderStyles.actionButton}
+                            onClick={() => setShareOpen(true)}
+                            data-testid="instruction-share"
+                        />
+                    )}
+                    {role === 'OWNER' && (
+                        <MoreMenu
+                            label={t('instructionDetail.page.more')}
+                            items={[{ label: t('instructionDetail.page.deleteInstruction'), onSelect: remove, danger: true, testId: 'instruction-delete' }]}
+                        />
+                    )}
+                </>
+            ) : undefined}
+            data-testid="instruction-detail"
+        >
+            {loading && <div className={styles.state}>{t('instructionDetail.page.loading')}</div>}
+            {notFound && (
+                <div className={styles.state} data-testid="instruction-not-found">
+                    <p>{t('instructionDetail.page.notFound')}</p>
+                    <PillButton variant="secondary" label={t('instructionDetail.page.backToList')} onClick={() => navigate('/instructions')} />
+                </div>
+            )}
+            {latest && shown && (isNarrow ? (
+                <>
+                    {olderBanner}
+                    {textCard}
+                    <DetailRows
+                        label={t('instructionDetail.page.rows')}
+                        rows={[
+                            {
+                                key: 'sharing',
+                                icon: ICONS.SHARE,
+                                accent: true,
+                                title: t('instructionDetail.page.sharing'),
+                                summary: sharingSummary,
+                                onClick: canShare ? () => setShareOpen(true) : undefined,
+                            },
+                            {
+                                key: 'usage',
+                                icon: ICONS.CHAT_BUBBLE,
+                                title: t('instructionDetail.page.usage'),
+                                summary: usageQuery.isPending ? t('instructionDetail.page.loading') : usageSummary(usage),
+                                to: instructionPath(instructionId, '/usage'),
+                            },
+                            {
+                                key: 'versions',
+                                icon: ICONS.HISTORY,
+                                title: t('instructionDetail.page.versions'),
+                                summary: latest.createdAt
+                                    ? t('instructionDetail.page.versionsSummary', { version: latest.version, date: formatServerDateOnly(latest.createdAt) })
+                                    : t('instructionDetail.page.version', { version: latest.version }),
+                                to: instructionPath(instructionId, '/history'),
+                            },
+                        ]}
+                    />
+                </>
+            ) : (
+                <DetailColumns
+                    main={(
+                        <>
+                            {olderBanner}
+                            {textCard}
+                            <section aria-label={t('instructionDetail.page.versions')} className={styles.field}>
+                                <h2 className={styles.sectionTitle}>{t('instructionDetail.page.versions')}</h2>
+                                <Timeline
+                                    entries={history}
+                                    label={t('instructionDetail.page.versions')}
+                                    untitled=""
+                                    deleted=""
+                                />
+                            </section>
+                        </>
+                    )}
+                    side={(
+                        <>
+                            <SideCard title={t('instructionDetail.page.sharing')} data-testid="instruction-sharing">
+                                <div className={styles.sideSummary}>
+                                    <span className={`${styles.rowIcon} ${styles.rowIconAccent}`}>
+                                        <Icon src={ICONS.SHARE} size={19} aria-hidden={true} />
+                                    </span>
+                                    <span className={styles.rowText}>
+                                        <span className={styles.rowTitle}>
+                                            {role === 'OWNER' ? t('instructionDetail.page.youOwnIt') : canEdit ? t('instructionDetail.page.sharedWithYouEdit') : t('instructionDetail.page.sharedWithYouView')}
+                                        </span>
+                                        {canEdit && (
+                                            <span className={styles.rowSummary}>
+                                                {isPublic ? t('instructionDetail.page.everyone') : t('instructionDetail.page.peopleCanUse', { count: people.length })}
+                                            </span>
+                                        )}
+                                    </span>
+                                </div>
+                                {people.length > 0 && (
+                                    <ul className={styles.people}>
+                                        {people.map(user => (
+                                            <li key={user.customerId} className={styles.person}>
+                                                {user.picture
+                                                    ? <img className={styles.avatar} src={user.picture} alt="" />
+                                                    : <span className={styles.avatar} aria-hidden="true">{initials(user)}</span>}
+                                                <span className={styles.personName}>{user.name || user.username}</span>
+                                                <span className={styles.muted}>
+                                                    {user.role === 'EDIT' ? t('instructionDetail.page.canEdit') : t('instructionDetail.page.canView')}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                {canShare && (
+                                    <PillButton variant="secondary" label={t('instructionDetail.page.manageSharing')} onClick={() => setShareOpen(true)} />
+                                )}
+                            </SideCard>
+                            <SideCard title={t('instructionDetail.page.usage')} data-testid="instruction-usage">
+                                <UsageStats
+                                    stats={[
+                                        { value: usage?.usageCount ?? 0, label: t('instructionDetail.page.chatsUsedIt') },
+                                        {
+                                            value: usage?.lastUsedAt ? formatServerDateOnly(usage.lastUsedAt) : '—',
+                                            label: usage?.lastUsedAt
+                                                ? t('instructionDetail.page.lastUsed', { time: formatServerTime(usage.lastUsedAt) })
+                                                : t('instructionDetail.page.usageNever'),
+                                        },
+                                    ]}
+                                />
+                                {usageItems.length > 0 && (
+                                    <ConversationList
+                                        plain
+                                        items={usageItems.slice(0, SIDE_CONVERSATIONS)}
+                                        label={t('instructionDetail.page.usedIn')}
+                                        untitled={t('memoryPage.changes.untitledConversation')}
+                                        deleted={t('memoryPage.changes.deletedConversation')}
+                                    />
+                                )}
+                                {(usage?.usageCount ?? 0) > 0 && (
+                                    <Link className={styles.viewLink} to={instructionPath(instructionId, '/usage')}>
+                                        {t('instructionDetail.page.seeAllUsage')}
+                                    </Link>
+                                )}
+                            </SideCard>
+                        </>
+                    )}
+                />
+            ))}
+
+            <ShareModal
+                isOpen={shareOpen}
+                onClose={() => setShareOpen(false)}
+                onSave={saveShares}
+                entityId={latest ? instructionId : undefined}
+                fetchSharedUsers={async id => getInstructionSharedUsers(await getAccessTokenSilently(), id)}
+            />
+        </DetailShell>
+    )
 }

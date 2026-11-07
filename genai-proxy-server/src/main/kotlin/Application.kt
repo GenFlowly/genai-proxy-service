@@ -448,6 +448,7 @@ fun Application.module() {
     val requestAgentMapAdminService = get<com.genflowly.service.RequestAgentMapAdminService>()
     val customerRequestAgentMapService = get<com.genflowly.service.CustomerRequestAgentMapService>()
     val memoryService = get<com.genflowly.service.MemoryService>()
+    val instructionUsageService = get<com.genflowly.service.InstructionUsageService>()
 
     // Memory-extraction reconciler: re-dispatches pending extraction work
     // (restart-lost runs, retryable failures, debounce backstops) every minute.
@@ -468,5 +469,5 @@ fun Application.module() {
     val usageSummaryService = get<com.genflowly.service.UsageSummaryService>()
     val usageRateCardRepository = get<com.genflowly.repository.UsageRateCardRepository>()
     val accountDeletionService = get<com.genflowly.service.AccountDeletionService>()
-    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, usageSummaryService, usageRateCardRepository, accountDeletionService, appConfig)
+    configureRouting(generationOrchestrator, runsClient, customerProfileService, customerCredentialsService, instructionService, conversationService, conversationManagementService, aiModelsService, graphService, attachmentService, voiceSessionService, notesService, developerApiKeyService, systemApiKeyService, modelCatalogService, requestAgentMapAdminService, customerRequestAgentMapService, memoryService, instructionUsageService, exchangeSideEffects, unifiedSearchService, nodePresetService, vendorAllowlistService, customerToolsService, connectorsService, projectService, usageSummaryService, usageRateCardRepository, accountDeletionService, appConfig)
 }
