@@ -55,7 +55,8 @@ private data class RunStartPayload(
     /** End user's per-request reasoning depth; overrides node-config thinking_level on the response generator. */
     val thinking_level: String? = null,
     /** Optional idempotency/rediscovery key; server generates one when null. */
-    val run_id: String? = null
+    val run_id: String? = null,
+    val entitlements: EntitlementsPayload? = null
 )
 
 @Serializable
@@ -115,7 +116,8 @@ class RunsClient(
         graphId: String? = null,
         thinkingLevel: String? = null,
         runId: String? = null,
-        memoryContext: MemoryContext? = null
+        memoryContext: MemoryContext? = null,
+        entitlements: com.genflowly.models.CustomerEntitlements? = null
     ): String? {
         val payload = json.encodeToString(
             RunStartPayload(
@@ -138,7 +140,8 @@ class RunsClient(
                 request_source = requestSource,
                 graph_id = graphId,
                 thinking_level = thinkingLevel,
-                run_id = runId
+                run_id = runId,
+                entitlements = entitlements?.let(EntitlementsPayload::of)
             )
         )
         return try {

@@ -423,5 +423,21 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(client.inserted)
 
 
+    async def test_no_vector_db_is_a_409_and_nothing_is_embedded(self):
+        from fastapi import HTTPException
+
+        from encoding_library.utils.vector_db import VectorDBNotConfigured
+
+        with (
+            patch.object(notes_module, "get_milvus_client", side_effect=VectorDBNotConfigured("cust-1")),
+            patch("graph.nodes.retrieval.customer_embedding_model", return_value=MagicMock()) as encoder,
+            patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=[]) as embed,
+        ):
+            with self.assertRaises(HTTPException) as ctx:
+                await encode_memory(self._request())
+        self.assertEqual(ctx.exception.status_code, 409)
+        encoder.assert_not_called()
+        embed.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()

@@ -148,6 +148,10 @@ class RetrievalState(TypedDict):
     # the usage log.
     memory_context: Optional[dict]
 
+    # The customer's Entitlements as a dict, or None when the caller sent
+    # none (see graph.entitlements). Gates the tools bound and EPISODIC recall.
+    entitlements: Optional[dict]
+
     # Written by the MEMORY node: the rendered "what you know about this user"
     # block. The response-generating nodes append it to their persona.
     memories_block: Optional[str]

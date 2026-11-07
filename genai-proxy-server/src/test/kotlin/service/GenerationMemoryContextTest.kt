@@ -12,6 +12,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -47,7 +48,8 @@ class GenerationMemoryContextTest {
         AppScope(),
         mockk(relaxed = true),          // runsClient
         mockk(relaxed = true),          // appConfig (durableRunsEnabled=false → stateless path)
-        mockk(relaxed = true)           // conversationManagementService
+        mockk(relaxed = true),          // conversationManagementService
+        entitlementServiceWith()
     )
 
     private val context = slot<MemoryContext>()
@@ -62,14 +64,16 @@ class GenerationMemoryContextTest {
             retrievalService.retrieveAndGenerate(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                memoryContext = capture(context)
+                memoryContext = capture(context),
+                entitlements = any()
             )
         } returns RetrievalResult("ok", 1, 2, 3, null)
         every {
             retrievalService.retrieveAndGenerateStream(
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                memoryContext = capture(context)
+                memoryContext = capture(context),
+                entitlements = any()
             )
         } returns flowOf()
     }
@@ -93,6 +97,30 @@ class GenerationMemoryContextTest {
 
         assertEquals("PRJ1", context.captured.project_id)
         assertEquals(result.responseMessageId, context.captured.response_message_id)
+    }
+
+    @Test
+    fun `batch and streamed replies send the customer's entitlements`() = runTest {
+        orchestrator.processTextGenerateRequest(aiConfig, "", "", "hi", "conv-1", null, "REACT_APP", cust)
+        orchestrator.processTextGenerateStreamRequest(aiConfig, "", "", "hi", "conv-1", null, "REACT_APP", cust)
+            .flow.toList()
+
+        coVerify {
+            retrievalService.retrieveAndGenerate(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                memoryContext = any(),
+                entitlements = ALL_ENTITLEMENTS
+            )
+        }
+        verify {
+            retrievalService.retrieveAndGenerateStream(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                memoryContext = any(),
+                entitlements = ALL_ENTITLEMENTS
+            )
+        }
     }
 
     @Test

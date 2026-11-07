@@ -37,7 +37,7 @@ class CustomerCredentialsPrimaryProviderTest {
     private val service = CustomerCredentialsService(
         kms, credsRepo, profileRepo, mockk<EncodingServerClient>(relaxed = true),
         mockk<RetrievalServerClient>(), mockk<VendorAllowlistService>(), AppScope(),
-        mockk<EmbeddingModelCatalogService>(relaxed = true)
+        mockk<EmbeddingModelCatalogService>(relaxed = true), mockk<CustomerEntitlementService>(relaxed = true)
     )
 
     private fun keyItem(

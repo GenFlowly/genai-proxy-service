@@ -40,7 +40,8 @@ class CustomerCredentialsService(
     private val retrievalServerClient: RetrievalServerClient,
     private val vendorAllowlistService: VendorAllowlistService,
     private val appScope: AppScope,
-    private val embeddingModelCatalogService: EmbeddingModelCatalogService
+    private val embeddingModelCatalogService: EmbeddingModelCatalogService,
+    private val customerEntitlementService: CustomerEntitlementService
 ) {
 
     // ─── AI vendor API keys ───────────────────────────────────────────────────
@@ -68,6 +69,7 @@ class CustomerCredentialsService(
         return if (result.valid) {
             val stored = storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
             logger.info { "API Key validated and stored for vendor $vendor: $stored" }
+            customerEntitlementService.refresh(customerId)
             // An OPENAI chat key doubles as the embedding key, and chat
             // validation (models.list) can pass for a key that cannot embed.
             // Refresh the embedding catalog now so capability — or the lack
@@ -253,6 +255,7 @@ class CustomerCredentialsService(
             // to validate it against, and nothing to probe. Store as-is.
             storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
             logger.info { "Stored $vendor token without provider validation" }
+            customerEntitlementService.refresh(customerId)
             return com.genflowly.models.EmbeddingKeyStatus(
                 vendor = vendor,
                 isAPIKeyValid = true,
@@ -265,6 +268,7 @@ class CustomerCredentialsService(
         return if (result.valid) {
             storeApiKey(customerId = customerId, aiVendor = vendor.name, apiKey = apiKey)
             logger.info { "Embedding API key validated and stored for vendor $vendor" }
+            customerEntitlementService.refresh(customerId)
             // Discover which models THIS key can actually embed, so the model
             // picker is accurate by the time the customer opens it.
             embeddingModelCatalogService.probeOnKeyChangeAsync(customerId, vendor, apiKey)
@@ -365,6 +369,7 @@ class CustomerCredentialsService(
     suspend fun deleteEmbeddingKey(customerId: String, vendor: com.genflowly.models.EmbeddingVendor) {
         require(!vendor.embeds) { "Only the ${com.genflowly.models.EmbeddingVendor.HUGGINGFACE.name} token can be deleted" }
         customerCredentialsRepository.deleteCustomerApiKey(customerId, vendor.name)
+        customerEntitlementService.refresh(customerId)
     }
 
     // ─── Vector DB config ─────────────────────────────────────────────────────
@@ -378,6 +383,7 @@ class CustomerCredentialsService(
         val encryptedEndpoint = kmsProvider.encrypt(endpoint)
         val encryptedToken = kmsProvider.encrypt(token)
         customerCredentialsRepository.saveCustomerVectorDBConfig(customerId, vendor, encryptedEndpoint, encryptedToken)
+        customerEntitlementService.refresh(customerId)
         return true
     }
 
@@ -393,6 +399,7 @@ class CustomerCredentialsService(
     fun ensureCollectionsExistAsync(customerId: String, authHeader: String?) {
         if (authHeader != null) {
             appScope.launch {
+                if (customerEntitlementService.getOrNull(customerId)?.canIndex == false) return@launch
                 val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
                 encodingServerClient.ensureCollections(customerId, authHeader, prefs?.embeddingModel)
             }
@@ -418,6 +425,7 @@ class CustomerCredentialsService(
         customerCredentialsRepository.saveCustomerToolCredentials(
             customerId, toolType, authType, encrypted, settingsJson
         )
+        customerEntitlementService.refresh(customerId)
         // Read back so `connected` reflects what is actually stored — a
         // settings-only save on an item with no key must not report connected.
         val item = customerCredentialsRepository.getCustomerToolCredentials(customerId, toolType)
@@ -474,6 +482,7 @@ class CustomerCredentialsService(
 
     suspend fun removeToolCredentials(customerId: String, toolType: String) {
         customerCredentialsRepository.deleteCustomerToolCredentials(customerId, toolType)
+        customerEntitlementService.refresh(customerId)
     }
 
     /**
@@ -486,6 +495,7 @@ class CustomerCredentialsService(
         val keys = customerCredentialsRepository.deleteAllCustomerApiKeys(customerId)
         val vectorDb = if (customerCredentialsRepository.deleteCustomerVectorDBConfig(customerId)) 1 else 0
         val tools = customerCredentialsRepository.removeAllToolCredentials(customerId)
+        customerEntitlementService.refresh(customerId)
         val removed = keys + vectorDb + tools
         logger.info { "Removed $removed credential(s) for customer $customerId" }
         return removed

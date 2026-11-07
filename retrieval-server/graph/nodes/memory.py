@@ -10,6 +10,7 @@ from boto3.dynamodb.conditions import Key
 
 from encoding_library.observability import count, observe
 from graph.bounded_cache import BoundedCache
+from graph.entitlements import can_search_vectors
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -479,7 +480,9 @@ def memory(node_id: Optional[str] = None):
         recallable_by_key.update({i["memoryId"]: i for i in overflow_core})
 
         recalled: list[dict] = []
-        if recall_top_k > 0 and recallable_by_key:
+        # EPISODIC recall embeds the message and searches the vector DB, so
+        # it needs both; without them only CORE memories apply.
+        if recall_top_k > 0 and recallable_by_key and can_search_vectors(state.get("entitlements")):
             try:
                 recalled = _recall_episodic(
                     state,

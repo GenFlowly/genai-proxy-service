@@ -42,7 +42,8 @@ class InstructionService(
     private val generationAgentExecutor: GenerationAgentExecutor,
     private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
-    private val appScope: AppScope
+    private val appScope: AppScope,
+    private val customerEntitlementService: CustomerEntitlementService
 ) {
 
     /**
@@ -181,6 +182,7 @@ class InstructionService(
     ) {
         appScope.launch {
             try {
+                if (customerEntitlementService.getOrNull(customerId)?.canIndex == false) return@launch
                 val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
                 encodingServerClient.encodeInstruction(
                     EncodingSaveInstructionRequest(
@@ -344,7 +346,9 @@ class InstructionService(
      * keyword-matched instead and listed first. Hits are hydrated back from
      * the accessible-latest set — content always comes from DDB; the index
      * knows only chunk text and keys. A blank query returns all latest
-     * instructions. Vector-index failures propagate to the caller.
+     * instructions. A customer without a vector DB or embedding key gets
+     * [com.genflowly.providers.SearchNotConfiguredException] before anything
+     * is searched; other vector-index failures propagate to the caller.
      */
     suspend fun searchInstructions(customerId: String, query: String): GetCustomerInstructionListResponse {
         val latestRows = accessibleInstructions(customerId)
@@ -367,6 +371,7 @@ class InstructionService(
             }
             .map { it.second }
         val accessibleById = latest.associateBy { it.id }
+        customerEntitlementService.requireSearchable(customerId)
         val semantic = retrievalServerClient
             .search(
                 customerId,

@@ -39,16 +39,22 @@ class UnifiedSearchService(
     private val conversationRepository: ConversationRepository,
     private val notesRepository: NotesRepository,
     private val memoryRepository: MemoryRepository,
-    private val vectorSyncPendingRepository: VectorSyncPendingRepository
+    private val vectorSyncPendingRepository: VectorSyncPendingRepository,
+    private val customerEntitlementService: CustomerEntitlementService
 ) {
     private val logger = LoggerFactory.getLogger(UnifiedSearchService::class.java)
 
+    /**
+     * Throws [com.genflowly.providers.SearchNotConfiguredException] before
+     * searching anything when the customer has no vector DB or embedding key.
+     */
     suspend fun search(
         customerId: String,
         query: String,
         limit: Int,
         types: List<String>? = null
     ): List<SearchResultItem> = coroutineScope {
+        customerEntitlementService.requireSearchable(customerId)
         val keyword = async { keywordMatches(customerId, query, types) }
         val semantic = retrievalServerClient.search(customerId, query, limit, types).mapNotNull { hit ->
             when (hit.type) {
