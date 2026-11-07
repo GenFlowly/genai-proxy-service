@@ -4,10 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { Route } from 'react-router-dom'
 import MemoryDetailPage from '../../pages/MemoryPage/MemoryDetailPage'
 import NewMemoryPage from '../../pages/MemoryPage/NewMemoryPage'
+import MemoryEditPage from '../../pages/MemoryPage/MemoryEditPage'
+import MemoryHistoryPage from '../../pages/MemoryPage/MemoryHistoryPage'
+import MemoryUsedInPage from '../../pages/MemoryPage/MemoryUsedInPage'
 import { queryClient } from '../../queryClient'
 import { memoriesCache } from '../../services/memoriesService'
 import { MemoryChange } from '../../models/memory.models'
 import { FakeMemoryApi, memory, renderMemoryRoutes } from './MemoryPage/memoryTestKit'
+import { appliesLabel } from '../../pages/MemoryPage/memoryDetail'
 
 const mockFetch = jest.fn()
 jest.mock('../../utils/apiUtils', () => ({ fetchWithRetry: (...args: unknown[]) => mockFetch(...args) }))
@@ -56,6 +60,9 @@ function renderAt(path: string) {
             <Route path="/memory" element={<div data-testid="list-page" />} />
             <Route path="/memory/new" element={<NewMemoryPage />} />
             <Route path="/memory/:memoryId" element={<MemoryDetailPage />} />
+            <Route path="/memory/:memoryId/edit" element={<MemoryEditPage />} />
+            <Route path="/memory/:memoryId/history" element={<MemoryHistoryPage />} />
+            <Route path="/memory/:memoryId/usage" element={<MemoryUsedInPage />} />
         </>
     ))
 }
@@ -78,126 +85,108 @@ beforeEach(() => {
     mockFetch.mockImplementation(api.handle)
 })
 
+const USAGE = [
+    {
+        items: [
+            { conversationId: 'CONV1', messageId: 'MSG-5', usedAt: '2026-11-05T10:42:00Z', how: 'core', conversationTitle: 'Weekly Report', conversationAvailable: true },
+            { conversationId: 'CONV1', messageId: 'MSG-4', usedAt: '2026-11-05T10:41:00Z', how: 'core', conversationTitle: 'Weekly Report', conversationAvailable: true },
+        ],
+        nextCursor: '1',
+        total: 198,
+    },
+    { items: [{ conversationId: 'GONE', messageId: 'MSG-2', usedAt: '2026-11-01T10:42:00Z', how: 'search', conversationAvailable: false }], total: 198 },
+]
+
 describe('MemoryDetailPage', () => {
-    test('shows where it applies, its versions newest first and the change log', async () => {
+    test('desktop: the text, where it applies, usage and history side by side', async () => {
+        api.usage['MEM#m'] = USAGE
         renderAt('/memory/MEM%23m?scope=core')
 
-        expect(await screen.findByTestId('memory-text')).toHaveValue('Prefers concise answers with the conclusion first.')
-        expect(screen.getAllByText('Profile · Core')).toHaveLength(2)
-        expect(screen.getByText(/Used 198×/)).toBeInTheDocument()
-        const versions = within(screen.getByTestId('memory-versions'))
-        expect(versions.getByTestId('memory-version-3')).toHaveTextContent('Latest')
-        expect(versions.getByTestId('memory-version-1')).toHaveTextContent('Learned from a conversation')
+        expect(await screen.findByTestId('memory-text-shown')).toHaveTextContent('Prefers concise answers with the conclusion first.')
+        expect(screen.getByText('preference')).toBeInTheDocument()
+        expect(within(screen.getByTestId('memory-applies')).getByText('Every conversation · Core')).toBeInTheDocument()
+        const usage = screen.getByTestId('memory-usage')
+        expect(within(usage).getByText('198')).toBeInTheDocument()
+        expect(await within(usage).findByText('Weekly Report')).toBeInTheDocument()
+        expect(within(usage).getByText(/^2 replies · last/)).toBeInTheDocument()
+        expect(within(usage).getByRole('link', { name: 'See all usage' })).toHaveAttribute('href', '/memory/MEM%23m/usage?scope=core')
 
-        const log = screen.getByTestId('memory-change-log')
-        const learned = within(log).getByTestId('memory-change-c1')
+        const timeline = screen.getByTestId('detail-timeline')
+        const learned = within(timeline).getByTestId('timeline-c1')
         expect(within(learned).getByRole('link', { name: 'Learning From User Conversations' })).toHaveAttribute('href', '/chat/CONV1')
-        expect(within(learned).getByText('MSG-1')).toBeInTheDocument()
         expect(within(learned).getByText('“Keep answers short.”')).toBeInTheDocument()
         expect(within(learned).getByText('States a lasting preference.')).toBeInTheDocument()
-        const moved = within(log).getByTestId('memory-change-c2')
-        expect(within(moved).getByText('No new version')).toBeInTheDocument()
-        expect(within(moved).getByText('Profile · Episodic')).toBeInTheDocument()
-        const updated = within(log).getByTestId('memory-change-c4')
+        expect(within(learned).getByRole('link', { name: /View version 1/ })).toHaveAttribute('href', '/memory/MEM%23m?version=1&scope=core')
+        const updated = within(timeline).getByTestId('timeline-c4')
         expect(within(updated).getByText('Deleted conversation')).toBeInTheDocument()
-        expect(within(updated).getByText('Prefers concise answers.')).toBeInTheDocument()
+        expect(within(updated).getByText('with the conclusion first').tagName).toBe('INS')
+        expect(within(updated).queryByRole('link', { name: /View version/ })).not.toBeInTheDocument()
+        expect(within(within(timeline).getByTestId('timeline-c2')).getByText('No new version')).toBeInTheDocument()
+        expect(screen.queryByTestId('memory-detail-copy')).not.toBeInTheDocument()
     })
 
-    test('each version says how it was made', async () => {
-        api.changes['MEM#m'] = [
-            { changeId: 'a1', type: 'ADDED_BY_YOU', createdAt: '2026-11-06T08:48:00Z', version: 1, text: 'Prefers short answers.' },
-            { changeId: 'a2', type: 'EDITED_BY_YOU', createdAt: '2026-11-06T08:49:00Z', version: 2, text: 'Prefers concise answers.', previousText: 'Prefers short answers.' },
-            { changeId: 'a3', type: 'UPDATED', createdAt: '2026-11-06T09:04:00Z', version: 3, text: 'Prefers concise answers with the conclusion first.', sourceType: 'CONVERSATION' },
-        ]
+    test('desktop: Edit turns the card into an editor and saves the next version', async () => {
         renderAt('/memory/MEM%23m')
+        await screen.findByTestId('memory-text-shown')
 
-        const versions = within(await screen.findByTestId('memory-versions'))
-        expect(versions.getByTestId('memory-version-1')).toHaveTextContent('Added by you')
-        expect(versions.getByTestId('memory-version-2')).toHaveTextContent('Edited by you')
-        expect(versions.getByTestId('memory-version-3')).toHaveTextContent('Updated from a conversation')
-    })
-
-    test('saving creates the next version from the one edited', async () => {
-        renderAt('/memory/MEM%23m')
-        const text = await screen.findByTestId('memory-text')
+        await userEvent.click(screen.getByTestId('memory-edit'))
+        const text = screen.getByTestId('memory-text') as HTMLTextAreaElement
+        expect(text).toHaveValue('Prefers concise answers with the conclusion first.')
+        expect(text).toHaveFocus()
+        expect(text.selectionStart).toBe(text.value.length)
         expect(screen.getByTestId('memory-save')).toBeDisabled()
-
         await userEvent.clear(text)
         await userEvent.type(text, 'Prefers bullet points.')
-        expect(screen.getByTestId('memory-save')).toHaveTextContent('Save as version 4')
         await userEvent.click(screen.getByTestId('memory-save'))
 
         await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Saved as version 4'))
         expect(api.last('PUT')!.body).toEqual({ text: 'Prefers bullet points.', baseVersion: 3 })
+        expect(screen.queryByTestId('memory-text')).not.toBeInTheDocument()
     })
 
-    test('an older version can be read and saved again as a new version', async () => {
-        renderAt('/memory/MEM%23m')
-        await screen.findByTestId('memory-text')
+    test('desktop: an older version can be restored as the next version', async () => {
+        renderAt('/memory/MEM%23m?version=1')
 
-        await userEvent.click(screen.getByTestId('memory-version-1'))
-
+        expect(await screen.findByTestId('memory-older')).toHaveTextContent('This is version 1. Replies use the latest, version 3.')
+        expect(screen.getByTestId('memory-text-shown')).toHaveTextContent('Prefers short answers.')
+        await userEvent.click(screen.getByRole('button', { name: 'Restore as version 4' }))
         expect(screen.getByTestId('memory-text')).toHaveValue('Prefers short answers.')
-        expect(screen.getByText(/Viewing version 1\. Saving this text creates version 4/)).toBeInTheDocument()
         await userEvent.click(screen.getByTestId('memory-save'))
+
         await waitFor(() => expect(api.last('PUT')!.body).toEqual({ text: 'Prefers short answers.', baseVersion: 3 }))
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/memory\/MEM%23m\?scope=core$/))
     })
 
-    test('a save that lost a race says so', async () => {
-        api.refuseWith = 409
+    test('a save that lost a race says so and keeps the editor', async () => {
         renderAt('/memory/MEM%23m')
-        const text = await screen.findByTestId('memory-text')
+        await screen.findByTestId('memory-text-shown')
+        api.refuseWith = 409
 
-        await userEvent.type(text, ' Really.')
+        await userEvent.click(screen.getByTestId('memory-edit'))
+        await userEvent.type(screen.getByTestId('memory-text'), ' Always.')
         await userEvent.click(screen.getByTestId('memory-save'))
 
         await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith(
-            "A newer version was saved while you were editing. It's listed now, and your text is still here."
-        ))
+            "A newer version was saved while you were editing. It's listed now, and your text is still here."))
+        expect(screen.getByTestId('memory-text')).toBeInTheDocument()
     })
 
-    test('the usage log pages through the replies it was used in', async () => {
-        api.usage['MEM#m'] = [
-            { items: [{ conversationId: 'CONV1', messageId: 'MSG-5', usedAt: '2026-11-05T10:42:00Z', how: 'core', conversationTitle: 'Weekly Report', conversationAvailable: true }], nextCursor: '1', total: 198 },
-            { items: [{ conversationId: 'GONE', messageId: 'MSG-2', usedAt: '2026-11-01T10:42:00Z', how: 'search', conversationAvailable: false }], total: 198 },
-        ]
-        renderAt('/memory/MEM%23m')
-        await screen.findByTestId('memory-text')
-
-        await userEvent.click(screen.getByTestId('memory-tab-usage'))
-
-        const log = await screen.findByTestId('memory-usage-log')
-        expect(within(log).getByRole('link', { name: 'Weekly Report' })).toBeInTheDocument()
-        expect(screen.getByText('Showing the latest 1 of 198')).toBeInTheDocument()
-        await userEvent.click(screen.getByTestId('memory-usage-load-more'))
-        expect(await within(log).findByText('Memory search')).toBeInTheDocument()
-        expect(within(log).getByText('Deleted conversation')).toBeInTheDocument()
-        expect(screen.queryByTestId('memory-usage-load-more')).not.toBeInTheDocument()
-    })
-
-    test('a project memory offers Copy and can leave just this project', async () => {
+    test('a project memory offers Copy in the more menu and can leave just this project', async () => {
         renderAt('/memory/MEM%23p?scope=PRJb')
-        await screen.findByTestId('memory-text')
-        expect(screen.getByTestId('memory-detail-copy')).toBeInTheDocument()
+        await screen.findByTestId('memory-text-shown')
 
-        await userEvent.click(screen.getByTestId('memory-detail-delete-button'))
+        await userEvent.click(screen.getByTestId('detail-more'))
+        expect(screen.getByTestId('memory-detail-copy')).toBeInTheDocument()
+        await userEvent.click(screen.getByTestId('memory-detail-delete'))
         await userEvent.click(screen.getByTestId('memory-remove-here'))
 
         await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/memory?scope=PRJb'))
         expect(api.last('DELETE')!.query.get('projectId')).toBe('PRJb')
     })
 
-    test('a Profile memory has no Copy', async () => {
-        renderAt('/memory/MEM%23m')
-        await screen.findByTestId('memory-text')
-
-        expect(screen.getByTestId('memory-detail-move')).toBeInTheDocument()
-        expect(screen.queryByTestId('memory-detail-copy')).not.toBeInTheDocument()
-    })
-
     test('moving it elsewhere follows it to its new list', async () => {
         renderAt('/memory/MEM%23m?scope=core')
-        await screen.findByTestId('memory-text')
+        await screen.findByTestId('memory-text-shown')
 
         await userEvent.click(screen.getByTestId('memory-detail-move'))
         await userEvent.click(screen.getByTestId('memory-destination-PRJa'))
@@ -212,17 +201,129 @@ describe('MemoryDetailPage', () => {
         expect(await screen.findByText("This memory doesn't exist anymore.")).toBeInTheDocument()
     })
 
-    test('on a phone the versions open from a row above the editor', async () => {
+    test('phone: the text card, then rows for where it applies, usage and history', async () => {
         mockBreakpoints.mockReturnValue(phone)
-        renderAt('/memory/MEM%23m')
-        await screen.findByTestId('memory-text')
-        expect(screen.queryByTestId('memory-versions')).not.toBeInTheDocument()
+        renderAt('/memory/MEM%23m?scope=core')
+        await screen.findByTestId('memory-text-shown')
 
-        await userEvent.click(screen.getByTestId('memory-versions-toggle'))
-        await userEvent.click(screen.getByTestId('memory-version-2'))
+        expect(screen.getByTestId('detail-row-applies')).toHaveTextContent('Every conversation · Core')
+        expect(screen.getByTestId('detail-row-usage')).toHaveTextContent('198 replies · last')
+        expect(screen.getByTestId('detail-row-history')).toHaveTextContent('Version 3 · 4 changes')
+        expect(screen.getByTestId('detail-row-history')).toHaveAttribute('href', '/memory/MEM%23m/history?scope=core')
+        expect(screen.getByTestId('detail-row-usage')).toHaveAttribute('href', '/memory/MEM%23m/usage?scope=core')
+        expect(screen.queryByTestId('detail-timeline')).not.toBeInTheDocument()
 
-        expect(screen.getByTestId('memory-text')).toHaveValue('Prefers concise answers.')
-        expect(screen.queryByTestId('memory-versions')).not.toBeInTheDocument()
+        await userEvent.click(screen.getByTestId('detail-row-applies'))
+        expect(await screen.findByTestId('memory-destination-PRJa')).toBeInTheDocument()
+    })
+
+    test('phone: Edit and Restore open the edit page', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/memory/MEM%23m?scope=core&version=2')
+        await screen.findByTestId('memory-text-shown')
+
+        await userEvent.click(screen.getByRole('button', { name: 'Restore as version 4' }))
+
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/memory/MEM%23m/edit?version=2&scope=core'))
+    })
+})
+
+describe('appliesLabel', () => {
+    test('only Core in Profile applies to every conversation', () => {
+        const names = { PRJ1: 'Market research' }
+        expect(appliesLabel({ projectId: null, kind: 'CORE' }, names)).toBe('Every conversation · Core')
+        expect(appliesLabel({ projectId: null, kind: 'EPISODIC' }, names)).toBe('When relevant · Episodic')
+        expect(appliesLabel({ projectId: 'PRJ1', kind: 'EPISODIC' }, names)).toBe('Market research · Episodic')
+    })
+})
+
+describe('MemoryEditPage', () => {
+    test('shows the change while typing and saves the next version', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/memory/MEM%23m/edit?scope=core')
+        const text = await screen.findByTestId('memory-text')
+        expect(screen.queryByTestId('memory-change-preview')).not.toBeInTheDocument()
+        expect(screen.getByTestId('detail-back')).toHaveAttribute('href', '/memory/MEM%23m?scope=core')
+
+        await userEvent.type(text, ' Always.')
+        expect(within(screen.getByTestId('memory-change-preview')).getByText('Always.').tagName).toBe('INS')
+        expect(screen.getByText(`${'Prefers concise answers with the conclusion first. Always.'.length} / 500`)).toBeInTheDocument()
+        await userEvent.click(screen.getByTestId('memory-save'))
+
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/memory\/MEM%23m\?scope=core$/))
+        expect(api.last('PUT')!.body).toEqual({ text: 'Prefers concise answers with the conclusion first. Always.', baseVersion: 3 })
+    })
+
+    test('starts from an older version and says so', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/memory/MEM%23m/edit?version=1')
+
+        expect(await screen.findByTestId('memory-text')).toHaveValue('Prefers short answers.')
+        expect(screen.getByText('Editing from version 1. Saving makes it version 4.')).toBeInTheDocument()
+    })
+
+    test('Cancel goes back, and a failed save says so', async () => {
+        renderAt('/memory/MEM%23m/edit')
+        await userEvent.type(await screen.findByTestId('memory-text'), ' Always.')
+        api.refuseWith = 500
+
+        await userEvent.click(screen.getByTestId('memory-save'))
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith("Couldn't save the memory."))
+        await userEvent.click(screen.getByTestId('memory-edit-cancel'))
+
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/memory\/MEM%23m\?scope=core$/))
+    })
+})
+
+describe('MemoryHistoryPage', () => {
+    test('every change, with a link back to the memory', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/memory/MEM%23m/history')
+
+        const timeline = await screen.findByTestId('detail-timeline')
+        expect(within(timeline).getAllByRole('listitem')).toHaveLength(4)
+        expect(within(timeline).getByText('Learned from a conversation')).toBeInTheDocument()
+        expect(screen.getByTestId('detail-back')).toHaveTextContent('Memory')
+    })
+})
+
+describe('MemoryUsedInPage', () => {
+    test('one row per conversation, with older uses on request', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        api.usage['MEM#m'] = USAGE
+        renderAt('/memory/MEM%23m/usage')
+
+        const list = await screen.findByTestId('detail-conversations')
+        expect(within(list).getByRole('link', { name: /Weekly Report/ })).toHaveAttribute('href', '/chat/CONV1')
+        expect(within(list).getByText(/^2 replies · last/)).toBeInTheDocument()
+        await userEvent.click(screen.getByTestId('memory-usage-load-more'))
+        expect(await within(list).findByText('Deleted conversation')).toBeInTheDocument()
+        expect(screen.queryByTestId('memory-usage-load-more')).not.toBeInTheDocument()
+        expect(screen.getByTestId('memory-usage-unlisted')).toHaveTextContent('Plus 195 earlier replies, from before conversations were listed.')
+    })
+
+    test('replies from before conversations were listed are counted, not hidden', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        api.memories = [memory('MEM#old', 'Runs a studio.', { hitCount: 12 })]
+        renderAt('/memory/MEM%23old/usage')
+
+        expect(await screen.findByTestId('memory-usage-empty')).toHaveTextContent('12 replies used it before conversations were listed.')
+        expect(screen.getByTestId('mobile-header-subtitle')).toHaveTextContent('12 replies')
+    })
+
+    test('desktop: a count without a last use says the date was not recorded', async () => {
+        api.memories = [memory('MEM#old', 'Runs a studio.', { hitCount: 12 })]
+        renderAt('/memory/MEM%23old')
+
+        const usage = await screen.findByTestId('memory-usage')
+        expect(within(usage).getByText('12')).toBeInTheDocument()
+        expect(within(usage).getByText('last use not recorded')).toBeInTheDocument()
+    })
+
+    test('says when it was never used', async () => {
+        renderAt('/memory/MEM%23p/usage')
+
+        expect(await screen.findByText('Not used in any reply yet.')).toBeInTheDocument()
     })
 })
 

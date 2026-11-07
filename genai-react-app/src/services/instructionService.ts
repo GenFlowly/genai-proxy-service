@@ -3,7 +3,8 @@ import { endpoints } from "../config/endpoints";
 import {
     CreateInstructionRequest,
     GetCustomerInstructionListResponse,
-    InstructionResponse
+    InstructionResponse,
+    InstructionUsageResponse,
 } from "../models/instruction.models";
 
 import { fetchWithRetry } from "../utils/apiUtils";
@@ -162,4 +163,20 @@ export async function getInstructionSharedUsers(
     }
 
     return (await response.json()) as SearchUserResponse[]
+}
+
+export class InstructionApiError extends Error {
+    constructor(readonly status: number) {
+        super(`Instruction request failed: ${status}`)
+    }
+}
+
+/** In how many of the caller's conversations the instruction was used, when last, and which. */
+export async function getInstructionUsage(token: string, instructionId: string): Promise<InstructionUsageResponse> {
+    const response = await fetchWithRetry(endpoints.instructionUsage(instructionId), {
+        method: HttpMethod.GET,
+        headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) throw new InstructionApiError(response.status)
+    return (await response.json()) as InstructionUsageResponse
 }

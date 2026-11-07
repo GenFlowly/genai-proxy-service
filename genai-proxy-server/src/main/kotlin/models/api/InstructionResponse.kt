@@ -13,5 +13,7 @@ data class InstructionResponse(
     val color: String? = null,
     val tags: List<String>? = null,
     val category: String? = null,
-    val role: ShareRole = ShareRole.OWNER
+    val role: ShareRole = ShareRole.OWNER,
+    /** When this version was saved. Null for versions saved before timestamps were kept. */
+    val createdAt: String? = null
 )

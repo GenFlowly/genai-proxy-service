@@ -22,6 +22,10 @@ export interface StepFunctionsV2StackProps extends cdk.StackProps {
     // one queue holds every kind of dead letter and redrive replays them all.
     deadLetterQueue: sqs.IQueue;
     parseAndChunkRepo: ecr.IRepository;
+    // The trigger must run the commit's tag: a mutable tag such as
+    // parse-and-chunk-latest leaves the template unchanged, so CloudFormation
+    // never moves the function off the image it first resolved.
+    parseAndChunkImageTag?: string;
     parseAndChunkLambda: lambda.IFunction;
     createAndStoreLambda: lambda.IFunction;
     // Comma-separated emails subscribed to the pipeline-alerts SNS topic.
@@ -165,7 +169,7 @@ export class StepFunctionsV2Stack extends cdk.Stack {
         const triggerLambdaV2 = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda-v2`, {
             functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-trigger-lambda-v2`,
             code: DockerImageCode.fromEcr(props.parseAndChunkRepo, {
-                tagOrDigest: 'parse-and-chunk-latest',
+                tagOrDigest: props.parseAndChunkImageTag || 'parse-and-chunk-latest',
                 cmd: ['handlers.trigger_lambda.handler'],
             }),
             memorySize: 256,

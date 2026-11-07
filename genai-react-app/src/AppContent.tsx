@@ -9,11 +9,17 @@ import LandingPage from './pages/LandingPage'
 import SettingsPage from './pages/SettingsPage/SettingsPage'
 import MemoryPage from './pages/MemoryPage/MemoryPage'
 import MemoryDetailPage from './pages/MemoryPage/MemoryDetailPage'
+import MemoryEditPage from './pages/MemoryPage/MemoryEditPage'
+import MemoryHistoryPage from './pages/MemoryPage/MemoryHistoryPage'
+import MemoryUsedInPage from './pages/MemoryPage/MemoryUsedInPage'
 import NewMemoryPage from './pages/MemoryPage/NewMemoryPage'
 import AgentsPage from './pages/AgentsPage/AgentsPage'
 import GraphAgentEditorPage from './pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage'
 import InstructionsPage from './pages/InstructionsPage/InstructionsPage'
 import InstructionDetailPage from './pages/InstructionDetailPage/InstructionDetailPage'
+import InstructionEditPage from './pages/InstructionDetailPage/InstructionEditPage'
+import InstructionHistoryPage from './pages/InstructionDetailPage/InstructionHistoryPage'
+import InstructionUsedInPage from './pages/InstructionDetailPage/InstructionUsedInPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
@@ -77,11 +83,18 @@ export default function AppContent(): React.ReactElement | null {
                             <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
                             <Route path="/memory/new" element={<ProtectedRoute><NewMemoryPage /></ProtectedRoute>} />
                             <Route path="/memory/:memoryId" element={<ProtectedRoute><MemoryDetailPage /></ProtectedRoute>} />
+                            <Route path="/memory/:memoryId/edit" element={<ProtectedRoute><MemoryEditPage /></ProtectedRoute>} />
+                            <Route path="/memory/:memoryId/history" element={<ProtectedRoute><MemoryHistoryPage /></ProtectedRoute>} />
+                            <Route path="/memory/:memoryId/usage" element={<ProtectedRoute><MemoryUsedInPage /></ProtectedRoute>} />
                             <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
                             <Route path="/agents/new" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
                             <Route path="/agents/:graphId" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
                             <Route path="/instructions" element={<InstructionsPage />} />
+                            <Route path="/instructions/new" element={<InstructionEditPage isNew />} />
                             <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
+                            <Route path="/instructions/:instructionId/edit" element={<InstructionEditPage />} />
+                            <Route path="/instructions/:instructionId/history" element={<InstructionHistoryPage />} />
+                            <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
                         </Routes>
                         <AppMenuOverlay />
                     </ConversationProvider>

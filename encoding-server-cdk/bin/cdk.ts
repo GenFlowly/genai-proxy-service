@@ -53,6 +53,7 @@ const stepFunctionsV2Stack = new StepFunctionsV2Stack(app, `${RESOURCE_NAMES.ENC
     ingestionQueue: sqsStack.ingestionQueue,
     deadLetterQueue: sqsStack.deadLetterQueue,
     parseAndChunkRepo: ecrStack.parseAndChunkRepo,
+    parseAndChunkImageTag: process.env.PARSE_AND_CHUNK_IMAGE_TAG || 'latest',
     parseAndChunkLambda: lambdaStack.parseAndChunkLambda,
     createAndStoreLambda: lambdaStack.createAndStoreLambda,
     alertEmails: process.env.ADMIN_EMAILS,

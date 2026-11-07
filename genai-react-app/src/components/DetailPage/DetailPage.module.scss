@@ -1,0 +1,888 @@
+@import '../../styles/themes.scss';
+@import '../../styles/mixins.scss';
+
+// ── Shell ────────────────────────────────────────────────────────────────────
+
+.page {
+    height: 100vh;
+    overflow: hidden;
+    background-color: $color-background;
+    display: flex;
+    flex-direction: column;
+}
+
+.scroll {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.content {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+
+    @include respond-to-tablet {
+        padding: calc(#{$mobile-header-height} + 12px) 16px 40px;
+    }
+}
+
+.back {
+    align-self: flex-start;
+    min-height: 44px;
+    margin: -8px 0 -8px -4px;
+    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+// ── Two columns on desktop ───────────────────────────────────────────────────
+
+.columns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 24px;
+}
+
+.mainColumn {
+    flex: 999 1 560px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+}
+
+.sideColumn {
+    flex: 1 1 320px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+// ── Text card ────────────────────────────────────────────────────────────────
+
+.card {
+    padding: 24px 28px;
+    border: 1px solid $color-border-light;
+    border-radius: 18px;
+    background: $color-background-secondary;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    @include respond-to-tablet {
+        padding: 20px;
+        gap: 14px;
+    }
+}
+
+.cardHead {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.iconTile {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.375rem;
+    background: $color-background-tertiary;
+
+    @include respond-to-tablet {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        font-size: 1.25rem;
+    }
+}
+
+.cardTitle {
+    margin: 0;
+    font-size: 1.5rem;
+    line-height: 1.3;
+    font-weight: 600;
+    color: $color-text-primary;
+    overflow-wrap: anywhere;
+
+    @include respond-to-tablet {
+        font-size: 1.25rem;
+    }
+}
+
+.chips {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chip {
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: $color-background-tertiary;
+    color: $color-text-secondary;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.chipAccent {
+    background: $color-background-selected;
+    color: $color-primary;
+    font-weight: 600;
+}
+
+.bigText {
+    margin: 0;
+    font-size: 1.5rem;
+    line-height: 1.4;
+    color: $color-text-primary;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+
+    @include respond-to-tablet {
+        font-size: 1.25rem;
+        line-height: 1.45;
+    }
+}
+
+// The library's TextContainer is a boxed chat article; inside the card it is
+// just the instruction's formatted text.
+.markdown {
+    min-width: 0;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: $color-text-primary;
+
+    > article {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+    }
+
+    ol,
+    ul {
+        padding-left: 1.5rem;
+    }
+
+    p:last-child {
+        margin-bottom: 0;
+    }
+}
+
+.clipped {
+    max-height: 18rem;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+    mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+
+.textToggle {
+    align-self: flex-start;
+    min-height: 40px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.cardFoot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid $color-border-light;
+}
+
+.footNote {
+    font-size: 0.8125rem;
+    color: $color-text-muted;
+
+    strong {
+        font-weight: 600;
+        color: $color-text-secondary;
+    }
+}
+
+.footActions {
+    display: flex;
+    gap: 10px;
+}
+
+.banner {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: $color-background-selected;
+    color: $color-text-primary;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+.bannerLink {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: $color-primary;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────────
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fieldLabel {
+    margin: 0 4px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $color-text-muted;
+}
+
+.textArea {
+    width: 100%;
+    min-height: 150px;
+    resize: vertical;
+    padding: 14px 16px;
+    border: 1.5px solid $color-border;
+    border-radius: 16px;
+    background: $color-background;
+    color: $color-text-primary;
+    font: inherit;
+    font-size: 1.125rem;
+    line-height: 1.5;
+    box-sizing: border-box;
+
+    &:focus {
+        outline: 0;
+        border-color: $color-primary;
+    }
+
+    @include respond-to-tablet {
+        background: $color-background-secondary;
+    }
+}
+
+.fieldFoot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 4px;
+    font-size: 0.78rem;
+    color: $color-text-muted;
+}
+
+.count {
+    font-variant-numeric: tabular-nums;
+}
+
+.preview {
+    padding: 12px 14px;
+    border: 1px solid $color-border-light;
+    border-radius: 14px;
+    background: $color-background-secondary;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stickyActions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin: 0 -16px -40px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    border-top: 1px solid $color-border-light;
+    background: $color-background;
+    display: flex;
+    gap: 12px;
+
+    > * {
+        flex: 1;
+    }
+}
+
+.desktopActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+// ── Rows (phone) ─────────────────────────────────────────────────────────────
+
+.rows {
+    border: 1px solid $color-border-light;
+    border-radius: 16px;
+    background: $color-background-secondary;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.row {
+    min-height: 64px;
+    padding: 12px 16px;
+    border: 0;
+    border-bottom: 1px solid $color-border-light;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+
+    &:last-child {
+        border-bottom: 0;
+    }
+
+    &:hover {
+        background: $color-background-hover;
+    }
+}
+
+.rowStatic {
+    cursor: default;
+
+    &:hover {
+        background: transparent;
+    }
+}
+
+.rowIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    background: $color-background-tertiary;
+    color: $color-text-secondary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rowIconAccent {
+    background: $color-background-selected;
+    color: $color-primary;
+}
+
+.rowText {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rowTitle {
+    font-size: 0.97rem;
+    font-weight: 600;
+    color: $color-text-primary;
+}
+
+.rowSummary {
+    font-size: 0.8125rem;
+    color: $color-text-muted;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chevron {
+    color: $color-text-muted;
+    flex-shrink: 0;
+}
+
+// ── Side cards (desktop) ─────────────────────────────────────────────────────
+
+.sideCard {
+    padding: 18px;
+    border: 1px solid $color-border-light;
+    border-radius: 16px;
+    background: $color-background-secondary;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.sideTitle {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $color-text-muted;
+}
+
+.sideSummary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.statValue {
+    font-size: 1.625rem;
+    font-weight: 600;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: $color-text-primary;
+}
+
+.statWords {
+    // As tall as a count's line, so the labels under both stay level.
+    min-height: 1.79rem;
+    display: flex;
+    align-items: flex-end;
+    font-size: 1rem;
+    white-space: nowrap;
+}
+
+.statLabel {
+    font-size: 0.78rem;
+    color: $color-text-muted;
+}
+
+.people {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.person {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.875rem;
+}
+
+.avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    background: $color-background-tertiary;
+    color: $color-text-secondary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.personName {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+// ── Section heading ──────────────────────────────────────────────────────────
+
+.sectionTitle {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+    color: $color-text-primary;
+}
+
+.intro {
+    margin: 0 4px;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: $color-text-muted;
+}
+
+.muted {
+    color: $color-text-muted;
+}
+
+// ── Timeline ─────────────────────────────────────────────────────────────────
+
+.timeline {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 4px;
+    display: flex;
+    flex-direction: column;
+}
+
+.entry {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    column-gap: 14px;
+}
+
+.rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 6px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid $color-border;
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+.dotCurrent {
+    border-color: $color-primary;
+    background: $color-primary;
+}
+
+.line {
+    flex: 1;
+    width: 2px;
+    margin-top: 6px;
+    background: $color-border-light;
+}
+
+.entryBody {
+    padding: 0 0 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.entryHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+}
+
+.entryTitle {
+    margin: 0;
+    font-size: 0.97rem;
+    font-weight: 600;
+    color: $color-text-primary;
+}
+
+.badge {
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: $color-background-tertiary;
+    color: $color-text-secondary;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badgeCurrent {
+    background: $color-background-selected;
+    color: $color-primary;
+}
+
+.entryDate {
+    font-size: 0.8rem;
+    color: $color-text-muted;
+}
+
+.convLink {
+    align-self: flex-start;
+    max-width: 100%;
+    min-height: 40px;
+    padding: 6px 12px;
+    border: 1px solid $color-border-light;
+    border-radius: 10px;
+    background: $color-background-secondary;
+    color: $color-text-primary;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+
+    span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+.convGone {
+    font-size: 0.875rem;
+    color: $color-text-muted;
+}
+
+.facts {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.fact {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 12px;
+    align-items: baseline;
+
+    dt {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: $color-text-muted;
+    }
+
+    dd {
+        margin: 0;
+        font-size: 0.9rem;
+        line-height: 1.55;
+        color: $color-text-secondary;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+    }
+}
+
+.ins {
+    text-decoration: none;
+    padding: 1px 3px;
+    border-radius: 4px;
+    background: rgba(10, 132, 255, 0.28);
+    color: $color-text-primary;
+}
+
+.del {
+    color: $color-text-muted;
+    text-decoration: line-through;
+}
+
+.viewLink {
+    align-self: flex-start;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: $color-text-secondary;
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.placementMove {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.fromChip {
+    text-decoration: line-through;
+    color: $color-text-muted;
+}
+
+// ── Conversation list ────────────────────────────────────────────────────────
+
+.convList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid $color-border-light;
+    border-radius: 16px;
+    background: $color-background-secondary;
+    overflow: hidden;
+}
+
+.convListPlain {
+    margin: 0 -8px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.convRow {
+    min-height: 64px;
+    padding: 12px 16px;
+    border-bottom: 1px solid $color-border-light;
+    color: inherit;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+
+    li:last-child > & {
+        border-bottom: 0;
+    }
+}
+
+a.convRow:hover {
+    background: $color-background-hover;
+}
+
+.convListPlain .convRow {
+    min-height: 48px;
+    padding: 6px 8px;
+    border-bottom: 0;
+    border-radius: 10px;
+}
+
+.convTitle {
+    font-size: 0.97rem;
+    font-weight: 600;
+    color: $color-text-primary;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.convListPlain .convTitle {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.convTitleGone {
+    font-weight: 500;
+    color: $color-text-muted;
+}
+
+.foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 4px;
+    font-size: 0.8125rem;
+    color: $color-text-muted;
+}
+
+// ── More menu ────────────────────────────────────────────────────────────────
+
+.more {
+    position: relative;
+}
+
+// PillButton's min-width is min(120px, 100%), which counts as 0 when the
+// header sizes its actions, so a short label left the box too narrow and
+// pushed the more button past the edge.
+.headerActions > button {
+    min-width: 120px;
+}
+
+.moreButton {
+    width: 38px;
+    height: 38px;
+    border: 1px solid $color-border;
+    border-radius: 50%;
+    background: $color-background;
+    color: $color-text-secondary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.moreMenu {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    z-index: 20;
+    min-width: 200px;
+    padding: 6px;
+    border: 1px solid $color-border-light;
+    border-radius: 12px;
+    background: $color-background-secondary;
+    box-shadow: $shadow-lg;
+}
+
+.moreItem {
+    width: 100%;
+    height: 40px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: $color-text-primary;
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+        background: $color-background-hover;
+    }
+}
+
+.moreItemDanger {
+    color: $color-error;
+}
+
+// ── States ───────────────────────────────────────────────────────────────────
+
+.state {
+    padding: 64px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    color: $color-text-muted;
+}
