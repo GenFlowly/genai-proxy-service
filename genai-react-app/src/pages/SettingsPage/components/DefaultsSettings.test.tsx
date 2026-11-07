@@ -28,6 +28,9 @@ jest.mock('./EmbeddingModelDefaults', () => ({
 jest.mock('./LearnedFactsSettings', () => ({
     LearnedFactsSettings: () => <div data-testid="learned-facts-section" />,
 }));
+jest.mock('./ChatIndexingSettings', () => ({
+    ChatIndexingSettings: () => <div data-testid="chat-indexing-section" />,
+}));
 // Render library select/button as native elements so options are inspectable
 jest.mock('@genflowly/component-library', () => ({
     InputSelectWithHint: ({ value, onChange, options, 'data-testid': testId }: any) => (
@@ -178,6 +181,11 @@ describe('DefaultsSettings', () => {
     test('renders the learned facts section', async () => {
         await renderLoaded();
         expect(screen.getByTestId('learned-facts-section')).toBeInTheDocument();
+    });
+
+    test('renders the search index section', async () => {
+        await renderLoaded();
+        expect(screen.getByTestId('chat-indexing-section')).toBeInTheDocument();
     });
 
     test('an unknown future action still renders, labeled by its server display name', async () => {

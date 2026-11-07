@@ -51,6 +51,20 @@ class DeleteCustomerVectorsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(result["deleted"].values()), 15)
         self.assertEqual(client.dropped, [])
 
+    async def test_a_data_type_limits_the_delete_to_that_type(self):
+        client = _FakeMilvus([
+            "conversation_voyage_4_large", "memory_voyage_4_large", "CU1_conversation_minilm", "CU1_notes_minilm",
+        ])
+
+        with patch.object(notes_module, "get_milvus_client", return_value=client):
+            result = await delete_customer_vectors(
+                DeleteCustomerVectorsRequest(customer_id="CU1", data_type="conversation")
+            )
+
+        self.assertEqual([name for name, _ in client.deletes], ["conversation_voyage_4_large"])
+        self.assertEqual(client.dropped, ["CU1_conversation_minilm"])
+        self.assertEqual(result["deleted"], {"conversation_voyage_4_large": 3})
+
     async def test_drops_only_this_customers_legacy_collections(self):
         client = _FakeMilvus(["CU1_notes_minilm", "CU1_memory", "CU10_notes_minilm", "CU2_notes_minilm", "unrelated"])
 

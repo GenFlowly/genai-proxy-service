@@ -334,7 +334,8 @@ class CustomerProfileRepository(
         preferredAgentId: String? = null,
         memoryLearnFromChats: Boolean? = null,
         memoryLearnFromNotes: Boolean? = null,
-        memoryUseInReplies: Boolean? = null
+        memoryUseInReplies: Boolean? = null,
+        indexChats: Boolean? = null
     ) = withContext(Dispatchers.IO) {
         try {
             val now = Instant.now().toString()
@@ -395,6 +396,7 @@ class CustomerProfileRepository(
                 MEMORY_LEARN_FROM_CHATS to memoryLearnFromChats,
                 MEMORY_LEARN_FROM_NOTES to memoryLearnFromNotes,
                 MEMORY_USE_IN_REPLIES to memoryUseInReplies,
+                INDEX_CHATS to indexChats,
             ).forEach { (attribute, value) ->
                 if (value != null) {
                     updateParts.add("#$attribute = :$attribute")
@@ -463,7 +465,8 @@ class CustomerProfileRepository(
                 preferredAgentId = item["preferredAgentId"]?.s(),
                 memoryLearnFromChats = item[MEMORY_LEARN_FROM_CHATS]?.bool(),
                 memoryLearnFromNotes = item[MEMORY_LEARN_FROM_NOTES]?.bool(),
-                memoryUseInReplies = item[MEMORY_USE_IN_REPLIES]?.bool()
+                memoryUseInReplies = item[MEMORY_USE_IN_REPLIES]?.bool(),
+                indexChats = item[INDEX_CHATS]?.bool()
             )
         }
 
@@ -607,6 +610,7 @@ class CustomerProfileRepository(
         private const val MEMORY_LEARN_FROM_CHATS = "memoryLearnFromChats"
         private const val MEMORY_LEARN_FROM_NOTES = "memoryLearnFromNotes"
         private const val MEMORY_USE_IN_REPLIES = "memoryUseInReplies"
+        private const val INDEX_CHATS = "indexChats"
         private const val IS_VECTOR_DB_STORING_ENABLED = "isVectorDbStoringEnabled"
         private const val IS_EMBEDDING_CREATION_ENABLED = "isEmbeddingCreationEnabled"
         private const val IS_WEB_SEARCH_ENABLED = "isWebSearchEnabled"

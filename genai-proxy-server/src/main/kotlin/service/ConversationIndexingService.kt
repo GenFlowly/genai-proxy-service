@@ -64,6 +64,11 @@ class ConversationIndexingService(
         if (bearerToken == null) return
         appScope.launch {
             try {
+                // Only once the customer has turned chat indexing on. A
+                // preference that can't be read counts as off: consent is
+                // never assumed.
+                val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }
+                    .getOrNull()?.takeIf { it.indexChats == true } ?: return@launch
                 val assistantText = conversationRepository
                     .getMessage(conversationId, responseMessageId)?.text ?: ""
                 if (userText.trim().length + assistantText.trim().length < MIN_EXCHANGE_CHARS) {
@@ -87,7 +92,7 @@ class ConversationIndexingService(
                     logger.warn("Could not record $responseMessageId as pending: ${e.message}")
                 }
 
-                val model = embeddingModel(customerId)
+                val model = prefs.embeddingModelConversations ?: prefs.embeddingModel
                 if (collectionsEnsured.add(customerId)) {
                     // Customers onboarded before the CONVERSATION data type
                     // existed have no conversation collection yet; creation is
@@ -123,9 +128,14 @@ class ConversationIndexingService(
      * Re-embeds one exchange directly through the retrieval-server, rebuilt
      * from the Message table. Returns false when the exchange no longer
      * exists. Throws when the embed fails, with a permanent
-     * [VectorEncodeException] when the customer can't index.
+     * [VectorEncodeException] when the customer can't index or has turned
+     * chat indexing off.
      */
     suspend fun retryExchange(customerId: String, conversationId: String, responseMessageId: String): Boolean {
+        val prefs = customerProfileRepository.getAIConfigPreferences(customerId)
+        if (prefs?.indexChats != true) {
+            throw VectorEncodeException(409, "Customer $customerId has chat indexing off")
+        }
         if (customerEntitlementService.getOrNull(customerId)?.canIndex == false) {
             throw VectorEncodeException(409, "Customer $customerId has no vector DB or embedding key")
         }
@@ -133,7 +143,7 @@ class ConversationIndexingService(
         val userText = response.previousMessageId
             ?.let { conversationRepository.getMessage(conversationId, it)?.text }
             ?: ""
-        val model = embeddingModel(customerId)
+        val model = prefs.embeddingModelConversations ?: prefs.embeddingModel
         retrievalServerClient.encodeConversationVector(
             customerId = customerId,
             conversationId = conversationId,
@@ -147,9 +157,18 @@ class ConversationIndexingService(
         return true
     }
 
-    private suspend fun embeddingModel(customerId: String): String? {
-        val prefs = runCatching { customerProfileRepository.getAIConfigPreferences(customerId) }.getOrNull()
-        return prefs?.embeddingModelConversations ?: prefs?.embeddingModel
+    /**
+     * "Delete indexed chats": removes every chat vector the customer has in
+     * their vector DB, after the exchanges still waiting to be embedded, so a
+     * retry can't put one back. Returns how many vectors were deleted.
+     */
+    suspend fun deleteIndexedChats(customerId: String): Int {
+        for (page in 1..MAX_PENDING_PAGES) {
+            val pending = vectorSyncPendingRepository.listPending(customerId, PendingVectorType.CONVERSATION, PENDING_PAGE_SIZE)
+            if (pending.isEmpty()) break
+            pending.forEach { vectorSyncPendingRepository.clear(customerId, PendingVectorType.CONVERSATION, it.key) }
+        }
+        return retrievalServerClient.deleteCustomerVectors(customerId, dataType = CONVERSATION_DATA_TYPE)
     }
 
     companion object {
@@ -163,6 +182,11 @@ class ConversationIndexingService(
         // The pipeline normally stores an exchange within a minute; the retry
         // only runs if it hasn't by then.
         const val FIRST_RETRY_DELAY_SECONDS = 300L
+
+        // The retrieval-server's data type token for chat collections.
+        private const val CONVERSATION_DATA_TYPE = "conversation"
+        private const val PENDING_PAGE_SIZE = 100
+        private const val MAX_PENDING_PAGES = 50
 
         fun exchangeText(userText: String, assistantText: String) =
             "User: ${userText.take(MAX_SIDE_CHARS)}\nAssistant: ${assistantText.take(MAX_SIDE_CHARS)}"

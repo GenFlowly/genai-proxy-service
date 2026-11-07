@@ -19,6 +19,8 @@ export interface OnboardCustomerResponse {
         memoryLearnFromChats?: boolean | null
         memoryLearnFromNotes?: boolean | null
         memoryUseInReplies?: boolean | null
+        /** Index chats for search (Settings > Defaults > Search index); absent/null = off */
+        indexChats?: boolean | null
     }
     aiVendorAPIKeyStatusList: AIVendorAPIKeyStatus[]
     customerInstructions?: InstructionResponse[]

@@ -96,4 +96,5 @@ export const endpoints = {
     memoryUsage: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/usage`,
     deleteAccount: `${BASE}${API_PREFIX}/account`,
     deleteAllCredentials: `${BASE}${API_PREFIX}/credentials`,
+    indexedChats: `${BASE}${API_PREFIX}/indexing/chats`,
 };
