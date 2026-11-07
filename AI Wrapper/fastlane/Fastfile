@@ -61,7 +61,9 @@ platform :ios do
   desc "Signed build of the production stage, submitted for App Store review and released once Apple approves it."
   lane :release do
     api_key = connect_api_key
-    version = get_version_number(xcodeproj: PROJECT, target: APP_TARGET)
+    # Debug and Release use different Info plists; without a configuration the action prompts
+    # for one, which aborts on CI.
+    version = get_version_number(xcodeproj: PROJECT, target: APP_TARGET, configuration: "Release")
     ensure_version_not_live(version)
     ipa = build_signed(stage: "production", api_key: api_key)
     upload_to_app_store(
