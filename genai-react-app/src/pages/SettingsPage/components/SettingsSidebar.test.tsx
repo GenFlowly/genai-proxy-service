@@ -108,6 +108,20 @@ describe('SettingsSidebar', () => {
         expect(onNavigate).toHaveBeenCalled();
     });
 
+    test('links to the support page above the logout button', async () => {
+        const onNavigate = jest.fn();
+        render(
+            <MemoryRouter initialEntries={['/settings/profile']}>
+                <SettingsSidebar onNavigate={onNavigate} />
+            </MemoryRouter>
+        );
+
+        await userEvent.click(screen.getByTestId('settings-sidebar-support'));
+
+        expect(mockNavigate).toHaveBeenCalledWith('/support');
+        expect(onNavigate).toHaveBeenCalled();
+    });
+
     describe('mobile menu', () => {
         const renderMenu = (onNavigate = jest.fn()) => {
             render(
@@ -163,6 +177,21 @@ describe('SettingsSidebar', () => {
             const onNavigate = renderMenu();
             await userEvent.click(screen.getByTestId('settings-menu-privacy-policy'));
             expect(mockNavigate).toHaveBeenCalledWith('/privacy-policy');
+            expect(onNavigate).toHaveBeenCalled();
+        });
+
+        test('opens the support page and closes the menu', async () => {
+            const onNavigate = renderMenu();
+            await userEvent.click(screen.getByTestId('settings-menu-support'));
+            expect(mockNavigate).toHaveBeenCalledWith('/support');
+            expect(onNavigate).toHaveBeenCalled();
+        });
+
+        test('search finds the support page', async () => {
+            const onNavigate = renderMenu();
+            await userEvent.type(screen.getByTestId('mobile-menu-search'), 'supp');
+            await userEvent.click(screen.getByTestId('settings-search-hit-support'));
+            expect(mockNavigate).toHaveBeenCalledWith('/support');
             expect(onNavigate).toHaveBeenCalled();
         });
 

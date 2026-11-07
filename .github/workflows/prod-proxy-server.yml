@@ -8,6 +8,10 @@ on:
     paths:
       - 'genai-proxy-server/**'
       - 'genai-proxy-server-cdk/**'
+      # The support API has its own workflow (*-support-api.yml).
+      - '!genai-proxy-server-cdk/lib/support-stack.ts'
+      - '!genai-proxy-server-cdk/lambda/support/**'
+      - '!genai-proxy-server-cdk/bin/support.ts'
       - 'retrieval-server/**'
       - '.github/workflows/prod-proxy-server.yml'
   workflow_dispatch:
