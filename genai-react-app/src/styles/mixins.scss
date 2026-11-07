@@ -196,7 +196,7 @@
 @mixin page-base {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: calc(100vh - var(--app-footer-height, 0px));
     background-color: $color-background;
     color: $color-text-primary;
 }

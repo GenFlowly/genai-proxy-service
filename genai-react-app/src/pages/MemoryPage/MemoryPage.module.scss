@@ -6,7 +6,7 @@ $mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 // ── Page shell (the standard skeleton: header band, then the canvas row) ─────
 
 .page {
-    height: 100vh;
+    height: calc(100vh - var(--app-footer-height, 0px));
     overflow: hidden;
     background-color: $color-background;
     display: flex;

@@ -20,11 +20,13 @@ import InstructionDetailPage from './pages/InstructionDetailPage/InstructionDeta
 import InstructionEditPage from './pages/InstructionDetailPage/InstructionEditPage'
 import InstructionHistoryPage from './pages/InstructionDetailPage/InstructionHistoryPage'
 import InstructionUsedInPage from './pages/InstructionDetailPage/InstructionUsedInPage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage/PrivacyPolicyPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
 import { L1Menu } from './components/sections/L1Menu/L1Menu'
 import { AppMenuOverlay } from './components/sections/L1Menu/AppMenuOverlay'
+import AppFooter from './components/AppFooter/AppFooter'
 import ServiceWorkerUpdateNotifier from './components/common/ServiceWorkerUpdateNotifier/ServiceWorkerUpdateNotifier'
 
 import { AIProvider } from './context/AIContext'
@@ -95,8 +97,10 @@ export default function AppContent(): React.ReactElement | null {
                             <Route path="/instructions/:instructionId/edit" element={<InstructionEditPage />} />
                             <Route path="/instructions/:instructionId/history" element={<InstructionHistoryPage />} />
                             <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
+                            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                         </Routes>
                         <AppMenuOverlay />
+                        {!isNarrow && <AppFooter />}
                     </ConversationProvider>
                 </AIProvider>
             </ToastProvider>

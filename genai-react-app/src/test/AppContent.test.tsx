@@ -31,6 +31,8 @@ jest.mock('../components/sections/L1Menu/L1Menu', () => ({ L1Menu: () => <div da
 jest.mock('../pages/LandingPage', () => () => <div data-testid="landing-page" />)
 jest.mock('../pages/SettingsPage/SettingsPage', () => () => <div data-testid="settings-page" />)
 jest.mock('../pages/MemoryPage/MemoryPage', () => () => <div data-testid="memory-page" />)
+jest.mock('../pages/PrivacyPolicyPage/PrivacyPolicyPage', () => () => <div data-testid="privacy-policy-page" />)
+jest.mock('../components/AppFooter/AppFooter', () => () => <footer data-testid="app-footer" />)
 jest.mock('../components/onboarding/OnboardingWizard', () => ({
     OnboardingWizard: ({ onDone }: any) => (
         <div data-testid="onboarding-wizard-mock">
@@ -105,6 +107,13 @@ describe('AppContent', () => {
     test('/chat renders LandingPage', () => {
         renderAt('/chat')
         expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+    })
+
+    test('/privacy-policy opens signed out, and desktop pages have the footer', () => {
+        renderAt('/privacy-policy')
+        expect(screen.getByTestId('privacy-policy-page')).toBeInTheDocument()
+        expect(screen.getByTestId('app-footer')).toBeInTheDocument()
+        expect(mockLoginWithRedirect).not.toHaveBeenCalled()
     })
 
     test('/settings redirects to login when unauthenticated', async () => {
@@ -218,6 +227,12 @@ describe('AppContent', () => {
             renderAt('/')
             expect(screen.getByTestId('l1-menu')).toBeInTheDocument()
             expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
+        })
+
+        test('phones have no footer; the policy is in the Settings menu instead', () => {
+            renderAt('/privacy-policy')
+            expect(screen.getByTestId('privacy-policy-page')).toBeInTheDocument()
+            expect(screen.queryByTestId('app-footer')).not.toBeInTheDocument()
         })
 
         test('signed out on a bare /chat lands on the L1 Menu', () => {

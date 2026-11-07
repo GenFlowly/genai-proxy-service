@@ -2,7 +2,7 @@
 @import '../styles/mixins.scss';
 
 .page {
-  height: 100vh; // Fixed height instead of min-height
+  height: calc(100vh - var(--app-footer-height, 0px)); // Fixed height instead of min-height
   overflow: hidden; // Prevent page-level scroll
   background-color: $background-gray;
   display: flex;

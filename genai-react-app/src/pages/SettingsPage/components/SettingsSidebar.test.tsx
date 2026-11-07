@@ -159,6 +159,13 @@ describe('SettingsSidebar', () => {
             expect(screen.getByTestId('settings-search-hit-tools')).toBeInTheDocument();
         });
 
+        test('opens the privacy policy and closes the menu', async () => {
+            const onNavigate = renderMenu();
+            await userEvent.click(screen.getByTestId('settings-menu-privacy-policy'));
+            expect(mockNavigate).toHaveBeenCalledWith('/privacy-policy');
+            expect(onNavigate).toHaveBeenCalled();
+        });
+
         test('logs out from its own card', async () => {
             renderMenu();
             await userEvent.click(screen.getByTestId('settings-menu-logout'));
