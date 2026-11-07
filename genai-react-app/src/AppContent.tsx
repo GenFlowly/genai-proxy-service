@@ -21,6 +21,7 @@ import InstructionEditPage from './pages/InstructionDetailPage/InstructionEditPa
 import InstructionHistoryPage from './pages/InstructionDetailPage/InstructionHistoryPage'
 import InstructionUsedInPage from './pages/InstructionDetailPage/InstructionUsedInPage'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage/PrivacyPolicyPage'
+import SupportPage from './pages/SupportPage/SupportPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
@@ -98,6 +99,7 @@ export default function AppContent(): React.ReactElement | null {
                             <Route path="/instructions/:instructionId/history" element={<InstructionHistoryPage />} />
                             <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
                             <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                            <Route path="/support" element={<SupportPage />} />
                         </Routes>
                         <AppMenuOverlay />
                         {!isNarrow && <AppFooter />}

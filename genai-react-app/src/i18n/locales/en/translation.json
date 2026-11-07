@@ -520,7 +520,8 @@
     "layout": {
         "footer": {
             "copyright": "© {{year}} Genflowly",
-            "privacyPolicy": "Privacy policy"
+            "privacyPolicy": "Privacy policy",
+            "support": "Support"
         },
         "l1Menu": {
             "headlineOne": "One prompt.",
@@ -962,6 +963,7 @@
             "aiVectorDb": "Vector DB Connection",
             "developer": "Developer",
             "logout": "Logout",
+            "support": "Support",
             "privacyPolicy": "Privacy policy",
             "profile": "Profile",
             "title": "Settings",
@@ -1387,5 +1389,34 @@
             "saving": "Saving...",
             "title": "AI Vendor API Keys"
         }
+    },
+    "supportPage": {
+        "title": "Support",
+        "intro": "Questions, problems or ideas: tell us here and we'll reply by email.",
+        "name": "Name (optional)",
+        "email": "Email",
+        "emailInvalid": "Enter an email address we can reply to.",
+        "topic": "Topic",
+        "topicPlaceholder": "Choose a topic",
+        "topics": {
+            "account": "Account and sign-in",
+            "billing": "Billing and usage",
+            "bug": "Something isn't working",
+            "feature": "Feature request",
+            "privacy": "Privacy and data",
+            "other": "Something else"
+        },
+        "message": "Message",
+        "messagePlaceholder": "What happened, and what did you expect? For a problem, include the steps that lead to it.",
+        "messageHint": "At least {{min}} characters.",
+        "messageCount": "{{count}} / {{max}}",
+        "accountNote": "Your account ID is sent with this message, so we can find your account.",
+        "send": "Send",
+        "sending": "Sending…",
+        "failed": "Couldn't send your message. Try again, or email <mail>{{email}}</mail>.",
+        "privacyNote": "Read how we handle personal information in our <policy>privacy policy</policy>.",
+        "sentTitle": "Message sent",
+        "sentBody": "Thanks. We'll reply to {{email}}.",
+        "sendAnother": "Send another message"
     }
 }

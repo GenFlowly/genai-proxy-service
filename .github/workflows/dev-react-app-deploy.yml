@@ -29,6 +29,28 @@ jobs:
           echo "@genflowly:registry=https://npm.pkg.github.com/" > .npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}" >> .npmrc
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # The support form posts to gen-ai-proxy-service-SupportStack's API.
+      # A push that adds the stack deploys it in parallel (*-support-api.yml),
+      # so wait for its output rather than build a form that can't send.
+      - name: Look up the support API
+        id: support-api
+        run: |
+          for i in $(seq 1 30); do
+            URL=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-SupportStack --query "Stacks[0].Outputs[?OutputKey=='SupportRequestUrl'].OutputValue" --output text 2>/dev/null || true)
+            if [ -n "$URL" ] && [ "$URL" != "None" ]; then
+              echo "url=$URL" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "waiting for gen-ai-proxy-service-SupportStack (${i}/30)"; sleep 30
+          done
+          echo "::error::gen-ai-proxy-service-SupportStack has no SupportRequestUrl output"; exit 1
+
       - name: Beta
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -36,6 +58,7 @@ jobs:
           REACT_APP_AUTH0_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
           REACT_APP_AUTH0_CLIENT_ID: ${{ secrets.AUTH0_SPA_CLIENT_ID }}
           REACT_APP_AUTH0_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
+          REACT_APP_SUPPORT_API_URL: ${{ steps.support-api.outputs.url }}
           REACT_APP_BACKEND_URL: "https://api-development.genflowly.com"
         working-directory: genai-react-app
         run: |

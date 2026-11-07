@@ -28,6 +28,9 @@ export default function AppFooter(): React.ReactElement {
             <Link to="/privacy-policy" className={styles.link} data-testid="app-footer-privacy-policy">
                 {t('layout.footer.privacyPolicy')}
             </Link>
+            <Link to="/support" className={styles.link} data-testid="app-footer-support">
+                {t('layout.footer.support')}
+            </Link>
         </footer>
     )
 }
