@@ -1,0 +1,76 @@
+name: Production iOS App Store
+
+# Self-triggered: runs only when the iOS app (or this workflow) changes.
+# Runs the unit tests, uploads a signed production-stage build and submits it for App Store
+# review; Apple releases it automatically once approved. The version comes from the Xcode
+# target (MARKETING_VERSION) and must be bumped before each release. The recipe and the
+# credential names are in AI Wrapper/fastlane/Fastfile.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'AI Wrapper/**'
+      - '.github/workflows/prod-ios-app-store.yml'
+  workflow_dispatch:
+
+# Build numbers come from App Store Connect, so the two iOS workflows upload one at a time.
+concurrency:
+  group: ios-app-store-connect
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  app-store:
+    name: App Store
+    runs-on: xcode-27
+    environment: production
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: AI Wrapper
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      LANG: en_US.UTF-8
+      FASTLANE_SKIP_UPDATE_CHECK: 1
+      FASTLANE_HIDE_CHANGELOG: 1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: AI Wrapper/SourcePackages
+          key: spm-${{ hashFiles('AI Wrapper/AI Wrapper.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          fastlane --version | tail -1
+
+      - name: Unit tests
+        run: fastlane ios unit_tests stage:production
+
+      - name: App Store
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_P8: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
+          IOS_DISTRIBUTION_CERT_P12: ${{ secrets.IOS_DISTRIBUTION_CERT_P12 }}
+          IOS_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+          IOS_DISTRIBUTION_CERT_ID: ${{ secrets.IOS_DISTRIBUTION_CERT_ID }}
+          IOS_AUTH0_CLIENT_ID: ${{ secrets.IOS_AUTH0_CLIENT_ID }}
+          IOS_SENTRY_DSN: ${{ secrets.IOS_SENTRY_DSN }}
+        run: fastlane ios release
+
+      - name: Keep logs and test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-store-logs
+          path: |
+            AI Wrapper/build/logs
+            AI Wrapper/build/tests
+          if-no-files-found: ignore

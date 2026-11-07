@@ -1,0 +1,5 @@
+// Debug configuration. To change which backend a Debug build uses, change this one line:
+// Environments/local.xcconfig, Environments/development.xcconfig or Environments/production.xcconfig
+#include "Environments/production.xcconfig"
+
+INFOPLIST_FILE = BuildSettings/Info-Debug.plist

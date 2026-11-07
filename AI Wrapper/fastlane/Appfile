@@ -1,0 +1,4 @@
+# Identity of the app in the developer portal and App Store Connect. Credentials come from the
+# environment (see the Fastfile), never from here.
+app_identifier("com.unbiase.ai")
+team_id("FQ229A9NBM")
