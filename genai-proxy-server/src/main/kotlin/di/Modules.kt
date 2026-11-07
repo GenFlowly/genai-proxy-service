@@ -213,6 +213,7 @@ fun appModule(): Module = module {
     single { CustomerProfileService(get(), get(), get(), get(), get()) }
     single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { ConversationService(get(), get(), get(), get()) }
+    single { com.genflowly.service.InstructionUsageService(get(), get(), get()) }
     single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.ProjectService(get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }

@@ -83,7 +83,8 @@ class InstructionService(
             color = instruction.color,
             category = instruction.category,
             tags = instruction.tags,
-            role = role
+            role = role,
+            createdAt = instruction.createdAt
         )
     }
 
@@ -167,7 +168,8 @@ class InstructionService(
             color = newInstruction.color,
             tags = newInstruction.tags,
             category = newInstruction.category,
-            role = role
+            role = role,
+            createdAt = java.time.Instant.now().toString()
         )
     }
 
@@ -216,24 +218,45 @@ class InstructionService(
         existingInstructionId: String?,
         bearerToken: String? = null
     ): InstructionResponse {
-        // Always generate the persona metadata (icon, color, tags) via AI
-        val generatedPersona = generateInstructionPersona(instruction, customerId)
-
-        // Use user-provided name if available, otherwise use AI-generated name
-        val effectiveName = if (!instructionName.isNullOrBlank()) instructionName else generatedPersona.name
+        // A failed generation (retired model, no key, bad output) never blocks
+        // the save: the version keeps the previous one's metadata, and the list
+        // endpoint's backfill fills in whatever is still missing later.
+        val generatedPersona = try {
+            generateInstructionPersona(instruction, customerId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) { "Persona generation failed for $customerId; saving the instruction without it" }
+            null
+        }
+        val previous = existingInstructionId?.let { id ->
+            instructionRepository.getLatestInstructionVersion(id)?.let { instructionRepository.getInstruction(id, it) }
+        }
+        val effectiveName = instructionName?.takeIf { it.isNotBlank() }
+            ?: generatedPersona?.name
+            ?: previous?.name
+            ?: fallbackName(instruction)
 
         return createInstruction(
             customerId = customerId,
             instructionName = effectiveName,
             instruction = instruction,
             existingInstructionId = existingInstructionId,
-            icon = generatedPersona.icon,
-            color = generatedPersona.color,
-            tags = generatedPersona.tags,
-            category = generatedPersona.category,
+            icon = generatedPersona?.icon ?: previous?.icon,
+            color = generatedPersona?.color ?: previous?.color,
+            tags = generatedPersona?.tags ?: previous?.tags,
+            category = generatedPersona?.category ?: previous?.category,
             bearerToken = bearerToken
         )
     }
+
+    /** The instruction's first line, without markdown markers, when nothing else names it. */
+    private fun fallbackName(instruction: String): String =
+        instruction.lineSequence()
+            .map { it.trim().trimStart('#', '*', '-', '>', ' ').trimEnd('*') }
+            .firstOrNull { it.isNotBlank() }
+            ?.let { if (it.length > FALLBACK_NAME_CHARS) it.take(FALLBACK_NAME_CHARS - 1).trimEnd() + "…" else it }
+            ?: "Untitled instruction"
 
     /** True when [customerId] has EDIT via a direct or PUBLIC share on [instructionId]. */
     private suspend fun hasEditAccess(customerId: String, instructionId: String): Boolean {
@@ -288,7 +311,8 @@ class InstructionService(
                 color = instruction.color,
                 category = instruction.category,
                 tags = instruction.tags,
-                role = role
+                role = role,
+                createdAt = instruction.createdAt
             )
         }
     }
@@ -531,6 +555,7 @@ class InstructionService(
         // Chunk hits collapse to one entry per instruction, so a modest
         // fan-out is enough to cover the accessible set.
         private const val SEMANTIC_SEARCH_TOP_N = 25
+        private const val FALLBACK_NAME_CHARS = 60
 
         /** JSON Schema for [GeneratedPersona] — vendor-enforced during persona generation. */
         private val PERSONA_SCHEMA: JsonObject = buildJsonObject {

@@ -1,315 +1,384 @@
-import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import InstructionDetailPage from '../../../pages/InstructionDetailPage/InstructionDetailPage';
-import { useAuth } from '../../../context/AuthContext';
-import { useAuth0 } from '@auth0/auth0-react';
-import userEvent from '@testing-library/user-event';
-import * as instructionService from '../../../services/instructionService';
-import '@testing-library/jest-dom';
+import React from 'react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import '@testing-library/jest-dom'
+import InstructionDetailPage from '../../../pages/InstructionDetailPage/InstructionDetailPage'
+import InstructionEditPage from '../../../pages/InstructionDetailPage/InstructionEditPage'
+import InstructionHistoryPage from '../../../pages/InstructionDetailPage/InstructionHistoryPage'
+import InstructionUsedInPage from '../../../pages/InstructionDetailPage/InstructionUsedInPage'
+import { queryClient } from '../../../queryClient'
+import { LayoutProvider } from '../../../context/LayoutContext'
+import { useAuth } from '../../../context/AuthContext'
+import * as instructionService from '../../../services/instructionService'
+import { InstructionResponse, InstructionUsageResponse } from '../../../models/instruction.models'
 
-const mockNavigate = jest.fn();
+jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="navbar" />)
+jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }))
 
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
-    useNavigate: () => mockNavigate,
-}));
+const mockShowToast = jest.fn()
+jest.mock('../../../context/ToastContext', () => ({ useToast: () => ({ showToast: mockShowToast }) }))
 
-jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="mock-navbar" />);
+const mockBreakpoints = jest.fn()
+jest.mock('../../../hooks/useResponsiveBreakpoints', () => ({ useResponsiveBreakpoints: () => mockBreakpoints() }))
 
-jest.mock('../../../context/AuthContext', () => ({
-    useAuth: jest.fn(),
-}));
-
-jest.mock('@auth0/auth0-react', () => ({
-    useAuth0: () => ({
-        getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token')
-    })
-}));
-
-// Mock InstructionEditor: its internal TextEditor relies on the UIW Markdown
-// editor which can be tricky in JSDOM. The fake mirrors the real component's
-// action-visibility rules (covered by the component-library's own tests) so
-// these tests can exercise the page's wiring.
+// The library's markdown renderer and code editor don't run in JSDOM.
 jest.mock('@genflowly/component-library', () => ({
     ...jest.requireActual('@genflowly/component-library'),
-    InstructionEditor: function MockInstructionEditor(props: any) {
-        const showDelete = !props.readOnly && !props.isNew && props.canDelete && !!props.onDelete;
-        return (
-            <div>
-                {showDelete && <button onClick={props.onDelete}>{props.labels?.delete ?? 'Delete'}</button>}
-                {!props.readOnly && (
-                    <button onClick={props.onSave} disabled={props.isLoading || !props.instructionText.trim()}>
-                        {props.isLoading ? (props.labels?.saving ?? 'Saving…') : (props.labels?.save ?? 'Save')}
-                    </button>
-                )}
-                <input
-                    placeholder={props.labels?.namePlaceholder}
-                    value={props.name}
-                    disabled={props.readOnly}
-                    onChange={(e) => props.onNameChange(e.target.value)}
-                />
-                <textarea
-                    data-testid="mock-text-editor"
-                    value={props.instructionText}
-                    readOnly={props.readOnly}
-                    onChange={(e) => props.onInstructionTextChange(e.target.value)}
-                />
-                <ul data-testid="mock-versions">
-                    {(props.versions ?? []).map((v: any) => (
-                        <li key={v.version}>
-                            <button
-                                aria-current={v.version === props.selectedVersion}
-                                onClick={() => props.onSelectVersion?.(v.version)}
-                            >
-                                {`v${v.version}`}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        );
-    },
-}));
+    TextContainer: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
+    TextEditor: ({ value, onChange, 'data-testid': testId }: { value: string; onChange: (v: string) => void; 'data-testid'?: string }) => (
+        <textarea data-testid={testId ?? 'text-editor'} value={value} onChange={event => onChange(event.target.value)} />
+    ),
+}))
 
-jest.mock('../../../components/common/ShareModal/ShareModal', () => {
-    const React = require('react');
-    return function MockShareModal(props: any) {
-        if (!props.isOpen) return null;
-        return (
-            <div data-testid="mock-share-modal">
-                <button onClick={() => props.onSave('PUBLIC', [{ customerId: 'PUBLIC', role: 'VIEW' }], [])}>Make public to everyone</button>
-                <button 
-                    data-testid="mock-share-save" 
-                    onClick={() => props.onSave('SPECIFIC', [{ customerId: 'c1', role: 'VIEW' }], [{ customerId: 'c2' }])}
-                >
-                    Save
-                </button>
-            </div>
-        );
-    };
-});
+jest.mock('../../../components/common/ShareModal/ShareModal', () => function MockShareModal(props: any) {
+    if (!props.isOpen) return null
+    return (
+        <div data-testid="share-modal">
+            <button onClick={() => props.onSave('SPECIFIC', [{ customerId: 'c1', role: 'EDIT' }], [{ customerId: 'c2' }])}>Save sharing</button>
+        </div>
+    )
+})
+
+const desktop = { width: 1280, height: 900, isMobile: false, isNarrow: false }
+const phone = { width: 390, height: 844, isMobile: true, isNarrow: true }
+
+const V1: InstructionResponse = {
+    id: 'INS-1', version: 1, name: 'Early-Stage VC', role: 'OWNER', createdAt: '2026-09-03T09:41:00Z',
+    instruction: 'You are a VC. You look at customer anecdotes.',
+}
+const V2: InstructionResponse = {
+    ...V1, version: 2, name: 'Early-Stage AI VC', createdAt: '2026-10-28T14:10:00Z', icon: '📊', color: '#6d3be5',
+    category: 'Analysis', tags: ['startups', 'AI'],
+    instruction: 'You are a VC. Your expertise lies in what will fail. You look at customer anecdotes.',
+}
+const USAGE: InstructionUsageResponse = {
+    usageCount: 7,
+    lastUsedAt: '2026-11-06T13:12:00Z',
+    conversations: [
+        { conversationId: 'CONV1', title: 'Startup Pitch Review', firstUsedAt: '2026-11-06T13:12:00Z' },
+        { conversationId: 'CONV2', title: 'Deal Memo' },
+    ],
+    omitted: 0,
+}
+
+const mockRefresh = jest.fn()
+const mockLogin = jest.fn()
+
+function auth(overrides: Record<string, unknown> = {}) {
+    ;(useAuth as jest.Mock).mockReturnValue({
+        customerInstructions: [V1, V2],
+        refreshInstructions: mockRefresh,
+        isInstructionsLoaded: true,
+        isAuthenticated: true,
+        loginWithRedirect: mockLogin,
+        entitlements: { canShare: true },
+        getAccessTokenSilently: jest.fn().mockResolvedValue('tok'),
+        ...overrides,
+    })
+}
+
+function LocationProbe() {
+    const location = useLocation()
+    return <div data-testid="location">{location.pathname + location.search}</div>
+}
+
+function renderAt(path: string) {
+    return render(
+        <QueryClientProvider client={queryClient}>
+            <LayoutProvider>
+            <MemoryRouter initialEntries={[path]}>
+                <Routes>
+                    <Route path="/instructions" element={<div data-testid="list-page" />} />
+                    <Route path="/instructions/new" element={<InstructionEditPage isNew />} />
+                    <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
+                    <Route path="/instructions/:instructionId/edit" element={<InstructionEditPage />} />
+                    <Route path="/instructions/:instructionId/history" element={<InstructionHistoryPage />} />
+                    <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
+                </Routes>
+                <LocationProbe />
+            </MemoryRouter>
+            </LayoutProvider>
+        </QueryClientProvider>,
+    )
+}
+
+beforeEach(() => {
+    jest.clearAllMocks()
+    queryClient.clear()
+    mockBreakpoints.mockReturnValue(desktop)
+    auth()
+    jest.spyOn(instructionService, 'getInstructionUsage').mockResolvedValue(USAGE)
+    jest.spyOn(instructionService, 'getInstructionSharedUsers').mockResolvedValue([
+        { customerId: 'c1', name: 'Priya Natarajan', username: 'priya', role: 'EDIT' },
+    ])
+    jest.spyOn(instructionService, 'createInstruction').mockResolvedValue({ ...V2, version: 3 })
+    jest.spyOn(instructionService, 'deleteInstruction').mockResolvedValue(undefined)
+    jest.spyOn(instructionService, 'shareInstruction').mockResolvedValue(undefined)
+    jest.spyOn(instructionService, 'unshareInstruction').mockResolvedValue(undefined)
+    jest.spyOn(window, 'confirm').mockReturnValue(true)
+})
 
 describe('InstructionDetailPage', () => {
-    const mockGetToken = jest.fn().mockResolvedValue('mock-token');
-    const mockRefresh = jest.fn();
-    const mockUpdate = jest.fn();
+    test('desktop: the instruction, who it is shared with, your usage and its versions', async () => {
+        renderAt('/instructions/INS-1')
 
-    beforeEach(() => {
-        jest.clearAllMocks();
+        const card = screen.getByTestId('instruction-card')
+        expect(within(card).getByRole('heading', { name: 'Early-Stage AI VC' })).toBeInTheDocument()
+        expect(within(card).getByText('Analysis')).toBeInTheDocument()
+        expect(within(card).getByText('#startups')).toBeInTheDocument()
+        expect(within(card).getByTestId('markdown')).toHaveTextContent('Your expertise lies in what will fail.')
+        expect(within(card).getByText('Version 2')).toBeInTheDocument()
 
-        (useAuth as jest.Mock).mockReturnValue({
-            customerInstructions: [
-                { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 1, role: 'OWNER' }
-            ],
-            refreshInstructions: mockRefresh,
-            updateInstruction: mockUpdate,
-            isAuthenticated: true,
-            entitlements: { canShare: true }
-        });
+        const sharing = screen.getByTestId('instruction-sharing')
+        expect(within(sharing).getByText('You own it')).toBeInTheDocument()
+        expect(await within(sharing).findByText('Priya Natarajan')).toBeInTheDocument()
+        expect(within(sharing).getByText('1 person can use it')).toBeInTheDocument()
+        expect(within(sharing).getByText('Can edit')).toBeInTheDocument()
 
-        jest.spyOn(instructionService, 'createInstruction').mockResolvedValue({
-            id: 'inst-1',
-            name: 'Updated',
-            instruction: 'New text',
-            version: 2
-        });
-        jest.spyOn(instructionService, 'shareInstruction').mockResolvedValue(undefined);
-        jest.spyOn(instructionService, 'deleteInstruction').mockResolvedValue(undefined);
-        jest.spyOn(window, 'alert').mockImplementation(() => {});
-        jest.spyOn(window, 'confirm').mockImplementation(() => true);
-        jest.spyOn(window, 'prompt').mockImplementation(() => 'target-123');
-    });
+        const usage = screen.getByTestId('instruction-usage')
+        expect(await within(usage).findByText('7')).toBeInTheDocument()
+        expect(within(usage).getByRole('link', { name: /Startup Pitch Review/ })).toHaveAttribute('href', '/chat/CONV1')
+        expect(within(usage).getByRole('link', { name: 'See all usage' })).toHaveAttribute('href', '/instructions/INS-1/usage')
 
-    const renderWithRoute = (initialRoute: string) => {
-        render(
-            <MemoryRouter initialEntries={[initialRoute]}>
-                <Routes>
-                    <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
-                </Routes>
-            </MemoryRouter>
-        );
-    };
+        const timeline = screen.getByTestId('detail-timeline')
+        const edited = within(timeline).getByTestId('timeline-v2')
+        expect(within(edited).getByText('Edited')).toBeInTheDocument()
+        expect(within(edited).getByText('AI').tagName).toBe('INS')
+        expect(within(edited).queryByRole('link', { name: /View version/ })).not.toBeInTheDocument()
+        const created = within(timeline).getByTestId('timeline-v1')
+        expect(within(created).getByText('Created')).toBeInTheDocument()
+        expect(within(created).getByRole('link', { name: /View version 1/ })).toHaveAttribute('href', '/instructions/INS-1?version=1')
+    })
 
-    test('loads existing instruction data when ID is provided', () => {
-        renderWithRoute('/instructions/inst-1');
-        
-        expect(screen.getByDisplayValue('Existing')).toBeInTheDocument();
-        expect(screen.getByTestId('mock-text-editor')).toHaveValue('Original text');
-    });
+    test('desktop: Edit opens the editor in place and saves the next version', async () => {
+        renderAt('/instructions/INS-1')
 
-    test('renders new instruction form when ID is "new"', () => {
-        renderWithRoute('/instructions/new');
-        
-        expect(screen.getByPlaceholderText('e.g., Code Reviewer Persona')).toHaveValue('');
-        expect(screen.getByTestId('mock-text-editor')).toHaveValue('');
-        // Share and Delete should not be present
-        expect(screen.queryByText('Share')).not.toBeInTheDocument();
-        expect(screen.queryByText('Delete')).not.toBeInTheDocument();
-    });
+        await userEvent.click(screen.getByTestId('instruction-edit'))
+        const text = screen.getByTestId('text-editor')
+        expect(text).toHaveValue(V2.instruction)
+        await userEvent.type(text, ' Be brief.')
+        await userEvent.click(screen.getByTestId('instruction-save'))
 
-    test('saves instruction and calls API', async () => {
-        renderWithRoute('/instructions/new');
-        
-        const editor = screen.getByTestId('mock-text-editor');
-        await userEvent.type(editor, 'My new prompt');
-        
-        const nameInput = screen.getByPlaceholderText('e.g., Code Reviewer Persona');
-        await userEvent.type(nameInput, 'New Name');
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Saved as version 3'))
+        expect(instructionService.createInstruction).toHaveBeenCalledWith('tok', {
+            instruction: `${V2.instruction} Be brief.`,
+            instructionName: 'Early-Stage AI VC',
+            existingInstructionId: 'INS-1',
+        })
+        expect(mockRefresh).toHaveBeenCalled()
+        expect(screen.queryByTestId('text-editor')).not.toBeInTheDocument()
+    })
 
-        const saveButton = screen.getByText('Save');
-        await userEvent.click(saveButton);
+    test('a failed save says so and keeps the editor', async () => {
+        ;(instructionService.createInstruction as jest.Mock).mockRejectedValueOnce(new Error('500'))
+        renderAt('/instructions/INS-1')
 
-        await waitFor(() => {
-            expect(instructionService.createInstruction).toHaveBeenCalledWith('mock-token', {
-                instruction: 'My new prompt',
-                instructionName: 'New Name',
-                existingInstructionId: undefined
-            });
-            // The local-list upsert is createInstruction's own write-through
-            // (covered in the service test) — the page only refetches.
-            expect(mockRefresh).toHaveBeenCalled();
-        });
-    });
+        await userEvent.click(screen.getByTestId('instruction-edit'))
+        await userEvent.click(screen.getByTestId('instruction-save'))
 
-    test('hides share button when customer is not logged in', () => {
-        (useAuth as jest.Mock).mockReturnValue({
-            customerInstructions: [
-                { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 1, role: 'OWNER' }
-            ],
-            refreshInstructions: mockRefresh,
-            updateInstruction: mockUpdate,
-            isAuthenticated: false,
-            entitlements: { canShare: false }
-        });
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Failed to save instruction'))
+        expect(screen.getByTestId('text-editor')).toBeInTheDocument()
+    })
 
-        renderWithRoute('/instructions/inst-1');
+    test('an older version shows a banner, and Restore saves its text as the next version', async () => {
+        renderAt('/instructions/INS-1?version=1')
 
-        expect(screen.queryByText('Share')).not.toBeInTheDocument();
-    });
+        expect(screen.getByTestId('instruction-older')).toHaveTextContent('This is version 1. Chats use the latest, version 2.')
+        expect(screen.getByTestId('markdown')).toHaveTextContent(V1.instruction)
+        await userEvent.click(screen.getByRole('button', { name: 'Restore as version 3' }))
+        expect(screen.getByTestId('text-editor')).toHaveValue(V1.instruction)
+        await userEvent.click(screen.getByTestId('instruction-save'))
 
-    test('shares instruction when share button clicked', async () => {
-        renderWithRoute('/instructions/inst-1');
-        
-        const shareButton = screen.getByText('Share');
-        await userEvent.click(shareButton);
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/instructions\/INS-1$/))
+    })
 
-        expect(screen.getByTestId('mock-share-modal')).toBeInTheDocument();
-    });
+    test('Delete is in the more menu, asks first and returns to the list', async () => {
+        renderAt('/instructions/INS-1')
 
-    test('deletes instruction and navigates away', async () => {
-        renderWithRoute('/instructions/inst-1');
-        
-        const deleteButton = screen.getByText('Delete');
-        await userEvent.click(deleteButton);
+        await userEvent.click(screen.getByTestId('detail-more'))
+        await userEvent.click(screen.getByTestId('instruction-delete'))
 
-        expect(window.confirm).toHaveBeenCalled();
-        await waitFor(() => {
-            expect(instructionService.deleteInstruction).toHaveBeenCalledWith('mock-token', 'inst-1');
-            expect(mockRefresh).toHaveBeenCalled();
-            expect(mockNavigate).toHaveBeenCalledWith('/instructions');
-        });
-    });
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/instructions'))
+        expect(window.confirm).toHaveBeenCalled()
+        expect(instructionService.deleteInstruction).toHaveBeenCalledWith('tok', 'INS-1')
+    })
 
-    test('handles save instruction failure', async () => {
-        jest.spyOn(instructionService, 'createInstruction').mockRejectedValueOnce(new Error('Save failed'));
-        renderWithRoute('/instructions/new');
-        
-        const editor = screen.getByTestId('mock-text-editor');
-        await userEvent.type(editor, 'My new prompt');
-        
-        const saveButton = screen.getByText('Save');
-        await userEvent.click(saveButton);
-        
-        await waitFor(() => {
-            expect(window.alert).toHaveBeenCalledWith('Failed to save instruction');
-        });
-    });
+    test('a failed delete says so', async () => {
+        ;(instructionService.deleteInstruction as jest.Mock).mockRejectedValueOnce(new Error('403'))
+        renderAt('/instructions/INS-1')
 
-    test('handles delete instruction failure', async () => {
-        jest.spyOn(instructionService, 'deleteInstruction').mockRejectedValueOnce(new Error('Delete failed'));
-        renderWithRoute('/instructions/inst-1');
-        
-        const deleteButton = screen.getByText('Delete');
-        await userEvent.click(deleteButton);
-        
-        await waitFor(() => {
-            expect(window.alert).toHaveBeenCalledWith('Failed to delete instruction. You can only delete instructions you own.');
-        });
-    });
+        await userEvent.click(screen.getByTestId('detail-more'))
+        await userEvent.click(screen.getByTestId('instruction-delete'))
 
-    test('lists all versions and loads an older version when selected', async () => {
-        (useAuth as jest.Mock).mockReturnValue({
-            customerInstructions: [
-                { id: 'inst-1', name: 'Old name', instruction: 'Old text', version: 1, role: 'OWNER' },
-                { id: 'inst-1', name: 'Existing', instruction: 'Original text', version: 2, role: 'OWNER' }
-            ],
-            refreshInstructions: mockRefresh,
-            updateInstruction: mockUpdate,
-            isAuthenticated: true,
-            entitlements: { canShare: true }
-        });
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Failed to delete instruction. You can only delete instructions you own.'))
+    })
 
-        renderWithRoute('/instructions/inst-1');
+    test('Share saves who can use it', async () => {
+        renderAt('/instructions/INS-1')
 
-        // Latest version is loaded by default, newest listed first
-        expect(screen.getByTestId('mock-text-editor')).toHaveValue('Original text');
-        const versionButtons = screen.getAllByText(/^v\d+$/);
-        expect(versionButtons.map(b => b.textContent)).toEqual(['v2', 'v1']);
+        await userEvent.click(screen.getByTestId('instruction-share'))
+        await userEvent.click(screen.getByText('Save sharing'))
 
-        await userEvent.click(screen.getByText('v1'));
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Instruction share settings updated successfully!'))
+        expect(instructionService.shareInstruction).toHaveBeenCalledWith('tok', 'INS-1', 'c1', 'EDIT')
+        expect(instructionService.unshareInstruction).toHaveBeenCalledWith('tok', 'INS-1', 'c2')
+    })
 
-        expect(screen.getByTestId('mock-text-editor')).toHaveValue('Old text');
-        expect(screen.getByDisplayValue('Old name')).toBeInTheDocument();
-    });
+    test('a failed share says so', async () => {
+        ;(instructionService.shareInstruction as jest.Mock).mockRejectedValueOnce(new Error('403'))
+        renderAt('/instructions/INS-1')
 
-    test('ShareModal PUBLIC mode saves successfully', async () => {
-        jest.spyOn(instructionService, 'shareInstruction').mockResolvedValue(undefined);
-        renderWithRoute('/instructions/inst-1');
-        
-        const shareButton = screen.getByText('Share');
-        await userEvent.click(shareButton);
-        
-        const publicButton = screen.getByText('Make public to everyone');
-        await userEvent.click(publicButton);
-        
-        await waitFor(() => {
-            expect(instructionService.shareInstruction).toHaveBeenCalledWith('mock-token', 'inst-1', 'PUBLIC', 'VIEW');
-            expect(window.alert).toHaveBeenCalledWith('Instruction share settings updated successfully!');
-        });
-    });
+        await userEvent.click(screen.getByTestId('instruction-share'))
+        await userEvent.click(screen.getByText('Save sharing'))
 
-    test('ShareModal SPECIFIC mode saves successfully', async () => {
-        jest.spyOn(instructionService, 'shareInstruction').mockResolvedValue(undefined);
-        jest.spyOn(instructionService, 'unshareInstruction').mockResolvedValue(undefined);
-        renderWithRoute('/instructions/inst-1');
-        
-        const shareButton = screen.getByText('Share');
-        await userEvent.click(shareButton);
-        
-        // Find the mocked ShareModal and its save trigger
-        const mockSaveButton = screen.getByTestId('mock-share-save');
-        await userEvent.click(mockSaveButton);
-        
-        await waitFor(() => {
-            expect(instructionService.shareInstruction).toHaveBeenCalledWith('mock-token', 'inst-1', 'c1', 'VIEW');
-            expect(instructionService.unshareInstruction).toHaveBeenCalledWith('mock-token', 'inst-1', 'c2');
-            expect(window.alert).toHaveBeenCalledWith('Instruction share settings updated successfully!');
-        });
-    });
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Failed to share instruction. Make sure you own it.'))
+    })
 
-    test('ShareModal SPECIFIC mode handles save failure', async () => {
-        jest.spyOn(instructionService, 'shareInstruction').mockRejectedValue(new Error('Failed'));
-        renderWithRoute('/instructions/inst-1');
-        
-        const shareButton = screen.getByText('Share');
-        await userEvent.click(shareButton);
-        
-        const mockSaveButton = screen.getByTestId('mock-share-save');
-        await userEvent.click(mockSaveButton);
-        
-        await waitFor(() => {
-            expect(window.alert).toHaveBeenCalledWith('Failed to share instruction. Make sure you own it.');
-        });
-    });
-});
+    test('view-only access shows no Edit, Share or Delete', async () => {
+        auth({ customerInstructions: [{ ...V1, role: 'VIEW' }, { ...V2, role: 'VIEW' }] })
+        renderAt('/instructions/INS-1')
+
+        expect(within(screen.getByTestId('instruction-sharing')).getByText('Shared with you · view only')).toBeInTheDocument()
+        expect(screen.queryByTestId('instruction-edit')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('instruction-share')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('detail-more')).not.toBeInTheDocument()
+        expect(instructionService.getInstructionSharedUsers).not.toHaveBeenCalled()
+    })
+
+    test('an instruction you cannot see says so, and a signed-out visitor is sent to sign in', () => {
+        auth({ customerInstructions: [], isAuthenticated: false })
+        renderAt('/instructions/INS-1')
+
+        expect(screen.getByTestId('instruction-not-found')).toBeInTheDocument()
+        expect(mockLogin).toHaveBeenCalled()
+    })
+
+    test('phone: rows for sharing, usage and versions; Edit opens its own page', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/instructions/INS-1')
+
+        expect(await screen.findByText('You and 1 other')).toBeInTheDocument()
+        expect(await screen.findByText(/^7 chats · last/)).toBeInTheDocument()
+        expect(screen.getByTestId('detail-row-versions')).toHaveTextContent('Version 2 ·')
+        expect(screen.getByTestId('detail-row-versions')).toHaveAttribute('href', '/instructions/INS-1/history')
+        expect(screen.getByTestId('detail-row-usage')).toHaveAttribute('href', '/instructions/INS-1/usage')
+        await userEvent.click(screen.getByTestId('detail-row-sharing'))
+        expect(screen.getByTestId('share-modal')).toBeInTheDocument()
+
+        await userEvent.click(screen.getByTestId('instruction-edit'))
+        expect(screen.getByTestId('location')).toHaveTextContent('/instructions/INS-1/edit')
+    })
+
+    test('phone: a long instruction is clipped until you ask for all of it', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        auth({ customerInstructions: [{ ...V2, instruction: 'Long. '.repeat(200) }] })
+        renderAt('/instructions/INS-1')
+
+        const toggle = screen.getByRole('button', { name: 'Show the full instruction' })
+        expect(screen.getByTestId('instruction-text').className).toMatch(/clipped/)
+        await userEvent.click(toggle)
+        expect(screen.getByTestId('instruction-text').className).not.toMatch(/clipped/)
+        expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument()
+    })
+})
+
+describe('InstructionEditPage', () => {
+    test('a new instruction is created and opened', async () => {
+        jest.spyOn(instructionService, 'createInstruction').mockResolvedValueOnce({ ...V1, id: 'INS-new' })
+        renderAt('/instructions/new')
+
+        expect(screen.getByTestId('instruction-save')).toBeDisabled()
+        await userEvent.type(screen.getByPlaceholderText('e.g., Code Reviewer Persona'), 'Reviewer')
+        await userEvent.type(screen.getByTestId('instruction-edit-text'), 'Check every diff.')
+        await userEvent.click(screen.getByTestId('instruction-save'))
+
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/instructions/INS-new'))
+        expect(instructionService.createInstruction).toHaveBeenCalledWith('tok', {
+            instruction: 'Check every diff.', instructionName: 'Reviewer', existingInstructionId: undefined,
+        })
+    })
+
+    test('editing starts from an older version when asked, and saves the next version', async () => {
+        renderAt('/instructions/INS-1/edit?version=1')
+
+        expect(screen.getByTestId('instruction-edit-text')).toHaveValue(V1.instruction)
+        expect(screen.getByText('Editing from version 1. Saving makes it version 3.')).toBeInTheDocument()
+        await userEvent.click(screen.getByTestId('instruction-save'))
+
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/instructions\/INS-1$/))
+        expect(instructionService.createInstruction).toHaveBeenCalledWith('tok', {
+            instruction: V1.instruction, instructionName: 'Early-Stage VC', existingInstructionId: 'INS-1',
+        })
+    })
+
+    test('a failed save says so; Cancel goes back', async () => {
+        ;(instructionService.createInstruction as jest.Mock).mockRejectedValueOnce(new Error('500'))
+        renderAt('/instructions/INS-1/edit')
+
+        await userEvent.click(screen.getByTestId('instruction-save'))
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Failed to save instruction'))
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+        expect(screen.getByTestId('location')).toHaveTextContent(/^\/instructions\/INS-1$/)
+    })
+
+    test('view-only access goes back to the instruction', () => {
+        auth({ customerInstructions: [{ ...V2, role: 'VIEW' }] })
+        renderAt('/instructions/INS-1/edit')
+
+        expect(screen.getByTestId('location')).toHaveTextContent(/^\/instructions\/INS-1$/)
+    })
+
+    test('a signed-out visitor creating one is sent to sign in', () => {
+        auth({ customerInstructions: [], isAuthenticated: false })
+        renderAt('/instructions/new')
+
+        expect(mockLogin).toHaveBeenCalled()
+    })
+})
+
+describe('InstructionHistoryPage', () => {
+    test('every version, newest first, with a link back', () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/instructions/INS-1/history')
+
+        const timeline = screen.getByTestId('detail-timeline')
+        expect(within(timeline).getAllByRole('listitem')).toHaveLength(2)
+        expect(within(timeline).getByTestId('timeline-v1')).toHaveTextContent(V1.instruction)
+        expect(screen.getByTestId('detail-back')).toHaveAttribute('href', '/instructions/INS-1')
+    })
+})
+
+describe('InstructionUsedInPage', () => {
+    test('your conversations that used it, and how many were deleted', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/instructions/INS-1/usage')
+
+        const list = await screen.findByTestId('detail-conversations')
+        expect(within(list).getByRole('link', { name: /Startup Pitch Review/ })).toHaveAttribute('href', '/chat/CONV1')
+        expect(within(list).getByText(/^first used/)).toBeInTheDocument()
+        expect(screen.getByText('Plus 5 conversations since deleted.')).toBeInTheDocument()
+    })
+
+    test('past the limit it says only the newest are listed', async () => {
+        ;(instructionService.getInstructionUsage as jest.Mock).mockResolvedValueOnce({ ...USAGE, usageCount: 80, omitted: 30 })
+        renderAt('/instructions/INS-1/usage')
+
+        expect(await screen.findByText("Showing the newest 2. Older conversations aren't listed.")).toBeInTheDocument()
+        expect(screen.queryByText(/since deleted/)).not.toBeInTheDocument()
+    })
+
+    test('never used, and a failed load, say so', async () => {
+        ;(instructionService.getInstructionUsage as jest.Mock).mockResolvedValueOnce({ usageCount: 0, conversations: [] })
+        const { unmount } = renderAt('/instructions/INS-1/usage')
+        expect(await screen.findByText('Not used in a chat yet')).toBeInTheDocument()
+        unmount()
+        queryClient.clear()
+
+        ;(instructionService.getInstructionUsage as jest.Mock).mockRejectedValueOnce(new Error('500'))
+        renderAt('/instructions/INS-1/usage')
+        expect(await screen.findByText("Couldn't load the usage.")).toBeInTheDocument()
+    })
+})

@@ -183,6 +183,8 @@ object DynamoDBConstants {
     // counted at most once per customer.
     const val INSTRUCTION_USAGE_SEEN_TABLE = "InstructionUsageSeen"
     const val INSTRUCTION_USAGE_SEEN_SORT_KEY = "convInstKey" // "<conversationId>#<instructionId>"
+    // When the pair was first seen; rows written before 2026-11-06 have none.
+    const val INSTRUCTION_USAGE_SEEN_AT_KEY = "seenAt"
 
     const val CUSTOMER_NOTES_TABLE = "CustomerNotes"
     const val NOTE_KEY = "noteKey"

@@ -208,6 +208,8 @@ class InstructionRepository(
             color = item[DynamoDBConstants.INSTRUCTION_COLOR_KEY]?.s(),
             category = item[DynamoDBConstants.INSTRUCTION_CATEGORY_KEY]?.s(),
             tags = item[DynamoDBConstants.INSTRUCTION_TAGS_KEY]?.l()?.mapNotNull { it.s() },
+            createdAt = item["createdAt"]?.s(),
+            updatedAt = item["updatedAt"]?.s(),
             syncedWithVectorDb = item["is_synced_with_milvus"]?.bool() == true
         )
     }
@@ -230,7 +232,9 @@ class InstructionRepository(
             val item = mapOf(
                 CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
                 DynamoDBConstants.INSTRUCTION_USAGE_SEEN_SORT_KEY
-                    to AttributeValue.builder().s(convInstKey).build()
+                    to AttributeValue.builder().s(convInstKey).build(),
+                DynamoDBConstants.INSTRUCTION_USAGE_SEEN_AT_KEY
+                    to AttributeValue.builder().s(java.time.Instant.now().toString()).build()
             )
             dynamoDbClient.putItem(
                 PutItemRequest.builder()
@@ -274,4 +278,55 @@ class InstructionRepository(
         )
         logger.info("Incremented usage count for instruction $instructionId / customer $customerId")
     }
+
+    /**
+     * The customer's own use of the instruction: how many conversations used it
+     * and when it was last used in a new one. Null when they never used it.
+     */
+    suspend fun getInstructionUsage(customerId: String, instructionId: String): InstructionUsageCount? =
+        withContext(Dispatchers.IO) {
+            val item = dynamoDbClient.getItem(
+                GetItemRequest.builder()
+                    .tableName(DynamoDBConstants.INSTRUCTION_USAGE_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        INSTRUCTION_ID_KEY to AttributeValue.builder().s(instructionId).build()
+                    ))
+                    .build()
+            ).item()
+            if (item.isNullOrEmpty()) null else InstructionUsageCount(
+                count = item[DynamoDBConstants.INSTRUCTION_USAGE_COUNT_KEY]?.n()?.toIntOrNull() ?: 0,
+                lastUsedAt = item[DynamoDBConstants.INSTRUCTION_LAST_USED_KEY]?.s()
+            )
+        }
+
+    /**
+     * The customer's conversations that used the instruction, with when each
+     * first did (null on rows from before that was kept). The sort key leads
+     * with the conversation id, so this reads the customer's whole usage set
+     * and keeps this instruction's rows.
+     */
+    suspend fun getInstructionConversations(customerId: String, instructionId: String): List<InstructionConversationUse> =
+        withContext(Dispatchers.IO) {
+            val suffix = "#$instructionId"
+            dynamoDbClient.queryPaginator(
+                QueryRequest.builder()
+                    .tableName(DynamoDBConstants.INSTRUCTION_USAGE_SEEN_TABLE)
+                    .keyConditionExpression("#pk = :cid")
+                    .expressionAttributeNames(mapOf("#pk" to CUSTOMER_ID_KEY))
+                    .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                    .build()
+            ).items().mapNotNull { item ->
+                val key = item[DynamoDBConstants.INSTRUCTION_USAGE_SEEN_SORT_KEY]?.s() ?: return@mapNotNull null
+                if (!key.endsWith(suffix)) return@mapNotNull null
+                InstructionConversationUse(
+                    conversationId = key.removeSuffix(suffix),
+                    seenAt = item[DynamoDBConstants.INSTRUCTION_USAGE_SEEN_AT_KEY]?.s()
+                )
+            }
+        }
 }
+
+data class InstructionUsageCount(val count: Int, val lastUsedAt: String?)
+
+data class InstructionConversationUse(val conversationId: String, val seenAt: String?)

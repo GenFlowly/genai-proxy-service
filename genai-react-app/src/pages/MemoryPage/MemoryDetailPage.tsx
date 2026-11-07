@@ -1,54 +1,44 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { PillButton, pageHeaderStyles } from '@genflowly/component-library'
 import {
-    Breadcrumbs,
-    PillButton,
-    ResizableSidebar,
-    ScrollArea,
-    SidebarListPanel,
-    pageHeaderStyles,
-} from '@genflowly/component-library'
-import type { SidebarListGroup } from '@genflowly/component-library'
-import Navbar from '../../components/navbar/Navbar'
-import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader'
+    ConversationList,
+    DetailColumns,
+    DetailRows,
+    DetailShell,
+    MoreMenu,
+    SideCard,
+    Timeline,
+    UsageStats,
+    detailStyles as styles,
+    focusAtEnd,
+} from '../../components/DetailPage/DetailParts'
+import { ICONS } from '../../constants/icons'
 import { useAuth } from '../../context/AuthContext'
 import { useLayout } from '../../context/LayoutContext'
 import { useToast } from '../../context/ToastContext'
 import { usePageTitle } from '../../hooks/usePageTitle'
 import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import { useMemories, useMemoryDetail, useMemoryUsage, useProjects } from '../../hooks/queries/useMemories'
-import {
-    CustomerMemory,
-    MemoryScope,
-    memoryCounts,
-    placementIn,
-    scopeFromParam,
-    scopeToParam,
-} from '../../models/memory.models'
+import { MemoryScope, memoryCounts, placementIn, scopeFromParam, scopeToParam } from '../../models/memory.models'
 import { MemoryApiError, editMemory } from '../../services/memoriesService'
-import { formatServerDateTime } from '../../utils/timeUtils'
+import { formatServerDateOnly } from '../../utils/timeUtils'
 import MemoryMenuContent from './components/MemoryMenuContent'
 import MoveMemoryDialog from './components/MoveMemoryDialog'
 import DeleteMemoryDialog from './components/DeleteMemoryDialog'
-import { MemoryChangeLog, MemoryUsageLog } from './components/MemoryLogs'
-import { changeTitle, placementLabel, projectNames, scopeTitle } from './memoryLabels'
+import { projectNames, scopeTitle } from './memoryLabels'
 import { memoryPath } from './MemoryPage'
-import styles from './MemoryPage.module.scss'
+import { MAX_TEXT_CHARS, appliesLabel, lastUsedLabel, memoryHistory, memorySubPath, scopeOf, usageByConversation, usageSummary } from './memoryDetail'
 
-const VERSIONS_WIDTH_STORAGE_KEY = 'memory_versions_width_rem'
-const MAX_TEXT_CHARS = 500
-
-function scopeOf(memory: CustomerMemory): MemoryScope {
-    const first = memory.placements[0]
-    if (first?.projectId) return { type: 'project', projectId: first.projectId }
-    return { type: 'profile', kind: first?.kind ?? memory.kind }
-}
+// Conversations shown in the desktop Usage card before "See all usage".
+const SIDE_CONVERSATIONS = 4
 
 /**
- * One memory: its text (every save is a new version; old versions never
- * change), its versions, the change log saying what caused each change, and
- * the usage log of the replies it was used in.
+ * One memory: its text with one Edit action, where it applies, how it was
+ * used and its history. Phones show the last three as rows that open their
+ * own pages; desktop shows the history under the text and the rest beside it.
+ * `?version=N` shows an older version, which Restore saves as a new one.
  */
 export default function MemoryDetailPage(): React.ReactElement {
     const { t } = useTranslation()
@@ -64,44 +54,52 @@ export default function MemoryDetailPage(): React.ReactElement {
     const detailQuery = useMemoryDetail(memoryId)
     const memoriesQuery = useMemories()
     const projectsQuery = useProjects()
+    const usageQuery = useMemoryUsage(memoryId, !isNarrow)
     const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data])
     const names = useMemo(() => projectNames(projects), [projects])
     const counts = useMemo(() => memoryCounts(memoriesQuery.data ?? []), [memoriesQuery.data])
     const detail = detailQuery.data
     const memory = detail?.memory
 
-    const [selectedVersion, setSelectedVersion] = useState<number | null>(null)
-    const [draft, setDraft] = useState<string | null>(null)
-    const [tab, setTab] = useState<'changes' | 'usage'>('changes')
+    const [editing, setEditing] = useState(false)
+    const [draft, setDraft] = useState('')
     const [saving, setSaving] = useState(false)
-    const [versionsOpen, setVersionsOpen] = useState(false)
     const [dialog, setDialog] = useState<'move' | 'copy' | 'delete' | null>(null)
-    const usageQuery = useMemoryUsage(memoryId, tab === 'usage')
 
     useEffect(() => {
         setLeftSidebarExpanded(false)
         setRightSidebarExpanded(false)
     }, [setLeftSidebarExpanded, setRightSidebarExpanded])
 
-    useEffect(() => {
-        setSelectedVersion(null)
-        setDraft(null)
-    }, [memoryId])
+    useEffect(() => setEditing(false), [memoryId])
 
     const requested = params.get('scope') ? scopeFromParam(params.get('scope')) : null
     const scope: MemoryScope | null = memory
         ? (requested && placementIn(memory, requested) ? requested : scopeOf(memory))
         : requested
     const from = memory && scope ? placementIn(memory, scope) ?? memory.placements[0] : undefined
-    const latestVersion = memory?.version ?? 1
-    const shownVersion = selectedVersion ?? latestVersion
-    const versionText = detail?.versions.find(v => v.version === shownVersion)?.text ?? memory?.text ?? ''
-    const text = draft ?? versionText
-    const nextVersion = latestVersion + 1
-    const trimmed = text.trim()
-    const canSave = !!memory && trimmed.length > 0 && trimmed.length <= MAX_TEXT_CHARS && trimmed !== memory.text
+    const latest = memory?.version ?? 1
+    const asked = Number(params.get('version'))
+    const shownChange = detail?.versions.find(v => v.version === asked && asked !== latest)
+        ?? detail?.versions.find(v => v.version === latest)
+    const shownVersion = shownChange?.version ?? latest
+    const older = shownVersion !== latest
+    const shownText = older ? shownChange?.text ?? '' : memory?.text ?? ''
     const listPath = scope ? `/memory?scope=${encodeURIComponent(scopeToParam(scope))}` : '/memory'
+    const latestPath = memory ? memorySubPath(memory.memoryId, '', scope) : listPath
     const notFound = detailQuery.error instanceof MemoryApiError && detailQuery.error.status === 404
+    const trimmed = draft.trim()
+    const canSave = !!memory && trimmed.length > 0 && trimmed.length <= MAX_TEXT_CHARS && trimmed !== memory.text
+
+    const startEdit = () => {
+        if (!memory) return
+        if (isNarrow) {
+            navigate(memorySubPath(memory.memoryId, '/edit', scope, older ? { version: String(shownVersion) } : {}))
+            return
+        }
+        setDraft(shownText)
+        setEditing(true)
+    }
 
     const save = async () => {
         if (!memory || !canSave) return
@@ -109,8 +107,8 @@ export default function MemoryDetailPage(): React.ReactElement {
         try {
             const updated = await editMemory(await getAccessTokenSilently(), memory.memoryId, trimmed, memory.version)
             showToast(t('memoryPage.detail.saved', { version: updated.version }))
-            setSelectedVersion(null)
-            setDraft(null)
+            setEditing(false)
+            if (older) navigate(latestPath, { replace: true })
         } catch (error) {
             console.error('Failed to save memory:', error)
             const conflict = error instanceof MemoryApiError && error.status === 409
@@ -121,247 +119,215 @@ export default function MemoryDetailPage(): React.ReactElement {
         }
     }
 
-    const versionsGroup: SidebarListGroup = {
-        id: 'versions',
-        label: '',
-        items: (detail?.versions ?? []).map(version => ({
-            id: String(version.version),
-            label: (
-                <span className={styles.versionRow}>
-                    {t('memoryPage.versions.version', { version: version.version })}
-                    {version.version === latestVersion && <span className={styles.versionBadge}>{t('memoryPage.versions.latest')}</span>}
-                </span>
-            ),
-            details: (
-                <span className={styles.versionDetails}>
-                    {changeTitle(version)} · {formatServerDateTime(version.createdAt)}
-                </span>
-            ),
-            isActive: version.version === shownVersion,
-            ariaCurrent: 'true' as const,
-            onSelect: () => {
-                setSelectedVersion(version.version === latestVersion ? null : version.version ?? null)
-                setDraft(null)
-                setVersionsOpen(false)
-            },
-            testId: `memory-version-${version.version}`,
-        })),
-    }
-
-    const versionsPanel = (
-        <SidebarListPanel
-            title={t('memoryPage.versions.title')}
-            groups={[versionsGroup]}
-            isLoading={detailQuery.isPending}
-            hasError={false}
-            errorText=""
-            emptyText=""
-            listAriaLabel={t('memoryPage.versions.title')}
-            data-testid="memory-versions"
-        />
-    )
-
     const menuItems = memory && from ? [
         { label: t('memoryPage.list.moveTo'), onClick: () => setDialog('move'), 'data-testid': 'memory-detail-move' },
         ...(from.projectId ? [{ label: t('memoryPage.list.copyToProject'), onClick: () => setDialog('copy'), 'data-testid': 'memory-detail-copy' }] : []),
         { label: t('memoryPage.list.delete'), onClick: () => setDialog('delete'), 'data-testid': 'memory-detail-delete' },
     ] : undefined
 
-    return (
-        <div className={styles.page}>
-            {isNarrow ? (
-                <MobileHeader
-                    title={t('memoryPage.detail.editMemory')}
-                    subtitle={from ? placementLabel(from, names) : undefined}
-                    menuItems={menuItems}
-                    menuTitle={t('memoryPage.title')}
-                    menuContent={(
-                        <MemoryMenuContent
-                            scope={null}
-                            counts={counts}
-                            projects={projects}
-                            projectsLoading={projectsQuery.isPending}
-                            projectsFailed={projectsQuery.isError}
-                            onClose={() => setLeftSidebarExpanded(false)}
+    const history = memory && detail ? memoryHistory(detail.changes, memory, names, scope) : []
+    const usage = usageByConversation((usageQuery.data?.pages ?? []).flatMap(page => page.items))
+
+    const textCard = memory && (
+        <section className={styles.card} aria-label={t('memoryPage.detail.textLabel')} data-testid="memory-card">
+            {memory.category && (
+                <ul className={styles.chips}><li className={styles.chip}>{memory.category}</li></ul>
+            )}
+            {editing ? (
+                <>
+                    <div className={styles.field}>
+                        <label className={styles.fieldLabel} htmlFor="memory-text">{t('memoryPage.detail.textLabel')}</label>
+                        <textarea
+                            id="memory-text"
+                            className={styles.textArea}
+                            value={draft}
+                            maxLength={MAX_TEXT_CHARS}
+                            onChange={event => setDraft(event.target.value)}
+                            ref={focusAtEnd}
+                            data-testid="memory-text"
                         />
-                    )}
-                />
+                        <div className={styles.fieldFoot}>
+                            <span>{t('memoryPage.page.kept')}</span>
+                            <span className={styles.count}>{draft.length} / {MAX_TEXT_CHARS}</span>
+                        </div>
+                    </div>
+                    <div className={styles.desktopActions}>
+                        <PillButton variant="secondary" label={t('memoryPage.page.cancel')} onClick={() => setEditing(false)} disabled={saving} />
+                        <PillButton
+                            label={saving ? t('memoryPage.detail.saving') : t('memoryPage.detail.save', { next: latest + 1 })}
+                            onClick={save}
+                            disabled={!canSave || saving}
+                            data-testid="memory-save"
+                        />
+                    </div>
+                </>
             ) : (
                 <>
-                    <Navbar />
-                    <div className={pageHeaderStyles.header}>
-                        <Breadcrumbs
-                            variant="onHeader"
-                            items={[
-                                { label: t('memoryPage.title'), onClick: () => navigate('/memory') },
-                                ...(scope ? [{ label: scopeTitle(scope, names), onClick: () => navigate(listPath) }] : []),
-                                { label: t('memoryPage.detail.editMemory') },
-                            ]}
+                    <p className={styles.bigText} data-testid="memory-text-shown">{shownText}</p>
+                    <div className={styles.cardFoot}>
+                        <span className={styles.footNote}>
+                            <strong>{t('memoryPage.versions.version', { version: shownVersion })}</strong>
+                            {shownChange ? ` · ${formatServerDateOnly(shownChange.createdAt)}` : ''}
+                        </span>
+                        <PillButton
+                            variant={older ? 'primary' : 'secondary'}
+                            label={older ? t('memoryPage.page.restore', { next: latest + 1 }) : t('memoryPage.page.edit')}
+                            onClick={startEdit}
+                            data-testid="memory-edit"
                         />
-                        {memory && from && (
-                            <div className={pageHeaderStyles.actions}>
-                                <PillButton
-                                    variant="secondary"
-                                    label={t('memoryPage.list.moveTo')}
-                                    className={pageHeaderStyles.actionButton}
-                                    onClick={() => setDialog('move')}
-                                    data-testid="memory-detail-move"
-                                />
-                                {from.projectId && (
-                                    <PillButton
-                                        variant="secondary"
-                                        label={t('memoryPage.list.copyToProject')}
-                                        className={pageHeaderStyles.actionButton}
-                                        onClick={() => setDialog('copy')}
-                                        data-testid="memory-detail-copy"
-                                    />
-                                )}
-                            </div>
-                        )}
                     </div>
                 </>
             )}
+        </section>
+    )
 
-            <div className={styles.layout}>
-                {!isNarrow && memory && (
-                    <ResizableSidebar
-                        storageKey={VERSIONS_WIDTH_STORAGE_KEY}
-                        minWidth={200}
-                        defaultWidth={280}
-                        maxWidth={380}
-                        data-testid="memory-versions-sidebar"
-                    >
-                        {versionsPanel}
-                    </ResizableSidebar>
-                )}
+    const olderBanner = older && (
+        <div className={styles.banner} role="status" data-testid="memory-older">
+            <span>{t('memoryPage.page.olderBanner', { version: shownVersion, latest })}</span>
+            <Link className={styles.bannerLink} to={latestPath}>{t('memoryPage.page.backToLatest')}</Link>
+        </div>
+    )
 
-                <ScrollArea className={styles.main} data-testid="memory-detail">
-                    {detailQuery.isPending && (
-                        <div className={styles.stateContainer}>
-                            <div className={styles.spinner} aria-label={t('memoryPage.list.loading')} />
-                        </div>
+    const timeline = (
+        <Timeline
+            entries={history}
+            label={t('memoryPage.page.history')}
+            untitled={t('memoryPage.changes.untitledConversation')}
+            deleted={t('memoryPage.changes.deletedConversation')}
+        />
+    )
+
+    return (
+        <DetailShell
+            narrow={isNarrow}
+            title={t('memoryPage.page.title')}
+            subtitle={scope ? scopeTitle(scope, names) : undefined}
+            menuItems={menuItems}
+            menuTitle={t('memoryPage.title')}
+            menuContent={(
+                <MemoryMenuContent
+                    scope={null}
+                    counts={counts}
+                    projects={projects}
+                    projectsLoading={projectsQuery.isPending}
+                    projectsFailed={projectsQuery.isError}
+                    onClose={() => setLeftSidebarExpanded(false)}
+                />
+            )}
+            breadcrumbs={[
+                { label: t('memoryPage.title'), onClick: () => navigate('/memory') },
+                ...(scope ? [{ label: scopeTitle(scope, names), onClick: () => navigate(listPath) }] : []),
+                { label: memory ? truncate(memory.text) : t('memoryPage.page.title') },
+            ]}
+            actions={memory && from ? (
+                <>
+                    <PillButton
+                        label={t('memoryPage.list.moveTo')}
+                        icon={ICONS.FOLDER}
+                        className={pageHeaderStyles.actionButton}
+                        onClick={() => setDialog('move')}
+                        data-testid="memory-detail-move"
+                    />
+                    <MoreMenu
+                        label={t('memoryPage.page.more')}
+                        items={[
+                            ...(from.projectId ? [{ label: t('memoryPage.list.copyToProject'), onSelect: () => setDialog('copy'), testId: 'memory-detail-copy' }] : []),
+                            { label: t('memoryPage.list.delete'), onSelect: () => setDialog('delete'), danger: true, testId: 'memory-detail-delete' },
+                        ]}
+                    />
+                </>
+            ) : undefined}
+            data-testid="memory-detail"
+        >
+            {detailQuery.isPending && (
+                <div className={styles.state}><span>{t('memoryPage.list.loading')}</span></div>
+            )}
+            {detailQuery.isError && (
+                <div className={styles.state} data-testid="memory-detail-error">
+                    <p>{t(notFound ? 'memoryPage.detail.notFound' : 'memoryPage.detail.loadFailed')}</p>
+                    <PillButton variant="secondary" label={t('memoryPage.detail.backToList')} onClick={() => navigate(listPath)} />
+                </div>
+            )}
+            {memory && detail && from && (isNarrow ? (
+                <>
+                    {olderBanner}
+                    {textCard}
+                    <DetailRows
+                        label={t('memoryPage.page.rows')}
+                        rows={[
+                            {
+                                key: 'applies',
+                                icon: from.projectId ? ICONS.FOLDER : ICONS.BRAIN,
+                                accent: true,
+                                title: t('memoryPage.page.appliesTo'),
+                                summary: memory.placements.map(p => appliesLabel(p, names)).join(', '),
+                                onClick: () => setDialog('move'),
+                            },
+                            {
+                                key: 'usage',
+                                icon: ICONS.CHAT_BUBBLE,
+                                title: t('memoryPage.page.usage'),
+                                summary: usageSummary(memory),
+                                to: memorySubPath(memory.memoryId, '/usage', scope),
+                            },
+                            {
+                                key: 'history',
+                                icon: ICONS.HISTORY,
+                                title: t('memoryPage.page.history'),
+                                summary: t('memoryPage.page.historySummary', { version: latest, count: detail.changes.length }),
+                                to: memorySubPath(memory.memoryId, '/history', scope),
+                            },
+                        ]}
+                    />
+                </>
+            ) : (
+                <DetailColumns
+                    main={(
+                        <>
+                            {olderBanner}
+                            {textCard}
+                            <section aria-label={t('memoryPage.page.history')} className={styles.field}>
+                                <h2 className={styles.sectionTitle}>{t('memoryPage.page.history')}</h2>
+                                {timeline}
+                            </section>
+                        </>
                     )}
-
-                    {detailQuery.isError && (
-                        <div className={styles.stateContainer} data-testid="memory-detail-error">
-                            <p className={styles.stateText}>
-                                {t(notFound ? 'memoryPage.detail.notFound' : 'memoryPage.detail.loadFailed')}
-                            </p>
-                            <PillButton variant="secondary" label={t('memoryPage.detail.backToList')} onClick={() => navigate(listPath)} />
-                        </div>
+                    side={(
+                        <>
+                            <SideCard title={t('memoryPage.page.appliesTo')} data-testid="memory-applies">
+                                <ul className={styles.chips}>
+                                    {memory.placements.map(p => (
+                                        <li key={p.projectId ?? 'profile'} className={`${styles.chip} ${styles.chipAccent}`}>{appliesLabel(p, names)}</li>
+                                    ))}
+                                </ul>
+                                <PillButton variant="secondary" label={t('memoryPage.page.changeWhere')} onClick={() => setDialog('move')} />
+                            </SideCard>
+                            <SideCard title={t('memoryPage.page.usage')} data-testid="memory-usage">
+                                <UsageStats
+                                    stats={[
+                                        { value: memory.hitCount, label: t('memoryPage.page.repliesUsedIt') },
+                                        { value: memory.lastUsedAt ? formatServerDateOnly(memory.lastUsedAt) : t('memoryPage.page.neverShort'), label: lastUsedLabel(memory) },
+                                    ]}
+                                />
+                                {usage.length > 0 && (
+                                    <ConversationList
+                                        plain
+                                        items={usage.slice(0, SIDE_CONVERSATIONS)}
+                                        label={t('memoryPage.page.usedIn')}
+                                        untitled={t('memoryPage.changes.untitledConversation')}
+                                        deleted={t('memoryPage.changes.deletedConversation')}
+                                    />
+                                )}
+                                {memory.hitCount > 0 && (
+                                    <Link className={styles.viewLink} to={memorySubPath(memory.memoryId, '/usage', scope)}>
+                                        {t('memoryPage.page.seeAllUsage')}
+                                    </Link>
+                                )}
+                            </SideCard>
+                        </>
                     )}
-
-                    {memory && detail && (
-                        <div className={styles.detail}>
-                            {isNarrow && (
-                                <div className={styles.versionsToggle}>
-                                    <button
-                                        type="button"
-                                        className={styles.versionsToggleButton}
-                                        aria-expanded={versionsOpen}
-                                        onClick={() => setVersionsOpen(open => !open)}
-                                        data-testid="memory-versions-toggle"
-                                    >
-                                        <span className={styles.fieldLabel}>{t('memoryPage.versions.title')}</span>
-                                        <span>
-                                            {t('memoryPage.versions.version', { version: shownVersion })}
-                                            {shownVersion === latestVersion ? ` · ${t('memoryPage.versions.latest')}` : ''}
-                                        </span>
-                                    </button>
-                                    {versionsOpen && versionsPanel}
-                                </div>
-                            )}
-
-                            <div className={styles.metaRow}>
-                                <span className={styles.muted}>{t('memoryPage.detail.appliesIn')}</span>
-                                {memory.placements.map(placement => (
-                                    <span key={placement.projectId ?? 'profile'} className={`${styles.tag} ${styles.tagKind}`}>
-                                        {placementLabel(placement, names)}
-                                    </span>
-                                ))}
-                                {memory.category && <span className={styles.tag}>{memory.category}</span>}
-                                <span className={styles.spacer} />
-                                <span className={styles.muted}>
-                                    {memory.hitCount > 0
-                                        ? t('memoryPage.detail.usedSummary', {
-                                            count: memory.hitCount,
-                                            date: memory.lastUsedAt ? formatServerDateTime(memory.lastUsedAt) : '',
-                                        })
-                                        : t('memoryPage.detail.neverUsed')}
-                                </span>
-                            </div>
-
-                            <div className={styles.field}>
-                                <label className={styles.fieldLabel} htmlFor="memory-text">{t('memoryPage.detail.textLabel')}</label>
-                                <textarea
-                                    id="memory-text"
-                                    className={styles.textArea}
-                                    value={text}
-                                    maxLength={MAX_TEXT_CHARS}
-                                    onChange={event => setDraft(event.target.value)}
-                                    spellCheck={false}
-                                    data-testid="memory-text"
-                                />
-                                <p className={styles.help}>
-                                    {shownVersion === latestVersion
-                                        ? t('memoryPage.detail.hintLatest', { next: nextVersion })
-                                        : t('memoryPage.detail.hintOld', { version: shownVersion, next: nextVersion })}
-                                </p>
-                            </div>
-
-                            <div className={styles.detailActions}>
-                                <PillButton
-                                    variant="danger"
-                                    label={t('memoryPage.list.delete')}
-                                    onClick={() => setDialog('delete')}
-                                    disabled={saving}
-                                    data-testid="memory-detail-delete-button"
-                                />
-                                <PillButton
-                                    label={saving ? t('memoryPage.detail.saving') : t('memoryPage.detail.save', { next: nextVersion })}
-                                    onClick={save}
-                                    disabled={!canSave || saving}
-                                    data-testid="memory-save"
-                                />
-                            </div>
-
-                            <div className={styles.tabs} role="tablist" aria-label={t('memoryPage.detail.logs')}>
-                                {([
-                                    ['changes', t('memoryPage.detail.changeLog'), detail.changes.length],
-                                    ['usage', t('memoryPage.detail.usageLog'), memory.hitCount],
-                                ] as const).map(([id, label, count]) => (
-                                    <button
-                                        key={id}
-                                        type="button"
-                                        role="tab"
-                                        aria-selected={tab === id}
-                                        className={`${styles.tab} ${tab === id ? styles.tabOn : ''}`}
-                                        onClick={() => setTab(id)}
-                                        data-testid={`memory-tab-${id}`}
-                                    >
-                                        {label}
-                                        <span className={styles.scopeCount}>{count}</span>
-                                    </button>
-                                ))}
-                            </div>
-
-                            {tab === 'changes' ? (
-                                <MemoryChangeLog changes={detail.changes} names={names} selectedVersion={shownVersion} />
-                            ) : (
-                                <MemoryUsageLog
-                                    pages={usageQuery.data?.pages ?? []}
-                                    total={memory.hitCount}
-                                    isLoading={usageQuery.isPending}
-                                    isError={usageQuery.isError}
-                                    hasMore={!!usageQuery.hasNextPage}
-                                    loadingMore={usageQuery.isFetchingNextPage}
-                                    onLoadMore={() => usageQuery.fetchNextPage()}
-                                />
-                            )}
-                        </div>
-                    )}
-                </ScrollArea>
-            </div>
+                />
+            ))}
 
             {memory && from && (dialog === 'move' || dialog === 'copy') && (
                 <MoveMemoryDialog
@@ -376,13 +342,12 @@ export default function MemoryDetailPage(): React.ReactElement {
                 />
             )}
             {memory && from && dialog === 'delete' && (
-                <DeleteMemoryDialog
-                    memory={memory}
-                    from={from}
-                    onClose={() => setDialog(null)}
-                    onDone={() => navigate(listPath)}
-                />
+                <DeleteMemoryDialog memory={memory} from={from} onClose={() => setDialog(null)} onDone={() => navigate(listPath)} />
             )}
-        </div>
+        </DetailShell>
     )
+}
+
+function truncate(text: string, max = 48): string {
+    return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text
 }
