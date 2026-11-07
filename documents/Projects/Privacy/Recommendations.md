@@ -415,7 +415,7 @@ A user can only overwrite a key with another valid one, or revoke it at the vend
 
 **Status (2026-11-06): "Delete all API keys" is live in production since 2026-11-06 (PR #334).** Settings > Profile removes every stored credential in one step (`DELETE /api/v1/credentials`): AI and embedding keys, the vector DB connection, and tool and connector credentials. Tools keep their non-secret settings. Removing a single key is still not possible.
 
-### R6. Text enters the pipeline even when it has nowhere to go (fix in dev 2026-11-07, production with PR #338)
+### R6. Text enters the pipeline even when it has nowhere to go (fix live 2026-11-07)
 
 **What happens.** `ConversationIndexingService.kt:55-88` and `NotesService.kt:143-163` never check whether the user has an embedding key or a vector database. For a chat-only BYOK user, text still goes through SQS, Step Functions and CloudWatch. The embedding step then raises an error (`create_and_store_lambda.py:68,78,228`), and the original message lands in the DLQ for 14 days.
 
@@ -425,7 +425,7 @@ This is the likely source of some of the 381 production messages, though I didn'
 
 **Effort:** S.
 
-**Status (2026-11-07): deployed to dev** (`49078268`, PR #338 open to `main`). The dev proxy, retrieval server and encoding lambdas all run it (the dev store and trigger lambdas run the `4907826` images). Production deploys when #338 merges. Each profile now carries three entitlement flags, kept in step with the customer's credentials: `isVectorDbStoringEnabled` (a vector DB is connected), `isEmbeddingCreationEnabled` (a stored embedding key can embed) and `isWebSearchEnabled` (a web search key is stored). Saving or removing any key or connection re-derives them, and a profile from before the flags gets them on its first read.
+**Status (2026-11-07): live in production** (`49078268`, PR #338). The proxy and retrieval server run it since 04:03 UTC, and the store and trigger lambdas since 04:30 UTC: they run the `8e82bb3` images, checked read-only. Each profile now carries three entitlement flags, kept in step with the customer's credentials: `isVectorDbStoringEnabled` (a vector DB is connected), `isEmbeddingCreationEnabled` (a stored embedding key can embed) and `isWebSearchEnabled` (a web search key is stored). Saving or removing any key or connection re-derives them, and a profile from before the flags gets them on its first read.
 
 - **Nothing is sent without both storage flags.** Chats, notes, instructions and memories skip the pipeline, and their retries stop. Search answers "not set up" without calling the retrieval server.
 - **Tools fail fast.** Knowledge and memory search are never offered to the model without both storage flags, nor web search without its key. Memory recall falls back to core memories.
@@ -457,7 +457,7 @@ Memory is the most sensitive feature in the app: it builds a profile of the user
 
 **Status (2026-11-06): live in production since 2026-11-05 (PR #332).** You decided memory stays **on by default**. Settings > Defaults > Learned facts has two switches, learn from chats and use in replies, and "Delete all learned facts". The third, learn from notes, was removed with the notes page in PR #335. The server enforces the saved switches and treats a failed read as off. The iOS app has the same switches (BUG-059), not yet released.
 
-### R8. Indexing has no opt-out (fix built 2026-11-07, not deployed)
+### R8. Indexing has no opt-out (fix live 2026-11-07)
 
 **What happens.** Every completed exchange is sent for indexing unconditionally (`ExchangeSideEffects.kt:32`). Notes are sent whenever editing ends. Only the absence of a token stops it.
 
@@ -465,12 +465,12 @@ Memory is the most sensitive feature in the app: it builds a profile of the user
 
 **Effort:** M.
 
-**Status (2026-11-07): built, not yet deployed.** You narrowed it to chats: the apps no longer save notes, and email indexing was never on.
+**Status (2026-11-07): live in production** (`0ff55eb8`, PR #339): the proxy since 04:20 UTC, the web card since 04:13 UTC. You narrowed it to chats: the apps no longer save notes, and email indexing was never on.
 
 - **The switch.** Settings > Defaults > Search index has "Index my chats", off until the user turns it on (the `indexChats` preference; unset means off).
 - **Turning it off** asks whether to delete the chats already indexed. "Delete indexed chats" is also there on its own (`DELETE /api/v1/indexing/chats`). It clears the chats still waiting to be indexed, then removes every chat vector from the user's vector DB.
 - **Enforced on the server.** Each exchange and each retry checks the switch first. A preference that can't be read counts as off.
-- **Existing users.** Nobody has the switch on yet, so their new chats stop being indexed until they turn it on. Chats already indexed stay searchable until deleted.
+- **Existing users.** Nobody had the switch on, so since the deploy their new chats aren't indexed until they turn it on. Chats already indexed stay searchable until deleted.
 - **Still open:**
   - "Don't index this conversation".
   - The opt-in during setup, when the user connects a vector DB.
@@ -491,7 +491,7 @@ Memory is the most sensitive feature in the app: it builds a profile of the user
 
 **Status (2026-11-06): live in production since 2026-11-05 (PR #332), in a simpler form you chose.** Every background task runs on the **priority-1 provider** (or the first key added), on its small model, with no failover. A customer's own agent on that vendor keeps its model. The AI Settings page says so. The cost of the simpler form: a chat on a different vendor still sends its first message (title) and recent messages (memory) to the priority-1 provider, so content reaches at most two vendors, both chosen by the user. This replaces items 1 and 2. Item 3 is built without the opt-in, and item 4 was not built.
 
-### R10. OpenAI keeps Responses API state for 30 days (fix built 2026-11-07, not deployed)
+### R10. OpenAI keeps Responses API state for 30 days (fix live 2026-11-07)
 
 **What happens.** The gpt-5 family goes through the Responses API (`llm_factory.py:120-121`), and `store` isn't set anywhere in the retrieval server. [code] OpenAI says this API "has a 30 day Application State retention period by default". [vendor]
 
@@ -499,12 +499,12 @@ Memory is the most sensitive feature in the app: it builds a profile of the user
 
 **Effort:** S.
 
-**Status (2026-11-07): built, not yet deployed.**
+**Status (2026-11-07): live in production** (`5d17cca8`, PR #339) since 04:20 UTC.
 
 - Every OpenAI call sets `store=False`, so OpenAI keeps no Responses API state. Each call already replays the whole history, so nothing depended on it.
 - The gpt-5 family, on the Responses API, also asks for `reasoning.encrypted_content`, so a tool round can hand its reasoning back without anything stored. Other OpenAI models stay on Chat Completions without it.
 - The pinned langchain-openai (1.7.3) keeps that encrypted reasoning when it streams, and replays it without message IDs. `tests/test_openai_stateless.py` pins both; they fail on the older 1.1.12.
-- **Not yet checked against the live API.** There was no OpenAI key to test with. Run one gpt-5 chat that calls a tool in dev before production.
+- **Not yet checked against the live API.** There was no OpenAI key to test with. Run one gpt-5 chat that calls a tool. The production retrieval server's recent warnings showed no `store` errors after the deploy, but that buffer was short.
 - OpenAI's abuse logs (up to 30 days) still apply, so the policy still can't claim zero retention.
 
 ### R11. Provider defaults are not disclosed
@@ -701,13 +701,13 @@ The principle: **nothing leaves for a vendor the user didn't choose for that pur
 |---|---|---|
 | Memory from chats and notes | On, with switches since 2026-11-05 | On, with switches (decided) |
 | Using memories in replies | On, with a switch since 2026-11-05 | On, with a switch (decided) |
-| Indexing chats and notes | Whenever a vector database is connected (since 2026-11-05). A chats switch, off by default, is built but not deployed | Off until opted in, with a per-conversation exclusion |
+| Indexing chats and notes | Chats only after the user turns on "Index my chats", and only with a vector database and an embedding key (since 2026-11-07) | Off until opted in, with a per-conversation exclusion |
 | Titles and other background tasks | Priority-1 provider only, no failover, since 2026-11-05 | Priority-1 provider only, no failover (decided) |
 | Web search | Available once a key is stored | Same, plus a per-chat switch |
 | Thinking steps | Saved in full | Short lifetime, or labels only |
 | Deleting anything | Permanent delete of conversations and accounts since 2026-11-06. The apps can't delete old notes since PR #335 (Policy.md N1) | Permanent delete, everywhere (decided: no Trash) |
 | Removing keys | Tool keys one at a time, or every key at once (since 2026-11-06) | All keys, one at a time or all at once |
-| OpenAI `store` | Default (stored 30 days). `false` is built but not deployed | `false` |
+| OpenAI `store` | `false` (since 2026-11-07) | `false` |
 | Text in logs and queues | IDs only since 2026-11-05, except email. Older copies age out by 2027-02-04 (R1) | IDs only |
 
 Beyond those defaults, here are the options in order of value for the effort. **My recommendation: ship B1 and B2 right after the P0 work, then B3, and treat B4, B5 and B6 as later differentiators.**
@@ -751,10 +751,10 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Rotate the admin key from git history | R16 | S |
 | Turn off Step Functions execution data (**live since 2026-11-05**), delete existing log streams, narrow the Grafana role | R1 | S |
 | Open the AWS support case to shorten execution history | R1 | S |
-| Skip indexing when no embedding key or vector DB exists. **In dev since 2026-11-07** (entitlement flags, PR #338). | R6 | S |
+| Skip indexing when no embedding key or vector DB exists. **Live since 2026-11-07** (entitlement flags, PR #338). | R6 | S |
 | Allow-list thinking-step fields for non-authors and hide identity | R2 | S |
 | Stop archived content reaching AI providers. **Live since 2026-11-06.** | R3 step 1 | S |
-| Set OpenAI `store=False`, after testing tool rounds. **Built 2026-11-07, not deployed.** | R10 | S |
+| Set OpenAI `store=False`, after testing tool rounds. **Live since 2026-11-07** (PR #339); the live tool-round test is still open. | R10 | S |
 | Lock down CORS, add security headers | R13, R14 | S |
 | Enable CloudTrail, gate the dev environment, set Lambda log retention, fix table drift | R16, R17, R18, R20 | S |
 
@@ -763,7 +763,7 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Action | Item | Effort |
 |---|---|---|
 | Memory switches, on by default (decided). **Live since 2026-11-05.** | R7 | S-M |
-| Indexing switches. **Chats: built 2026-11-07, not deployed.** | R8 | M |
+| Indexing switches. **Chats: live since 2026-11-07** (PR #339). | R8 | M |
 | Pin background tasks to the priority-1 provider. **Live since 2026-11-05.** | R9 | S-M |
 | Remove keys (all at once: **live since 2026-11-06**; one at a time: open) | R5 | S |
 | Provider facts, Voyage acknowledgement, delete batch files | R11 | S-M |
