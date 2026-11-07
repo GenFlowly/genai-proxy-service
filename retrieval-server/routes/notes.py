@@ -73,6 +73,9 @@ class DeleteConversationVectorsRequest(BaseModel):
 
 class DeleteCustomerVectorsRequest(BaseModel):
     customer_id: str
+    # Only this data type's collections (e.g. "conversation" for "Delete
+    # indexed chats"); None = every type, for account deletion.
+    data_type: Optional[str] = None
 
 
 def _escape_filter_value(value: str) -> str:
@@ -508,21 +511,25 @@ async def delete_customer_vectors(req: DeleteCustomerVectorsRequest):
     Hard-delete every vector a customer owns in their vector DB, for account
     deletion: their rows in each shared '{type}_{model}' collection, and their
     legacy per-customer '{customer_id}_*' collections, which hold nobody else's
-    rows and are dropped. Raises on any failure so the caller retries; a
-    customer with no vector DB has nothing to delete.
+    rows and are dropped. data_type narrows both to one type. Raises on any
+    failure so the caller retries; a customer with no vector DB has nothing
+    to delete.
     """
     if not req.customer_id or not CUSTOMER_ID_PATTERN.fullmatch(req.customer_id):
         raise HTTPException(status_code=400, detail="A valid customer_id is required")
 
-    logger.info("Deleting all vectors — customer=%s", req.customer_id)
+    logger.info("Deleting all vectors — customer=%s data_type=%s", req.customer_id, req.data_type or "all")
 
     try:
         client = get_milvus_client(req.customer_id)
-        legacy_prefix = f"{req.customer_id}_"
+        legacy_prefix = f"{req.customer_id}_{req.data_type or ''}"
         deleted: dict[str, int] = {}
         dropped: list[str] = []
         for collection_name in client.list_collections():
-            if collection_data_type(collection_name) is not None:
+            data_type = collection_data_type(collection_name)
+            if data_type is not None:
+                if req.data_type and data_type != req.data_type:
+                    continue
                 result = client.delete(collection_name=collection_name, filter=customer_filter(req.customer_id))
                 deleted[collection_name] = result.get("delete_count", 0) if hasattr(result, "get") else 0
             elif collection_name.startswith(legacy_prefix):

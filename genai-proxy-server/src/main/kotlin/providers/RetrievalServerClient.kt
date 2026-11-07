@@ -1210,13 +1210,14 @@ class RetrievalServerClient(
     /**
      * Hard-deletes every vector the customer owns in their vector DB, for
      * account deletion: their rows in each shared collection and their legacy
-     * per-customer collections. Returns how many vectors were deleted. Throws
-     * when the retrieval server could not finish, so the caller can retry.
+     * per-customer collections. [dataType] narrows it to one type's
+     * collections. Returns how many vectors were deleted. Throws when the
+     * retrieval server could not finish, so the caller can retry.
      */
-    suspend fun deleteCustomerVectors(customerId: String): Int {
+    suspend fun deleteCustomerVectors(customerId: String, dataType: String? = null): Int {
         val response = httpClient.post("$retrievalServerUrl/delete-customer-vectors") {
             contentType(ContentType.Application.Json)
-            setBody(json.encodeToString(DeleteCustomerVectorsPayload(customer_id = customerId)))
+            setBody(json.encodeToString(DeleteCustomerVectorsPayload(customer_id = customerId, data_type = dataType)))
             // One delete per collection in the customer's cluster
             timeout {
                 requestTimeoutMillis = 300_000L
@@ -1232,7 +1233,11 @@ class RetrievalServerClient(
 private data class DeleteNoteVectorsPayload(val customer_id: String, val note_key: String)
 
 @Serializable
-private data class DeleteCustomerVectorsPayload(val customer_id: String)
+private data class DeleteCustomerVectorsPayload(
+    val customer_id: String,
+    /** Only this data type's collections (e.g. "conversation"); null = every type. */
+    val data_type: String? = null
+)
 
 @Serializable
 private data class DeleteConversationVectorsPayload(val customer_id: String, val conversation_key: String)

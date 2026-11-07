@@ -36,7 +36,8 @@ class CustomerProfileService(
         preferredAgentId: String? = null,
         memoryLearnFromChats: Boolean? = null,
         memoryLearnFromNotes: Boolean? = null,
-        memoryUseInReplies: Boolean? = null
+        memoryUseInReplies: Boolean? = null,
+        indexChats: Boolean? = null
     ) {
         customerProfileRepository.savePreferences(
             customerId,
@@ -49,7 +50,8 @@ class CustomerProfileService(
             preferredAgentId,
             memoryLearnFromChats,
             memoryLearnFromNotes,
-            memoryUseInReplies
+            memoryUseInReplies,
+            indexChats
         )
     }
 
