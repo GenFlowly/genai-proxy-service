@@ -3,7 +3,7 @@ import Security
 
 /// Minimal Keychain wrapper for storing auth tokens.
 enum Keychain {
-    private static let service = "nkirit.AI-Wrapper.auth"
+    private static let service = "com.unbiase.ai.auth"
 
     static func set(_ value: String, for key: String) {
         let data = Data(value.utf8)
@@ -42,3 +42,17 @@ enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 }
+
+/// Where the session's tokens live.
+protocol TokenVault {
+    func get(_ key: String) -> String?
+    func set(_ value: String, for key: String)
+    func delete(_ key: String)
+}
+
+struct KeychainVault: TokenVault {
+    func get(_ key: String) -> String? { Keychain.get(key) }
+    func set(_ value: String, for key: String) { Keychain.set(value, for: key) }
+    func delete(_ key: String) { Keychain.delete(key) }
+}
+

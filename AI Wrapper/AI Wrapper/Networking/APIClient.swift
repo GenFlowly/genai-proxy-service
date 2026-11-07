@@ -11,9 +11,16 @@ enum HttpMethod: String {
 struct APIError: Error, LocalizedError {
     let status: Int
     let message: String
+    /// The error response's body, for callers that read a machine-readable code from it.
+    var body: Data? = nil
 
     var errorDescription: String? { message }
     var isAuthError: Bool { status == 401 || status == 403 }
+
+    /// `response.statusText`. Credential saves show this, never the response body.
+    var statusText: String {
+        HTTPURLResponse.localizedString(forStatusCode: status).capitalized(with: Locale(identifier: "en_US"))
+    }
 }
 
 /// Mirrors genai-react-app/src/utils/apiUtils.ts (fetchWithRetry) — exponential
@@ -22,6 +29,17 @@ enum APIClient {
     static let defaultRetries = 3
     static let defaultBackoff: TimeInterval = 1.0
     static let retryOnStatuses: Set<Int> = [429, 500, 502, 503, 504]
+    static let browserFetchTimeout: TimeInterval = 300
+
+    /// API responses hold account data, and the app caches what it needs in `CacheStore`, which
+    /// logout clears. URLSession's own cache would keep a second copy on disk, and a response
+    /// finishing during logout could land there after the wipe.
+    static let session: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }()
 
     static func request(
         _ url: URL,
@@ -32,6 +50,9 @@ enum APIClient {
     ) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: url)
         request.httpMethod = method.rawValue
+        // URLSession's default 60s would abort calls a browser waits out: an encoded note save
+        // can run for minutes, and its autosave retry would then repeat that work forever.
+        request.timeoutInterval = browserFetchTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -43,7 +64,7 @@ enum APIClient {
         var attempt = 0
         while true {
             do {
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await session.data(for: request)
                 guard let http = response as? HTTPURLResponse else {
                     throw APIError(status: -1, message: "Invalid response")
                 }
@@ -56,7 +77,7 @@ enum APIClient {
                     continue
                 }
                 let message = String(data: data, encoding: .utf8) ?? ""
-                throw APIError(status: http.statusCode, message: "Request failed: \(http.statusCode) \(message)")
+                throw APIError(status: http.statusCode, message: "Request failed: \(http.statusCode) \(message)", body: data)
             } catch let error as APIError {
                 throw error
             } catch is CancellationError {

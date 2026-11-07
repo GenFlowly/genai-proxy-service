@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C0FFEE000000000000000014 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = C0FFEE000000000000000012 /* Sentry */; };
+		C0FFEE000000000000000015 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = C0FFEE000000000000000013 /* SwiftMath */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		4C7CE9DB302C438D00C4C2E2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +32,8 @@
 		4C7CE9CD302C438C00C4C2E2 /* AI Wrapper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "AI Wrapper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4C7CE9DA302C438D00C4C2E2 /* AI WrapperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "AI WrapperTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4C7CE9E4302C438D00C4C2E2 /* AI WrapperUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "AI WrapperUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0FFEE000000000000000001 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		C0FFEE000000000000000002 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +59,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C0FFEE000000000000000014 /* Sentry in Frameworks */,
+				C0FFEE000000000000000015 /* SwiftMath in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +87,7 @@
 				4C7CE9CF302C438C00C4C2E2 /* AI Wrapper */,
 				4C7CE9DD302C438D00C4C2E2 /* AI WrapperTests */,
 				4C7CE9E7302C438D00C4C2E2 /* AI WrapperUITests */,
+				C0FFEE000000000000000003 /* BuildSettings */,
 				4C7CE9CE302C438C00C4C2E2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +100,15 @@
 				4C7CE9E4302C438D00C4C2E2 /* AI WrapperUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C0FFEE000000000000000003 /* BuildSettings */ = {
+			isa = PBXGroup;
+			children = (
+				C0FFEE000000000000000001 /* Debug.xcconfig */,
+				C0FFEE000000000000000002 /* Release.xcconfig */,
+			);
+			path = BuildSettings;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +131,8 @@
 			);
 			name = "AI Wrapper";
 			packageProductDependencies = (
+				C0FFEE000000000000000012 /* Sentry */,
+				C0FFEE000000000000000013 /* SwiftMath */,
 			);
 			productName = "AI Wrapper";
 			productReference = 4C7CE9CD302C438C00C4C2E2 /* AI Wrapper.app */;
@@ -195,6 +216,10 @@
 			);
 			mainGroup = 4C7CE9C4302C438C00C4C2E2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C0FFEE000000000000000010 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				C0FFEE000000000000000011 /* XCRemoteSwiftPackageReference "SwiftMath" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4C7CE9CE302C438C00C4C2E2 /* Products */;
 			projectDirPath = "";
@@ -392,6 +417,7 @@
 		};
 		4C7CE9EF302C438D00C4C2E2 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0FFEE000000000000000001 /* Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -402,7 +428,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -410,7 +435,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "nkirit.AI-Wrapper";
+				PRODUCT_BUNDLE_IDENTIFIER = com.unbiase.ai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -424,6 +449,7 @@
 		};
 		4C7CE9F0302C438D00C4C2E2 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0FFEE000000000000000002 /* Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -434,7 +460,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -442,7 +467,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "nkirit.AI-Wrapper";
+				PRODUCT_BUNDLE_IDENTIFIER = com.unbiase.ai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -464,7 +489,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "nkirit.AI-WrapperTests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.unbiase.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -486,7 +511,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "nkirit.AI-WrapperTests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.unbiase.ai.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -506,7 +531,7 @@
 				DEVELOPMENT_TEAM = FQ229A9NBM;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "nkirit.AI-WrapperUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.unbiase.ai.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -526,7 +551,7 @@
 				DEVELOPMENT_TEAM = FQ229A9NBM;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "nkirit.AI-WrapperUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.unbiase.ai.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -578,6 +603,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C0FFEE000000000000000010 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.32.0;
+			};
+		};
+		C0FFEE000000000000000011 /* XCRemoteSwiftPackageReference "SwiftMath" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mgriebling/SwiftMath.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.7.3;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C0FFEE000000000000000012 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0FFEE000000000000000010 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+		C0FFEE000000000000000013 /* SwiftMath */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0FFEE000000000000000011 /* XCRemoteSwiftPackageReference "SwiftMath" */;
+			productName = SwiftMath;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4C7CE9C5302C438C00C4C2E2 /* Project object */;
 }

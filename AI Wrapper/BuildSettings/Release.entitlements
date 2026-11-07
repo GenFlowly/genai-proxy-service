@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal links for shared conversations: genflowly.com must serve the matching
+	     /.well-known/apple-app-site-association. Must stay in step with WEB_APP_URL. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:genflowly.com</string>
+	</array>
+</dict>
+</plist>

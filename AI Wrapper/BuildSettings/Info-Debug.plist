@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Values come from the stage file Debug.xcconfig selects (Environments/). The ATS
+	     exception only matters on the local stage; Release has none. -->
+	<key>API_BASE_URL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>APP_ENV</key>
+	<string>$(APP_ENV)</string>
+	<key>AUTH0_AUDIENCE</key>
+	<string>$(AUTH0_AUDIENCE)</string>
+	<key>AUTH0_CLIENT_ID</key>
+	<string>$(AUTH0_CLIENT_ID)</string>
+	<key>AUTH0_DOMAIN</key>
+	<string>$(AUTH0_DOMAIN)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(APP_DISPLAY_NAME)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			</array>
+		</dict>
+	</array>
+	<key>ENCODE_API_URL</key>
+	<string>$(ENCODE_API_URL)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo to attach to your message.</string>
+	<key>SENTRY_DSN</key>
+	<string>$(SENTRY_DSN)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Roboto-Variable.ttf</string>
+		<string>Roboto-Italic-Variable.ttf</string>
+	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>WEB_APP_URL</key>
+	<string>$(WEB_APP_URL)</string>
+</dict>
+</plist>
