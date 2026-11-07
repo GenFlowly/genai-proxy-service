@@ -53,7 +53,7 @@ class MemoryExtractionLifecycleTest {
 
     private val service = MemoryExtractionService(
         resolution, executor, memoryRepo, memoryService, conversationService,
-        MemoryVectorService(memoryRepo, profiles, retrievalClient, vectorPending), AppScope(), logContent = false
+        MemoryVectorService(memoryRepo, profiles, retrievalClient, vectorPending, entitlementServiceWith()), AppScope(), logContent = false
     )
 
     private val agent = ResolvedAgent(

@@ -28,7 +28,7 @@ class MemorySettingsTest {
     private val purge = mockk<com.genflowly.repository.PurgeRepository>(relaxed = true)
     private val service = MemoryService(
         memoryRepo, profiles,
-        MemoryVectorService(memoryRepo, profiles, retrieval, mockk(relaxed = true)),
+        MemoryVectorService(memoryRepo, profiles, retrieval, mockk(relaxed = true), entitlementServiceWith()),
         purge, mockk(), mockk(), AppScope()
     )
 

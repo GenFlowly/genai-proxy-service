@@ -6,8 +6,8 @@ import com.genflowly.models.encoding.EncodingConversationData
 import com.genflowly.models.encoding.EncodingSaveConversationRequest
 import com.genflowly.providers.EncodingServerClient
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.providers.VectorEncodeException
 import com.genflowly.repository.ConversationRepository
-import com.genflowly.repository.CustomerCredentialsRepository
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.PendingVectorType
 import com.genflowly.repository.VectorSyncPendingRepository
@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory
 class ConversationIndexingService(
     private val conversationRepository: ConversationRepository,
     private val customerProfileRepository: CustomerProfileRepository,
-    private val customerCredentialsRepository: CustomerCredentialsRepository,
+    private val customerEntitlementService: CustomerEntitlementService,
     private val vectorSyncPendingRepository: VectorSyncPendingRepository,
     private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
@@ -69,8 +69,9 @@ class ConversationIndexingService(
                 if (userText.trim().length + assistantText.trim().length < MIN_EXCHANGE_CHARS) {
                     return@launch
                 }
-                // A failed lookup must not drop the exchange: assume configured.
-                if (!runCatching { customerCredentialsRepository.hasVectorDBConfig(customerId) }.getOrDefault(true)) {
+                // Sent only when it can be both embedded and stored. Flags that
+                // can't be read must not drop the exchange.
+                if (customerEntitlementService.getOrNull(customerId)?.canIndex == false) {
                     return@launch
                 }
 
@@ -121,9 +122,13 @@ class ConversationIndexingService(
     /**
      * Re-embeds one exchange directly through the retrieval-server, rebuilt
      * from the Message table. Returns false when the exchange no longer
-     * exists. Throws when the embed fails.
+     * exists. Throws when the embed fails, with a permanent
+     * [VectorEncodeException] when the customer can't index.
      */
     suspend fun retryExchange(customerId: String, conversationId: String, responseMessageId: String): Boolean {
+        if (customerEntitlementService.getOrNull(customerId)?.canIndex == false) {
+            throw VectorEncodeException(409, "Customer $customerId has no vector DB or embedding key")
+        }
         val response = conversationRepository.getMessage(conversationId, responseMessageId) ?: return false
         val userText = response.previousMessageId
             ?.let { conversationRepository.getMessage(conversationId, it)?.text }

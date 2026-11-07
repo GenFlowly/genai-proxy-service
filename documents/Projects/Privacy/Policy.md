@@ -60,7 +60,7 @@ Your relationship with each provider is your own. Its terms and privacy policy a
 | **Use voice through the API** | Your audio and conversation context. Transcripts are saved as messages. | OpenAI or Google, using your key |
 | **Add or save a key** | One small test request. Embedding keys also get a one-character test about once a week to check which models they can use. | That provider |
 
-If you haven't connected a vector database, your chats aren't sent for indexing at all.
+Unless you've connected a vector database and added an embedding key, nothing is sent for indexing. ⛔R6
 
 When a provider offers a per-request option not to store your content, we use it. ⛔R10
 
@@ -328,9 +328,10 @@ Email: `[PRIVACY EMAIL]`
 
 | Marker | The draft promises | Today | Interim wording if publishing first |
 |---|---|---|---|
-| ⛔R1 | No content in logs | **Live since 2026-11-05** (PRs #331 and #332): the pipeline carries only IDs, and production workflow logs record errors without data. The trigger lambda, which strips text from old-format messages, still runs its 2026-10-10 image until the CDK tag fix (`e258f3a3`, committed on `development`) deploys, so don't redrive the dead-letter queue before then. Copies made before 2026-11-05 age out: CloudWatch and the dead-letter queue by 2026-11-12, and workflow history by 2027-02-04 unless an AWS support case shortens it. The Grafana role still has `CloudWatchReadOnlyAccess` (checked 2026-11-06). | "Content indexed before 6 November 2026 may remain in our background system's workflow history until 4 February 2027, when it is deleted automatically." After 2026-11-12 that is the only copy left. Also narrow the Grafana role. |
+| ⛔R1 | No content in logs | **Live since 2026-11-05** (PRs #331 and #332): the pipeline carries only IDs, and production workflow logs record errors without data. The trigger lambda, which strips text from old-format messages, still runs its 2026-10-10 image until the CDK tag fix (`e258f3a3`, merged in PR #337) reaches production, so don't redrive the dead-letter queue before then. Copies made before 2026-11-05 age out: CloudWatch and the dead-letter queue by 2026-11-12, and workflow history by 2027-02-04 unless an AWS support case shortens it. The Grafana role still has `CloudWatchReadOnlyAccess` (checked 2026-11-06). | "Content indexed before 6 November 2026 may remain in our background system's workflow history until 4 February 2027, when it is deleted automatically." After 2026-11-12 that is the only copy left. Also narrow the Grafana role. |
 | ⛔R2 | Public links reveal only messages and replies, hide your name, and aren't indexed | Not built (checked 2026-11-06). Trace data can reveal note, memory and past-chat text, your name and picture are shown, and `robots.txt` allows indexing. | "A public link can also reveal the AI's activity trace, which may include text from your notes, memories and earlier conversations, as well as your name and picture." **Fix this rather than publish that sentence.** |
 | ⛔R4 | Self-service export, and account deletion that also removes your sign-in | Deletion is live on the web (PR #334, 2026-11-06). The iOS app has it in its uncommitted build, and Apple requires it before release. Export doesn't exist. The Auth0 login survives deletion, because `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET` aren't set in either GitHub environment (checked 2026-11-06). Check the open items under R3 and R4 in Recommendations.md before clearing this row. | "To get a copy of your data, contact `[PRIVACY EMAIL]`." For the login, adding the three secrets is the whole fix. Until then add: "Your sign-in record with Auth0 is deleted on request." |
+| ⛔R6 | Nothing is sent for indexing without both a vector database and an embedding key | Built 2026-11-06, not yet deployed: flags on each profile gate chats, notes, instructions, memories and search, and the pipeline embeds nothing without a vector database. Live today: only chats are skipped, and only when no vector database is connected (PR #332). | "If you haven't connected a vector database, your chats aren't sent for indexing at all." |
 | ⛔R8 | Indexing off by default, with a switch | Not built. Indexing starts on its own once a vector database is connected. | "If you connect a vector database, your chats are indexed automatically. There is no setting to turn this off yet." |
 | ⛔R10 | We use "don't store" options | Not built: `store` isn't set for OpenAI, so it keeps Responses API state for 30 days. | Delete the sentence. Pay-as-you-go needs this fix too, unless OpenAI approves zero data retention, which forces `store` off. |
 | ⛔R11 | Key facts shown when adding a key | Not shown | Delete the sentence. **Keep the Voyage, Google, Tavily and DeepSeek examples.** |
@@ -349,7 +350,6 @@ Email: `[PRIVACY EMAIL]`
 
 - **R3 (delete):** Permanent delete of conversations went live with PR #334. Notes are covered by N1 instead.
 - **R5 (keys):** "Delete all API keys" went live with PR #334. Removing a single key is still not possible, but the draft no longer promises it.
-- **R6 (indexing):** Accounts with no vector database are skipped, since PR #332. The sentence now says only that.
 - **R7 (memory):** The switches went live with PR #332, and PR #335 hid "Learn from notes".
 - **R9 (background tasks):** They run on the priority-1 provider only, since PR #332.
 

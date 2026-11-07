@@ -25,11 +25,15 @@ class InstructionSearchErrorTest {
     private val retrievalServerClient = mockk<RetrievalServerClient>()
     private val instructionRepository = mockk<InstructionRepository>()
     private val shareRepository = mockk<ShareRepository>()
+    private var entitlements = ALL_ENTITLEMENTS
 
     private val service = InstructionService(
         instructionRepository, shareRepository, mockk(relaxed = true), mockk(relaxed = true),
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), retrievalServerClient,
-        mockk(relaxed = true)
+        mockk(relaxed = true),
+        CustomerEntitlementService(
+            mockk { coEvery { getEntitlements(any()) } answers { entitlements } }, mockk(), mockk()
+        )
     )
 
     private fun instruction(id: String, version: Int, name: String, text: String, synced: Boolean) = Instruction(
@@ -55,6 +59,17 @@ class InstructionSearchErrorTest {
 
         val error = assertThrows<SearchNotConfiguredException> { service.searchInstructions("CU-1", "tests") }
         assertEquals(SearchSetupReason.VECTOR_DB, error.reason)
+    }
+
+    @Test
+    fun `a customer without an embedding key is told before anything is searched`() = runTest {
+        owned(instruction("INS-1", 1, "Tax advisor", "taxes", synced = false))
+        entitlements = ALL_ENTITLEMENTS.copy(isEmbeddingCreationEnabled = false)
+
+        val error = assertThrows<SearchNotConfiguredException> { service.searchInstructions("CU-1", "taxes") }
+
+        assertEquals(SearchSetupReason.EMBEDDING_KEY, error.reason)
+        coVerify(exactly = 0) { retrievalServerClient.search(any(), any(), any(), any(), any()) }
     }
 
     @Test

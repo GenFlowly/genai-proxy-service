@@ -8,12 +8,14 @@ from encoding_library.models.memory_request_internal_state import MemoryRequestI
 from encoding_library.observability import count, set_request_id, setup_logging, track
 from encoding_library.processors.processor_factory import ProcessorFactory
 from encoding_library.utils.embedding_utils import (
+    EmbeddingKeyMissing,
     create_chunks,
     create_embeddings,
     get_embedding_model_for_customer,
 )
 from encoding_library.utils.model_registry import build_collection_description, get_chunking_params, resolve_model
 from encoding_library.utils.vector_db import (
+    VectorDBNotConfigured,
     customer_filter,
     ensure_collection,
     escape_filter_value,
@@ -119,6 +121,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if not customer_id:
             raise ValueError("customer_id is missing from the payload")
 
+        # The vector DB first, then the embedding key: without either the
+        # text has nowhere to go, so it is never embedded, and the message
+        # ends here instead of failing into the dead-letter queue.
+        try:
+            milvus_client = get_milvus_client(customer_id)
+            encoder = get_embedding_model_for_customer(
+                customer_id,
+                memory_request_internal_state.model_type,
+                memory_request_internal_state.model_name,
+            )
+        except (VectorDBNotConfigured, EmbeddingKeyMissing) as e:
+            missing = "missing_vector_db" if isinstance(e, VectorDBNotConfigured) else "missing_key"
+            count("vector_store_skipped_total", data_type=memory_request_internal_state.data_type, status=missing)
+            logger.warning(f"Not storing {memory_request_internal_state.data_type}: {e}")
+            return _summary(memory_request_internal_state, collection="", inserted=0)
+
         if not memory_request_internal_state.data_chunks and expected_digest:
             reloaded = _reload_batch_chunks(
                 memory_request_internal_state, chunk_offset, chunk_count, chunk_total, expected_digest
@@ -132,17 +150,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.warning("No data_chunks found in batch payload. Skipping.")
             return _summary(memory_request_internal_state, collection="", inserted=0)
 
-        encoder = get_embedding_model_for_customer(
-            customer_id,
-            memory_request_internal_state.model_type,
-            memory_request_internal_state.model_name,
-        )
         logger.info(f"Generating vectors for {len(chunks)} chunks...")
         vectors = create_embeddings(chunks, encoder, customer_id=customer_id)
         count("embedding_chunks_total", len(vectors))
 
         logger.info(f"Storing {len(vectors)} vectors for customer {customer_id}")
-        milvus_client = get_milvus_client(customer_id)
         processor = ProcessorFactory.get_processor(memory_request_internal_state)
         collection_name = processor.get_collection_name(memory_request_internal_state)
 

@@ -15,6 +15,7 @@ from graph.dynamic_graph import get_or_build_graph, _DEFAULT_MAX_ITERATIONS
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from graph.image_normalize import ImageNormalizationError
 from graph.instruction_loader import get_instruction_text
+from graph.entitlements import entitled_tools
 from graph.tools_runtime import MEMORY_CONSENT_TOOLS, all_builtin_tool_names
 from graph.nodes.llm_node import make_llm_node
 from graph.nodes.memory import memory
@@ -56,6 +57,10 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         # is the single choke point: the chat, durable-run and voice paths all
         # build their state here.
         builtin_tools = [t for t in builtin_tools if t not in MEMORY_CONSENT_TOOLS]
+    # Same choke point for entitlements: a tool that needs a setting the
+    # customer lacks (vector DB, embedding key, web search key) is never bound.
+    entitlements = req.entitlements.model_dump() if req.entitlements else None
+    builtin_tools = entitled_tools(builtin_tools, entitlements)
     return RetrievalState(
         customer_id=req.customer_id,
         client=req.client,
@@ -95,6 +100,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0, "reasoning_tokens": 0},
         memory_enabled=req.memory_enabled,
         memory_context=req.memory_context.model_dump() if req.memory_enabled and req.memory_context else None,
+        entitlements=entitlements,
         memories_block=None,
         trace=[],
         scratch={},
@@ -424,6 +430,7 @@ def _build_agent_graph_state(
         usage={"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0, "reasoning_tokens": 0},
         memory_enabled=req.memory_enabled,
         memory_context=None,
+        entitlements=None,
         memories_block=None,
         trace=[],
         scratch={},

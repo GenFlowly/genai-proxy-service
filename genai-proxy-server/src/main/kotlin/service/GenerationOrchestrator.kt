@@ -61,7 +61,8 @@ class GenerationOrchestrator(
     private val appScope: AppScope,
     private val runsClient: RunsClient,
     private val appConfig: AppConfig,
-    private val conversationManagementService: ConversationManagementService
+    private val conversationManagementService: ConversationManagementService,
+    private val customerEntitlementService: CustomerEntitlementService
 ) {
     private val logger = LoggerFactory.getLogger("GenerationOrchestrator")
 
@@ -332,7 +333,8 @@ class GenerationOrchestrator(
                 conversation_id = message.conversationId,
                 response_message_id = responseMessageId,
                 turn_started_at = turnStartedAt ?: java.time.Instant.now().toString(),
-            )
+            ),
+            entitlements = customerEntitlementService.getOrNull(message.customerId)
         )
 
         val responseMessage = Message(
@@ -552,6 +554,7 @@ class GenerationOrchestrator(
             response_message_id = responseMessageId,
             turn_started_at = turnStartedAt,
         )
+        val entitlements = customerEntitlementService.getOrNull(customerId)
 
         // Generation is DECOUPLED from the client connection: it runs on
         // appScope and pushes chunks through a buffered channel the HTTP
@@ -607,7 +610,8 @@ class GenerationOrchestrator(
                     memoryEnabled = memoryEnabled,
                     graphId = agentId,
                     thinkingLevel = config.thinkingLevel,
-                    memoryContext = memoryContext
+                    memoryContext = memoryContext,
+                    entitlements = entitlements
                 )
                 // Durable /runs path (flagged): start a durable background run and
                 // reattach to its event stream. Credentials are NOT sent — the
@@ -636,7 +640,8 @@ class GenerationOrchestrator(
                             memoryEnabled = memoryEnabled,
                             graphId = agentId,
                             thinkingLevel = config.thinkingLevel,
-                            memoryContext = memoryContext
+                            memoryContext = memoryContext,
+                            entitlements = entitlements
                         )
                         if (startedRunId != null) {
                             // Register for durable cancel FIRST — addPendingRun below

@@ -21,7 +21,8 @@ class InstructionPersonaFallbackTest {
     private val executor = mockk<GenerationAgentExecutor>()
     private val service = InstructionService(
         repository, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-        mockk(relaxed = true), executor, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true)
+        mockk(relaxed = true), executor, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
+        entitlementServiceWith()
     )
     private val saved = slot<Instruction>()
 

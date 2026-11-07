@@ -319,6 +319,7 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `vector_store_total` / `_duration_seconds` | status | store_embeddings lambda |
 | `vector_store_chunks_total` | data_type | store_embeddings lambda |
 | `vector_store_ddb_writeback_failure_total` | data_type | store_embeddings lambda |
+| `vector_store_skipped_total` | data_type, status (`missing_vector_db`\|`missing_key`) | create_and_store lambda — a batch ended without embedding because the customer has no vector DB or no embedding key |
 | `create_embeddings_total` / `_duration_seconds`, `embedding_chunks_total` | status | create_embeddings lambda |
 | `vector_retrieval_total` / `_duration_seconds` | status, source (`retrieve`\|`search`) | retrieval-server |
 | `embedding_failure_total` | source, model | retrieval-server |

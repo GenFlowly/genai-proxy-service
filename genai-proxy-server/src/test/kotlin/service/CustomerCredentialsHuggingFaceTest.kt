@@ -39,7 +39,8 @@ class CustomerCredentialsHuggingFaceTest {
     private val allowlist = mockk<VendorAllowlistService>()
     private val catalog = mockk<EmbeddingModelCatalogService>(relaxed = true)
     private val service = CustomerCredentialsService(
-        kms, credsRepo, profileRepo, encoding, retrieval, allowlist, AppScope(), catalog
+        kms, credsRepo, profileRepo, encoding, retrieval, allowlist, AppScope(), catalog,
+        mockk<CustomerEntitlementService>(relaxed = true)
     )
 
     private val cid = "CU1"

@@ -7,6 +7,7 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
 import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
 import com.genflowly.DynamoDBConstants.SUB_PARTITION_KEY
+import com.genflowly.models.CustomerEntitlements
 import com.genflowly.models.api.AIConfigPreferences
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +87,8 @@ class CustomerProfileRepository(
             put("username", AttributeValue.builder().s(generatedUsername).build())
             put("isDiscoverable", AttributeValue.builder().bool(false).build())
             put("onboardingCompleted", AttributeValue.builder().bool(false).build())
+            // A new account has no credentials yet, so every entitlement starts off.
+            ENTITLEMENT_ATTRIBUTES.values.forEach { put(it, AttributeValue.builder().bool(false).build()) }
         }
 
         val item = withTimestamps(baseItem)
@@ -494,6 +497,82 @@ class CustomerProfileRepository(
             )
         }
 
+    // ─── Entitlements ─────────────────────────────────────────────────────────
+
+    /**
+     * The entitlement flags on the customer's profile row. Null when the row
+     * is missing or predates the flags (any of them absent).
+     */
+    suspend fun getEntitlements(customerId: String): CustomerEntitlements? = withContext(Dispatchers.IO) {
+        val item = dynamoDbClient.query(
+            QueryRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .indexName(DynamoDBConstants.CUSTOMER_PROFILE_CUSTOMER_ID_GSI)
+                .keyConditionExpression("#cid = :cid")
+                .projectionExpression(ENTITLEMENT_ATTRIBUTES.keys.joinToString(", "))
+                .expressionAttributeNames(ENTITLEMENT_ATTRIBUTES + ("#cid" to "customerId"))
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                .limit(1)
+                .build()
+        ).items().firstOrNull() ?: return@withContext null
+        CustomerEntitlements(
+            isVectorDbStoringEnabled = item[IS_VECTOR_DB_STORING_ENABLED]?.bool() ?: return@withContext null,
+            isEmbeddingCreationEnabled = item[IS_EMBEDDING_CREATION_ENABLED]?.bool() ?: return@withContext null,
+            isWebSearchEnabled = item[IS_WEB_SEARCH_ENABLED]?.bool() ?: return@withContext null,
+        )
+    }
+
+    /**
+     * Writes the entitlement flags onto the customer's profile row. Returns
+     * false, writing nothing, when the customer has no profile row: a deleted
+     * account is never recreated.
+     */
+    suspend fun saveEntitlements(customerId: String, entitlements: CustomerEntitlements): Boolean =
+        withContext(Dispatchers.IO) {
+            val keys = dynamoDbClient.query(
+                QueryRequest.builder()
+                    .tableName(CUSTOMER_PROFILE_TABLE)
+                    .indexName(DynamoDBConstants.CUSTOMER_PROFILE_CUSTOMER_ID_GSI)
+                    .keyConditionExpression("#cid = :cid")
+                    .projectionExpression("#sub, #client")
+                    .expressionAttributeNames(
+                        mapOf("#cid" to "customerId", "#sub" to SUB_PARTITION_KEY, "#client" to CLIENT_SORT_KEY)
+                    )
+                    .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                    .limit(1)
+                    .build()
+            ).items().firstOrNull()
+            val sub = keys?.get(SUB_PARTITION_KEY)?.s() ?: return@withContext false
+            val client = keys[CLIENT_SORT_KEY]?.s() ?: return@withContext false
+            try {
+                dynamoDbClient.updateItem(
+                    UpdateItemRequest.builder()
+                        .tableName(CUSTOMER_PROFILE_TABLE)
+                        .key(
+                            mapOf(
+                                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+                            )
+                        )
+                        .updateExpression("SET #vdb = :vdb, #emb = :emb, #web = :web")
+                        .conditionExpression("#cid = :cid")
+                        .expressionAttributeNames(ENTITLEMENT_ATTRIBUTES + ("#cid" to "customerId"))
+                        .expressionAttributeValues(
+                            mapOf(
+                                ":vdb" to AttributeValue.builder().bool(entitlements.isVectorDbStoringEnabled).build(),
+                                ":emb" to AttributeValue.builder().bool(entitlements.isEmbeddingCreationEnabled).build(),
+                                ":web" to AttributeValue.builder().bool(entitlements.isWebSearchEnabled).build(),
+                                ":cid" to AttributeValue.builder().s(customerId).build()
+                            )
+                        )
+                        .build()
+                )
+                true
+            } catch (e: ConditionalCheckFailedException) {
+                false
+            }
+        }
+
     // ─── System vendor allowlist ──────────────────────────────────────────────
     // One system-scoped item in the preferences table (the "#" makes the key
     // impossible to collide with real customer ids). null = never configured.
@@ -528,6 +607,14 @@ class CustomerProfileRepository(
         private const val MEMORY_LEARN_FROM_CHATS = "memoryLearnFromChats"
         private const val MEMORY_LEARN_FROM_NOTES = "memoryLearnFromNotes"
         private const val MEMORY_USE_IN_REPLIES = "memoryUseInReplies"
+        private const val IS_VECTOR_DB_STORING_ENABLED = "isVectorDbStoringEnabled"
+        private const val IS_EMBEDDING_CREATION_ENABLED = "isEmbeddingCreationEnabled"
+        private const val IS_WEB_SEARCH_ENABLED = "isWebSearchEnabled"
+        private val ENTITLEMENT_ATTRIBUTES = mapOf(
+            "#vdb" to IS_VECTOR_DB_STORING_ENABLED,
+            "#emb" to IS_EMBEDDING_CREATION_ENABLED,
+            "#web" to IS_WEB_SEARCH_ENABLED,
+        )
     }
 }
 
