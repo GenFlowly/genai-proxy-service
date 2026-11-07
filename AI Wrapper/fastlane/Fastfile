@@ -1,0 +1,195 @@
+# Run from the "AI Wrapper" directory (fastlane cds to the parent of this folder), e.g.
+#   fastlane ios unit_tests            # simulator unit tests, development stage
+#   fastlane ios beta                  # signed development-stage build -> TestFlight
+#   fastlane ios release               # signed production-stage build -> App Store review
+#
+# Every credential is an environment variable, set by the GitHub workflows from repository and
+# environment secrets:
+#   APP_STORE_CONNECT_API_KEY_ID / APP_STORE_CONNECT_API_ISSUER_ID / APP_STORE_CONNECT_API_KEY_P8 (base64 .p8)
+#   IOS_DISTRIBUTION_CERT_P12 (base64 .p12) / IOS_DISTRIBUTION_CERT_PASSWORD / IOS_DISTRIBUTION_CERT_ID (optional)
+#   IOS_AUTH0_CLIENT_ID (required for production) / IOS_SENTRY_DSN (optional)
+
+require "base64"
+require "tmpdir"
+
+default_platform(:ios)
+
+# Ruby code in a Fastfile runs inside fastlane/, so every path is anchored to the project root.
+ROOT = File.expand_path("..", FastlaneCore::FastlaneFolder.path)
+PROJECT = File.join(ROOT, "AI Wrapper.xcodeproj")
+SCHEME = "AI Wrapper"
+APP_TARGET = "AI Wrapper"
+UNIT_TEST_TARGET = "AI WrapperTests"
+APP_IDENTIFIER = "com.unbiase.ai"
+CI_XCCONFIG = File.join(ROOT, "BuildSettings/CI.xcconfig")
+PACKAGES_DIR = File.join(ROOT, "SourcePackages")
+OUTPUT_DIR = File.join(ROOT, "build")
+KEYCHAIN = "fastlane_tmp_keychain"
+
+platform :ios do
+  desc "Unit tests on a simulator. stage: the BuildSettings/Environments file the app reads (default development)."
+  lane :unit_tests do |options|
+    write_ci_xcconfig(options[:stage] || "development")
+    run_tests(
+      project: PROJECT,
+      scheme: SCHEME,
+      configuration: "Debug",
+      only_testing: [UNIT_TEST_TARGET],
+      xcconfig: CI_XCCONFIG,
+      cloned_source_packages_path: PACKAGES_DIR,
+      xcargs: "CODE_SIGNING_ALLOWED=NO",
+      buildlog_path: "#{OUTPUT_DIR}/logs",
+      output_directory: "#{OUTPUT_DIR}/tests",
+      output_types: "junit",
+      result_bundle: true
+    )
+  end
+
+  desc "Signed build of the development stage, uploaded to TestFlight for internal testers."
+  lane :beta do |options|
+    api_key = connect_api_key
+    ipa = build_signed(stage: options[:stage] || "development", api_key: api_key)
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: ipa,
+      app_identifier: APP_IDENTIFIER,
+      distribute_external: false,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  desc "Signed build of the production stage, submitted for App Store review and released once Apple approves it."
+  lane :release do
+    api_key = connect_api_key
+    version = get_version_number(xcodeproj: PROJECT, target: APP_TARGET)
+    ensure_version_not_live(version)
+    ipa = build_signed(stage: "production", api_key: api_key)
+    upload_to_app_store(
+      api_key: api_key,
+      ipa: ipa,
+      app_identifier: APP_IDENTIFIER,
+      app_version: version,
+      skip_metadata: true,
+      skip_screenshots: true,
+      precheck_include_in_app_purchases: false,
+      run_precheck_before_submit: false,
+      force: true,
+      submit_for_review: true,
+      automatic_release: true,
+      reject_if_possible: true,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false
+      }
+    )
+  end
+
+  # Archive + export with the Apple Distribution certificate from the secrets and an App Store
+  # profile fetched (or created) through the API key. Returns the .ipa path.
+  private_lane :build_signed do |options|
+    stage = options[:stage]
+    api_key = options[:api_key]
+    write_ci_xcconfig(stage)
+    if stage == "production" && ENV["IOS_AUTH0_CLIENT_ID"].to_s.strip.empty?
+      UI.user_error!("IOS_AUTH0_CLIENT_ID is empty: a production build would ship the placeholder client ID from Release.xcconfig and nobody could sign in.")
+    end
+
+    setup_ci
+    import_certificate(
+      certificate_path: write_secret_file("distribution.p12", secret("IOS_DISTRIBUTION_CERT_P12")),
+      certificate_password: ENV["IOS_DISTRIBUTION_CERT_PASSWORD"].to_s,
+      keychain_name: KEYCHAIN,
+      keychain_password: ""
+    )
+
+    profile = { api_key: api_key, app_identifier: APP_IDENTIFIER, readonly: false }
+    profile[:cert_id] = ENV["IOS_DISTRIBUTION_CERT_ID"] unless ENV["IOS_DISTRIBUTION_CERT_ID"].to_s.strip.empty?
+    get_provisioning_profile(**profile)
+    profile_name = lane_context[SharedValues::SIGH_NAME]
+
+    # Build numbers only ever go up, across both lanes and any upload made from Xcode.
+    build_number = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      initial_build_number: 0
+    ).to_i + 1
+
+    # Signing goes on the app target only. As xcargs it would also reach the Swift package
+    # resource bundles (SwiftMath_SwiftMath), which then demand a team of their own. The
+    # action edits project.pbxproj in place, so it is restored for local runs.
+    pbxproj = File.join(PROJECT, "project.pbxproj")
+    original_pbxproj = File.read(pbxproj)
+    begin
+      update_code_signing_settings(
+        path: PROJECT,
+        targets: [APP_TARGET],
+        build_configurations: ["Release"],
+        use_automatic_signing: false,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile_name
+      )
+      build_app(
+        project: PROJECT,
+        scheme: SCHEME,
+        configuration: "Release",
+        xcconfig: CI_XCCONFIG,
+        cloned_source_packages_path: PACKAGES_DIR,
+        output_directory: OUTPUT_DIR,
+        output_name: "AI Wrapper.ipa",
+        buildlog_path: "#{OUTPUT_DIR}/logs",
+        export_method: "app-store",
+        export_options: {
+          signingStyle: "manual",
+          provisioningProfiles: { APP_IDENTIFIER => profile_name }
+        },
+        xcargs: "CURRENT_PROJECT_VERSION=#{build_number}"
+      )
+    ensure
+      File.write(pbxproj, original_pbxproj)
+    end
+  end
+end
+
+def connect_api_key
+  app_store_connect_api_key(
+    key_id: secret("APP_STORE_CONNECT_API_KEY_ID"),
+    issuer_id: secret("APP_STORE_CONNECT_API_ISSUER_ID"),
+    key_content: secret("APP_STORE_CONNECT_API_KEY_P8"),
+    is_key_content_base64: true
+  )
+end
+
+def secret(name)
+  value = ENV[name].to_s.strip
+  UI.user_error!("#{name} is not set") if value.empty?
+  value
+end
+
+def write_secret_file(name, base64)
+  path = File.join(Dir.mktmpdir, name)
+  File.binwrite(path, Base64.decode64(base64))
+  path
+end
+
+# A command-line xcconfig outranks the target's Release.xcconfig, so the stage and the secrets
+# written here are what ships. `//` starts a comment in xcconfig, hence the `/$()/` in URLs.
+def write_ci_xcconfig(stage)
+  UI.user_error!("Unknown stage '#{stage}'") unless File.exist?(File.join(ROOT, "BuildSettings/Environments/#{stage}.xcconfig"))
+  lines = ["#include \"Environments/#{stage}.xcconfig\""]
+  { "AUTH0_CLIENT_ID" => ENV["IOS_AUTH0_CLIENT_ID"], "SENTRY_DSN" => ENV["IOS_SENTRY_DSN"] }.each do |key, value|
+    next if value.to_s.strip.empty?
+    lines << "#{key} = #{value.strip.sub('//', '/$()/')}"
+  end
+  File.write(CI_XCCONFIG, lines.join("\n") + "\n")
+  UI.message("#{CI_XCCONFIG}: stage #{stage}, overrides #{lines.drop(1).map { |l| l.split(' = ').first }.inspect}")
+end
+
+# Apple refuses a second release of a version string, so a merge to main without a version bump
+# must stop here rather than after a 15-minute build.
+def ensure_version_not_live(version)
+  app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+  UI.user_error!("No App Store Connect app has the bundle ID #{APP_IDENTIFIER}; create it there first.") if app.nil?
+  live = app.get_live_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
+  return if live.nil? || Gem::Version.new(live.version_string) < Gem::Version.new(version)
+  UI.user_error!("Version #{version} is not newer than the live App Store version #{live.version_string}. Bump Version on the AI Wrapper target (General tab) and merge again.")
+end

@@ -1,672 +1,399 @@
 import SwiftUI
 
-/// Mirrors LandingPage (mobile): ConversationHeader bar + center section with
-/// the InstructionWidget, conversation blocks, and the inline draft editor.
+/// The chat page below isNarrow: full-screen scrolling conversation with the transparent
+/// MobileHeader floating above it (LandingPage + CenterSection + ConversationWidget).
 struct ChatView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var ai: AIStore
     @EnvironmentObject var conversation: ConversationStore
     @EnvironmentObject var toasts: ToastCenter
+    @EnvironmentObject var router: AppRouter
+    @EnvironmentObject var history: HistoryStore
 
     @State private var showShare = false
+    @State private var showPicker = false
+    @State private var scrollViewHeight: CGFloat = 0
+    /// Docked "Ask" pill (`.selectionAskDocked`): the selection and where it came from.
+    @State private var askSelection: AskSelection?
+    /// Blocks whose response already took the initial jump (ConversationBlock.hasScrolledRef).
+    @State private var scrolledBlocks: Set<String> = []
+    /// The sticky-bottom follow: pauses on touch, resumes when back near the bottom.
+    @State private var followPaused = false
+    @State private var followArmed = false
+    /// The conversation is taller than the screen, so its end can reach the home indicator.
+    @State private var contentFillsViewport = false
 
-    private var resolvedBlocks: [ConversationBlock] {
-        conversation.blocks.filter { $0.status == .resolved || $0.isLoading }
+    private var isFreshChat: Bool {
+        conversation.blocks.count == 1 && conversation.blocks[0].status == .draft && conversation.blocks[0].responseMessages.isEmpty && !conversation.blocks[0].isLoading
     }
+
 
     var body: some View {
-        VStack(spacing: 0) {
-            ConversationHeaderBar(showShare: $showShare)
-
-            if resolvedBlocks.isEmpty {
-                // New chat: the editor fills the viewport below the
-                // instruction widget (web: calc(100vh - navbar - 10rem)).
-                VStack(alignment: .leading, spacing: 14) {
-                    InstructionWidgetView()
-                    DraftEditorView(expand: true)
+        ZStack(alignment: .top) {
+            if isFreshChat {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    ComposerView(blockId: conversation.blocks[0].conversationBlockId, isLastBlock: true)
                 }
-                .padding()
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            InstructionWidgetView()
-                                .padding(.horizontal)
-                                .padding(.vertical, 10)
+                conversationScroll
+            }
 
-                            // Blocks are full-bleed bands like the web
-                            ForEach(resolvedBlocks) { block in
-                                ConversationBlockView(
-                                    block: block,
-                                    isLastResponseBlock: block.conversationBlockId == resolvedBlocks.last?.conversationBlockId
-                                )
-                                .id(block.conversationBlockId)
-                            }
+            ChatHeader(showShare: $showShare, showPicker: $showPicker)
 
-                            if !conversation.blocks.contains(where: { $0.isLoading }) {
-                                DraftEditorView(expand: false)
-                                    .padding()
-                            }
-                        }
-                    }
-                    .onChange(of: lastMessageText) { _, _ in
-                        if let last = resolvedBlocks.last, last.isLoading {
-                            withAnimation { proxy.scrollTo(last.conversationBlockId, anchor: .bottom) }
-                        }
-                    }
+            if let selection = askSelection {
+                VStack {
+                    Spacer()
+                    askPill(selection)
+                        .padding(.bottom, 88)
                 }
             }
         }
+        .statusBarBand()
         .background(AppTheme.background)
-        .sheet(isPresented: $showShare) {
-            ShareSheetView(target: .conversation(conversation.conversationId))
+        .webModal(isPresented: $showPicker, title: L("conversation.instructionPicker.title"), maxWidth: 768, scrollsContent: false) {
+            InstructionPickerModal(onClose: { showPicker = false }) { instruction in
+                ai.selectedInstructionId = instruction.id
+                ai.systemPrompt = instruction.instruction
+                showPicker = false
+            }
         }
-        .task {
-            if auth.isAuthenticated, ai.modelsByVendor.isEmpty, let token = try? await auth.getAccessTokenSilently() {
-                await ai.fetchModels(token: token, vendors: AIVendor.allCases)
+        .webModal(isPresented: $showShare, title: L("common.shareModal.title")) {
+            ShareModal(target: .conversation(conversation.conversationId), onClose: { showShare = false })
+        }
+        .onChange(of: router.showInstructionPicker) { _, open in
+            if open {
+                showPicker = true
+                router.showInstructionPicker = false
+            }
+        }
+        .task(id: auth.customerId) { await loadSharedQueries() }
+        .onChange(of: conversation.conversationId) { _, _ in askSelection = nil }
+    }
+
+    /// `useDefaultsPrefetch` + the AI widget's query: warm what the page reads.
+    private func loadSharedQueries() async {
+        guard auth.isAuthenticated, let token = try? await auth.getAccessTokenSilently() else { return }
+        let vendors = auth.aiVendorAPIKeyStatusList.filter(\.isValid).map { AIVendor(rawValue: $0.aiVendor) }
+        await ai.fetchModels(token: token, vendors: vendors)
+        await ai.fetchAgents(token: token, version: auth.cacheVersions?["agents"])
+    }
+
+    /// A browser's viewport ends above the home indicator. Here the conversation's end stops
+    /// there, so the response's surface carries on behind the indicator instead of the page's.
+    private var homeIndicatorBand: some View {
+        let endsInResponse = conversation.blocks.last?.responseMessages.isEmpty == false
+        return Color.clear
+            .frame(height: 0)
+            .background((endsInResponse && contentFillsViewport ? AppTheme.responseContainerBackground : AppTheme.background).ignoresSafeArea(.container, edges: .bottom))
+    }
+
+    private var conversationScroll: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                // Not a LazyVStack: it estimates the height of rows it hasn't built from the tall
+                // responses around them, and the estimate can change by tens of thousands of points
+                // on any update. Scrolling to a row could land past the page's end with nothing to
+                // draw, and the first drag could swap the screen for a different response.
+                VStack(spacing: 0) {
+                    ForEach(conversation.blocks) { block in
+                        ConversationBlockView(block: block, onSelectionChange: { selection in
+                            askSelection = selection
+                        })
+                        .id(block.conversationBlockId)
+                    }
+                    Color.clear.frame(height: 0).id("conversation-end")
+                }
+            }
+            .contentMargins(.top, mobileHeaderHeight, for: .scrollContent)
+            .scrollDismissesKeyboard(.interactively)
+            .background(alignment: .bottom) { homeIndicatorBand }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom >= geometry.containerSize.height
+            } action: { _, fills in
+                contentFillsViewport = fills
+            }
+            #if DEBUG
+            .modifier(DebugConversationScroll())
+            #endif
+            .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in followPaused = true })
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height < 50
+            } action: { _, nearBottom in
+                if nearBottom { followPaused = false }
+            }
+            .onChange(of: conversation.focusDraftRequest) { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("conversation-end", anchor: .bottom) }
+                }
+            }
+            // A response appearing for the first time jumps to its start: animated as it generates,
+            // straight there when a conversation opens.
+            .onChange(of: conversation.blocks.filter { !$0.responseMessages.isEmpty }.map(\.conversationBlockId), initial: true) { _, ids in
+                let fresh = ids.filter { !scrolledBlocks.contains($0) }
+                guard let target = fresh.last else { return }
+                scrolledBlocks.formUnion(fresh)
+                let isGenerating = conversation.blocks.last?.isLoading == true
+                let anchor = ConversationBlockView.responseAnchor(target)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    if isGenerating {
+                        withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
+                    } else {
+                        proxy.scrollTo(anchor, anchor: .top)
+                    }
+                }
+            }
+            // Armed shortly after generation starts: a regenerate's collapse to the short
+            // "thinking" placeholder must not snap the viewport up to its end.
+            // `initial`: this scroll view can first appear with the block already generating.
+            .onChange(of: conversation.blocks.last?.isLoading == true, initial: true) { _, loading in
+                followArmed = false
+                guard loading else { return }
+                followPaused = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { followArmed = true }
+            }
+            .onChange(of: conversation.blocks.last?.responseMessages.map(\.text.count)) { _, _ in
+                guard followArmed, !followPaused, conversation.blocks.last?.isLoading == true,
+                      let id = conversation.blocks.last?.conversationBlockId else { return }
+                proxy.scrollTo(ConversationBlockView.responseEndAnchor(id), anchor: .bottom)
             }
         }
     }
 
-    private var lastMessageText: String {
-        resolvedBlocks.last?.responseMessages.map(\.text).joined() ?? ""
+    /// Touch selection: the pill docks above the response action bar because the OS
+    /// selection callout draws over the page wherever the selection sits.
+    private func askPill(_ selection: AskSelection) -> some View {
+        Button {
+            conversation.ask(selectedText: selection.text, fromBlock: selection.blockId, message: selection.message)
+            askSelection = nil
+        } label: {
+            HStack(spacing: 8) {
+                WebIcon(name: "send-icon", size: 15, color: .white)
+                Text(L("common.textContainer.askSelection")).webText(16.8, 600)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 19.2)
+            .padding(.vertical, 9.6)
+            .background(AppTheme.buttonPrimary)
+            .clipShape(Capsule())
+            .shadow(color: .black.opacity(0.3), radius: 6, y: 4)
+        }
+        .buttonStyle(WebPressStyle())
     }
 }
 
-/// Mirrors ConversationHeader — #687077 bar, white title, Share pill.
-struct ConversationHeaderBar: View {
+struct AskSelection {
+    let text: String
+    let blockId: String
+    let message: Message
+}
+
+/// ConversationHeader below isNarrow: title, loaded instruction (tappable → picker) and
+/// the New Chat / Share / AI Config kebab; the hamburger opens the history menu.
+struct ChatHeader: View {
+    @EnvironmentObject var router: AppRouter
     @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var ai: AIStore
     @EnvironmentObject var conversation: ConversationStore
     @Binding var showShare: Bool
+    @Binding var showPicker: Bool
 
-    private var title: String {
-        if conversation.conversationId.isEmpty { return "New Chat" }
-        return conversation.conversationTitle ?? "Untitled conversation"
+    private var displayTitle: String {
+        conversation.conversationId.isEmpty
+            ? L("conversation.conversationHeader.newChat")
+            : (conversation.conversationTitle ?? L("conversation.conversationHeader.untitledConversation"))
     }
 
-    private var canShowShare: Bool {
-        auth.canShare && (conversation.conversationId.isEmpty || conversation.conversationRole != .view)
+    private var showShareItem: Bool {
+        auth.canShare && !conversation.conversationId.isEmpty && conversation.conversationRole != .view
+    }
+
+    /// Latest version of the instruction loaded into this conversation.
+    private var loadedInstruction: InstructionResponse? {
+        guard let id = ai.selectedInstructionId else { return nil }
+        return auth.customerInstructions.filter { $0.id == id }.max { $0.version < $1.version }
+    }
+
+    private var menuItems: [MobileHeaderMenuItem] {
+        var items = [MobileHeaderMenuItem(label: L("conversation.conversationHeader.newChat")) { conversation.resetConversation() }]
+        if showShareItem {
+            items.append(MobileHeaderMenuItem(label: L("conversation.conversationHeader.share")) { showShare = true })
+        }
+        items.append(MobileHeaderMenuItem(label: L("conversation.conversationHeader.aiConfig")) { router.isRightSidebarOpen = true })
+        return items
     }
 
     var body: some View {
-        HStack {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(AppTheme.conversationHeaderText)
-                .lineLimit(1)
-            Spacer()
-            if canShowShare {
-                Button {
-                    showShare = true
-                } label: {
-                    Text("Share")
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 5)
-                        .background(Color.white.opacity(conversation.conversationId.isEmpty ? 0.15 : 0.25))
-                        .foregroundStyle(AppTheme.conversationHeaderText)
-                        .clipShape(Capsule())
+        MobileHeader(
+            title: displayTitle,
+            menuItems: menuItems,
+            onSubtitleClick: { showPicker = true },
+            onMenuClick: { router.isMobileMenuOpen = true }
+        ) {
+            if let instruction = loadedInstruction {
+                if let icon = instruction.icon, !icon.isEmpty {
+                    EmojiIcon(text: icon, size: 12, advance: 15, lineHeight: 20)
                 }
-                .disabled(conversation.conversationId.isEmpty)
+                Text(instruction.name)
+            } else {
+                Text(L("conversation.conversationHeader.chooseInstruction"))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(AppTheme.conversationHeaderBackground)
     }
 }
 
-/// Mirrors the collapsed center InstructionWidget — "Persona" select +
-/// "[+] Create Instructions" CTA.
-struct InstructionWidgetView: View {
-    @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var ai: AIStore
-    @EnvironmentObject var router: AppRouter
-
-    private var latestInstructions: [InstructionResponse] {
-        var byId: [String: InstructionResponse] = [:]
-        for instruction in auth.customerInstructions where (byId[instruction.id]?.version ?? -1) < instruction.version {
-            byId[instruction.id] = instruction
-        }
-        return byId.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-    }
-
-    private func displayName(_ instruction: InstructionResponse) -> String {
-        if !instruction.name.isEmpty { return instruction.name }
-        let text = instruction.instruction
-        return text.isEmpty ? "Untitled Instruction" : String(text.prefix(40))
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            WebIcon(name: "user-role", size: 20, color: AppTheme.textMuted)
-            Menu {
-                Button("No persona") { ai.selectedInstructionId = nil }
-                ForEach(latestInstructions) { instruction in
-                    Button(displayName(instruction)) {
-                        ai.selectedInstructionId = instruction.id
-                    }
-                }
-                Divider()
-                Button {
-                    router.navigate(.instructionDetail(nil))
-                } label: {
-                    Label("Create Instructions", systemImage: "plus")
-                }
-            } label: {
-                HStack {
-                    Text(selectedLabel)
-                        .font(.subheadline)
-                        .foregroundStyle(selectedLabel == "Select a persona" ? AppTheme.textMuted : AppTheme.textPrimary)
-                        .lineLimit(1)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption2)
-                        .foregroundStyle(AppTheme.textMuted)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(AppTheme.backgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border, lineWidth: 1))
-    }
-
-    private var selectedLabel: String {
-        guard let id = ai.selectedInstructionId,
-              let instruction = auth.customerInstructions.first(where: { $0.id == id }) else {
-            return "Select a persona"
-        }
-        return displayName(instruction)
-    }
-}
-
-/// Mirrors the Request widget in draft mode — the full-height PromptEditor
-/// with the Generate button centered BELOW the editor container.
-struct DraftEditorView: View {
-    @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var ai: AIStore
-    @EnvironmentObject var conversation: ConversationStore
-
-    /// true = fill the remaining viewport (new chat); false = fixed height in scroll.
-    var expand: Bool
-
-    private var hasValidKeys: Bool {
-        auth.aiVendorAPIKeyStatusList.contains { $0.isValid }
-    }
-
-    private var canGenerate: Bool {
-        !conversation.editorPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && hasValidKeys && auth.isAuthenticated
-    }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            // Editor card
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $conversation.editorPrompt)
-                    .font(.body)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                if conversation.editorPrompt.isEmpty {
-                    Text("Type your prompt…")
-                        .foregroundStyle(AppTheme.textMuted)
-                        .padding(.top, 16)
-                        .padding(.leading, 13)
-                        .allowsHitTesting(false)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: expand ? nil : 320)
-            .frame(maxHeight: expand ? .infinity : 320)
-            .background(AppTheme.backgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border, lineWidth: 1))
-
-            // Generate button — centered, outside the editor container
-            HStack {
-                Spacer()
-                MultiPurposeButton(label: "Generate", icon: "send-icon", disabled: !canGenerate) {
-                    generate()
-                }
-                Spacer()
-            }
-        }
-        .onChange(of: conversation.editorPrompt) { _, newValue in
-            persistDraft(newValue)
-        }
-        .onAppear(perform: restoreDraft)
-    }
-
-    private var draftKey: String? {
-        auth.customerId.map { "\($0)_prompt_editor_content_conv-default" }
-    }
-
-    private func persistDraft(_ text: String) {
-        guard let draftKey else { return }
-        if text.isEmpty {
-            UserDefaults.standard.removeObject(forKey: draftKey)
-        } else {
-            UserDefaults.standard.set(text, forKey: draftKey)
-        }
-    }
-
-    private func restoreDraft() {
-        guard conversation.editorPrompt.isEmpty, let draftKey,
-              let saved = UserDefaults.standard.string(forKey: draftKey) else { return }
-        conversation.editorPrompt = saved
-    }
-
-    private func generate() {
-        let prompt = conversation.editorPrompt
-        let blockId: String
-        if let draft = conversation.blocks.last(where: { $0.status == .draft && !$0.isLoading }) {
-            blockId = draft.conversationBlockId
-        } else {
-            blockId = conversation.addNewBlock()
-        }
-        conversation.editorPrompt = ""
-        persistDraft("")
-        Task {
-            await conversation.generateResponsesStream(blockId: blockId, overridePrompt: prompt)
-        }
-    }
-}
-
-// MARK: - Message card (web TextContainer / message-card-base)
-
-extension View {
-    /// Web TextContainer article: page-background card, borderLight, radius 8.
-    func messageCard(selected: Bool = false) -> some View {
-        self
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? AppTheme.backgroundSelected : AppTheme.background)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.borderLight, lineWidth: 1))
-    }
-}
-
-/// Web TextContainer header: title centered, trailing accessory absolute right.
-struct MessageCardHeader<Title: View, Accessory: View>: View {
-    @ViewBuilder var title: Title
-    @ViewBuilder var accessory: Accessory
-
-    var body: some View {
-        ZStack {
-            HStack { Spacer(); title; Spacer() }
-            HStack { Spacer(); accessory }
-        }
-    }
-}
-
-// MARK: - Conversation block (web ConversationBlock: Request → Thinking → Response)
+// MARK: - Conversation block (Request → Response)
 
 struct ConversationBlockView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
-    var block: ConversationBlock
-    var isLastResponseBlock: Bool
+    let block: ConversationBlock
+    let onSelectionChange: (AskSelection?) -> Void
 
-    /// Web: messages with text or still loading are visible.
-    private var visibleMessages: [Message] {
-        block.responseMessages.filter { !$0.text.isEmpty || $0.isLoading }
-    }
-
-    /// Ordered unique vendors among visible messages.
-    private var availableVendors: [AIVendor] {
-        var seen = Set<AIVendor>()
-        return visibleMessages.compactMap { message in
-            seen.insert(message.aiVendor).inserted ? message.aiVendor : nil
-        }
-    }
-
-    /// Mobile maxVendors = 1: exactly one vendor's column is shown.
-    private var selectedVendor: AIVendor? {
-        let selection = conversation.getVendorSelection(for: block.conversationBlockId)
-        if let chosen = selection.compactMap(AIVendor.init(rawValue:)).first(where: { availableVendors.contains($0) }) {
-            return chosen
-        }
-        return availableVendors.first
-    }
-
-    /// Latest visible message per selected vendor (web keeps the latest).
-    private var filteredMessages: [Message] {
-        guard let selectedVendor else { return [] }
-        var latest: Message?
-        for message in visibleMessages where message.aiVendor == selectedVendor {
-            latest = message
-        }
-        return latest.map { [$0] } ?? []
-    }
-
-    private var thinkingMessages: [Message] {
-        filteredMessages.filter { !$0.thinkingSteps.isEmpty || ($0.isLoading && $0.text.trimmingCharacters(in: .whitespaces).isEmpty) }
-    }
+    static func responseAnchor(_ blockId: String) -> String { "response-start-\(blockId)" }
+    static func responseEndAnchor(_ blockId: String) -> String { "response-end-\(blockId)" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Request band (page background)
-            VStack(spacing: 12) {
-                RequestCardView(block: block)
-                if block.isLoading {
-                    MultiPurposeButton(label: "Stop Generating") {
-                        conversation.stopGenerating(blockId: block.conversationBlockId)
-                    }
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            .background(AppTheme.background)
-
-            if visibleMessages.isEmpty {
-                if !block.isLoading {
-                    Text("No responses were generated")
-                        .italic()
-                        .foregroundStyle(AppTheme.textMuted)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+        VStack(spacing: 0) {
+            if block.status == .resolved || block.isLoading {
+                ResolvedRequestView(block: block)
             } else {
-                // Thinking + Response band (response container background)
-                VStack(spacing: 8) {
-                    if availableVendors.count > 1 {
-                        VendorToggleGroup(
-                            vendors: availableVendors,
-                            selected: selectedVendor,
-                            onSelect: { vendor in
-                                conversation.setVendorSelection(for: block.conversationBlockId, vendors: [vendor.rawValue])
-                            }
-                        )
-                        .padding(.top, 12)
-                    }
-
-                    ForEach(thinkingMessages) { message in
-                        ThinkingCardView(message: message)
-                    }
-
-                    ForEach(filteredMessages) { message in
-                        ResponseCardView(
-                            block: block,
-                            message: message,
-                            isLastResponseBlock: isLastResponseBlock
-                        )
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity)
-                .background(AppTheme.responseContainerBackground)
-            }
-        }
-        .onChange(of: availableVendors) { _, newVendors in
-            // Web: auto-select vendors that appear for the first time
-            let selection = conversation.getVendorSelection(for: block.conversationBlockId)
-            let newOnes = newVendors.map(\.rawValue).filter { !selection.contains($0) }
-            if !newOnes.isEmpty {
-                conversation.setVendorSelection(for: block.conversationBlockId, vendors: selection + newOnes)
-            }
-        }
-    }
-}
-
-/// Web Request resolved mode — TextContainer with centered UserBrandName title.
-struct RequestCardView: View {
-    @EnvironmentObject var auth: AuthStore
-    var block: ConversationBlock
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MessageCardHeader {
-                HStack(spacing: 6) {
-                    if let picture = auth.customerPicture, let url = URL(string: picture) {
-                        AsyncImage(url: url) { image in
-                            image.resizable()
-                        } placeholder: {
-                            WebIcon(name: "user-circle", size: 24)
-                        }
-                        .frame(width: 24, height: 24)
-                        .clipShape(Circle())
-                    } else {
-                        WebIcon(name: "user-circle", size: 24)
-                    }
-                    Text(auth.customerName?.isEmpty == false ? auth.customerName! : "You")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                }
-            } accessory: {
-                CopyButton(text: block.prompt)
-            }
-            .padding(.bottom, 14)
-
-            MarkdownView(text: block.prompt)
-        }
-        .messageCard()
-    }
-}
-
-/// Web ResponseThinking card — brand header + "Thinking ▼" toggle with pulse,
-/// bulleted steps, auto-collapses when the vendor stops thinking.
-struct ThinkingCardView: View {
-    var message: Message
-    @State private var isExpanded = true
-
-    private var isThinkingPhase: Bool {
-        message.isLoading && message.text.trimmingCharacters(in: .whitespaces).isEmpty
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MessageCardHeader {
-                BrandNameView(vendor: message.aiVendor)
-            } accessory: {
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
-                } label: {
-                    HStack(spacing: 5) {
-                        if isThinkingPhase {
-                            Circle()
-                                .fill(AppTheme.primary)
-                                .frame(width: 7, height: 7)
-                        }
-                        Text("Thinking")
-                        Text(isExpanded ? "▼" : "▶")
-                            .font(.system(size: 9))
-                    }
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.textMuted)
-                }
-            }
-
-            if isExpanded {
-                Group {
-                    if message.thinkingSteps.isEmpty {
-                        HStack(spacing: 6) {
-                            WebIcon(name: "think", size: 14, color: AppTheme.textMuted)
-                            Text("Thinking...")
-                                .font(.caption)
-                                .foregroundStyle(AppTheme.textMuted)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(Array(message.thinkingSteps.enumerated()), id: \.offset) { _, step in
-                                HStack(alignment: .top, spacing: 6) {
-                                    Text("•")
-                                    Text(step)
-                                }
-                                .font(.callout)
-                                .foregroundStyle(AppTheme.textPrimary)
-                            }
-                        }
-                    }
-                }
-                .padding(.top, 14)
-            }
-        }
-        .messageCard()
-        .onAppear {
-            // Web: collapses on mount when the vendor is no longer thinking
-            if !isThinkingPhase { isExpanded = false }
-        }
-        .onChange(of: isThinkingPhase) { _, stillThinking in
-            if !stillThinking { isExpanded = false }
-        }
-    }
-}
-
-/// Web Response card — centered brand header + copy, markdown, token badges,
-/// centered Stop / Regenerate / Follow up action bar at the bottom.
-struct ResponseCardView: View {
-    @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var conversation: ConversationStore
-    var block: ConversationBlock
-    var message: Message
-    var isLastResponseBlock: Bool
-
-    private var isSelected: Bool {
-        conversation.getSelectedResponse(for: block.conversationBlockId) == message.messageId
-    }
-
-    private var hasValidKeys: Bool {
-        auth.aiVendorAPIKeyStatusList.contains { $0.isValid }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MessageCardHeader {
-                BrandNameView(vendor: message.aiVendor)
-            } accessory: {
-                if !message.text.isEmpty {
-                    CopyButton(text: message.text)
-                }
-            }
-            .padding(.bottom, 14)
-
-            if !message.text.isEmpty {
-                MarkdownView(text: message.text)
-            } else if message.isLoading {
-                HStack { Spacer(); ProgressView(); Spacer() }
-                    .padding(.vertical, 12)
-            }
-
-            // Token badges
-            if !message.isLoading,
-               message.inputTokens != nil || message.outputTokens != nil || message.totalTokens != nil || message.tokensReadFromCache != nil {
-                TokenBadges(message: message)
-                    .padding(.top, 12)
-            }
-
-            // Action bar: centered blue buttons on the card's bottom edge
-            if message.isLoading || isLastResponseBlock {
-                HStack(spacing: 8) {
-                    Spacer()
-                    if message.isLoading {
-                        MultiPurposeButton(label: "Stop") {
-                            conversation.stopGenerating(blockId: block.conversationBlockId, vendor: message.aiVendor)
-                        }
-                    } else {
-                        MultiPurposeButton(label: "Regenerate", icon: "refresh-icon", disabled: !hasValidKeys) {
-                            Task {
-                                await conversation.generateResponsesStream(
-                                    blockId: block.conversationBlockId,
-                                    vendorToRegenerate: message.aiVendor
-                                )
-                            }
-                        }
-                        if !message.text.trimmingCharacters(in: .whitespaces).isEmpty {
-                            MultiPurposeButton(
-                                label: isSelected ? "Selected" : "Follow up",
-                                icon: isSelected ? nil : "send-icon",
-                                disabled: isSelected || !hasValidKeys
-                            ) {
-                                followUp()
-                            }
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(.top, 14)
-            }
-        }
-        .messageCard(selected: isSelected)
-    }
-
-    /// Web handleFollowUp: select this response as the parent for the draft.
-    private func followUp() {
-        conversation.setSelectedResponse(for: block.conversationBlockId, responseId: message.messageId)
-        let draftId: String
-        if let draft = conversation.blocks.last(where: { $0.status == .draft && !$0.isLoading }) {
-            draftId = draft.conversationBlockId
-        } else {
-            draftId = conversation.addNewBlock()
-        }
-        conversation.setSelectedResponse(for: draftId, responseId: message.messageId)
-    }
-}
-
-/// Web RadioButtonGroup — joined segmented pills with vendor icon + label.
-struct VendorToggleGroup: View {
-    var vendors: [AIVendor]
-    var selected: AIVendor?
-    var onSelect: (AIVendor) -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(vendors.enumerated()), id: \.element) { index, vendor in
-                let isActive = vendor == selected
-                Button {
-                    onSelect(vendor)
-                } label: {
-                    HStack(spacing: 5) {
-                        CollapsedBrandIcon(vendor: vendor, size: 18)
-                        Text(vendor.displayName)
-                            .font(.subheadline)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(isActive ? AppTheme.primary : Color.clear)
-                    .foregroundStyle(isActive ? .white : AppTheme.textPrimary)
-                }
-                .clipShape(segmentShape(index: index))
-                .overlay(
-                    segmentShape(index: index)
-                        .stroke(AppTheme.border, lineWidth: 1)
+                ComposerView(
+                    blockId: block.conversationBlockId,
+                    isLastBlock: conversation.blocks.last?.conversationBlockId == block.conversationBlockId
                 )
             }
-        }
-    }
 
-    private func segmentShape(index: Int) -> UnevenRoundedRectangle {
-        let radius: CGFloat = 100
-        return UnevenRoundedRectangle(
-            topLeadingRadius: index == 0 ? radius : 0,
-            bottomLeadingRadius: index == 0 ? radius : 0,
-            bottomTrailingRadius: index == vendors.count - 1 ? radius : 0,
-            topTrailingRadius: index == vendors.count - 1 ? radius : 0
-        )
+            if block.status == .resolved || !block.responseMessages.isEmpty {
+                ResponseGroupView(block: block, onSelectionChange: onSelectionChange)
+                    // `scrollIntoView({ block: 'start' })` lands the response's top edge at
+                    // the top of the page, behind the overlay header. Scrolling to an id
+                    // stops at the content margin, so the anchor sits that far inside.
+                    .overlay(alignment: .top) {
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: mobileHeaderHeight)
+                            Color.clear.frame(height: 1).id(Self.responseAnchor(block.conversationBlockId))
+                        }
+                        .allowsHitTesting(false)
+                    }
+                Color.clear.frame(height: 0).id(Self.responseEndAnchor(block.conversationBlockId))
+            }
+
+            RunHitlBanner(block: block)
+        }
     }
 }
 
-struct CopyButton: View {
-    var text: String
-    @State private var copied = false
+// MARK: - Resolved request (Request.module.scss .resolvedRequestContainer)
+
+struct ResolvedRequestView: View {
+    @EnvironmentObject var auth: AuthStore
+    let block: ConversationBlock
+
+    /// A shared conversation shows who sent each message, never the viewer's identity.
+    private var displayName: String {
+        if let sender = block.sender { return sender.name ?? "" }
+        return auth.customerName ?? ""
+    }
+
+    private var displayPicture: String? {
+        if let sender = block.sender { return sender.picture }
+        return auth.customerPicture
+    }
 
     var body: some View {
-        Button {
-            UIPasteboard.general.string = text
-            copied = true
-            Task {
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                copied = false
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .trailing) {
+                UserBrandName(name: displayName, picture: displayPicture)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.trailing, 50)
+                CopyToClipboardButton(content: block.prompt, accessibilityLabel: L("common.textContainer.copyResponse"))
             }
-        } label: {
-            if copied {
-                WebIcon(name: "valid", size: 16, color: AppTheme.success)
-            } else {
-                WebIcon(name: "copy-icon", size: 16, color: AppTheme.textMuted)
+            .frame(height: 27.2)
+            .padding(.bottom, 20)
+
+            MarkdownView(text: block.prompt, options: .init(capitalizeFirstLetter: true, tightFirstHeading: false))
+
+            if !block.attachments.isEmpty {
+                ResolvedAttachmentThumbnails(attachments: block.attachments)
+            }
+
+            if let sentAt = block.sentAt {
+                Text(ServerDate.dateTime(sentAt))
+                    .webText(11.2, lineHeight: 19.04)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.top, 8)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(AppTheme.background)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .padding(8)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.background)
+    }
+}
+
+// MARK: - Human in the loop (RunHitlBanner.tsx)
+
+struct RunHitlBanner: View {
+    @EnvironmentObject var conversation: ConversationStore
+    let block: ConversationBlock
+    @State private var drafts: [String: String] = [:]
+
+    private var entries: [(String, AwaitingInput)] {
+        block.responseMessages.compactMap { message in
+            conversation.awaitingInputs[message.messageId].map { (message.messageId, $0) }
+        }
+    }
+
+    var body: some View {
+        if !entries.isEmpty {
+            VStack(spacing: 8) {
+                ForEach(entries, id: \.0) { messageId, payload in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(payload.prompt ?? L("conversation.runHitl.defaultPrompt"))
+                            .webText(16, 500)
+                            .foregroundStyle(AppTheme.textPrimary)
+                        HStack(spacing: 8) {
+                            TextField("", text: binding(messageId), prompt: Text(L("conversation.runHitl.replyPlaceholder")).foregroundStyle(AppTheme.textMuted))
+                                .webText(13.33)
+                                .foregroundStyle(AppTheme.textPrimary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(AppTheme.border, lineWidth: 1))
+                                .onSubmit { send(messageId) }
+                            Button(L("conversation.runHitl.send")) { send(messageId) }
+                                .disabled((drafts[messageId] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
+                                .webText(arial: 13.33)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 6)
+                                .background(AppTheme.backgroundTertiary)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                    .padding(12)
+                    .background(AppTheme.backgroundSecondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.border, lineWidth: 1))
+                    .accessibilityLabel(L("conversation.runHitl.ariaLabel"))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func binding(_ id: String) -> Binding<String> {
+        Binding(get: { drafts[id] ?? "" }, set: { drafts[id] = $0 })
+    }
+
+    private func send(_ id: String) {
+        let text = (drafts[id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        drafts[id] = ""
+        Task { await conversation.submitRunReply(messageId: id, reply: text) }
     }
 }

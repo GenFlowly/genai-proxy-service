@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23727" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="23721"/>
+        <capability name="Named colors" minToolsVersion="9.0"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--Launch Screen-->
+        <scene sceneID="EHf-IW-A2E">
+            <objects>
+                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleToFill" image="SplashBackground" translatesAutoresizingMaskIntoConstraints="NO" id="Bkg-Gr-0p1">
+                                <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                            </imageView>
+                            <imageView userInteractionEnabled="NO" contentMode="scaleAspectFit" image="SplashMark" translatesAutoresizingMaskIntoConstraints="NO" id="Mrk-Im-0p1">
+                                <rect key="frame" x="144.66666666666666" y="378" width="104" height="96"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" constant="104" id="Mrk-Wd-0p1"/>
+                                    <constraint firstAttribute="height" constant="96" id="Mrk-Ht-0p1"/>
+                                </constraints>
+                            </imageView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="6Tk-OE-BBY"/>
+                        <color key="backgroundColor" name="LaunchBackground"/>
+                        <constraints>
+                            <constraint firstItem="Bkg-Gr-0p1" firstAttribute="top" secondItem="Ze5-6b-2t3" secondAttribute="top" id="Bkg-Tp-0p1"/>
+                            <constraint firstItem="Bkg-Gr-0p1" firstAttribute="leading" secondItem="Ze5-6b-2t3" secondAttribute="leading" id="Bkg-Ld-0p1"/>
+                            <constraint firstAttribute="trailing" secondItem="Bkg-Gr-0p1" secondAttribute="trailing" id="Bkg-Tr-0p1"/>
+                            <constraint firstAttribute="bottom" secondItem="Bkg-Gr-0p1" secondAttribute="bottom" id="Bkg-Bt-0p1"/>
+                            <constraint firstItem="Mrk-Im-0p1" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="Mrk-Cx-0p1"/>
+                            <constraint firstItem="Mrk-Im-0p1" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="Mrk-Cy-0p1"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="53" y="375"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="SplashBackground" width="128" height="128"/>
+        <image name="SplashMark" width="104" height="96"/>
+        <namedColor name="LaunchBackground">
+            <color red="0.11372549019607843" green="0.15686274509803921" blue="0.21176470588235294" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </namedColor>
+    </resources>
+</document>
