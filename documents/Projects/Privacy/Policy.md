@@ -1,14 +1,14 @@
-> [!warning] DRAFT: do not publish yet
-> This draft describes the app **after the remaining fixes in [Recommendations.md](Recommendations.md)**. Sentences marked ⛔ are **not true in production today**. Before publishing, clear each one using Appendix A, which also gives accurate wording to use if you need to publish before a fix ships.
+> [!warning] DRAFT: the target policy, with markers
+> This draft describes the app **after the remaining fixes in [Recommendations.md](Recommendations.md)**. Sentences marked ⛔ are **not true in production today**.
 >
-> Delete this notice, all ⛔ markers and both appendices before publishing. Text in `[BRACKETS]` needs your input. Have a lawyer review the final text.
+> **The published policy** is `genai-react-app/public/privacy-policy.md`, shown at `/privacy-policy` since 2026-11-07. It is this draft with Appendix A's interim wording for every marker still open, and without the notice or the appendices. When a fix ships, update both files. Text in `[BRACKETS]` still needs your input before Pay-as-you-go launches. A lawyer hasn't reviewed either version.
 
 # Privacy Policy
 
-**Effective date:** `[DATE]`
-**Last updated:** `[DATE]`
+**Effective date:** 2026-11-07
+**Last updated:** 2026-11-07
 
-Unbiase AI ("Unbiase AI", "we", "us") is operated by `[LEGAL ENTITY]`, `[ADDRESS]`. This policy explains what we collect when you use our web app at genflowly.com, our iOS app and our developer API, where that information goes, and the choices you have.
+Unbiase AI ("Unbiase AI", "we", "us") is operated by Genflowly, based in Seattle, Washington, United States. This policy explains what we collect when you use our web app at genflowly.com, our iOS app and our developer API, where that information goes, and the choices you have.
 
 ## The short version
 
@@ -73,9 +73,9 @@ When a provider offers a per-request option not to store your content, we use it
 
 ### 1.4 What your providers do with your content
 
-Provider practices differ, and some of the defaults may surprise you. **Please check the terms of each provider you connect**, especially whether it uses your content for training, how long it keeps it, and where it stores it. We show key facts when you add a key. ⛔R11
+Provider practices differ, and some of the defaults may surprise you. **Please check the terms of each provider you connect**, especially whether it uses your content for training, how long it keeps it, and where it stores it.
 
-As of `[DATE]`, for example:
+As of November 2026, for example:
 
 - **Voyage AI**'s terms allow it to use your content to train its models **unless you opt out**. Opting out requires a payment method on file and isn't retroactive.
 - **Google** may use content from the **free tier** of the Gemini API to improve its products, and human reviewers may read it. This doesn't apply to the paid tier, or to use in the EEA, Switzerland or the UK.
@@ -226,7 +226,7 @@ We require these companies to protect your information to at least the standard 
 
 ### Sharing you choose
 
-- **Public links.** Anyone with the link can read the conversation's messages and replies, without signing in. It doesn't reveal your notes, memories or the AI's internal reasoning and tool activity, and your name is hidden unless you choose to show it. ⛔R2 Search engines are asked not to index these pages. ⛔R2 Anything you share publicly may be copied by others. If you allow editing on a public link, anyone signed in who has the link can add to the conversation.
+- **Public links.** Anyone with the link can read the conversation without signing in. That includes its messages and replies, the AI's activity trace, which can include text from your notes, memories and earlier conversations that the AI looked up for a reply, and your name and picture. Search engines may index these pages. Anything you share publicly may be copied by others. If you allow editing on a public link, anyone signed in who has the link can add to the conversation.
 - **Sharing with specific people.** They can see the conversation, including prompts you wrote and replies you received.
 - **Continuing a shared conversation.** When someone with edit access continues a conversation, its history is sent to the AI provider they use, under their own account, or under ours if they use Pay-as-you-go.
 - **Forks.** Someone with access to a conversation can copy it into their own account. **That copy remains theirs, even if you later delete the original or stop sharing it.**
@@ -283,7 +283,7 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 | Export your data | Settings ⛔R4 |
 | Delete your account | Settings > Profile > Delete your data |
 
-**By law.** Depending on where you live, you may have the right to access, correct, delete, or receive a copy of your personal information, to restrict or object to how we use it, and to withdraw consent. To use these rights, contact `[PRIVACY EMAIL]`. We'll respond within 30 days, and we won't treat you differently for using them. If you're unhappy with our response, you can complain to your local data protection authority.
+**By law.** Depending on where you live, you may have the right to access, correct, delete, or receive a copy of your personal information, to restrict or object to how we use it, and to withdraw consent. To use these rights, email privacy@genflowly.com. We'll respond within 30 days, and we won't treat you differently for using them. If you're unhappy with our response, you can complain to your local data protection authority.
 
 **California residents.** We don't sell personal information or share it for cross-context behavioral advertising. The categories we collect and use are described above. You have the right to know, delete and correct your information, and to appoint an authorized agent to do so.
 
@@ -291,11 +291,11 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 
 ### International transfers
 
-We're based in `[COUNTRY]`, and our main systems are in the United States (AWS and Fly.io in the Virginia region). Cloudflare operates a global network. In BYOK mode your content also goes wherever your chosen providers and vector database are located. In Pay-as-you-go, our providers process it in the locations listed at `[SUB-PROCESSOR PAGE]`. Where the law requires it, we use appropriate safeguards for transfers, such as Standard Contractual Clauses. `[CONFIRM]`
+We're based in Seattle, Washington, in the United States, and our main systems are in the United States (AWS and Fly.io in the Virginia region). Cloudflare operates a global network. In BYOK mode your content also goes wherever your chosen providers and vector database are located. In Pay-as-you-go, our providers process it in the locations listed at `[SUB-PROCESSOR PAGE]`. Where the law requires it, we use appropriate safeguards for transfers, such as Standard Contractual Clauses. `[CONFIRM]`
 
 ### Children
 
-Unbiase AI isn't intended for anyone under `[13, OR 16 IN THE EEA AND UK]`. Some AI providers set a higher minimum age. If you believe a child has given us personal information, contact us and we'll delete it.
+Unbiase AI isn't intended for anyone under 13, or under 16 in the EEA and the UK. Some AI providers set a higher minimum age. If you believe a child has given us personal information, contact us and we'll delete it.
 
 ### Cookies and local storage
 
@@ -317,8 +317,8 @@ We'll post any change here and update the date above. If a change materially aff
 
 ### Contact
 
-`[LEGAL ENTITY]`, `[ADDRESS]`
-Email: `[PRIVACY EMAIL]`
+Genflowly, Seattle, Washington, United States
+Email: privacy@genflowly.com
 
 ---
 
@@ -329,15 +329,13 @@ Email: `[PRIVACY EMAIL]`
 | Marker | The draft promises | Today | Interim wording if publishing first |
 |---|---|---|---|
 | ⛔R1 | No content in logs | **Live since 2026-11-05** (PRs #331 and #332): the pipeline carries only IDs, and production workflow logs record errors without data. Since 2026-11-07 the trigger lambda also strips text from messages queued before the fix, so redriving the dead-letter queue is safe. Copies made before 2026-11-05 age out: CloudWatch and the dead-letter queue by 2026-11-12, and workflow history by 2027-02-04 unless an AWS support case shortens it. The Grafana role still has `CloudWatchReadOnlyAccess` (checked 2026-11-06). | "Content indexed before 6 November 2026 may remain in our background system's workflow history until 4 February 2027, when it is deleted automatically." After 2026-11-12 that is the only copy left. Also narrow the Grafana role. |
-| ⛔R2 | Public links reveal only messages and replies, hide your name, and aren't indexed | Not built (checked 2026-11-06). Trace data can reveal note, memory and past-chat text, your name and picture are shown, and `robots.txt` allows indexing. | "A public link can also reveal the AI's activity trace, which may include text from your notes, memories and earlier conversations, as well as your name and picture." **Fix this rather than publish that sentence.** |
-| ⛔R4 | Self-service export, and account deletion that also removes your sign-in | Deletion is live on the web (PR #334, 2026-11-06). The iOS app has it in its uncommitted build, and Apple requires it before release. Export doesn't exist. The Auth0 login survives deletion, because `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET` aren't set in either GitHub environment (checked 2026-11-06). Check the open items under R3 and R4 in Recommendations.md before clearing this row. | "To get a copy of your data, contact `[PRIVACY EMAIL]`." For the login, adding the three secrets is the whole fix. Until then add: "Your sign-in record with Auth0 is deleted on request." |
-| ⛔R11 | Key facts shown when adding a key | Not shown | Delete the sentence. **Keep the Voyage, Google, Tavily and DeepSeek examples.** |
+| ⛔R4 | Self-service export, and account deletion that also removes your sign-in | Deletion is live on the web (PR #334, 2026-11-06). The iOS app has it in its uncommitted build, and Apple requires it before release. Export doesn't exist. The Auth0 login survives deletion, because `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET` aren't set in either GitHub environment (checked 2026-11-06). Check the open items under R3 and R4 in Recommendations.md before clearing this row. | "To get a copy of your data, email privacy@genflowly.com." For the login, adding the three secrets is the whole fix. Until then add: "Your sign-in record with Auth0 is deleted on request." |
 | ⛔R12 | Permission requested before first use | No consent step. **Apple requires this.** | Remove the sentence. Blocks the iOS release. |
 | ⛔R16 | Staff access is logged | No CloudTrail trail in production (checked 2026-11-06) | Delete "and is logged". |
 | ⛔R17 | Backups last up to 35 days | True where backups are on. Point-in-time backups are still off on `Message`, `Conversation`, `CustomerProfile` and `CustomerVendorApiKeys` (checked 2026-11-06). | Accurate as a maximum, but fix the drift. |
 | ⛔R18 | Scratch files 1 day, logs 30 days | Scratch files written since 2026-11-06 expire after 1 day (the bucket rule is live, checked 2026-11-06). Older ones carry no tag, so they stay until deleted once. Lambda log groups never expire (checked 2026-11-06). | "Temporary tool files created before 6 November 2026 and operational logs are currently kept indefinitely." |
 | ⛔R19 | No content in logs (also) | Some error lines could contain fragments | Add: "Rarely, an error message from a provider may include a short fragment of your content." |
-| ⛔N1 | Old notes can be deleted in the app | Since PR #335 (live 2026-11-06), the web app can't list, open or delete notes, and the iOS app follows in its uncommitted build. Saved notes stay in DynamoDB and the vector database, and `search_knowledge_base` still returns them in replies. Deleting the account still removes them. | "To delete notes you saved in earlier versions of the app, delete your account or contact `[PRIVACY EMAIL]`." To clear it, pick one: delete every note after notice and stop the knowledge search returning notes, or add "Delete all notes" to Settings > Profile > Delete your data. |
+| ⛔N1 | Old notes can be deleted in the app | Since PR #335 (live 2026-11-06), the web app can't list, open or delete notes, and the iOS app follows in its uncommitted build. Saved notes stay in DynamoDB and the vector database, and `search_knowledge_base` still returns them in replies. Deleting the account still removes them. | "To delete notes you saved in earlier versions of the app, delete your account or email privacy@genflowly.com." To clear it, pick one: delete every note after notice and stop the knowledge search returning notes, or add "Delete all notes" to Settings > Profile > Delete your data. |
 | ⛔Q6 | Staff access only for these reasons | Needs your confirmation | Edit to match actual practice. |
 | ⛔Q10 | Third parties protect data to the same standard | Needs confirmation that DPAs are in place. Apple asks for this statement. | Sign the DPAs. Most are self-serve. |
 | ⛔M1-M10 | All of Section 2 (Recommendations.md calls it Paid mode) | Pay-as-you-go doesn't exist. Before launch, choose the providers, turn on or apply for zero data retention, and set the opt-outs. The next table shows what each provider offers. | Omit Section 2, or publish it marked "coming soon" and keep the notice. |
@@ -352,6 +350,11 @@ Email: `[PRIVACY EMAIL]`
 - **R6 (indexing):** Since PR #338, nothing is sent for indexing without both a vector database and an embedding key.
 - **R8 (indexing switch):** Since PR #339, chats are indexed only after the user turns on "Index my chats", and "Delete indexed chats" removes them.
 - **R10 (don't store):** Since PR #339, every OpenAI call sets `store=false`.
+
+**Settled by decision on 2026-11-07:**
+
+- **R2 (public links):** Users are aware, so it isn't treated as an issue. The policy now describes what a public link shows instead of promising to hide it.
+- **R11 (provider facts in the app):** Deferred. The sentence promising them is gone; the provider examples and links stay.
 
 ### Pay-as-you-go: zero data retention and training, by provider
 

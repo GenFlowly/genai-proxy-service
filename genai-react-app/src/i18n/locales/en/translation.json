@@ -518,6 +518,10 @@
         }
     },
     "layout": {
+        "footer": {
+            "copyright": "© {{year}} Genflowly",
+            "privacyPolicy": "Privacy policy"
+        },
         "l1Menu": {
             "headlineOne": "One prompt.",
             "headlineTwo": "Many models.",
@@ -834,6 +838,11 @@
             "yourUsername": "Your Username"
         }
     },
+    "privacyPolicy": {
+        "title": "Privacy policy",
+        "loadError": "Couldn't load the privacy policy. Check your connection and try again.",
+        "retry": "Try again"
+    },
     "settingsPage": {
         "aiSettings": {
             "addVendorHint": "Vendor",
@@ -953,6 +962,7 @@
             "aiVectorDb": "Vector DB Connection",
             "developer": "Developer",
             "logout": "Logout",
+            "privacyPolicy": "Privacy policy",
             "profile": "Profile",
             "title": "Settings",
             "defaults": "Defaults",

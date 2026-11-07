@@ -249,6 +249,16 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                         ) : nav}
                     </ScrollArea>
                 </SidebarCard>
+                <SidebarCard className={styles.menuLinkCard}>
+                    <button
+                        className={styles.menuLink}
+                        onClick={() => { navigate('/privacy-policy'); onNavigate?.() }}
+                        data-testid="settings-menu-privacy-policy"
+                    >
+                        <Icon src={ICONS.DOCUMENT_TEXT} size={iconSize} className={styles.icon} />
+                        <span>{t('settingsPage.settingsSidebar.privacyPolicy')}</span>
+                    </button>
+                </SidebarCard>
                 <SidebarCard className={styles.menuLogoutCard}>
                     <button
                         className={styles.menuLogout}

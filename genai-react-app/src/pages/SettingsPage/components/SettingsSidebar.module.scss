@@ -249,12 +249,14 @@
     }
 }
 
+.menuLinkCard,
 .menuLogoutCard {
     flex-shrink: 0;
     padding: 0.25rem;
     background-color: $color-sidebar-background;
 }
 
+.menuLink,
 .menuLogout {
     display: flex;
     align-items: center;
@@ -270,4 +272,12 @@
     font-weight: 500;
     text-align: left;
     cursor: pointer;
+}
+
+.menuLink {
+    color: $color-text-primary;
+
+    .icon {
+        color: $color-text-muted;
+    }
 }
