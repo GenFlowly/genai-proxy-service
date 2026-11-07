@@ -16,14 +16,16 @@ import org.slf4j.LoggerFactory
 /**
  * Keeps a memory's vector in step with its text, for semantic recall. Every
  * call is best effort: a failed embed is recorded in VectorSyncPending and
- * retried by [VectorRetryService]; a permanent failure (no vector DB or
- * embedding key) is not, since nothing could index the memory.
+ * retried by [VectorRetryService]; a permanent failure is not. Nothing is
+ * sent for a customer whose entitlements say they can't index (no vector DB
+ * or embedding key).
  */
 class MemoryVectorService(
     private val memoryRepository: MemoryRepository,
     private val customerProfileRepository: CustomerProfileRepository,
     private val retrievalServerClient: RetrievalServerClient,
     private val vectorSyncPendingRepository: VectorSyncPendingRepository,
+    private val customerEntitlementService: CustomerEntitlementService,
 ) {
     private val logger = LoggerFactory.getLogger(MemoryVectorService::class.java)
 
@@ -34,6 +36,7 @@ class MemoryVectorService(
      * replaces the memory's earlier vectors rather than adding to them.
      */
     suspend fun encode(customerId: String, memory: CustomerMemory) {
+        if (!canIndex(customerId)) return
         try {
             embed(customerId, memory)
         } catch (e: CancellationException) {
@@ -55,9 +58,13 @@ class MemoryVectorService(
 
     /**
      * Re-embeds a memory's current text. Returns false when the memory no
-     * longer exists. Throws when the embed fails.
+     * longer exists. Throws when the embed fails, with a permanent
+     * [VectorEncodeException] when the customer can't index.
      */
     suspend fun retry(customerId: String, memoryId: String): Boolean {
+        if (!canIndex(customerId)) {
+            throw VectorEncodeException(409, "Customer $customerId has no vector DB or embedding key")
+        }
         val memory = memoryRepository.getMemory(customerId, memoryId) ?: return false
         embed(customerId, memory)
         return true
@@ -89,6 +96,10 @@ class MemoryVectorService(
             modelName = model ?: EmbeddingConstants.MODEL_NAME,
         )
     }
+
+    /** Flags that can't be read count as entitled: a failed read never drops a vector. */
+    private suspend fun canIndex(customerId: String): Boolean =
+        customerEntitlementService.getOrNull(customerId)?.canIndex != false
 
     private companion object {
         const val FIRST_RETRY_DELAY_SECONDS = 60L

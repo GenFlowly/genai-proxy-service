@@ -27,8 +27,9 @@ class EmbeddingModelCatalogServiceTest {
     private val credsRepo = mockk<CustomerCredentialsRepository>()
     private val catalogRepo = mockk<EmbeddingModelCatalogRepository>(relaxed = true)
     private val retrieval = mockk<RetrievalServerClient>()
+    private val entitlements = mockk<CustomerEntitlementService>(relaxed = true)
     private val service = EmbeddingModelCatalogService(
-        kms, credsRepo, catalogRepo, retrieval, CoroutineScope(Dispatchers.Unconfined)
+        kms, credsRepo, catalogRepo, retrieval, CoroutineScope(Dispatchers.Unconfined), entitlements
     )
 
     private val cid = "CU1"
@@ -72,6 +73,27 @@ class EmbeddingModelCatalogServiceTest {
 
         assertEquals(EmbeddingCatalog.KeyCannotEmbed, result)
         coVerify { catalogRepo.putProbed(cid, "VOYAGE", emptyList(), any(), true) }
+    }
+
+    @Test
+    fun `a verdict that flips re-derives the customer's entitlements, an unchanged one doesn't`() = runTest {
+        val rejected = ProbedModels(models = emptyList(), lastProbedAt = Instant.now(), keyFingerprint = "fp", authFailed = true)
+        val accepted = rejected.copy(models = listOf("voyage-4"), authFailed = false)
+        coEvery { retrieval.probeEmbeddingModels(any()) } returns listOf(
+            VendorProbeResult(provider = "voyage", supported = listOf("voyage-4"), inconclusive = emptyList(), error = null)
+        )
+
+        service.probeAndStore(cid, voyage, "key", existing = accepted)
+        coVerify(exactly = 0) { entitlements.refresh(any()) }
+
+        service.probeAndStore(cid, voyage, "key", existing = rejected)
+        coVerify(exactly = 1) { entitlements.refresh(cid) }
+
+        coEvery { retrieval.probeEmbeddingModels(any()) } returns listOf(
+            VendorProbeResult(provider = "voyage", supported = emptyList(), inconclusive = emptyList(), error = "authentication failed")
+        )
+        service.probeAndStore(cid, voyage, "key", existing = null)
+        coVerify(exactly = 2) { entitlements.refresh(cid) }
     }
 
     @Test

@@ -56,6 +56,9 @@ class UsernameGenerationTest {
         assertEquals(username, profile.item()["username"]?.s())
         assertEquals(false, profile.item()["isDiscoverable"]?.bool())
         assertEquals(false, profile.item()["onboardingCompleted"]?.bool())
+        listOf("isVectorDbStoringEnabled", "isEmbeddingCreationEnabled", "isWebSearchEnabled").forEach {
+            assertEquals(false, profile.item()[it]?.bool(), it)
+        }
         assertTrue(profile.item().containsKey("createdAt"))
     }
 

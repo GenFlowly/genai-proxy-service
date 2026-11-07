@@ -89,18 +89,19 @@ class EncodeConversationRouteTests(unittest.IsolatedAsyncioTestCase):
             await encode_conversation(_request(text="  "))
         self.assertEqual(ctx.exception.status_code, 400)
 
-    async def test_no_vector_db_is_a_409(self):
+    async def test_no_vector_db_is_a_409_and_nothing_is_embedded(self):
         with (
             patch.object(notes_module, "get_milvus_client", side_effect=VectorDBNotConfigured("cust-1")),
             patch("graph.nodes.retrieval.customer_embedding_model", return_value=MagicMock()),
             patch("encoding_library.utils.model_registry.get_chunking_params", return_value=(1000, 200)),
             patch("encoding_library.utils.embedding_utils.create_chunks", return_value=["c"]),
             patch("encoding_library.utils.embedding_utils.create_embeddings",
-                  return_value=[{"vector": [0.1], "text": "c"}]),
+                  return_value=[{"vector": [0.1], "text": "c"}]) as embed,
         ):
             with self.assertRaises(HTTPException) as ctx:
                 await encode_conversation(_request())
         self.assertEqual(ctx.exception.status_code, 409)
+        embed.assert_not_called()
 
     async def test_an_embedding_with_no_vector_is_a_500(self):
         with self.assertRaises(HTTPException) as ctx:

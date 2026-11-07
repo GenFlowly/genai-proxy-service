@@ -28,6 +28,7 @@ from langgraph.graph import END, StateGraph
 
 from content_logging import redact
 
+from graph.entitlements import entitled_tools
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,8 @@ async def run_subagent(
         # stripping spawn_agent from the leaf's toolset is the belt to that
         # suspender.
         tools = [t for t in tools if t != "spawn_agent"]
+    # A child is the same customer: it gets no tool the root couldn't bind.
+    tools = entitled_tools(tools, parent_state.get("entitlements"))
 
     child_configs = {
         _GENERATOR_ID: {
@@ -204,6 +207,7 @@ async def run_subagent(
             "reasoning_tokens": 0,
         },
         "memory_enabled": False,  # learned user memories are the root agent's
+        "entitlements": parent_state.get("entitlements"),
         "memories_block": None,
         "trace": [],
         # Share the parent's scratch-FS namespace so files flow down AND up
