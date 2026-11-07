@@ -76,3 +76,13 @@ node_modules/
 
 # Wrangler local dev state
 .wrangler/
+
+# Xcode / iOS app (AI Wrapper)
+xcuserdata/
+*.xcuserstate
+DerivedData/
+AI Wrapper/build/
+AI Wrapper/SourcePackages/
+AI Wrapper/BuildSettings/CI.xcconfig
+AI Wrapper/fastlane/report.xml
+AI Wrapper/fastlane/README.md
