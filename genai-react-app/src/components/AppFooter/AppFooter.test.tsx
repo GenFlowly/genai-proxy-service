@@ -12,11 +12,13 @@ function renderFooter() {
 }
 
 describe('AppFooter', () => {
-    test('names the company and links to the privacy policy', () => {
+    test('names the company and links to the privacy policy and support', () => {
         renderFooter()
 
         expect(screen.getByTestId('app-footer')).toHaveTextContent(`© ${new Date().getFullYear()} Genflowly`)
         expect(screen.getByTestId('app-footer-privacy-policy')).toHaveAttribute('href', '/privacy-policy')
+        expect(screen.getByTestId('app-footer-support')).toHaveAttribute('href', '/support')
+        expect(screen.getByTestId('app-footer-support')).toHaveTextContent('Support')
     })
 
     test('pages leave room for it while it is shown, and get the room back when it goes', () => {

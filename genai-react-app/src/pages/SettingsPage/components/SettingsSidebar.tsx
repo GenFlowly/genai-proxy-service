@@ -158,15 +158,21 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
 
     const normalizedQuery = query.trim().toLowerCase()
     const matches = (label: string) => label.toLowerCase().includes(normalizedQuery)
-    const searchHits = navItems.flatMap(item =>
-        item.children
-            ? item.children
-                .filter(child => matches(child.label) || matches(item.label))
-                .map(child => ({ key: `${item.key}-${child.key}`, label: child.label, icon: item.icon, path: child.path }))
-            : matches(item.label)
-                ? [{ key: item.key as string, label: item.label, icon: item.icon, path: item.path }]
-                : []
-    )
+    // Support lives outside Settings, at the public /support page.
+    const supportLink = { key: 'support', label: t('settingsPage.settingsSidebar.support'), icon: ICONS.CHAT_BUBBLE, path: '/support' }
+
+    const searchHits = [
+        ...navItems.flatMap(item =>
+            item.children
+                ? item.children
+                    .filter(child => matches(child.label) || matches(item.label))
+                    .map(child => ({ key: `${item.key}-${child.key}`, label: child.label, icon: item.icon, path: child.path }))
+                : matches(item.label)
+                    ? [{ key: item.key as string, label: item.label, icon: item.icon, path: item.path }]
+                    : []
+        ),
+        ...(matches(supportLink.label) ? [supportLink] : []),
+    ]
 
     const nav = (
             <nav className={`${styles.nav} ${menu ? styles.menuNav : ''}`}>
@@ -252,6 +258,14 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                 <SidebarCard className={styles.menuLinkCard}>
                     <button
                         className={styles.menuLink}
+                        onClick={() => { navigate(supportLink.path); onNavigate?.() }}
+                        data-testid="settings-menu-support"
+                    >
+                        <Icon src={supportLink.icon} size={iconSize} className={styles.icon} />
+                        <span>{supportLink.label}</span>
+                    </button>
+                    <button
+                        className={styles.menuLink}
                         onClick={() => { navigate('/privacy-policy'); onNavigate?.() }}
                         data-testid="settings-menu-privacy-policy"
                     >
@@ -282,6 +296,14 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
             {nav}
 
             <div className={styles.footer}>
+                <button
+                    className={`${styles.tabButton} ${styles.footerLink}`}
+                    onClick={() => { navigate(supportLink.path); onNavigate?.() }}
+                    data-testid="settings-sidebar-support"
+                >
+                    <Icon src={supportLink.icon} size={iconSize} className={styles.icon} />
+                    <span>{supportLink.label}</span>
+                </button>
                 <PillButton
                     label={t('settingsPage.settingsSidebar.logout')}
                     icon={ICONS.LOGOUT}
