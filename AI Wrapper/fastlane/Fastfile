@@ -114,27 +114,39 @@ platform :ios do
       initial_build_number: 0
     ).to_i + 1
 
-    build_app(
-      project: PROJECT,
-      scheme: SCHEME,
-      configuration: "Release",
-      xcconfig: CI_XCCONFIG,
-      cloned_source_packages_path: PACKAGES_DIR,
-      output_directory: OUTPUT_DIR,
-      output_name: "AI Wrapper.ipa",
-      buildlog_path: "#{OUTPUT_DIR}/logs",
-      export_method: "app-store",
-      export_options: {
-        signingStyle: "manual",
-        provisioningProfiles: { APP_IDENTIFIER => profile_name }
-      },
-      xcargs: [
-        "CODE_SIGN_STYLE=Manual",
-        "CODE_SIGN_IDENTITY=\"Apple Distribution\"",
-        "PROVISIONING_PROFILE_SPECIFIER=\"#{profile_name}\"",
-        "CURRENT_PROJECT_VERSION=#{build_number}"
-      ].join(" ")
-    )
+    # Signing goes on the app target only. As xcargs it would also reach the Swift package
+    # resource bundles (SwiftMath_SwiftMath), which then demand a team of their own. The
+    # action edits project.pbxproj in place, so it is restored for local runs.
+    pbxproj = File.join(PROJECT, "project.pbxproj")
+    original_pbxproj = File.read(pbxproj)
+    begin
+      update_code_signing_settings(
+        path: PROJECT,
+        targets: [APP_TARGET],
+        build_configurations: ["Release"],
+        use_automatic_signing: false,
+        code_sign_identity: "Apple Distribution",
+        profile_name: profile_name
+      )
+      build_app(
+        project: PROJECT,
+        scheme: SCHEME,
+        configuration: "Release",
+        xcconfig: CI_XCCONFIG,
+        cloned_source_packages_path: PACKAGES_DIR,
+        output_directory: OUTPUT_DIR,
+        output_name: "AI Wrapper.ipa",
+        buildlog_path: "#{OUTPUT_DIR}/logs",
+        export_method: "app-store",
+        export_options: {
+          signingStyle: "manual",
+          provisioningProfiles: { APP_IDENTIFIER => profile_name }
+        },
+        xcargs: "CURRENT_PROJECT_VERSION=#{build_number}"
+      )
+    ensure
+      File.write(pbxproj, original_pbxproj)
+    end
   end
 end
 
