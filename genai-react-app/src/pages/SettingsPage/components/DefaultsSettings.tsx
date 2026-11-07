@@ -22,6 +22,7 @@ import {
 import { ICONS } from '../../../constants/icons'
 import { EmbeddingModelDefaults } from './EmbeddingModelDefaults'
 import { LearnedFactsSettings } from './LearnedFactsSettings'
+import { ChatIndexingSettings } from './ChatIndexingSettings'
 import styles from './DefaultsSettings.module.scss'
 
 /**
@@ -297,6 +298,7 @@ export function DefaultsSettings(): React.ReactElement {
             )}
 
             <LearnedFactsSettings />
+            <ChatIndexingSettings />
             <EmbeddingModelDefaults />
         </div>
     )

@@ -111,7 +111,10 @@ def get_llm(
             logger.error("LLM factory: openai_api_key is MISSING in credentials")
         else:
             logger.info("LLM factory: openai_api_key present (len=%d)", len(key))
-        kwargs = {}
+        # Without store=False OpenAI keeps Responses API state for 30 days.
+        # Nothing here reads it back: every call replays the whole history
+        # (use_previous_response_id stays off).
+        kwargs = {"store": False}
         # gpt-5 family: reasoning is on by default and /v1/chat/completions
         # rejects function tools + reasoning ("use /v1/responses or set
         # reasoning_effort to 'none'"). The Responses API supports both, so
@@ -119,6 +122,9 @@ def get_llm(
         # -pro variants it knows about, which lags behind new model releases.
         if (resolved_model or "").startswith("gpt-5"):
             kwargs["use_responses_api"] = True
+            # Stored reasoning can't be referenced with store=False, so ask for
+            # it encrypted: a tool round hands it back with the history.
+            kwargs["include"] = ["reasoning.encrypted_content"]
         if thinking_level and (resolved_model or "").startswith(_OPENAI_REASONING_PREFIXES):
             if thinking_level == "none":
                 if (resolved_model or "").startswith("gpt-5"):
