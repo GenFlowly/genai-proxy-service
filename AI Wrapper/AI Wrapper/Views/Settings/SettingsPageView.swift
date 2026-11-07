@@ -1,140 +1,324 @@
 import SwiftUI
 
-/// Mirrors SettingsPage (mobile): breadcrumbs + SettingsMenuPage listing the
-/// sections, with Logout in the footer.
-struct SettingsMenuPageView: View {
-    @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var router: AppRouter
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsBreadcrumbs(section: nil)
-
-            if !auth.isAuthenticated {
-                LoginRequiredView(message: "Log in to manage settings")
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Settings")
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                        .padding(.bottom, 8)
-
-                    ForEach(AppRouter.SettingsSection.allCases) { section in
-                        Button {
-                            router.navigate(.settings(section))
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: section.icon)
-                                    .frame(width: 22)
-                                Text(section.label)
-                                    .font(.subheadline)
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(AppTheme.textMuted)
-                            }
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
-                            .background(AppTheme.backgroundSecondary)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-
-                    Spacer()
-
-                    HStack {
-                        ThemeToggleView()
-                        Spacer()
-                        Button {
-                            auth.logout()
-                            router.navigate(.chat)
-                        } label: {
-                            Text("Logout")
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(AppTheme.error)
-                        }
-                    }
-                }
-                .padding()
-            }
+extension AppRouter.SettingsSection {
+    /// The MobileHeader title is the active section's own label (SECTION_LABEL_KEYS).
+    var title: String {
+        switch self {
+        case .profile: return L("settingsPage.settingsPage.sectionProfile")
+        case .llmKeys: return L("settingsPage.settingsPage.sectionAiModelKeys")
+        case .embeddingKeys: return L("settingsPage.settingsPage.sectionAiEmbeddingKeys")
+        case .vectorDb: return L("settingsPage.settingsPage.sectionAiVectorDb")
+        case .usageLlm: return L("settingsPage.settingsPage.sectionUsageLlmModels")
+        case .usageEmbedding: return L("settingsPage.settingsPage.sectionUsageEmbeddingModels")
+        case .usageVectorDb: return L("settingsPage.settingsPage.sectionUsageVectorDb")
+        case .usageWebSearch: return L("settingsPage.settingsPage.sectionUsageWebSearch")
+        case .defaults: return L("settingsPage.settingsPage.sectionDefaults")
+        case .tools: return L("settingsPage.settingsPage.sectionTools")
+        case .connectors: return L("settingsPage.settingsPage.sectionConnectors")
+        case .developer: return L("settingsPage.settingsPage.sectionDeveloper")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.background)
     }
 }
 
-/// Mirrors the mobile Breadcrumbs trail: Menu → Settings → [Section].
-struct SettingsBreadcrumbs: View {
-    @EnvironmentObject var router: AppRouter
-    var section: AppRouter.SettingsSection?
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Button("Menu") { router.isMobileMenuOpen = true }
-                .foregroundStyle(AppTheme.primary)
-            Text("/").foregroundStyle(AppTheme.textMuted)
-            Button("Settings") { router.navigate(.settingsMenu) }
-                .foregroundStyle(section == nil ? AppTheme.textMuted : AppTheme.primary)
-                .disabled(section == nil)
-            if let section {
-                Text("/").foregroundStyle(AppTheme.textMuted)
-                Text(section.label).foregroundStyle(AppTheme.textMuted)
-            }
-            Spacer()
-        }
-        .font(.caption)
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(AppTheme.backgroundSecondary)
-        .overlay(alignment: .bottom) { Divider() }
-    }
-}
-
-/// A settings section page: breadcrumbs + web-style title/subtitle + content.
+/// SettingsPage below isNarrow: the MobileHeader names the section, its hamburger opens
+/// the SettingsSidebar, and the page is one full-bleed scroller (`.contentInner`:
+/// 20pt gutters, 2.5rem bottom padding, resting below the overlay header).
 struct SettingsSectionPageView: View {
     @EnvironmentObject var auth: AuthStore
-    var section: AppRouter.SettingsSection
+    let section: AppRouter.SettingsSection
 
-    private var subtitle: String {
+    @StateObject private var dialogs = SettingsDialogCenter()
+
+    var body: some View {
+        PageScaffold(title: section.title) {
+            if auth.isAuthenticated {
+                ScrollView {
+                    content
+                        .padding(.horizontal, 20)
+                        .padding(.top, mobileHeaderHeight)
+                        .padding(.bottom, 40)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            } else {
+                LoginRequiredView()
+            }
+        }
+        .overlay { SettingsDialogOverlay() }
+        .environmentObject(dialogs)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch section {
-        case .profile: return "Manage your personal information and preferences."
-        case .ai: return "Configure your API keys to enable various AI models across the platform."
-        case .memory: return "Configure connections to your vector databases and storage providers."
-        case .developer: return "Create API keys to call the API from your own applications."
+        case .profile: ProfileSettingsView()
+        case .llmKeys: AISettingsView()
+        case .embeddingKeys: EmbeddingKeysSettingsView()
+        case .vectorDb: VectorDBSettingsView()
+        case .usageLlm: LlmUsageSettingsView()
+        case .usageEmbedding: EmbeddingUsageSettingsView()
+        case .usageVectorDb: VectorDbUsageSettingsView()
+        case .usageWebSearch: WebSearchUsageSettingsView()
+        case .defaults: DefaultsSettingsView()
+        case .tools: ToolsSettingsView()
+        case .connectors: ConnectorsSettingsView()
+        case .developer: DeveloperSettingsView()
+        }
+    }
+}
+
+// MARK: - Menu (SettingsSidebar.tsx)
+
+struct SettingsSidebar: View {
+    @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var router: AppRouter
+    let onNavigate: () -> Void
+
+    private struct Child: Identifiable {
+        let section: AppRouter.SettingsSection
+        let label: String
+        var id: String { label }
+    }
+
+    private struct Item: Identifiable {
+        let key: String
+        let label: String
+        let icon: String
+        var section: AppRouter.SettingsSection?
+        var children: [Child] = []
+        var id: String { key }
+    }
+
+    /// Manual expand/collapse choices; absent = expanded while the route is inside it.
+    @State private var expandedOverride: [String: Bool] = [:]
+    @State private var query = ""
+
+    private var items: [Item] {
+        [
+            Item(key: "profile", label: L("settingsPage.settingsSidebar.profile"), icon: "user-circle", section: .profile),
+            Item(key: "ai", label: L("settingsPage.settingsSidebar.aiSettings"), icon: "models", children: [
+                Child(section: .llmKeys, label: L("settingsPage.settingsSidebar.aiModelKeys")),
+                Child(section: .embeddingKeys, label: L("settingsPage.settingsSidebar.aiEmbeddingKeys")),
+                Child(section: .vectorDb, label: L("settingsPage.settingsSidebar.aiVectorDb"))
+            ]),
+            Item(key: "usage", label: L("settingsPage.settingsSidebar.usage"), icon: "tokens", children: [
+                Child(section: .usageLlm, label: L("settingsPage.settingsSidebar.usageLlmModels")),
+                Child(section: .usageEmbedding, label: L("settingsPage.settingsSidebar.usageEmbeddingModels")),
+                Child(section: .usageVectorDb, label: L("settingsPage.settingsSidebar.usageVectorDb")),
+                Child(section: .usageWebSearch, label: L("settingsPage.settingsSidebar.usageWebSearch"))
+            ]),
+            Item(key: "defaults", label: L("settingsPage.settingsSidebar.defaults"), icon: "prompt-icon", section: .defaults),
+            Item(key: "tools", label: L("settingsPage.settingsSidebar.tools"), icon: "steps", section: .tools),
+            // Connectors are hidden on iOS for now. This row is the only way in.
+            // Item(key: "connectors", label: L("settingsPage.settingsSidebar.connectors"), icon: "link", section: .connectors),
+            Item(key: "developer", label: L("settingsPage.settingsSidebar.developer"), icon: "edit", section: .developer)
+        ]
+    }
+
+    private var activeSection: AppRouter.SettingsSection? {
+        if case .settings(let section) = router.route { return section }
+        return nil
+    }
+
+    private func isInSection(_ item: Item) -> Bool {
+        item.children.contains { $0.section == activeSection }
+    }
+
+    private func isExpanded(_ item: Item) -> Bool {
+        !item.children.isEmpty && (expandedOverride[item.key] ?? isInSection(item))
+    }
+
+    private func go(_ section: AppRouter.SettingsSection) {
+        router.navigate(.settings(section))
+        onNavigate()
+    }
+
+    private var normalizedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+
+    /// Support lives outside Settings, at the web app's /support page.
+    private var supportMatches: Bool {
+        L("settingsPage.settingsSidebar.support").lowercased().contains(normalizedQuery)
+    }
+
+    /// Sections and sub-pages matching the search, flattened into one list.
+    private var searchHits: [(key: String, label: String, icon: String, section: AppRouter.SettingsSection)] {
+        items.flatMap { item -> [(key: String, label: String, icon: String, section: AppRouter.SettingsSection)] in
+            let itemMatches = item.label.lowercased().contains(normalizedQuery)
+            if let section = item.section {
+                return itemMatches ? [(item.key, item.label, item.icon, section)] : []
+            }
+            return item.children
+                .filter { itemMatches || $0.label.lowercased().contains(normalizedQuery) }
+                .map { ("\(item.key)-\($0.label)", $0.label, item.icon, $0.section) }
         }
     }
 
+    private func linkRowLabel(_ label: String, icon: String) -> some View {
+        HStack(spacing: 10) {
+            WebIcon(name: icon, size: 18, color: AppTheme.textMuted)
+            Text(label)
+                .webText(arial: 15)
+                .foregroundStyle(AppTheme.textPrimary)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 10)
+        .frame(height: 48)
+        .contentShape(Rectangle())
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsBreadcrumbs(section: section)
-
-            if !auth.isAuthenticated {
-                LoginRequiredView(message: "Log in to manage settings")
-            } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(section.title)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.textMuted)
-                }
-                .padding(.horizontal)
-                .padding(.top, 12)
-
-                Group {
-                    switch section {
-                    case .profile: ProfileSettingsView()
-                    case .ai: AISettingsView()
-                    case .memory: MemorySettingsView()
-                    case .developer: DeveloperSettingsView()
+        MobileMenuBody(searchText: $query, searchPlaceholder: L("layout.mobileMenu.searchSettings")) {
+            VStack(spacing: 12) {
+                HuggingScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        MenuCardLabel(title: L("settingsPage.settingsSidebar.title"))
+                        if normalizedQuery.isEmpty {
+                            ForEach(items) { item in
+                                if item.children.isEmpty {
+                                    leafRow(item)
+                                } else {
+                                    parentRow(item)
+                                }
+                            }
+                        } else if searchHits.isEmpty && !supportMatches {
+                            Text(L("layout.mobileMenu.noSearchResults"))
+                                .webText(13.6, lineHeight: 20.4)
+                                .foregroundStyle(AppTheme.textMuted)
+                                .padding(.vertical, 16)
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            ForEach(searchHits, id: \.key) { hit in
+                                row(label: hit.label, icon: hit.icon, active: false) { go(hit.section) }
+                            }
+                            if supportMatches {
+                                row(label: L("settingsPage.settingsSidebar.support"), icon: "chat-bubble", active: false) {
+                                    SupportLink.open()
+                                }
+                            }
+                        }
                     }
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 4)
                 }
+                .sidebarCard()
+
+                VStack(spacing: 0) {
+                    Button {
+                        SupportLink.open()
+                    } label: {
+                        linkRowLabel(L("settingsPage.settingsSidebar.support"), icon: "chat-bubble")
+                    }
+                    .buttonStyle(RowPressStyle())
+                    .accessibilityIdentifier("settings-menu-support")
+
+                    Button {
+                        router.navigate(.privacyPolicy)
+                        onNavigate()
+                    } label: {
+                        linkRowLabel(L("settingsPage.settingsSidebar.privacyPolicy"), icon: "document-text")
+                    }
+                    .buttonStyle(RowPressStyle())
+                }
+                .padding(4)
+                .sidebarCard()
+
+                Button {
+                    onNavigate()
+                    auth.logout()
+                    router.navigate(.chat)
+                } label: {
+                    HStack(spacing: 10) {
+                        WebIcon(name: "logout", size: 18, color: AppTheme.error)
+                        Text(L("settingsPage.settingsSidebar.logout"))
+                            .webText(arial: 15)
+                            .foregroundStyle(AppTheme.error)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.leading, 8)
+                    .padding(.trailing, 10)
+                    .frame(height: 48)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(RowPressStyle())
+                .padding(4)
+                .sidebarCard()
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppTheme.background)
+    }
+
+    private func leafRow(_ item: Item) -> some View {
+        row(label: item.label, icon: item.icon, active: item.section == activeSection) {
+            if let section = item.section { go(section) }
+        }
+    }
+
+    private func row(label: String, icon: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                WebIcon(name: icon, size: 18, color: AppTheme.textMuted)
+                Text(label)
+                    .webText(arial: 15, bold: active)
+                    .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 10)
+            .frame(height: 48)
+            .background(active ? AppTheme.backgroundSelected : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(RowPressStyle())
+    }
+
+    private func parentRow(_ item: Item) -> some View {
+        let inSection = isInSection(item)
+        let expanded = isExpanded(item)
+        return VStack(alignment: .leading, spacing: 2) {
+            Button {
+                expandedOverride[item.key] = !expanded
+            } label: {
+                HStack(spacing: 10) {
+                    WebIcon(name: item.icon, size: 18, color: AppTheme.textMuted)
+                    Text(item.label)
+                        .webText(arial: 15, bold: inSection)
+                        .foregroundStyle(inSection ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    Spacer(minLength: 0)
+                    WebIcon(name: "alt-arrow-right", size: 16, color: AppTheme.textMuted)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                }
+                .padding(.leading, 8)
+                .padding(.trailing, 10)
+                .frame(height: 48)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(RowPressStyle())
+            .accessibilityAddTraits(expanded ? .isSelected : [])
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(item.children) { child in
+                        let active = inSection && child.section == activeSection
+                        Button { go(child.section) } label: {
+                            Text(child.label)
+                                .webText(arial: 15, bold: active)
+                                .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                .padding(.horizontal, 10)
+                                .frame(height: 44)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(active ? AppTheme.backgroundSelected : Color.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(RowPressStyle())
+                    }
+                }
+                .padding(.leading, 8)
+                .overlay(alignment: .leading) { Rectangle().fill(AppTheme.borderLight).frame(width: 1) }
+                .padding(.leading, 16)
+            }
+        }
     }
 }
 
@@ -142,279 +326,210 @@ struct SettingsSectionPageView: View {
 
 struct ProfileSettingsView: View {
     @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var toasts: ToastCenter
 
     @State private var profile: CustomerProfileResponse?
+    @State private var isLoading = true
     @State private var username = ""
     @State private var isDiscoverable = false
     @State private var isSavingUsername = false
-    @State private var message: (text: String, isError: Bool)?
+    @State private var isSavingDiscoverability = false
+    @State private var message: (text: String, kind: WebMessageKind)?
+    @State private var seededSignature: String?
+    @FocusState private var usernameFocused: Bool
+
+    private var cacheKey: String? {
+        auth.customerId.map { StorageSuffix.customerKey($0, StorageSuffix.profile) }
+    }
 
     var body: some View {
-        List {
-            if let message {
-                Section {
-                    Text(message.text)
-                        .font(.caption)
-                        .foregroundStyle(message.isError ? AppTheme.error : AppTheme.success)
-                }
-            }
-
-            Section("Personal Details") {
-                HStack(spacing: 12) {
-                    if let picture = profile?.picture ?? auth.customerPicture, let url = URL(string: picture) {
-                        AsyncImage(url: url) { image in
-                            image.resizable()
-                        } placeholder: {
-                            Image(systemName: "person.crop.circle.fill")
-                                .resizable()
-                                .foregroundStyle(AppTheme.textMuted)
-                        }
-                        .frame(width: 48, height: 48)
-                        .clipShape(Circle())
-                    } else {
-                        Image(systemName: "person.crop.circle.fill")
-                            .resizable()
-                            .frame(width: 48, height: 48)
-                            .foregroundStyle(AppTheme.textMuted)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(profile?.name ?? auth.customerName ?? "No Name")
-                            .font(.headline)
-                        Text(profile?.email ?? "No Email")
-                            .font(.caption)
-                            .foregroundStyle(AppTheme.textMuted)
-                    }
-                }
-            }
-
-            Section {
-                TextField("e.g. johndoe-1234", text: $username)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button {
-                    Task { await saveUsername() }
-                } label: {
-                    if isSavingUsername { ProgressView() } else { Text("Update Username") }
-                }
-                .disabled(username.isEmpty || username == profile?.username || isSavingUsername)
-            } header: {
-                Text("Username")
-            }
-
-            Section {
-                Toggle("Discoverable", isOn: $isDiscoverable)
-                    .onChange(of: isDiscoverable) { oldValue, newValue in
-                        guard profile != nil, newValue != (profile?.isDiscoverable ?? false) else { return }
-                        Task { await saveDiscoverability(newValue, revertTo: oldValue) }
-                    }
-            } header: {
-                Text("Privacy")
-            } footer: {
-                Text("Allow other users to search for you by your exact username when sharing instructions.")
+        Group {
+            if let profile {
+                form(profile)
+            } else {
+                Text(isLoading ? L("settingsPage.profileSettings.loadingProfile") : L("settingsPage.profileSettings.loadProfileFailed"))
+                    .webText(16)
+                    .foregroundStyle(AppTheme.textPrimary)
             }
         }
-        .scrollContentBackground(.hidden)
         .task { await load() }
     }
 
-    private func load() async {
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
-        if let loaded = await UserService.getUserProfile(token: token) {
-            profile = loaded
-            username = loaded.username ?? ""
-            isDiscoverable = loaded.isDiscoverable
+    private func form(_ profile: CustomerProfileResponse) -> some View {
+        VStack(alignment: .leading, spacing: 32) {
+            if let message { messageBox(message) }
+
+            section(L("settingsPage.profileSettings.personalDetails")) {
+                HStack(spacing: 24) {
+                    avatar(profile)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profile.name?.isEmpty == false ? profile.name! : L("settingsPage.profileSettings.noName"))
+                            .webText(18, 700)
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(profile.email?.isEmpty == false ? profile.email! : L("settingsPage.profileSettings.noEmail"))
+                            .webText(15.2)
+                            .foregroundStyle(AppTheme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            section(L("settingsPage.profileSettings.usernameSection")) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(L("settingsPage.profileSettings.yourUsername"))
+                        .webText(14, 500)
+                        .foregroundStyle(AppTheme.textSecondary)
+                    TextField("", text: $username, prompt: Text(L("settingsPage.profileSettings.usernamePlaceholder")).foregroundStyle(AppTheme.textLight))
+                        .focused($usernameFocused)
+                        .font(DSFont.arial(15.2))
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 17)
+                        .frame(height: 43)
+                        .background(usernameFocused ? Color.white.opacity(0.02) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(usernameFocused ? AppTheme.primary : AppTheme.borderLight, lineWidth: usernameFocused ? 2 : 1))
+                }
+                PillButton(
+                    label: isSavingUsername ? L("settingsPage.profileSettings.savingLabel") : L("settingsPage.profileSettings.updateUsername"),
+                    disabled: isSavingUsername || username == (profile.username ?? "") || username.trimmingCharacters(in: .whitespaces).isEmpty
+                ) {
+                    Task { await saveUsername() }
+                }
+                .padding(.top, 8)
+            }
+
+            section(L("settingsPage.profileSettings.privacy")) {
+                HStack(alignment: .top, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(L("settingsPage.profileSettings.discoverable"))
+                            .webText(16, 500)
+                            .foregroundStyle(AppTheme.textPrimary)
+                        Text(L("settingsPage.profileSettings.discoverableDescription"))
+                            .webText(14, lineHeight: 19.6)
+                            .foregroundStyle(AppTheme.textMuted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    WebCheckbox(isOn: isDiscoverable, size: 20, disabled: isSavingDiscoverability, label: L("settingsPage.profileSettings.discoverable")) { value in
+                        Task { await toggleDiscoverability(value) }
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(17)
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.borderLight, lineWidth: 1))
+            }
+
+            DeleteDataSettingsView()
         }
     }
 
+    private func section<Content: View>(_ title: String, isLast: Bool = false, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            SettingsSectionTitle(title)
+            content()
+        }
+        .padding(.bottom, isLast ? 0 : 33)
+        .overlay(alignment: .bottom) {
+            if !isLast { Rectangle().fill(AppTheme.borderLight).frame(height: 1) }
+        }
+    }
+
+    private func avatar(_ profile: CustomerProfileResponse) -> some View {
+        Group {
+            if let picture = profile.picture, let url = URL(string: picture) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Color(hex: "#E2E8F0")
+                }
+            } else {
+                Color(hex: "#E2E8F0")
+            }
+        }
+        .frame(width: 64, height: 64)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(AppTheme.borderLight, lineWidth: 2).padding(1))
+    }
+
+    private func messageBox(_ message: (text: String, kind: WebMessageKind)) -> some View {
+        let isError = message.kind == .error
+        let tint = isError ? Color(hex: "#DC2626") : AppTheme.success
+        return Text(message.text)
+            .webText(15.2, 500)
+            .foregroundStyle(tint)
+            .padding(17)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isError ? Color(red: 220 / 255, green: 38 / 255, blue: 38 / 255).opacity(0.1) : Color(red: 60 / 255, green: 114 / 255, blue: 103 / 255).opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isError ? Color(red: 220 / 255, green: 38 / 255, blue: 38 / 255).opacity(0.2) : Color(red: 60 / 255, green: 114 / 255, blue: 103 / 255).opacity(0.2), lineWidth: 1))
+    }
+
+    /// The previous session's copy paints, a fresh fetch revalidates; the same content
+    /// coming back again must not clobber in-progress typing (useProfile + seededRef).
+    private func load() async {
+        if profile == nil, let cacheKey, let cached = CacheStore.shared.read(CustomerProfileResponse.self, key: cacheKey) {
+            apply(cached)
+        }
+        guard let token = try? await auth.getAccessTokenSilently() else {
+            isLoading = false
+            return
+        }
+        if let fresh = await UserService.getUserProfile(token: token) {
+            apply(fresh)
+            persist(fresh)
+        }
+        isLoading = false
+    }
+
+    private func apply(_ value: CustomerProfileResponse) {
+        profile = value
+        let signature = "\(value.username ?? "")|\(value.isDiscoverable)"
+        guard seededSignature != signature else { return }
+        seededSignature = signature
+        username = value.username ?? ""
+        isDiscoverable = value.isDiscoverable
+    }
+
+    private func persist(_ value: CustomerProfileResponse) {
+        if let cacheKey { CacheStore.shared.write(value, key: cacheKey) }
+    }
+
     private func saveUsername() async {
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
+        guard !username.isEmpty, username != profile?.username, let token = try? await auth.getAccessTokenSilently() else { return }
         isSavingUsername = true
+        message = nil
         defer { isSavingUsername = false }
         do {
             try await UserService.updateUsername(token: token, username: username)
             profile?.username = username
-            message = ("Username updated.", false)
-        } catch {
-            message = ((error as? APIError)?.message ?? "Failed to update username.", true)
-        }
-    }
-
-    private func saveDiscoverability(_ newValue: Bool, revertTo oldValue: Bool) async {
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
-        do {
-            try await UserService.updateDiscoverability(token: token, isDiscoverable: newValue)
-            profile?.isDiscoverable = newValue
-        } catch {
-            isDiscoverable = oldValue
-            message = ("Failed to update discoverability.", true)
-        }
-    }
-}
-
-// MARK: - AI Settings (AISettings.tsx)
-
-struct AISettingsView: View {
-    @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var toasts: ToastCenter
-
-    @State private var apiKeys: [AIVendor: String] = [:]
-    @State private var savingVendor: AIVendor?
-
-    var body: some View {
-        List {
-            ForEach(AIVendor.allCases) { vendor in
-                let status = auth.aiVendorAPIKeyStatusList.first { $0.aiVendor == vendor.rawValue }
-                Section {
-                    HStack {
-                        BrandNameView(vendor: vendor)
-                        Spacer()
-                        Text(status?.status ?? APIKeyStatus.notSet)
-                            .font(.caption2)
-                            .foregroundStyle((status?.isValid ?? false) ? AppTheme.success : AppTheme.textMuted)
-                    }
-                    SecureField("sk-...", text: Binding(
-                        get: { apiKeys[vendor] ?? "" },
-                        set: { apiKeys[vendor] = $0 }
-                    ))
-                    Button {
-                        Task { await saveKey(vendor) }
-                    } label: {
-                        if savingVendor == vendor {
-                            Text("Saving...")
-                        } else {
-                            Text((status?.isValid ?? false) ? "Overwrite API Key" : "Save")
-                        }
-                    }
-                    .disabled(savingVendor != nil)
-                }
+            if let profile {
+                seededSignature = "\(profile.username ?? "")|\(profile.isDiscoverable)"
+                persist(profile)
             }
-        }
-        .scrollContentBackground(.hidden)
-    }
-
-    private func saveKey(_ vendor: AIVendor) async {
-        let key = (apiKeys[vendor] ?? "").trimmingCharacters(in: .whitespaces)
-        guard auth.isAuthenticated else {
-            toasts.showToast("Please log in first.")
-            return
-        }
-        guard !key.isEmpty else {
-            toasts.showToast("Please enter a valid API key.")
-            return
-        }
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
-        savingVendor = vendor
-        defer { savingVendor = nil }
-        do {
-            let response = try await StoreConfigService.storeVendorApiKey(token: token, aiVendor: vendor.rawValue, apiKey: key)
-            auth.updateVendorApiKeyStatus(response.apiKeyStatus)
-            toasts.showToast(response.apiKeyStatus.status ?? "API key updated")
-            apiKeys[vendor] = ""
+            message = (L("settingsPage.profileSettings.usernameUpdatedMessage"), .success)
         } catch {
-            toasts.showToast("Failed to save API key.")
+            let text = (error as? APIError)?.message
+            message = (text?.isEmpty == false ? text! : L("settingsPage.profileSettings.usernameUpdateFailedMessage"), .error)
+            username = profile?.username ?? ""
         }
     }
-}
 
-// MARK: - Memory Settings (MemorySettings.tsx)
-
-struct MemorySettingsView: View {
-    @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var toasts: ToastCenter
-
-    @State private var milvusEndpoint = ""
-    @State private var milvusToken = ""
-    @State private var supabaseEndpoint = ""
-    @State private var supabaseKey = ""
-    @State private var supabasePassword = ""
-    @State private var savingSection: String?
-
-    var body: some View {
-        List {
-            Section("Milvus Cloud") {
-                if let status = auth.vectorDBConfigStatusList.first(where: { $0.vendor == "Zilliz" }) {
-                    statusRow(status.status)
-                }
-                TextField("https://in03-....zillizcloud.com", text: $milvusEndpoint)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                SecureField("Placeholder token...", text: $milvusToken)
-                Button(savingSection == "milvus" ? "Saving..." : "Save") {
-                    Task { await saveMilvus() }
-                }
-                .disabled(savingSection != nil)
+    private func toggleDiscoverability(_ checked: Bool) async {
+        isDiscoverable = checked
+        isSavingDiscoverability = true
+        message = nil
+        defer { isSavingDiscoverability = false }
+        do {
+            let token = try await auth.getAccessTokenSilently()
+            try await UserService.updateDiscoverability(token: token, isDiscoverable: checked)
+            profile?.isDiscoverable = checked
+            if let profile {
+                seededSignature = "\(profile.username ?? "")|\(profile.isDiscoverable)"
+                persist(profile)
             }
-
-            Section("Supabase") {
-                if let status = auth.supabaseConfigStatus {
-                    statusRow(status.status)
-                }
-                TextField("https://your-project.supabase.co", text: $supabaseEndpoint)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                SecureField("your-anon-key / service_role", text: $supabaseKey)
-                SecureField("PostgreSQL Database Password", text: $supabasePassword)
-                Button(savingSection == "supabase" ? "Saving..." : "Save") {
-                    Task { await saveSupabase() }
-                }
-                .disabled(savingSection != nil)
-            }
-        }
-        .scrollContentBackground(.hidden)
-    }
-
-    private func statusRow(_ status: String?) -> some View {
-        HStack {
-            Text("Status")
-            Spacer()
-            Text(status ?? "NOT_SET")
-                .font(.caption)
-                .foregroundStyle(status == "PRESENT" ? AppTheme.success : AppTheme.textMuted)
-        }
-    }
-
-    private func saveMilvus() async {
-        guard !milvusEndpoint.isEmpty, !milvusToken.isEmpty else {
-            toasts.showToast("Please enter an endpoint and token.")
-            return
-        }
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
-        savingSection = "milvus"
-        defer { savingSection = nil }
-        do {
-            let response = try await StoreConfigService.storeVectorDBConfig(
-                token: token,
-                request: StoreCustomerVectorDBConfigRequest(vendor: "Zilliz", endpoint: milvusEndpoint, token: milvusToken)
-            )
-            auth.updateVectorDBConfigStatus(response.configStatus)
-            toasts.showToast(response.configStatus.updateSuccessful == true ? "Milvus config saved" : "Milvus config failed validation")
         } catch {
-            toasts.showToast("Failed to save Milvus config.")
-        }
-    }
-
-    private func saveSupabase() async {
-        guard URL(string: supabaseEndpoint)?.scheme?.hasPrefix("http") == true else {
-            toasts.showToast("Please enter a valid endpoint URL.")
-            return
-        }
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
-        savingSection = "supabase"
-        defer { savingSection = nil }
-        do {
-            let response = try await StoreConfigService.storeSupabaseConfig(
-                token: token,
-                request: StoreCustomerSupabaseConfigRequest(
-                    endpoint: supabaseEndpoint,
-                    token: supabaseKey,
-                    password: supabasePassword.isEmpty ? nil : supabasePassword
-                )
-            )
-            auth.supabaseConfigStatus = response.configStatus
-            toasts.showToast(response.configStatus.updateSuccessful == true ? "Supabase config saved" : "Supabase config failed validation")
-        } catch {
-            toasts.showToast("Failed to save Supabase config.")
+            message = (L("settingsPage.profileSettings.discoverabilityUpdateFailedMessage"), .error)
+            isDiscoverable = !checked
         }
     }
 }
@@ -426,134 +541,166 @@ struct DeveloperSettingsView: View {
     @EnvironmentObject var toasts: ToastCenter
 
     @State private var keys: [DeveloperApiKeySummary] = []
-    @State private var isLoading = false
+    @State private var isLoading = true
     @State private var newKeyName = ""
     @State private var isCreating = false
+    @State private var revokingKeyId: String?
+    /// The full value is only ever available here, right after creation.
     @State private var createdKey: DeveloperApiKeyCreatedResponse?
     @State private var keyToRevoke: DeveloperApiKeySummary?
 
     var body: some View {
-        List {
-            Section {
-                Text("Authorization: Bearer gfy_...")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(AppTheme.textMuted)
-            }
-
-            if let createdKey {
-                Section {
-                    Text("Key \"\(createdKey.name)\" created — copy it now")
-                        .font(.subheadline.weight(.semibold))
-                    Text("This key is shown only once. Store it somewhere safe.")
-                        .font(.caption)
-                        .foregroundStyle(AppTheme.error)
-                    HStack {
-                        Text(createdKey.apiKey)
-                            .font(.system(.caption2, design: .monospaced))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
-                        Button("Copy") {
-                            UIPasteboard.general.string = createdKey.apiKey
-                            toasts.showToast("API key copied to clipboard.")
-                        }
-                    }
-                    Button("I've saved my key") {
-                        self.createdKey = nil
-                    }
+        VStack(alignment: .leading, spacing: 40) {
+            VStack(alignment: .leading, spacing: 16) {
+                InputTextWithHint(
+                    hint: L("settingsPage.developerSettings.keyNameHint"),
+                    placeholder: L("settingsPage.developerSettings.keyNamePlaceholder"),
+                    text: $newKeyName
+                )
+                PillButton(
+                    label: isCreating ? L("settingsPage.developerSettings.creatingLabel") : L("settingsPage.developerSettings.createApiKey"),
+                    icon: "add-icon",
+                    disabled: isCreating
+                ) {
+                    Task { await create() }
                 }
-                .listRowBackground(AppTheme.backgroundSelected)
             }
+            .padding(.bottom, 33)
+            .overlay(alignment: .bottom) { Rectangle().fill(AppTheme.borderLight).frame(height: 1) }
 
-            Section("Create a key") {
-                TextField("e.g. My CI server", text: $newKeyName)
-                Button {
-                    Task { await createKey() }
-                } label: {
-                    Label(isCreating ? "Creating…" : "Create API key", systemImage: "plus")
-                }
-                .disabled(newKeyName.isEmpty || isCreating)
-            }
+            if let createdKey { createdPanel(createdKey) }
 
-            Section("Your API keys") {
-                if isLoading && keys.isEmpty {
-                    Text("Loading…").foregroundStyle(AppTheme.textMuted)
+            VStack(alignment: .leading, spacing: 16) {
+                SettingsSectionTitle(L("settingsPage.developerSettings.yourApiKeys"))
+                if isLoading {
+                    emptyState(L("settingsPage.developerSettings.loading"))
                 } else if keys.isEmpty {
-                    Text("No API keys yet.").foregroundStyle(AppTheme.textMuted)
+                    emptyState(L("settingsPage.developerSettings.noKeysYet"))
                 } else {
-                    ForEach(keys) { key in
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(key.name).font(.subheadline)
-                                Spacer()
-                                Button("Revoke", role: .destructive) {
-                                    keyToRevoke = key
-                                }
-                                .font(.caption)
-                            }
-                            Text("\(key.prefix)…")
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(AppTheme.textMuted)
-                            HStack(spacing: 10) {
-                                if let createdAt = key.createdAt {
-                                    Text("Created \(createdAt)")
-                                }
-                                if let lastUsedAt = key.lastUsedAt {
-                                    Text("Last used \(lastUsedAt)")
-                                }
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(AppTheme.textMuted)
+                    VStack(spacing: 0) {
+                        ForEach(Array(keys.enumerated()), id: \.element.id) { index, key in
+                            keyRow(key, isLast: index == keys.count - 1)
                         }
                     }
                 }
             }
         }
-        .scrollContentBackground(.hidden)
-        .confirmationDialog(
-            "Revoke the key \"\(keyToRevoke?.name ?? "")\"? Applications using it will stop working immediately.",
-            isPresented: Binding(get: { keyToRevoke != nil }, set: { if !$0 { keyToRevoke = nil } }),
-            titleVisibility: .visible
+        .alert(
+            keyToRevoke.map { L("settingsPage.developerSettings.revokeConfirm", ["name": $0.name]) } ?? "",
+            isPresented: Binding(get: { keyToRevoke != nil }, set: { if !$0 { keyToRevoke = nil } })
         ) {
-            Button("Revoke", role: .destructive) {
-                if let key = keyToRevoke {
-                    Task { await revoke(key) }
-                }
+            Button(L("settingsPage.developerSettings.revoke"), role: .destructive) {
+                if let key = keyToRevoke { Task { await revoke(key) } }
             }
+            Button(L("settingsPage.toolsSettings.cancel"), role: .cancel) {}
         }
         .task { await load() }
     }
 
-    private func load() async {
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
-        isLoading = true
-        defer { isLoading = false }
-        if let response = try? await DeveloperApiKeysService.listKeys(token: token) {
-            keys = response.keys
+    private func emptyState(_ text: String) -> some View {
+        Text(text).webText(15.2).foregroundStyle(AppTheme.textMuted)
+    }
+
+    private func createdPanel(_ created: DeveloperApiKeyCreatedResponse) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L("settingsPage.developerSettings.createdKeyTitle", ["name": created.name]))
+                .webText(16, 600)
+                .foregroundStyle(AppTheme.textPrimary)
+            Text(L("settingsPage.developerSettings.createdKeyWarning"))
+                .webText(14.4)
+                .foregroundStyle(AppTheme.textMuted)
+            HStack(spacing: 12) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(verbatim: created.apiKey)
+                        .webText(mono: 14.4)
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9.6)
+                }
+                .background(AppTheme.borderLight)
+                .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
+                PillButton(label: L("settingsPage.developerSettings.copy"), icon: "copy-icon", style: .secondary) {
+                    UIPasteboard.general.string = created.apiKey
+                    toasts.showToast(L("settingsPage.developerSettings.copiedToast"))
+                }
+                .fixedSize()
+            }
+            PillButton(label: L("settingsPage.developerSettings.savedMyKey"), style: .secondary) {
+                createdKey = nil
+            }
+        }
+        .padding(21)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.borderLight, lineWidth: 1))
+    }
+
+    private func keyRow(_ key: DeveloperApiKeySummary, isLast: Bool) -> some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                WebTruncatedLine(key.name)
+                    .webText(16, 600)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text("\(key.prefix)…")
+                    .webText(mono: 13.6)
+                    .foregroundStyle(AppTheme.textMuted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            PillButton(
+                label: revokingKeyId == key.keyId ? L("settingsPage.developerSettings.revokingLabel") : L("settingsPage.developerSettings.revoke"),
+                style: .danger,
+                disabled: revokingKeyId == key.keyId
+            ) {
+                keyToRevoke = key
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.bottom, isLast ? 0 : 1)
+        .overlay(alignment: .bottom) {
+            if !isLast { Rectangle().fill(AppTheme.borderLight).frame(height: 1) }
         }
     }
 
-    private func createKey() async {
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let token = try await auth.getAccessTokenSilently()
+            keys = try await DeveloperApiKeysService.listKeys(token: token).keys
+        } catch {
+            toasts.showToast(L("settingsPage.developerSettings.loadErrorToast"))
+        }
+    }
+
+    private func create() async {
+        let name = newKeyName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else {
+            toasts.showToast(L("settingsPage.developerSettings.enterKeyNameToast"))
+            return
+        }
         isCreating = true
         defer { isCreating = false }
         do {
-            let created = try await DeveloperApiKeysService.createKey(token: token, name: newKeyName)
-            createdKey = created
+            let token = try await auth.getAccessTokenSilently()
+            createdKey = try await DeveloperApiKeysService.createKey(token: token, name: name)
             newKeyName = ""
             await load()
         } catch {
-            toasts.showToast("Failed to create API key.")
+            toasts.showToast(L("settingsPage.developerSettings.createErrorToast"))
         }
     }
 
     private func revoke(_ key: DeveloperApiKeySummary) async {
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
+        revokingKeyId = key.keyId
+        defer { revokingKeyId = nil }
         do {
+            let token = try await auth.getAccessTokenSilently()
             try await DeveloperApiKeysService.revokeKey(token: token, keyId: key.keyId)
-            keys.removeAll { $0.keyId == key.keyId }
+            if createdKey?.keyId == key.keyId { createdKey = nil }
+            toasts.showToast(L("settingsPage.developerSettings.revokedToast"))
+            await load()
         } catch {
-            toasts.showToast("Failed to revoke API key.")
+            toasts.showToast(L("settingsPage.developerSettings.revokeErrorToast"))
         }
     }
 }

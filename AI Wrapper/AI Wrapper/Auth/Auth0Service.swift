@@ -43,10 +43,24 @@ final class Auth0Service: NSObject {
     private static let expiresAtKey = "expires_at"
 
     private var webSession: ASWebAuthenticationSession?
+    private let send: (URLRequest) async throws -> (Data, URLResponse)
+    private let vault: TokenVault
+    private var refreshTask: Task<Tokens, Error>?
+    /// Moves on when the session is cleared, so a refresh still in flight can't bring it back.
+    private var sessionGeneration = 0
+
+    init(
+        vault: TokenVault = KeychainVault(),
+        send: @escaping (URLRequest) async throws -> (Data, URLResponse) = { try await APIClient.session.data(for: $0) }
+    ) {
+        self.vault = vault
+        self.send = send
+        super.init()
+    }
 
     // MARK: - Public API
 
-    var hasSession: Bool { Keychain.get(Self.refreshTokenKey) != nil }
+    var hasSession: Bool { vault.get(Self.refreshTokenKey) != nil }
 
     /// Interactive login via Auth0 Universal Login.
     @MainActor
@@ -81,7 +95,9 @@ final class Auth0Service: NSObject {
                 }
             }
             session.presentationContextProvider = self
-            session.prefersEphemeralWebBrowserSession = false
+            // Every sign-in starts fresh: Safari's login must never decide who uses the app, and
+            // the two can be different people. This also leaves no Auth0 session behind to end at logout.
+            session.prefersEphemeralWebBrowserSession = true
             self.webSession = session
             session.start()
         }
@@ -112,48 +128,95 @@ final class Auth0Service: NSObject {
 
     /// Mirrors getAccessTokenSilently: cached token if fresh, else refresh.
     func getAccessTokenSilently() async throws -> String {
-        if let token = Keychain.get(Self.accessTokenKey),
-           let expiresRaw = Keychain.get(Self.expiresAtKey),
+        if let token = vault.get(Self.accessTokenKey),
+           let expiresRaw = vault.get(Self.expiresAtKey),
            let expires = TimeInterval(expiresRaw),
            Date(timeIntervalSince1970: expires) > Date().addingTimeInterval(60) {
             return token
         }
-        guard let refreshToken = Keychain.get(Self.refreshTokenKey) else {
+        guard let refreshToken = vault.get(Self.refreshTokenKey) else {
             throw AuthError.loginRequired
         }
-        do {
-            let tokens = try await exchangeToken(params: [
-                "grant_type": "refresh_token",
-                "client_id": AppConfig.Auth0.clientId,
-                "refresh_token": refreshToken,
-            ])
-            store(tokens)
-            return tokens.accessToken
-        } catch let error as APIError where error.status == 403 || error.status == 401 || error.status == 400 {
-            // Refresh token revoked/expired — login required
-            clearSession()
-            throw AuthError.loginRequired
+        return try await (refreshTask ?? startRefresh(using: refreshToken)).value.accessToken
+    }
+
+    /// Requests that find the token expired all wait on this one exchange: Auth0 rotates refresh
+    /// tokens, and treats a second use of an old one as theft by revoking the whole session.
+    private func startRefresh(using refreshToken: String) -> Task<Tokens, Error> {
+        let session = sessionGeneration
+        let task = Task { () throws -> Tokens in
+            defer { if session == sessionGeneration { refreshTask = nil } }
+            do {
+                let tokens = try await exchangeToken(params: [
+                    "grant_type": "refresh_token",
+                    "client_id": AppConfig.Auth0.clientId,
+                    "refresh_token": refreshToken,
+                ])
+                guard session == sessionGeneration else { throw AuthError.loginRequired }
+                store(tokens)
+                return tokens
+            } catch let error as APIError where error.status == 403 || error.status == 401 || error.status == 400 {
+                // Refresh token revoked/expired — login required
+                if session == sessionGeneration { clearSession() }
+                throw AuthError.loginRequired
+            }
         }
+        refreshTask = task
+        return task
     }
 
     /// Local logout (clears tokens). Matches logout({ localOnly: true }).
     func clearSession() {
-        Keychain.delete(Self.accessTokenKey)
-        Keychain.delete(Self.refreshTokenKey)
-        Keychain.delete(Self.idTokenKey)
-        Keychain.delete(Self.expiresAtKey)
+        sessionGeneration += 1
+        refreshTask = nil
+        vault.delete(Self.accessTokenKey)
+        vault.delete(Self.refreshTokenKey)
+        vault.delete(Self.idTokenKey)
+        vault.delete(Self.expiresAtKey)
     }
 
-    /// User profile decoded from the stored ID token (Auth0 user).
+#if DEBUG
+    /// Debug-only: install a session from externally-provided tokens, for headless
+    /// testing where the interactive `ASWebAuthenticationSession` login can't run
+    /// (CI / no-GUI simulator). Compiled out of Release builds entirely.
+    func installDebugSession(accessToken: String, idToken: String?, refreshToken: String?, expiresAt: Date) {
+        vault.set(accessToken, for: Self.accessTokenKey)
+        vault.set(String(expiresAt.timeIntervalSince1970), for: Self.expiresAtKey)
+        if let idToken { vault.set(idToken, for: Self.idTokenKey) }
+        if let refreshToken { vault.set(refreshToken, for: Self.refreshTokenKey) }
+    }
+
+    /// Debug-only, for running the real refresh paths against Auth0 from a real sign-in.
+    func debugExpireAccessToken() { vault.set("0", for: Self.expiresAtKey) }
+    func debugBreakRefreshToken() { vault.set("invalid", for: Self.refreshTokenKey) }
+#endif
+
+    /// User profile decoded from the stored ID token (Auth0 user). In DEBUG, falls
+    /// back to the access token's `sub` claim when no ID token is present (headless
+    /// token injection, where only an access token may be available).
     func currentUser() -> AuthUser? {
-        guard let idToken = Keychain.get(Self.idTokenKey),
-              let payload = Self.decodeJWTPayload(idToken) else { return nil }
-        return AuthUser(
-            sub: payload["sub"] as? String ?? "",
-            email: payload["email"] as? String ?? "",
-            name: payload["name"] as? String ?? "",
-            picture: payload["picture"] as? String
-        )
+        if let idToken = vault.get(Self.idTokenKey),
+           let payload = Self.decodeJWTPayload(idToken) {
+            return AuthUser(
+                sub: payload["sub"] as? String ?? "",
+                email: payload["email"] as? String ?? "",
+                name: payload["name"] as? String ?? "",
+                picture: payload["picture"] as? String
+            )
+        }
+        #if DEBUG
+        if let accessToken = vault.get(Self.accessTokenKey),
+           let payload = Self.decodeJWTPayload(accessToken),
+           let sub = payload["sub"] as? String {
+            return AuthUser(
+                sub: sub,
+                email: payload["email"] as? String ?? "",
+                name: payload["name"] as? String ?? "",
+                picture: nil
+            )
+        }
+        #endif
+        return nil
     }
 
     // MARK: - Internals
@@ -167,10 +230,10 @@ final class Auth0Service: NSObject {
             .joined(separator: "&")
             .data(using: .utf8)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await send(request)
         guard let http = response as? HTTPURLResponse else { throw AuthError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
-            throw APIError(status: http.statusCode, message: String(data: data, encoding: .utf8) ?? "Token exchange failed")
+            throw APIError(status: http.statusCode, message: String(data: data, encoding: .utf8) ?? L("auth.tokenExchangeFailed"))
         }
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -187,10 +250,10 @@ final class Auth0Service: NSObject {
     }
 
     private func store(_ tokens: Tokens) {
-        Keychain.set(tokens.accessToken, for: Self.accessTokenKey)
-        Keychain.set(String(tokens.expiresAt.timeIntervalSince1970), for: Self.expiresAtKey)
-        if let refresh = tokens.refreshToken { Keychain.set(refresh, for: Self.refreshTokenKey) }
-        if let idToken = tokens.idToken { Keychain.set(idToken, for: Self.idTokenKey) }
+        vault.set(tokens.accessToken, for: Self.accessTokenKey)
+        vault.set(String(tokens.expiresAt.timeIntervalSince1970), for: Self.expiresAtKey)
+        if let refresh = tokens.refreshToken { vault.set(refresh, for: Self.refreshTokenKey) }
+        if let idToken = tokens.idToken { vault.set(idToken, for: Self.idTokenKey) }
     }
 
     private static func randomURLSafeString(length: Int) -> String {
@@ -217,13 +280,11 @@ final class Auth0Service: NSObject {
 
 extension Auth0Service: ASWebAuthenticationPresentationContextProviding {
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        // Must be a real window from the active scene — a bare ASPresentationAnchor()
-        // has no scene and the session can fail to present.
-        let window = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow }
-        return window ?? ASPresentationAnchor()
+        // Must be a real window from the active scene: without one the session can fail to present.
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) { return window }
+        guard let scene = scenes.first else { preconditionFailure("Sign-in always starts from a visible scene.") }
+        return ASPresentationAnchor(windowScene: scene)
     }
 }
 

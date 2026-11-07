@@ -1,0 +1,8 @@
+// Release configuration (Archive / TestFlight / App Store). Always production.
+#include "Environments/production.xcconfig"
+
+// Sign-in fails until the production iOS Auth0 app exists and its ID replaces this.
+AUTH0_CLIENT_ID = REPLACE_WITH_PROD_IOS_CLIENT_ID
+
+INFOPLIST_FILE = BuildSettings/Info-Release.plist
+CODE_SIGN_ENTITLEMENTS = BuildSettings/Release.entitlements
