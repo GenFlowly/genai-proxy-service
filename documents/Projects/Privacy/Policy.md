@@ -53,16 +53,16 @@ Your relationship with each provider is your own. Its terms and privacy policy a
 | **Start a chat** | The first message and the instruction's name, to create a title | Your primary provider: the one ranked priority 1 in Settings, or the first one you added if you haven't ranked any |
 | **Create or use an instruction** | The instruction's text, to suggest an icon and category | Your primary provider |
 | **Use memory** (on by default, with separate switches for learning from your chats and for using what it learned in replies) | After each reply, the latest messages in the conversation and the memories you already have, to learn new facts about you and update existing ones. Each memory is also indexed so it can be found, and while memory is on, each message you send is used to look up relevant memories. | Learning: your primary provider. Indexing and lookup: your embedding provider and your vector database. Memories used in a reply go to the provider you chat with: core memories in every conversation, others only when relevant, and a project's memories only in that project's conversations. |
-| **Turn on indexing** (off by default ⛔R8) | Your chats | Your embedding provider and your vector database, where the text is stored in readable form |
+| **Turn on indexing** (off by default) | Your chats | Your embedding provider and your vector database, where the text is stored in readable form |
 | **Search your content** | Your search words | Your embedding provider and your vector database |
 | **Use an assistant that can search the web**, if you connected a search key | Search terms written by the AI, which may reflect your conversation | Your web search provider (currently Tavily) |
 | **Connect your own tool, MCP server or API** | Inputs the AI writes for that tool, which may reflect your conversation | The service you connected |
 | **Use voice through the API** | Your audio and conversation context. Transcripts are saved as messages. | OpenAI or Google, using your key |
 | **Add or save a key** | One small test request. Embedding keys also get a one-character test about once a week to check which models they can use. | That provider |
 
-Unless you've connected a vector database and added an embedding key, nothing is sent for indexing. ⛔R6
+Unless you've connected a vector database and added an embedding key, nothing is sent for indexing.
 
-When a provider offers a per-request option not to store your content, we use it. ⛔R10
+When a provider offers a per-request option not to store your content, we use it.
 
 ### 1.3 Your API keys
 
@@ -115,7 +115,7 @@ Your search index lives in **your** vector database, not ours. When you delete s
 ### 1.6 Our commitments in BYOK mode
 
 1. We send your content only to services you have connected, for the purposes described above.
-2. Memory is on by default. You can turn off learning from your chats, and using what it learned in replies, each on its own. Indexing your chats for search is off until you turn it on. ⛔R8
+2. Memory is on by default. You can turn off learning from your chats, and using what it learned in replies, each on its own. Indexing your chats for search is off until you turn it on.
 3. Background tasks run only on your primary provider. If it fails, they don't move to another provider.
 4. We don't use our own provider accounts for your requests.
 5. We don't use your content to train AI models, and we don't sell it.
@@ -196,7 +196,7 @@ We don't ask you to provide sensitive information. If you include it in your con
 |---|---|
 | Provide the app: run your requests, store and show your content, keep you signed in | Performance of our contract with you |
 | Memory, which is on by default | Our legitimate interest in personalizing your replies. You can object by turning it off in Settings |
-| Provide optional features you turn on, such as indexing and web search | Your consent, which you can withdraw in Settings ⛔R8 |
+| Provide optional features you turn on, such as indexing and web search | Your consent, which you can withdraw in Settings |
 | Keep the service secure and reliable: fix errors, prevent abuse, monitor performance | Our legitimate interest in running a secure service |
 | Show you your usage and costs, and bill you in Pay-as-you-go | Performance of our contract |
 | Meet legal obligations | Legal obligation |
@@ -277,7 +277,7 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 | See, edit and delete what memory has learned, and see where each fact came from and which replies used it | The Memory page |
 | Turn memory off, or delete everything it has learned | Settings > Defaults > Learned facts |
 | Delete notes saved in earlier versions of the app | `[WHERE]` ⛔N1 |
-| Turn indexing off and remove indexed data | Settings ⛔R8 |
+| Turn indexing off and remove indexed data | Settings |
 | Delete all your API keys | Settings > Profile > Delete your data |
 | Stop sharing a conversation | Share menu |
 | Export your data | Settings ⛔R4 |
@@ -324,16 +324,13 @@ Email: `[PRIVACY EMAIL]`
 
 ## Appendix A: Publication gate
 
-**Delete before publishing.** Each row is a promise in the draft that production doesn't keep yet, as of 2026-11-06. To clear a row, ship the fix and verify it. To publish before a fix, replace the promise with the interim wording, which is accurate today.
+**Delete before publishing.** Each row is a promise in the draft that production doesn't keep yet, as of 2026-11-07. To clear a row, ship the fix and verify it. To publish before a fix, replace the promise with the interim wording, which is accurate today.
 
 | Marker | The draft promises | Today | Interim wording if publishing first |
 |---|---|---|---|
 | ⛔R1 | No content in logs | **Live since 2026-11-05** (PRs #331 and #332): the pipeline carries only IDs, and production workflow logs record errors without data. Since 2026-11-07 the trigger lambda also strips text from messages queued before the fix, so redriving the dead-letter queue is safe. Copies made before 2026-11-05 age out: CloudWatch and the dead-letter queue by 2026-11-12, and workflow history by 2027-02-04 unless an AWS support case shortens it. The Grafana role still has `CloudWatchReadOnlyAccess` (checked 2026-11-06). | "Content indexed before 6 November 2026 may remain in our background system's workflow history until 4 February 2027, when it is deleted automatically." After 2026-11-12 that is the only copy left. Also narrow the Grafana role. |
 | ⛔R2 | Public links reveal only messages and replies, hide your name, and aren't indexed | Not built (checked 2026-11-06). Trace data can reveal note, memory and past-chat text, your name and picture are shown, and `robots.txt` allows indexing. | "A public link can also reveal the AI's activity trace, which may include text from your notes, memories and earlier conversations, as well as your name and picture." **Fix this rather than publish that sentence.** |
 | ⛔R4 | Self-service export, and account deletion that also removes your sign-in | Deletion is live on the web (PR #334, 2026-11-06). The iOS app has it in its uncommitted build, and Apple requires it before release. Export doesn't exist. The Auth0 login survives deletion, because `AUTH0_MGMT_DOMAIN`, `AUTH0_MGMT_CLIENT_ID` and `AUTH0_MGMT_CLIENT_SECRET` aren't set in either GitHub environment (checked 2026-11-06). Check the open items under R3 and R4 in Recommendations.md before clearing this row. | "To get a copy of your data, contact `[PRIVACY EMAIL]`." For the login, adding the three secrets is the whole fix. Until then add: "Your sign-in record with Auth0 is deleted on request." |
-| ⛔R6 | Nothing is sent for indexing without both a vector database and an embedding key | In dev since 2026-11-07 (PR #338), not yet in production: flags on each profile gate chats, notes, instructions, memories and search, and the pipeline embeds nothing without a vector database. Live today: only chats are skipped, and only when no vector database is connected (PR #332). | "If you haven't connected a vector database, your chats aren't sent for indexing at all." |
-| ⛔R8 | Indexing off by default, with a switch | Built 2026-11-07, not yet deployed: "Index my chats" in Settings > Defaults > Search index, off until the user turns it on, and "Delete indexed chats". Live today: indexing starts on its own once a vector database is connected. | "If you connect a vector database, your chats are indexed automatically. There is no setting to turn this off yet." |
-| ⛔R10 | We use "don't store" options | Built 2026-11-07, not yet deployed: every OpenAI call sets `store=False`, and gpt-5 keeps its reasoning encrypted between tool rounds. Live today: OpenAI keeps Responses API state for 30 days. | Delete the sentence. Pay-as-you-go needs this fix too, unless OpenAI approves zero data retention, which forces `store` off. |
 | ⛔R11 | Key facts shown when adding a key | Not shown | Delete the sentence. **Keep the Voyage, Google, Tavily and DeepSeek examples.** |
 | ⛔R12 | Permission requested before first use | No consent step. **Apple requires this.** | Remove the sentence. Blocks the iOS release. |
 | ⛔R16 | Staff access is logged | No CloudTrail trail in production (checked 2026-11-06) | Delete "and is logged". |
@@ -346,12 +343,15 @@ Email: `[PRIVACY EMAIL]`
 | ⛔M1-M10 | All of Section 2 (Recommendations.md calls it Paid mode) | Pay-as-you-go doesn't exist. Before launch, choose the providers, turn on or apply for zero data retention, and set the opt-outs. The next table shows what each provider offers. | Omit Section 2, or publish it marked "coming soon" and keep the notice. |
 | ⛔M11 | Models that need retention are marked in the model picker | Not built. Some models can't run under zero data retention (see the next table). | Don't offer those models in Pay-as-you-go, or delete the sentence and name them in section 2.3. |
 
-**Cleared since the first draft**, each checked in production on 2026-11-06:
+**Cleared since the first draft**, each checked in production on 2026-11-06 (R6, R8 and R10 on 2026-11-07):
 
 - **R3 (delete):** Permanent delete of conversations went live with PR #334. Notes are covered by N1 instead.
 - **R5 (keys):** "Delete all API keys" went live with PR #334. Removing a single key is still not possible, but the draft no longer promises it.
 - **R7 (memory):** The switches went live with PR #332, and PR #335 hid "Learn from notes".
 - **R9 (background tasks):** They run on the priority-1 provider only, since PR #332.
+- **R6 (indexing):** Since PR #338, nothing is sent for indexing without both a vector database and an embedding key.
+- **R8 (indexing switch):** Since PR #339, chats are indexed only after the user turns on "Index my chats", and "Delete indexed chats" removes them.
+- **R10 (don't store):** Since PR #339, every OpenAI call sets `store=false`.
 
 ### Pay-as-you-go: zero data retention and training, by provider
 
@@ -375,7 +375,7 @@ Checked 2026-11-06 on each provider's own pages, except where marked "secondary"
 1. Turn ZDR on where it's self-serve: the xAI Console (Team Settings) and Bedrock (`data_retention_mode: none`). Apply for it with OpenAI, Anthropic, Mistral and Cohere, which grant it on request.
 2. Opt out of training wherever it's a setting: Voyage, Cohere, Mistral and Tavily.
 3. Use paid tiers only (M3).
-4. Set `store=false` on every OpenAI call (R10). Use only the endpoints ZDR covers.
+4. Every OpenAI call already sets `store=false` (R10, since 2026-11-07). Use only the endpoints ZDR covers.
 5. On Gemini, don't use grounding with Search or Maps, explicit caching or the Files API, or use Vertex AI with the exception.
 6. Record each provider's ZDR status and approval date, its retention without ZDR, and its training status. That record becomes the public sub-processor page.
 
