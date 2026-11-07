@@ -18,10 +18,10 @@ However, five problems mean an accurate privacy policy today would read badly, a
 | #   | Problem                                                                                                                                                                                                                                                                            | Why it matters                                                                                                        | Fix size                                   | Status                                                                                                                                                                                                                    |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **Full chat and note text is stored in production logs and queues.** Step Functions records it for up to 90 days, CloudWatch for 7 days and the dead-letter queue for 14 days. The queue held 381 messages when checked.                                                           | Contradicts the repo's own "no content in production logs" rule. A role set up for Grafana Cloud can read these logs. | Hours for logging, days to remove it fully | **Live since 2026-11-05** (PRs #331 and #332). Execution history from earlier runs keeps text until it ages out, by 2027-02-04. The trigger lambda got the fix on 2026-11-07 (see R1).                                                                                           |
-| 2   | **Public share links can expose private notes and memories.** Agent trace data goes to anonymous viewers with only one step type redacted.                                                                                                                                         | The most direct way a user could be harmed today.                                                                     | Under a day                                | Open                                                                                                                                                                                                                      |
+| 2   | **Public share links can expose private notes and memories.** Agent trace data goes to anonymous viewers with only one step type redacted.                                                                                                                                         | The most direct way a user could be harmed today.                                                                     | Under a day                                | **Accepted 2026-11-07**: you decided it isn't an issue, since users know what a public link shows. The published policy says what it shows. |
 | 3   | **Users can't delete things.** There is no delete for conversations or notes, no account deletion, no export, and no way to remove a stored API key. Archived chats can still be fed to AI providers.                                                                              | Required by Apple and by GDPR and CCPA. Most of the deletion code already exists on an unmerged branch.               | 1-2 weeks                                  | **Live since 2026-11-06** (PR #334): delete is permanent and everywhere for conversations, notes and accounts, and deleted content can't reach AI providers. Export is still open, and since PR #335 the apps can't delete old notes (Policy.md N1). |
 | 4   | **Data reaches more vendors than the user chose.** Memory is on with no off switch. Saving a note sends it to an AI provider. A chat with Claude can have its title and memory work sent to OpenAI.                                                                                | This is the biggest gap against the goal of "maximum privacy" in BYOK.                                                | Days                                       | **Live since 2026-11-05** (PR #332): memory switches (on by default), and background tasks run only on the priority-1 provider. A chat on another vendor still sends its title and memory work to that provider.          |
-| 5   | **Provider defaults are not disclosed.** Voyage, the embedding provider the setup wizard recommends, may train on content unless the user opts out, and opting out requires a payment method. OpenAI keeps Responses API state for 30 days because `store` is left at its default. | Users assume BYOK means their data is safe with vendors.                                                              | Days                                       | Open                                                                                                                                                                                                                      |
+| 5   | **Provider defaults are not disclosed.** Voyage, the embedding provider the setup wizard recommends, may train on content unless the user opts out, and opting out requires a payment method. OpenAI keeps Responses API state for 30 days because `store` is left at its default. | Users assume BYOK means their data is safe with vendors.                                                              | Days                                       | OpenAI's part is fixed (R10, live since 2026-11-07). Showing provider defaults in the app (R11) is **deferred** (2026-11-07). |
 
 **Recommended order:** do the config-only fixes in Phase 0 this week, ship the Phase 1 product changes, then publish the policy. Section 8 has the sequence and section 9 lists the decisions I need from you.
 
@@ -294,7 +294,7 @@ The production DLQ held **381 messages** when checked. I read the count only. Ea
   - Old execution history: it still holds text until it ages out, by 2027-02-04.
   - Email ingestion: it has no source table, so it still carries its text (see R25).
 
-### R2. Public share links can expose private notes, memories and identity
+### R2. Public share links can expose private notes, memories and identity (accepted 2026-11-07)
 
 **What happens.** `GET /api/v1/chat` works without login for publicly shared conversations (`GetConversationActivity.kt:25,65`). The response includes thinking steps, but only steps with `kind == "MEMORY"` are redacted for other viewers (`MemoryRedaction.kt:25,51`, `ConversationService.kt:160`).
 
@@ -321,6 +321,8 @@ Search engines aren't told to stay away either. `robots.txt` allows all pages, a
 6. Consider removing the **Edit** option for public links (`ShareModal.tsx:172-173`). Today it lets any signed-in stranger with the link add to the conversation, and continuing it sends the history to that person's AI provider.
 
 **Effort:** S.
+
+**Status (2026-11-07): accepted, not fixed.** You decided this isn't an issue: users know what a public link shows. The published policy now says so. A public link shows the conversation's messages and replies, the AI's activity trace (which can include text from notes, memories and earlier conversations it looked up), and the author's name and picture, and search engines may index it.
 
 ### R3. There was no way to delete a conversation or a note (fix live 2026-11-06, except old notes)
 
@@ -507,7 +509,7 @@ Memory is the most sensitive feature in the app: it builds a profile of the user
 - **Not yet checked against the live API.** There was no OpenAI key to test with. Run one gpt-5 chat that calls a tool. The production retrieval server's recent warnings showed no `store` errors after the deploy, but that buffer was short.
 - OpenAI's abuse logs (up to 30 days) still apply, so the policy still can't claim zero retention.
 
-### R11. Provider defaults are not disclosed
+### R11. Provider defaults are not disclosed (deferred 2026-11-07)
 
 **What happens.** The setup wizard describes Voyage only as generating "the embeddings used to index and search your conversations and notes", and invites users to create a key (`translation.json:522-525`). Nothing mentions that its terms grant a perpetual licence to train on that content unless they opt out, that opting out needs a payment method, or that the opt-out isn't retroactive. [vendor]
 
@@ -524,7 +526,9 @@ Voyage batch files also stay on Voyage's side for about 30 days, because `voyage
 
 **Effort:** S to M.
 
-### R12. There is no privacy policy, terms page or consent step
+**Status (2026-11-07): deferred, your call.** The published policy no longer says the app shows key facts when a key is added. It keeps the Voyage, Google, Tavily and DeepSeek examples and each provider's privacy links. Voyage batch files (step 4) still aren't deleted.
+
+### R12. There is no privacy policy, terms page or consent step (privacy policy page built 2026-11-07)
 
 **What happens.** No privacy or terms route exists (`AppContent.tsx:69-81`). `genflowly.com/privacy` returns the app shell. [live] iOS has no privacy manifest.
 
@@ -541,6 +545,13 @@ Voyage batch files also stay on Voyage's side for about 30 days, because `voyage
 4. Add `PrivacyInfo.xcprivacy` and complete the App Privacy labels.
 
 **Effort:** S to M.
+
+**Status (2026-11-07): the privacy policy page is built**, at `/privacy-policy` rather than `/privacy`.
+
+- **The text** is `genai-react-app/public/privacy-policy.md`. It is Policy.md with Appendix A's interim wording for every marker still open, and Genflowly, Seattle and privacy@genflowly.com filled in. The web page renders it like a reply, and the iOS app fetches the same file, so both show one text.
+- **Where to find it.** It's public, so it opens signed out. On desktop, a footer on every page links to it. On phones, web and iOS, it's in the Settings menu above Log out.
+- **iOS** is built but uncommitted, like the rest of the iOS app.
+- **Still open:** `/terms`, the first-use consent step (step 3, which Apple requires), the iOS privacy manifest (step 4), and a lawyer's review.
 
 ---
 
@@ -752,7 +763,7 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Turn off Step Functions execution data (**live since 2026-11-05**), delete existing log streams, narrow the Grafana role | R1 | S |
 | Open the AWS support case to shorten execution history | R1 | S |
 | Skip indexing when no embedding key or vector DB exists. **Live since 2026-11-07** (entitlement flags, PR #338). | R6 | S |
-| Allow-list thinking-step fields for non-authors and hide identity | R2 | S |
+| Allow-list thinking-step fields for non-authors and hide identity. **Not doing (2026-11-07): users are aware, and the policy says what public links show.** | R2 | S |
 | Stop archived content reaching AI providers. **Live since 2026-11-06.** | R3 step 1 | S |
 | Set OpenAI `store=False`, after testing tool rounds. **Live since 2026-11-07** (PR #339); the live tool-round test is still open. | R10 | S |
 | Lock down CORS, add security headers | R13, R14 | S |
@@ -766,13 +777,13 @@ Paid mode changes the legal and practical picture. Requests run under **your** v
 | Indexing switches. **Chats: live since 2026-11-07** (PR #339). | R8 | M |
 | Pin background tasks to the priority-1 provider. **Live since 2026-11-05.** | R9 | S-M |
 | Remove keys (all at once: **live since 2026-11-06**; one at a time: open) | R5 | S |
-| Provider facts, Voyage acknowledgement, delete batch files | R11 | S-M |
+| Provider facts, Voyage acknowledgement, delete batch files. **Deferred (2026-11-07).** | R11 | S-M |
 | Real delete (permanent, no Trash: decided), purge jobs, scratch expiry, vector purge fix. **Live since 2026-11-06**; Lambda log retention (R18) open | R3, R18 | M-L |
 | Account deletion (**live since 2026-11-06**) and export (open) | R4 | M-L |
 | Send IDs instead of text through the pipeline. **Live since 2026-11-05**; the trigger lambda since 2026-11-07 (PR #337). | R1 step 3 | M |
 | Close the logging gaps | R19 | S |
-| `/privacy`, `/terms`, consent screen, iOS privacy manifest | R12 | S-M |
-| **Clear the gate in Policy.md, get legal review, publish** | | |
+| `/privacy-policy` **built 2026-11-07**; `/terms`, the consent screen and the iOS privacy manifest are open | R12 | S-M |
+| **Publish the policy.** Built 2026-11-07 with Appendix A's interim wording for every open marker. Legal review is still open. | | |
 
 ### Phase 2: the BYOK privacy lead
 
@@ -790,7 +801,7 @@ M1-M10, plus a rewrite of Section 2 of the policy against the vendors actually c
 
 | # | Question | My recommendation |
 |---|---|---|
-| Q1 | Legal entity, address, privacy contact, governing law, and target markets (EU, UK, California, India)? | Needed to complete the policy. Markets decide whether you need an EU or UK representative. |
+| Q1 | Legal entity, address, privacy contact, governing law, and target markets (EU, UK, California, India)? | **Partly answered 2026-11-07:** Genflowly, Seattle, privacy@genflowly.com. Governing law and target markets are still open; markets decide whether you need an EU or UK representative. |
 | Q2 | When memory becomes opt-in, what happens for existing users who have memories? | **Decided 2026-11-05:** memory stays on by default, with switches, so existing users keep it and nobody is asked. |
 | Q3 | When an account is deleted, what happens to conversations shared directly with others? | Delete them too, with public links always revoked. It's simpler and easier to explain. Recipients who forked keep their own copy, and the policy says so. |
 | Q4 | How long should Trash last? | 30 days, plus "Delete now". |

@@ -4,7 +4,7 @@
 // ── Desktop page shell ────────────────────────────────────────────────────────
 
 .page {
-    height: 100vh;
+    height: calc(100vh - var(--app-footer-height, 0px));
     overflow: hidden;
     background-color: $color-background;
     display: flex;
@@ -124,7 +124,7 @@
 // ── Mobile "needs a larger screen" notice ─────────────────────────────────────
 
 .mobilePage {
-    height: 100vh;
+    height: calc(100vh - var(--app-footer-height, 0px));
     overflow: hidden;
     background-color: $color-background;
     display: flex;

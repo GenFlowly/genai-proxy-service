@@ -4,7 +4,7 @@
 // ── Page shell ────────────────────────────────────────────────────────────────
 
 .page {
-    height: 100vh;
+    height: calc(100vh - var(--app-footer-height, 0px));
     overflow: hidden;
     background-color: $color-background;
     display: flex;

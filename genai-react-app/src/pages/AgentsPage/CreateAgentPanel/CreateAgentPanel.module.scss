@@ -4,7 +4,7 @@
 .panel {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 64px);
+    height: calc(100vh - 64px - var(--app-footer-height, 0px));
     background-color: $color-background;
     overflow: hidden;
 }
