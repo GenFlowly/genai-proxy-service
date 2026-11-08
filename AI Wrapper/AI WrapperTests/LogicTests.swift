@@ -1938,6 +1938,71 @@ struct MenuFlowTests {
         #expect(router.isAppMenuOpen)
         #expect(!router.isMobileMenuOpen)
     }
+
+    @Test func aPageFromTheL1MenuHasItsL2MenuWaitingUnderneath() {
+        let router = AppRouter()
+        router.openWithL2Menu(.memory)
+        #expect(router.l2MenuAppearsInPlace)
+    }
+
+    @Test func anL2MenuOpenedFromItsPageSlidesIn() {
+        let router = AppRouter()
+        router.openWithL2Menu(.chat)
+        router.isMobileMenuOpen = false
+
+        router.openPageMenu()
+
+        #expect(router.isMobileMenuOpen)
+        #expect(!router.l2MenuAppearsInPlace)
+    }
+
+    @Test func backToAnL2MenuWithNoL1MenuOverItSlidesIn() {
+        let router = AppRouter()
+        router.navigate(.privacyPolicy)
+
+        router.openWithL2Menu(.settings(.profile))
+
+        #expect(router.isMobileMenuOpen)
+        #expect(!router.l2MenuAppearsInPlace)
+    }
+
+    @Test(arguments: [
+        (AppRouter.Route.chat, MenuLayer.l2), (.memoryDetail("id"), .l2), (.settings(.tools), .l2),
+        (.instructions, .l1), (.instructionDetail("id"), .l1), (.newAgent, .l1),
+    ])
+    func anEdgeSwipeOnAPageOpensWhatItsHamburgerDoes(route: AppRouter.Route, menu: MenuLayer) {
+        let router = AppRouter()
+        router.navigate(route)
+        #expect(router.pageMenu == menu)
+
+        router.open(router.pageMenu)
+
+        #expect(router.isMobileMenuOpen == (menu == .l2))
+        #expect(router.isAppMenuOpen == (menu == .l1))
+    }
+}
+
+// MARK: - Edge swipe
+
+struct EdgeSwipeTests {
+    @Test func releasedPastAThirdOfTheScreenItGoesThrough() {
+        #expect(EdgeSwipeGesture.commits(translation: 140, velocity: 0, width: 402))
+        #expect(!EdgeSwipeGesture.commits(translation: 100, velocity: 0, width: 402))
+    }
+
+    @Test func aQuickFlickGoesThroughHoweverShort() {
+        #expect(EdgeSwipeGesture.commits(translation: 30, velocity: 900, width: 402))
+        #expect(!EdgeSwipeGesture.commits(translation: 30, velocity: 200, width: 402))
+    }
+
+    @Test func aFlickBackTowardTheEdgeCancelsIt() {
+        #expect(!EdgeSwipeGesture.commits(translation: 100, velocity: -600, width: 402))
+    }
+
+    /// Same strip as the web's EDGE_ZONE, so a swipe starts in the same place on both.
+    @Test func theSwipeStartsInTheSameStripAsOnTheWeb() {
+        #expect(EdgeSwipeGesture.edgeZone == 24)
+    }
 }
 
 /// L2-001: a search the API couldn't run reports why, so the app can say search isn't set up.

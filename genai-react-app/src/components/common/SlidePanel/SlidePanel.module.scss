@@ -1,0 +1,14 @@
+.panel {
+    position: fixed;
+    inset: 0;
+    // Falls off-screen at rest; while sliding it marks the menu's edge over the page
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.18);
+}
+
+.l2 {
+    z-index: 100; // Above page content and the MobileHeader overlay (z=50)
+}
+
+.l1 {
+    z-index: 101; // Above the L2 Menu, which can be open underneath
+}

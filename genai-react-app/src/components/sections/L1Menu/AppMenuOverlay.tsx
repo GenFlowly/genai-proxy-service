@@ -4,11 +4,13 @@ import { useAuth } from '../../../context/AuthContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { MenuLocationState } from '../../../hooks/useAppMenu'
 import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
+import { SlidePanel } from '../../common/SlidePanel/SlidePanel'
 import { L1Menu } from './L1Menu'
 
 /**
  * Acts on the menu requests in location state: shows the L1 Menu over the
- * current page and opens the L2 Menu of a page just arrived at.
+ * current page and opens the L2 Menu of a page just arrived at. On phones it
+ * also shows the L1 Menu that is the app's root, so leaving it slides it away.
  *
  * Must render after <Routes>. Pages collapse the left sidebar in a mount
  * effect, and sibling effects run in order, so this one has to run last.
@@ -22,6 +24,7 @@ export const AppMenuOverlay: React.FC = () => {
 
     const state = location.state as MenuLocationState | null
     const wantsL2Menu = !!state?.openMobileMenu
+    const isHome = location.pathname === '/'
 
     useEffect(() => {
         if (wantsL2Menu) setLeftSidebarExpanded(true)
@@ -37,5 +40,9 @@ export const AppMenuOverlay: React.FC = () => {
         return () => clearTimeout(timer)
     }, [wantsL2Menu, isOnboarding, navigate, location])
 
-    return isNarrow && state?.appMenu ? <L1Menu /> : null
+    return (
+        <SlidePanel layer="l1" open={isNarrow && (isHome || !!state?.appMenu)} appearInPlace={isHome}>
+            <L1Menu />
+        </SlidePanel>
+    )
 }

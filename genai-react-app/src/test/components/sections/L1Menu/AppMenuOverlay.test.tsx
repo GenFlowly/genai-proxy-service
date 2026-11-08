@@ -1,6 +1,6 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { Link, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import '@testing-library/jest-dom'
 import { AppMenuOverlay } from '../../../../components/sections/L1Menu/AppMenuOverlay'
 import { useAuth } from '../../../../context/AuthContext'
@@ -86,5 +86,23 @@ describe('AppMenuOverlay', () => {
         ;(useResponsiveBreakpoints as jest.Mock).mockReturnValue({ isNarrow: false })
         renderAt('/memory', { appMenu: true })
         expect(screen.queryByTestId('l1-menu')).not.toBeInTheDocument()
+    })
+
+    test('on phones it is also the app\'s root, so leaving the root takes it away', async () => {
+        render(
+            <MemoryRouter initialEntries={['/']}>
+                <Routes>
+                    <Route path="/" element={<Link to="/chat" data-testid="leave">Chat</Link>} />
+                    <Route path="*" element={<CollapsingPage />} />
+                </Routes>
+                <AppMenuOverlay />
+            </MemoryRouter>
+        )
+        expect(screen.getByTestId('l1-menu')).toBeInTheDocument()
+
+        fireEvent.click(screen.getByTestId('leave'))
+
+        await waitFor(() => expect(screen.queryByTestId('l1-menu')).not.toBeInTheDocument())
+        expect(screen.getByTestId('page')).toBeInTheDocument()
     })
 })

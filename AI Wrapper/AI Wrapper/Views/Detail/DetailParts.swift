@@ -198,6 +198,7 @@ struct DetailScaffold<Content: View>: View {
         }
         .statusBarBand()
         .background(AppTheme.background)
+        .edgeSwipeBack(backLabel == nil ? nil : onLeading)
     }
 }
 
