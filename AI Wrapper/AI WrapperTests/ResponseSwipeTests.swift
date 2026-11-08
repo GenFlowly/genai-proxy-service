@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import AI_Wrapper
 
@@ -12,6 +13,23 @@ struct ResponseSwipeTests {
         #expect(ResponseSwipeRules.neighbor(of: "A", in: vendors, side: .previous) == nil)
         #expect(ResponseSwipeRules.neighbor(of: nil, in: vendors, side: .next) == nil)
         #expect(ResponseSwipeRules.neighbor(of: "Z", in: vendors, side: .next) == nil)
+    }
+
+    @Test func theHintPeeksForwardUnlessThereIsNothingAhead() {
+        #expect(ResponseSwipeRules.hintSide(of: "A", in: vendors) == .next)
+        #expect(ResponseSwipeRules.hintSide(of: "B", in: vendors) == .next)
+        #expect(ResponseSwipeRules.hintSide(of: "C", in: vendors) == .previous)
+        #expect(ResponseSwipeRules.hintSide(of: "A", in: ["A"]) == nil)
+        #expect(ResponseSwipeRules.hintSide(of: nil, in: vendors) == nil)
+    }
+
+    @Test func theHintIsRememberedOnceSeen() throws {
+        let suite = "ResponseSwipeTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        #expect(!ResponseSwipeHint.wasSeen(in: defaults))
+        ResponseSwipeHint.markSeen(in: defaults)
+        #expect(ResponseSwipeHint.wasSeen(in: defaults))
     }
 
     @Test func aLoneResponseResistsAndCapsTheDrag() {

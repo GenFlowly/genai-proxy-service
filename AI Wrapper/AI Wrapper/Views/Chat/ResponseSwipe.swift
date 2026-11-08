@@ -13,11 +13,22 @@ enum ResponseSwipeRules {
     static let rubberBandFactor: CGFloat = 0.3
     static let rubberBandLimit: CGFloat = 64
     static let labelLinger: Duration = .seconds(1)
+    /// Lets the reader land on the response before anything moves on its own.
+    static let hintDelay: Duration = .milliseconds(800)
+    /// Far enough to show the next response's edge past the gap between cards.
+    static let hintDistance: CGFloat = 56
+    static let hintHold: Duration = .milliseconds(1260)
 
     static func neighbor(of current: String?, in vendors: [String], side: Side) -> String? {
         guard let current, let index = vendors.firstIndex(of: current) else { return nil }
         let target = index + (side == .next ? 1 : -1)
         return vendors.indices.contains(target) ? vendors[target] : nil
+    }
+
+    /// The hint peeks toward the next response, or back from the last one.
+    static func hintSide(of current: String?, in vendors: [String]) -> Side? {
+        if neighbor(of: current, in: vendors, side: .next) != nil { return .next }
+        return neighbor(of: current, in: vendors, side: .previous) != nil ? .previous : nil
     }
 
     static func rubberBand(_ dx: CGFloat) -> CGFloat {
@@ -27,6 +38,19 @@ enum ResponseSwipeRules {
 
     static func commits(dx: CGFloat, velocity: CGFloat, page: CGFloat) -> Bool {
         abs(dx) > page * commitFraction || (abs(velocity) > commitVelocity && velocity * dx > 0)
+    }
+}
+
+/// Whether this device has been shown that responses can be swiped.
+enum ResponseSwipeHint {
+    private static let key = "responseSwipeHintSeen"
+
+    static func wasSeen(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: key)
+    }
+
+    static func markSeen(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: key)
     }
 }
 
@@ -40,6 +64,7 @@ final class ResponseSwipeModel {
     var neighbor: Neighbor?
     var isDragging = false
     var isLabelVisible = false
+    var isShowingHint = false
 
     struct Neighbor: Equatable {
         let vendor: String
@@ -47,6 +72,7 @@ final class ResponseSwipeModel {
     }
 
     @ObservationIgnored private var hideLabel: Task<Void, Never>?
+    @ObservationIgnored private var hint: Task<Void, Never>?
 
     func showLabel() {
         hideLabel?.cancel()
@@ -60,6 +86,28 @@ final class ResponseSwipeModel {
             guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.2)) { self?.isLabelVisible = false }
         }
+    }
+
+    /// Slides aside by `distance` and back, unless a finger takes over first.
+    func runHint(distance: CGFloat) {
+        hint = Task { [weak self] in
+            await Task.yield()
+            withAnimation(.easeOut(duration: 0.32)) { self?.dx = distance }
+            try? await Task.sleep(for: ResponseSwipeRules.hintHold)
+            guard !Task.isCancelled, let self else { return }
+            withAnimation(.easeInOut(duration: 0.32), completionCriteria: .logicallyComplete) {
+                self.dx = 0
+            } completion: { [weak self] in
+                guard let self, !self.isDragging else { return }
+                self.neighbor = nil
+                self.hideLabelAfterLinger()
+            }
+        }
+    }
+
+    func cancelHint() {
+        hint?.cancel()
+        isShowingHint = false
     }
 
     /// Where a card sits while the finger holds the row: the incoming one a page to the side.
@@ -182,6 +230,7 @@ struct ResponseSwipeGesture: UIGestureRecognizerRepresentable {
 /// of the part of the response on screen. The header names the vendor for VoiceOver.
 struct ResponseSwipeLabel: View {
     let model: ResponseSwipeModel
+    let isNeighbor: Bool
     let vendor: AIVendor
     let modelName: String?
     let position: Int
@@ -227,6 +276,12 @@ struct ResponseSwipeLabel: View {
                     Text(L("conversation.response.onlyResponse"))
                         .webText(11, lineHeight: 13)
                         .foregroundStyle(AppTheme.textMuted)
+                        .padding(.top, 4)
+                }
+                if model.isShowingHint && !isNeighbor {
+                    Text(L("conversation.response.swipeHint"))
+                        .webText(12, 500, lineHeight: 16)
+                        .foregroundStyle(AppTheme.textPrimary)
                         .padding(.top, 4)
                 }
             }
