@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom'
 import { EdgeSwipeProvider, MenuLayer, useEdgeSwipePageAction } from '../../context/EdgeSwipeContext'
 import { SlidePanel } from '../../components/common/SlidePanel/SlidePanel'
 import { useLayout } from '../../context/LayoutContext'
+import { MenuLocationState, OPEN_L2_MENU_STATE } from '../../hooks/useAppMenu'
 import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 
 jest.mock('../../context/LayoutContext', () => ({ useLayout: jest.fn() }))
@@ -27,13 +28,14 @@ const LocationProbe = () => {
 interface PageProps {
     menuLayer?: MenuLayer
     backTo?: string
+    backState?: MenuLocationState
     isL2Open?: boolean
     children?: React.ReactNode
 }
 
 /** A page whose header registers its top-left button, with its L2 Menu. */
-const Page = ({ menuLayer = 'l2', backTo, isL2Open = false, children }: PageProps) => {
-    useEdgeSwipePageAction(menuLayer, backTo)
+const Page = ({ menuLayer = 'l2', backTo, backState, isL2Open = false, children }: PageProps) => {
+    useEdgeSwipePageAction(menuLayer, backTo ? { to: backTo, state: backState } : undefined)
     return (
         <div data-testid="page">
             {children}
@@ -167,6 +169,14 @@ describe('EdgeSwipeProvider', () => {
         expect(screen.getByTestId('location')).toHaveTextContent('/memory/m1')
         expect(mockSetLeftSidebarExpanded).not.toHaveBeenCalled()
         expect(screen.queryByTestId('l2-menu')).not.toBeInTheDocument()
+    })
+
+    test('going back can arrive with a menu request, to land on the menu the page was opened from', () => {
+        renderApp(<Page backTo="/settings/profile" backState={OPEN_L2_MENU_STATE} />)
+
+        swipe(screen.getByTestId('page'), [[4, 300], slowly(60), slowly(200)])
+
+        expect(screen.getByTestId('location')).toHaveTextContent('/settings/profile {"openMobileMenu":true}')
     })
 
     test('a short swipe on a page with a Back link stays put', () => {

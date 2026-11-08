@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Breadcrumbs, Icon, ScrollArea, pageHeaderStyles } from '@genflowly/component-library'
 import Navbar from '../navbar/Navbar'
 import MobileHeader, { MobileHeaderMenuItem } from '../widgets/MobileHeader/MobileHeader'
+import { SwipeBack } from '../../context/EdgeSwipeContext'
 import { ICONS } from '../../constants/icons'
 import { DiffPart, wordDiff } from '../../utils/wordDiff'
 import styles from './DetailPage.module.scss'
@@ -26,6 +27,8 @@ interface DetailShellProps {
     actions?: React.ReactNode
     /** Phone only: a link back to the parent page, above the content. */
     back?: { label: string; to: string }
+    /** Where a swipe from the left edge goes on a page without a Back link. */
+    swipeBack?: SwipeBack
     narrow: boolean
     children: React.ReactNode
     'data-testid'?: string
@@ -33,7 +36,7 @@ interface DetailShellProps {
 
 /** The detail pages' frame: the phone header or the desktop navbar and breadcrumb band, then the scrolling content. */
 export function DetailShell({
-    title, subtitle, menuItems, menuTitle, menuContent, breadcrumbs, actions, back, narrow, children, 'data-testid': testId,
+    title, subtitle, menuItems, menuTitle, menuContent, breadcrumbs, actions, back, swipeBack, narrow, children, 'data-testid': testId,
 }: DetailShellProps): React.ReactElement {
     return (
         <div className={styles.page}>
@@ -44,7 +47,7 @@ export function DetailShell({
                     menuItems={menuItems}
                     menuTitle={menuTitle}
                     menuContent={menuContent}
-                    swipeBackTo={back?.to}
+                    swipeBack={back ? { to: back.to } : swipeBack}
                 />
             ) : (
                 <>

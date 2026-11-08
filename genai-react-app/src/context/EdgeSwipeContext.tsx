@@ -6,8 +6,14 @@ import { useResponsiveBreakpoints } from '../hooks/useResponsiveBreakpoints'
 
 export type MenuLayer = 'l1' | 'l2'
 
+/** Where a page's Back goes, and the menu request it arrives with. */
+export interface SwipeBack {
+    to: string
+    state?: MenuLocationState
+}
+
 /** What the page's top-left button does, which a swipe from the left edge stands in for. */
-export type PageSwipeAction = { kind: 'menu'; layer: MenuLayer } | { kind: 'back'; to: string }
+export type PageSwipeAction = { kind: 'menu'; layer: MenuLayer } | ({ kind: 'back' } & SwipeBack)
 
 /** Where a swipe has to start: the strip along the left edge of the screen. */
 export const EDGE_ZONE = 24
@@ -35,7 +41,7 @@ interface Swipe {
     startX: number
     startY: number
     target: Element
-    action: { kind: 'drag'; layer: MenuLayer } | { kind: 'back'; to: string }
+    action: { kind: 'drag'; layer: MenuLayer } | ({ kind: 'back' } & SwipeBack)
     isClaimed: boolean
     dx: number
     lastX: number
@@ -68,9 +74,9 @@ function canScrollBack(target: Element): boolean {
 }
 
 /**
- * Below isNarrow, a swipe from the left edge does what the top-left button
- * does: on a page it opens the page's L2 Menu (or the L1 Menu, or goes back),
- * on the L2 Menu it opens the L1 Menu. Menus follow the finger; released early
+ * Below isNarrow, a swipe from the left edge opens the page's L2 Menu (or the
+ * L1 Menu when it has none), or goes back on a page nested under another. On
+ * the L2 Menu it opens the L1 Menu. Menus follow the finger; released early
  * they slide back.
  */
 export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.ReactElement {
@@ -178,7 +184,7 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
 
             const { location: here, navigate: go, setLeftSidebarExpanded: setL2Open } = latest.current
             if (current.action.kind === 'back') {
-                if (commits) go(current.action.to)
+                if (commits) go(current.action.to, { state: current.action.state })
                 return
             }
             if (commits) {
@@ -224,13 +230,15 @@ export function useEdgeSwipe(): EdgeSwipeContextValue {
 }
 
 /**
- * Tells the edge swipe what the page's top-left button does: open a menu, or
- * go back when the page has a Back link.
+ * Tells the edge swipe what to do on this page: open a menu, or go back when
+ * the page is nested under another.
  */
-export function useEdgeSwipePageAction(menuLayer: MenuLayer, backTo?: string): void {
+export function useEdgeSwipePageAction(menuLayer: MenuLayer, back?: SwipeBack): void {
     const { registerPageAction } = useEdgeSwipe()
+    const backTo = back?.to
+    const backState = back?.state
     useEffect(
-        () => registerPageAction(backTo ? { kind: 'back', to: backTo } : { kind: 'menu', layer: menuLayer }),
-        [registerPageAction, menuLayer, backTo]
+        () => registerPageAction(backTo ? { kind: 'back', to: backTo, state: backState } : { kind: 'menu', layer: menuLayer }),
+        [registerPageAction, menuLayer, backTo, backState]
     )
 }

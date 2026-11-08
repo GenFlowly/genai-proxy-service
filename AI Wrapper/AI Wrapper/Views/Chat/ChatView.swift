@@ -116,7 +116,11 @@ struct ChatView: View {
             #if DEBUG
             .modifier(DebugConversationScroll())
             #endif
-            .simultaneousGesture(DragGesture(minimumDistance: 1).onChanged { _ in followPaused = true })
+            // A drag gesture here would take every swipe that starts on a message, the one from the
+            // left edge that opens the menus included.
+            .onScrollPhaseChange { _, phase in
+                if phase == .interacting { followPaused = true }
+            }
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height < 50
             } action: { _, nearBottom in
