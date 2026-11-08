@@ -8,7 +8,7 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
 | [MEM-002](#mem-002) | Medium | Fixed (in code) | Backend | The model's memory search fails on every call |
 | [MEM-003](#mem-003) | Low | Open | Backend | Every memory write forces a vector-store flush |
 | [MEM-004](#mem-004) | Low | Open | Backend | An earlier reply's learning indicator can be left pending |
-| [MEM-005](#mem-005) | Low | Fixed on web; iOS open | Both | A save conflict tells you to reload, but the page has already reloaded |
+| [MEM-005](#mem-005) | Low | Fixed | Both | A save conflict tells you to reload, but the page has already reloaded |
 | [MEM-006](#mem-006) | Low | Fixed (verified live) | Web | The shared-memory delete dialog's three buttons wrap untidily |
 | [MEM-007](#mem-007) | Medium | Won't fix (user, 2026-11-06) | Backend | Memories never get vectors when the conversations embedding model is multimodal |
 | [MEM-008](#mem-008) | High | Fixed (verified live) | Backend | No use of a memory was ever recorded: no usage rows, hit counter stuck at 0 |
@@ -16,10 +16,10 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
 | [MEM-010](#mem-010) | Medium | Fixed (verified live) | Both | After a conversation is deleted, "Used N×" stays but the usage log says "Not used in any reply yet" |
 | [MEM-011](#mem-011) | Low | Fixed | Web | AI Settings still says the priority 1 provider writes "note titles" |
 | [MEM-012](#mem-012) | Low | Fixed (verified live) | Web | Delete in the mobile actions sheet isn't red |
-| [MEM-013](#mem-013) | Low | Fixed on web; iOS open | Both | A version you added by hand says "Edited by you" |
-| [MEM-014](#mem-014) | Low | Open | iOS | Delete in the iOS actions sheet uses an archive icon |
-| [MEM-015](#mem-015) | Low | Open | iOS | New memory: Save sits half under the keyboard, and there's no Cancel |
-| [MEM-016](#mem-016) | Low | Open | iOS | Small differences from the web on the Memory screens |
+| [MEM-013](#mem-013) | Low | Fixed (iOS by test; screen check pending) | Both | A version you added by hand says "Edited by you" |
+| [MEM-014](#mem-014) | Low | Fixed (screen check pending) | iOS | Delete in the iOS actions sheet uses an archive icon |
+| [MEM-015](#mem-015) | Low | Fixed (verified on the simulator) | iOS | New memory: Save sits half under the keyboard, and there's no Cancel |
+| [MEM-016](#mem-016) | Low | Fixed (partly verified; rest needs sign-in) | iOS | Small differences from the web on the Memory screens |
 
 ## MEM-001
 
@@ -80,7 +80,7 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
 - **Cause:** `MemoryDetailPage.tsx:116-118` refetches on 409 (iOS `MemoryDetailView.save()` does the same); the `memoryPage.detail.conflict` string predates that.
 - **Caused by this work.**
 - **Fixed on web, 2026-11-06:** it now says "A newer version was saved while you were editing. It's listed now, and your text is still here." `MemoryDetailPage.test.tsx` asserts it.
-- **iOS:** same wording problem in `Localizable.strings` (`memoryPage.detail.conflict`). I changed it and then put it back, because iOS fixes wait for your go-ahead.
+- **iOS fixed, 2026-11-06 (user: "fix them"):** `Localizable.strings` has the same new wording. iOS also reloads on 409 and keeps the draft.
 
 ## MEM-006
 
@@ -175,7 +175,7 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
 - **Cause:** `versionAuthor` (web `memoryLabels.ts`, iOS `MemoryLabels.versionAuthor`) mapped both `ADDED_BY_YOU` and `EDITED_BY_YOU` to `memoryPage.versions.byYou` = "Edited by you". My own test asserted the wrong text.
 - **Caused by this work.**
 - **Fixed on web, 2026-11-06:** the versions list uses `changeTitle`, which already words every change type, and the unused `byYou` key is gone. New test "each version says how it was made" covers Added by you, Edited by you and Updated from a conversation.
-- **iOS:** open, waiting for your go-ahead (same one-line change in `MemoryLabels`).
+- **iOS fixed, 2026-11-06:** the versions list uses `MemoryLabels.changeTitle`; `versionAuthor` and the `memoryPage.versions.byYou` string are gone. Test `eachVersionSaysHowItWasMade` passes.
 
 ## MEM-014
 
@@ -183,7 +183,8 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
 
 - **Where:** iOS Memory list › card ⋮ › Delete (`MemoryPageView.swift:150`, icon `archive`).
 - **Expected:** the trash icon, as on the web (`ICONS.TRASH`). Deleting is permanent, so an archive box suggests the wrong thing.
-- **Caused by this work.** Open, waiting for your go-ahead.
+- **Caused by this work.**
+- **Fixed, 2026-11-06:** the icon is `trash` now. Another session made that change while swapping archive icons for trash app-wide, and it also removed `archive.imageset`. Not yet seen on screen: the simulator app was signed out.
 
 ## MEM-015
 
@@ -191,7 +192,12 @@ Severity: High, Medium, Low. Status: Open, Fix planned, Fixed (in code, unit-tes
 
 - **Steps:** iOS › Memory › Add memory, tap the text box.
 - **Actual:** with the keyboard up, only the top edge of Save memory shows above it; the field's return key adds a new line, so there's no obvious way to reach Save without dismissing the keyboard. The web page has Cancel beside Save; iOS has Save only.
-- **Caused by this work.** Open, waiting for your go-ahead.
+- **Caused by this work.**
+- **Fixed, 2026-11-06:** Cancel and Save sit side by side under the text box, like the web. When the keyboard opens, the form scrolls them just above it.
+- **Verified on the simulator:**
+  - the buttons stay visible above the keyboard;
+  - Save turns on after typing;
+  - Cancel goes back to the list.
 
 ## MEM-016
 
@@ -205,4 +211,14 @@ Each was checked against the web at 390px:
 - New memory puts "Applies in" inside the field; the web labels it above.
 - "Not used in a reply yet" sits on its own line under Applies in; the web puts it on the same row.
 
-**Caused by this work.** Open, waiting for your go-ahead.
+**Caused by this work.**
+
+**Fixed, 2026-11-06:**
+- **Card menu:** three horizontal dots, drawn to the web's `KebabIcon` geometry.
+- **Card dates:** "Nov 6, 2026", like `formatServerDateOnly`. The change log's "History before …" note shows the year too. Test `memoryDatesIncludeTheYear` passes.
+- **Log tabs:** underlined, as on the web. The tabs split the width equally, 44pt tall, Roboto 14 (600 when chosen, 500 otherwise). The chosen tab has a 2pt primary underline over a 1pt rule, and the counts sit in grey pills.
+- **New memory:** "Applies in" is a label above a 48pt dropdown with radius 10. Field labels are 600 weight, as on the web.
+- **Detail page:** "Applies in", the tags, then the usage text at the far end of one row. When that doesn't fit, the usage text moves to its own line, as the web's wrap does.
+- **Found while fixing:** the web detail page on a phone shows Delete and Save as centred pills; iOS had a full-width Save only. iOS now shows both.
+
+**Checked so far:** only the New memory screen, on the simulator. The list, detail page and actions sheet need a signed-in app, and the simulator app was signed out.
