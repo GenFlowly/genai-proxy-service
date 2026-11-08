@@ -34,6 +34,10 @@ export interface OnboardCustomerResponse {
     }[]
     /** False only for an account that has never dismissed the first-time setup wizard */
     onboardingCompleted: boolean
+    /** True until the customer agrees to the AI data consent screen; absent = don't ask */
+    aiDataConsentRequired?: boolean
+    /** When the customer last agreed, ISO-8601 UTC */
+    aiDataConsentAt?: string | null
     /**
      * Monotonic per-resource counters bumped on every server-side mutation.
      * A cached resource whose stored counter matches the current one is

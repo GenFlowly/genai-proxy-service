@@ -1,6 +1,7 @@
 package com.genflowly.activity.customer
 
 import com.genflowly.Routes
+import com.genflowly.models.api.AiDataConsentResponse
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.SuccessResponse
 import com.genflowly.models.api.UpdateUsernameRequest
@@ -137,6 +138,35 @@ fun Route.registerCustomerProfileSettingsRoutes(
                 call.respond(HttpStatusCode.OK, mapOf("success" to true))
             } catch (e: Exception) {
                 logger.error("Failed to complete onboarding", e)
+                call.respond(HttpStatusCode.InternalServerError)
+            }
+        }
+
+        post(Routes.AI_DATA_CONSENT, {
+            tags("Customer")
+            summary = "Agree to the AI data consent screen"
+            description = "Records that the customer agreed to the current version of the screen that says " +
+                    "what is sent to third-party services and who receives it. " +
+                    "Web-app only: requires an Auth0 JWT; not accessible with a developer API key."
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "Agreement recorded"
+                    body<AiDataConsentResponse>()
+                }
+                code(HttpStatusCode.InternalServerError) {
+                    description = "Unexpected server error"
+                }
+            }
+        }) {
+            val principal = call.principal<JWTPrincipal>()
+            val sub = principal?.payload?.subject ?: return@post call.respond(HttpStatusCode.Unauthorized)
+            val client = "REACT_APP"
+
+            try {
+                val acceptedAt = customerProfileService.acceptAiDataConsent(sub, client)
+                call.respond(HttpStatusCode.OK, AiDataConsentResponse(aiDataConsentAt = acceptedAt))
+            } catch (e: Exception) {
+                logger.error("Failed to record AI data consent", e)
                 call.respond(HttpStatusCode.InternalServerError)
             }
         }

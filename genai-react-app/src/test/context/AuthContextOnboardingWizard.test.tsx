@@ -7,7 +7,7 @@ import { LayoutProvider } from '../../context/LayoutContext'
 import { MOCK_USER } from '../fixtures/auth0'
 import { mockOnboardResponse } from '../fixtures/customerProfile'
 import { onboardCustomer } from '../../services/onboardUserService'
-import { completeOnboarding as completeOnboardingRequest } from '../../services/userService'
+import { acceptAiDataConsent as acceptAiDataConsentRequest, completeOnboarding as completeOnboardingRequest } from '../../services/userService'
 
 const mockUseAuth0 = jest.fn()
 jest.mock('@auth0/auth0-react', () => ({
@@ -22,6 +22,7 @@ jest.mock('../../services/onboardUserService', () => ({
 jest.mock('../../services/userService', () => ({
     ...jest.requireActual('../../services/userService'),
     completeOnboarding: jest.fn(),
+    acceptAiDataConsent: jest.fn(),
 }))
 
 jest.mock('../../services/instructionService', () => ({
@@ -29,7 +30,7 @@ jest.mock('../../services/instructionService', () => ({
 }))
 
 function TestOnboardingState() {
-    const { onboardingCompleted, completeOnboarding } = useAuth()
+    const { onboardingCompleted, completeOnboarding, aiDataConsentRequired, aiDataConsentAt, acceptAiDataConsent } = useAuth()
     const [error, setError] = React.useState<string | null>(null)
     return (
         <div>
@@ -44,6 +45,17 @@ function TestOnboardingState() {
                 Complete
             </button>
             <div data-testid="complete-onboarding-error">{error ?? ''}</div>
+            <div data-testid="consent-required">{String(aiDataConsentRequired)}</div>
+            <div data-testid="consent-at">{aiDataConsentAt ?? ''}</div>
+            <button
+                data-testid="accept-consent-btn"
+                onClick={() => {
+                    setError(null)
+                    acceptAiDataConsent().catch(err => setError(err.message))
+                }}
+            >
+                Agree
+            </button>
         </div>
     )
 }
@@ -71,6 +83,51 @@ describe('AuthContext onboarding wizard state', () => {
             getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
             logout: jest.fn(),
         })
+    })
+
+    test('aiDataConsentRequired follows /onboard', async () => {
+        (onboardCustomer as jest.Mock).mockResolvedValue({ ...mockOnboardResponse, aiDataConsentRequired: true })
+
+        renderWithProvider()
+
+        await waitFor(() => expect(screen.getByTestId('consent-required')).toHaveTextContent('true'))
+    })
+
+    test('a backend that omits the field never asks', async () => {
+        (onboardCustomer as jest.Mock).mockResolvedValue({ ...mockOnboardResponse })
+
+        renderWithProvider()
+
+        await waitFor(() => expect(onboardCustomer).toHaveBeenCalled())
+        await waitFor(() => expect(screen.getByTestId('onboarding-completed-value')).toHaveTextContent('true'))
+        expect(screen.getByTestId('consent-required')).toHaveTextContent('false')
+    })
+
+    test('acceptAiDataConsent() records the agreement and lifts the gate', async () => {
+        (onboardCustomer as jest.Mock).mockResolvedValue({ ...mockOnboardResponse, aiDataConsentRequired: true })
+        ;(acceptAiDataConsentRequest as jest.Mock).mockResolvedValue('2026-11-08T21:00:00Z')
+
+        renderWithProvider()
+        await waitFor(() => expect(screen.getByTestId('consent-required')).toHaveTextContent('true'))
+
+        act(() => { screen.getByTestId('accept-consent-btn').click() })
+
+        await waitFor(() => expect(screen.getByTestId('consent-required')).toHaveTextContent('false'))
+        expect(acceptAiDataConsentRequest).toHaveBeenCalledWith('token')
+        expect(screen.getByTestId('consent-at')).toHaveTextContent('2026-11-08T21:00:00Z')
+    })
+
+    test('acceptAiDataConsent() keeps the gate up when the backend call fails', async () => {
+        (onboardCustomer as jest.Mock).mockResolvedValue({ ...mockOnboardResponse, aiDataConsentRequired: true })
+        ;(acceptAiDataConsentRequest as jest.Mock).mockRejectedValue(new Error('network down'))
+
+        renderWithProvider()
+        await waitFor(() => expect(screen.getByTestId('consent-required')).toHaveTextContent('true'))
+
+        act(() => { screen.getByTestId('accept-consent-btn').click() })
+
+        await waitFor(() => expect(screen.getByTestId('complete-onboarding-error')).toHaveTextContent('network down'))
+        expect(screen.getByTestId('consent-required')).toHaveTextContent('true')
     })
 
     test('onboardingCompleted reflects false for a brand-new account', async () => {

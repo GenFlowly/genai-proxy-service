@@ -5,6 +5,7 @@ import com.genflowly.activity.search.respondSearchFailure
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.GetCustomerInstructionListResponse
 import com.genflowly.models.api.SearchErrorResponse
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.getAuthenticatedCustomerId
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.InstructionService
@@ -71,6 +72,7 @@ fun Route.registerSearchInstructionsRoutes(
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Customer profile not found"))
                     return@get
                 }
+                if (!call.ensureAiDataConsent(customerProfileService)) return@get
                 val query = call.request.queryParameters["q"] ?: ""
 
                 val response = instructionService.searchInstructions(customerId, query)

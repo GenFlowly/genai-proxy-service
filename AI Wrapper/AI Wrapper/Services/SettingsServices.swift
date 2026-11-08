@@ -253,4 +253,9 @@ enum OnboardingService {
     static func completeOnboarding(token: String) async throws {
         _ = try await APIClient.request(Endpoints.completeOnboarding, method: .post, token: token)
     }
+
+    /// Records agreement to the AI data consent screen and returns when, ISO-8601 UTC.
+    static func acceptAiDataConsent(token: String) async throws -> String {
+        try await APIClient.requestJSON(Endpoints.aiDataConsent, method: .post, token: token, as: AiDataConsentResponse.self).aiDataConsentAt
+    }
 }

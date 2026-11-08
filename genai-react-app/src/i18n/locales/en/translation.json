@@ -775,6 +775,24 @@
             "back": "Memory"
         }
     },
+    "aiDataConsent": {
+        "title": "Your messages go to the AI you choose",
+        "intro": "Unbiase AI does not run its own models. Before your first message, here is where your data goes.",
+        "modelsTitle": "AI model providers",
+        "modelsBody": "Messages, photos and files you send go to the provider of the model you pick. Chat titles and memory use your primary provider. Always on your own API keys.",
+        "memoryTitle": "Memory and search",
+        "memoryBody": "When memory or chat indexing is on, conversation text goes to the embedding service and vector database you connected, on your own accounts. So do your search words. You can switch memory and indexing off in Settings.",
+        "webTitle": "Web search and connected tools",
+        "webBody": "When the model searches the web or uses a tool you connected, its search terms or tool inputs go to that service, on your own account.",
+        "note": "Each service handles your data under its own terms. See your connected services and review this any time in Settings.",
+        "privacyPolicy": "Privacy policy",
+        "agree": "Agree and continue",
+        "decline": "Not now, sign out",
+        "saveError": "Couldn't save that. Check your connection and try again.",
+        "settingsTitle": "AI data sharing",
+        "agreedOn": "You agreed on {{date}}.",
+        "manageServices": "Manage your connected services"
+    },
     "onboarding": {
         "stepLabel": "Step {{current}} of {{total}}",
         "back": "Back",

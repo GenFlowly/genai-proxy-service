@@ -10,7 +10,7 @@ import React, {
 import { useAuth0 } from '@auth0/auth0-react'
 import { AuthContextType, User } from '../types/auth.types'
 import { onboardCustomer } from '../services/onboardUserService'
-import { completeOnboarding as completeOnboardingRequest } from '../services/userService'
+import { acceptAiDataConsent as acceptAiDataConsentRequest, completeOnboarding as completeOnboardingRequest } from '../services/userService'
 import { CacheVersions, OnboardCustomerResponse } from '../models/onboardUser.models'
 import { AIVendorAPIKeyStatus } from '../models/storeCustomerVendorAPIKeys.models'
 import { InstructionResponse } from '../models/instruction.models'
@@ -66,6 +66,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     // setup wizard gate in AppContent — distinct from isOnboarding below, which
     // means "the /onboard sync call itself is in flight"
     const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null)
+    const [aiDataConsentRequired, setAiDataConsentRequired] = useState(false)
+    const [aiDataConsentAt, setAiDataConsentAt] = useState<string | null>(null)
     // Preferences and instructions live in module stores (not React state) so
     // mutation services write through to them; this context just subscribes.
     const aiConfigPreferences = useSyncExternalStore(subscribeAiPreferences, getAiPreferences)
@@ -207,6 +209,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
                             return JSON.stringify(prev) === JSON.stringify(fresh) ? prev : fresh
                         })
                         setOnboardingCompleted(onboardData.onboardingCompleted)
+                        setAiDataConsentRequired(onboardData.aiDataConsentRequired === true)
+                        setAiDataConsentAt(onboardData.aiDataConsentAt ?? null)
                     }
                     onboardFailedRef.current = false
                     console.log('User onboarded successfully');
@@ -348,6 +352,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         setOnboardingCompleted(true)
     }, [getAccessTokenSilently])
 
+    const acceptAiDataConsent = useCallback(async (): Promise<void> => {
+        const token = await getAccessTokenSilently()
+        setAiDataConsentAt(await acceptAiDataConsentRequest(token))
+        setAiDataConsentRequired(false)
+    }, [getAccessTokenSilently])
+
     const updateVectorDBConfigStatus = (status: StoreCustomerVectorDBConfigResponse['configStatus']) => {
         setVectorDBConfigStatusList(prev => {
             const index = prev.findIndex(s => s.vendor === status.vendor)
@@ -385,6 +395,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         isInstructionsLoaded,
         onboardingCompleted,
         completeOnboarding,
+        aiDataConsentRequired,
+        aiDataConsentAt,
+        acceptAiDataConsent,
         customerId,
         setCustomerId,
         loginWithRedirect,
