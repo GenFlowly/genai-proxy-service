@@ -4,6 +4,7 @@ APP_DISPLAY_NAME = Unbiase AI
 API_BASE_URL = https:/$()/api.genflowly.com
 WEB_APP_URL = https:/$()/genflowly.com
 ENCODE_API_URL = https:/$()/api-encode.genflowly.com
+SUPPORT_API_URL = https:/$()/njcnp6og90.execute-api.us-east-1.amazonaws.com/support
 AUTH0_DOMAIN = auth.genflowly.com
 AUTH0_AUDIENCE = https:/$()/api.genflowly.com
 AUTH0_CLIENT_ID = 7uXHWmLk1uPO3u5y98sKsNnYzCxCTTNX

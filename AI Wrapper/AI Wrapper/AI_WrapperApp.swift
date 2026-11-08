@@ -71,6 +71,7 @@ struct AI_WrapperApp: App {
                         case "connectors": router.navigate(.settings(.connectors))
                         case "developer": router.navigate(.settings(.developer))
                         case "privacy": router.navigate(.privacyPolicy)
+                        case "support": router.navigate(.support)
                         default: break
                         }
                     }

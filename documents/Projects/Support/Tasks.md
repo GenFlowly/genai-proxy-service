@@ -1,6 +1,6 @@
 # Support page
 
-`/support` on the web app: a form that emails the support inbox. It works signed out, because the App Store listing links to it as the Support URL (`https://genflowly.com/support`).
+`/support` on the web app: a form that emails the support inbox. Anyone can open the page, because the App Store listing links to it as the Support URL (`https://genflowly.com/support`), but only a signed-in user can send. Signed out, it shows a Sign in button and the support address for people who can't sign in.
 
 ## How it works
 
@@ -8,12 +8,12 @@
 |---|---|
 | Page | `genai-react-app/src/pages/SupportPage/` (route `/support`, public) |
 | Entry points | Desktop footer, desktop Settings sidebar (above Logout), phone Settings menu (with Privacy policy), Settings search |
-| Request | `genai-react-app/src/services/supportService.ts`, POST JSON, never retried |
-| API | `gen-ai-proxy-service-SupportStack` in `genai-proxy-server-cdk/lib/support-stack.ts`: HTTP API `POST /support`, no auth, CORS limited to the app's origins, stage throttle 1 request/s with bursts of 5 |
-| Handler | `genai-proxy-server-cdk/lambda/support/handler.py`: validates, drops honeypot hits, publishes plain text to SNS |
+| Request | `genai-react-app/src/services/supportService.ts`, POST JSON with the user's Auth0 access token, never retried |
+| API | `gen-ai-proxy-service-SupportStack` in `genai-proxy-server-cdk/lib/support-stack.ts`: HTTP API `POST /support` behind an Auth0 JWT authorizer (issuer `AUTH0_SPA_DOMAIN`, audience `AUTH0_API_AUDIENCE`, the tokens the web and iOS apps get), CORS limited to the app's origins, stage throttle 1 request/s with bursts of 5 |
+| Handler | `genai-proxy-server-cdk/lambda/support/handler.py`: refuses requests without a verified user, validates, drops honeypot hits, publishes plain text with the verified Auth0 user ID to SNS |
 | Email | SNS topic `gen-ai-proxy-service-<stage>-support-requests`, email subscription to `customer-support@genflowly.com` (`SUPPORT_EMAILS` in the support workflows) |
 | Deploy | `.github/workflows/dev-support-api.yml` / `prod-support-api.yml`, from its own CDK app entry `genai-proxy-server-cdk/bin/support.ts` so support changes don't redeploy the proxy; the web deploys read the URL from the stack's `SupportRequestUrl` output |
-| iOS | Settings menu row and search hit open the web page in an in-app browser with `?source=ios&appVersion=…` |
+| iOS | Native form, `AI Wrapper/Views/Support/SupportView.swift` (route `.support`), from the Settings menu row and search hit. `Services/SupportService.swift` posts to the same API with the app's own access token, never retried. The URL is `SUPPORT_API_URL` per stage in `BuildSettings/Environments/`, the stack's `SupportRequestUrl` output; if the API is ever recreated, update those files |
 
 Development emails carry `[development]` in the subject. Both stages send to the same inbox.
 
@@ -27,9 +27,10 @@ Development emails carry `[development]` in the subject. Both stages send to the
 ## Decisions
 
 - SNS email can't set Reply-To. The email's first header line is "Reply to: Name <address>" to copy from.
-- The account ID is what the app sends, not verified: the API has no auth so the form works signed out.
-- No CAPTCHA. A hidden field catches simple bots and the throttle bounds the rest. If spam arrives, add Cloudflare Turnstile.
-- iOS uses the web page instead of a native form, so the app needs no API URL and there is one form to maintain.
+- Sending needs sign-in (user's call, 2026-11-07, to stop anonymous spam). The email's "Signed in as" line is the Auth0 user ID API Gateway verified; the account ID next to it is still what the app sends.
+- The throttle is per stage, not per user: one signed-in account could still send a request a second. If that happens, add a per-user limit (a DynamoDB counter in the Lambda).
+- Signed-out visitors see the support address, for people locked out of their account and for App Review.
+- iOS has a native form (user's call, 2026-11-08). The app signs in separately from its in-app browser, so the web page would have asked people to sign in again. The web page still accepts `?source=ios&appVersion=…` for builds that open it.
 
 ## Verified (2026-11-07)
 
@@ -37,3 +38,9 @@ Development emails carry `[development]` in the subject. Both stages send to the
 - Web: page, service, sidebar and footer tests; coverage gate passed; CI build passed.
 - End to end locally: the real handler behind a local stand-in for API Gateway, the dev server at phone width: invalid email flagged on blur, send, confirmation, the email text, a failed send offering the address, desktop layout, desktop sidebar, phone Settings menu, dark mode.
 - Not exercised: the deployed API, real SNS delivery, the iOS row in the simulator (Settings needs a signed-in session).
+
+## Verified (2026-11-08, iOS native form)
+
+- 230 iOS unit tests, including the form's rules and the request's JSON.
+- Simulator, against the real `handler.py` behind a local stand-in for API Gateway that rejects requests without a token, with SNS stubbed: open from Settings, prefill, topic menu, send, the email text, Send another, a 502 (one attempt, error shown, nothing retried), sending again, invalid email, a long message staying above the keyboard, privacy link, swipe back, dark mode.
+- Not exercised: the deployed API, real SNS delivery, a real device.
