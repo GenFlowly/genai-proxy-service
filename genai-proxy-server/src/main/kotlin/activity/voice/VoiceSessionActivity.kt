@@ -3,6 +3,8 @@ package com.genflowly.activity.voice
 import com.genflowly.Routes
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.VoiceSessionService
+import com.genflowly.utils.authenticatedAzp
+import com.genflowly.utils.authenticatedSub
 import com.genflowly.utils.getAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.route
 import io.ktor.server.auth.authenticate
@@ -174,6 +176,11 @@ fun Route.registerVoiceSessionRoutes(
 
                 val customerId = clientSession.call.getAuthenticatedCustomerId(customerProfileService)
                     ?: return@webSocket reject("Customer profile not found")
+
+                val sub = clientSession.call.authenticatedSub()
+                if (sub != null && !customerProfileService.hasAiDataConsent(sub, clientSession.call.authenticatedAzp())) {
+                    return@webSocket reject("Agree to how your data is shared in the app to continue.")
+                }
 
                 val initText = (clientSession.incoming.receiveCatching().getOrNull() as? Frame.Text)
                     ?.readText()

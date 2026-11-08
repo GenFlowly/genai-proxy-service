@@ -3,6 +3,7 @@ package com.genflowly.activity.generation
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.utils.bearerToken
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -76,6 +77,7 @@ fun Route.registerGenerateTextRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(
                     customerProfileService
                 )
+                if (!call.ensureAiDataConsent(customerProfileService)) return@post
 
                 val client = request.client
 

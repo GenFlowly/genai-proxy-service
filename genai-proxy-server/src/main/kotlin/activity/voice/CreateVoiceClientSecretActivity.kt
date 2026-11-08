@@ -6,6 +6,7 @@ import com.genflowly.models.api.CreateVoiceClientSecretResponse
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.VoiceSessionService
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -59,6 +60,7 @@ fun Route.registerVoiceClientSecretRoutes(
         }) {
             val request = call.receive<CreateVoiceClientSecretRequest>()
             val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+            if (!call.ensureAiDataConsent(customerProfileService)) return@post
 
             if (request.model.isBlank() || request.instructions.isBlank()) {
                 call.respond(

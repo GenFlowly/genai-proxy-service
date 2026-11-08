@@ -328,6 +328,7 @@ struct SettingsSidebar: View {
 
 struct ProfileSettingsView: View {
     @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var router: AppRouter
 
     @State private var profile: CustomerProfileResponse?
     @State private var isLoading = true
@@ -419,9 +420,33 @@ struct ProfileSettingsView: View {
                 }
                 .padding(17)
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.borderLight, lineWidth: 1))
+
+                aiDataSharing
             }
 
             DeleteDataSettingsView()
+        }
+    }
+
+    private var aiDataSharing: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L("aiDataConsent.settingsTitle"))
+                    .webText(16, 500)
+                    .foregroundStyle(AppTheme.textPrimary)
+                if let agreedOn = AiDataConsentDate.display(auth.aiDataConsentAt) {
+                    Text(L("aiDataConsent.agreedOn", ["date": agreedOn]))
+                        .webText(14, lineHeight: 19.6)
+                        .foregroundStyle(AppTheme.textMuted)
+                }
+            }
+            AiDataConsentRows()
+            Button { router.navigate(.settings(.llmKeys)) } label: {
+                Text(L("aiDataConsent.manageServices"))
+                    .webText(14, 500)
+                    .foregroundStyle(AppTheme.primary)
+            }
+            .buttonStyle(WebPressStyle())
         }
     }
 

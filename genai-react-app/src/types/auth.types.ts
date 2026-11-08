@@ -34,6 +34,9 @@ export interface AuthContextType {
     // never dismissed the first-time setup wizard
     onboardingCompleted: boolean | null;
     completeOnboarding: () => Promise<void>;
+    aiDataConsentRequired: boolean;
+    aiDataConsentAt: string | null;
+    acceptAiDataConsent: () => Promise<void>;
     loginWithRedirect: (options?: any) => Promise<void>;
     logout: (options: { returnTo: string; localOnly?: boolean }) => void;
     getAccessTokenSilently: () => Promise<string>;

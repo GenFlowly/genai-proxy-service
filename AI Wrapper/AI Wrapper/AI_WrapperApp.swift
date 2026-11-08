@@ -106,6 +106,16 @@ struct AI_WrapperApp: App {
                             auth.onboardingCompleted = false
                         }
                     }
+                    if CommandLine.arguments.contains("--show-ai-consent") {
+                        Task { @MainActor in
+                            for _ in 0..<60 {
+                                try? await Task.sleep(nanoseconds: 200_000_000)
+                                if auth.isAuthenticated && !auth.isOnboarding { break }
+                            }
+                            try? await Task.sleep(nanoseconds: 400_000_000)
+                            auth.aiDataConsentRequired = true
+                        }
+                    }
                     if CommandLine.arguments.contains("--edit-first-agent") {
                         Task { @MainActor in
                             for _ in 0..<60 { if auth.isAuthenticated && !auth.isOnboarding { break }; try? await Task.sleep(nanoseconds: 200_000_000) }

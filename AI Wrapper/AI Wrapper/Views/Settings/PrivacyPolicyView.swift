@@ -5,6 +5,19 @@ import SwiftUI
 struct PrivacyPolicyView: View {
     @EnvironmentObject var router: AppRouter
 
+    var body: some View {
+        DetailScaffold(
+            title: L("privacyPolicy.title"),
+            backLabel: L("settingsPage.settingsSidebar.title"),
+            onLeading: { router.openWithL2Menu(.settings(.profile)) }
+        ) {
+            PrivacyPolicyContent()
+        }
+    }
+}
+
+/// The loaded policy, shared by the page and the consent screen's sheet.
+struct PrivacyPolicyContent: View {
     private enum Load: Equatable {
         case loading
         case loaded(String)
@@ -14,11 +27,7 @@ struct PrivacyPolicyView: View {
     @State private var load = Load.loading
 
     var body: some View {
-        DetailScaffold(
-            title: L("privacyPolicy.title"),
-            backLabel: L("settingsPage.settingsSidebar.title"),
-            onLeading: { router.openWithL2Menu(.settings(.profile)) }
-        ) {
+        Group {
             switch load {
             case .loading:
                 ProgressView()

@@ -21,6 +21,7 @@ import com.genflowly.service.MemoryConflictException
 import com.genflowly.service.MemoryNotFoundException
 import com.genflowly.service.MemoryRequestException
 import com.genflowly.service.MemoryService
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.config.RequestConfig
 import io.github.smiley4.ktoropenapi.config.ResponsesConfig
@@ -146,6 +147,7 @@ fun Route.registerMemoryRoutes(
         }) {
             call.handleMemoryErrors("add a memory") {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                if (!call.ensureAiDataConsent(customerProfileService)) return@handleMemoryErrors
                 val request = call.receive<CreateMemoryRequest>()
                 call.respond(HttpStatusCode.OK, MemoryResponse(memoryService.createMemory(customerId, request)))
             }
@@ -216,6 +218,7 @@ fun Route.registerMemoryRoutes(
         }) {
             call.handleMemoryErrors("edit a memory") {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                if (!call.ensureAiDataConsent(customerProfileService)) return@handleMemoryErrors
                 val request = call.receive<EditMemoryRequest>()
                 call.respond(HttpStatusCode.OK, MemoryResponse(memoryService.editMemory(customerId, call.memoryId(), request)))
             }

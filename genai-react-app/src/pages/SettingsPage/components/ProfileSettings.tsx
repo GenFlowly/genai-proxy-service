@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { PillButton } from '@genflowly/component-library';
 import { updateUsername, updateDiscoverability } from '../../../services/userService';
 import { useProfile } from '../../../hooks/queries/useProfile';
 import { DeleteDataSettings } from './DeleteDataSettings';
+import { AiDataConsentRows } from '../../../components/onboarding/AiDataConsentRows';
 import styles from './ProfileSettings.module.scss';
 
 export function ProfileSettings(): React.ReactElement {
     const { t } = useTranslation();
-    const { getAccessTokenSilently } = useAuth();
+    const { getAccessTokenSilently, aiDataConsentAt } = useAuth();
     const { data: profile, isLoading } = useProfile();
     const [usernameInput, setUsernameInput] = useState('');
     const [isDiscoverable, setIsDiscoverable] = useState(false);
@@ -135,6 +137,18 @@ export function ProfileSettings(): React.ReactElement {
                             onChange={(e) => handleToggleDiscoverability(e.target.checked)}
                             disabled={isSavingDiscoverability}
                         />
+                    </div>
+                    <div className={styles.aiDataSharing} data-testid="ai-data-sharing">
+                        <div className={styles.toggleLabel}>
+                            <strong>{t('aiDataConsent.settingsTitle')}</strong>
+                            {aiDataConsentAt && (
+                                <span>{t('aiDataConsent.agreedOn', { date: new Date(aiDataConsentAt).toLocaleDateString() })}</span>
+                            )}
+                        </div>
+                        <AiDataConsentRows />
+                        <Link to="/settings/ai/llm-keys" className={styles.settingsLink}>
+                            {t('aiDataConsent.manageServices')}
+                        </Link>
                     </div>
                 </div>
 

@@ -258,6 +258,45 @@ class CustomerProfileRepository(
         dynamoDbClient.updateItem(updateReq)
     }
 
+    suspend fun recordAiDataConsent(
+        sub: String,
+        client: String,
+        version: Int,
+        acceptedAt: String
+    ) = withContext(Dispatchers.IO) {
+        val updateReq = UpdateItemRequest.builder()
+            .tableName(CUSTOMER_PROFILE_TABLE)
+            .key(mapOf(
+                SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+            ))
+            .updateExpression("SET aiDataConsentVersion = :v, aiDataConsentAt = :a")
+            .expressionAttributeValues(mapOf(
+                ":v" to AttributeValue.builder().n(version.toString()).build(),
+                ":a" to AttributeValue.builder().s(acceptedAt).build()
+            ))
+            .build()
+        dynamoDbClient.updateItem(updateReq)
+    }
+
+    /**
+     * The profile's consent attributes, or null when (sub, client) has no profile.
+     * Consistent, so a request sent right after agreeing isn't refused.
+     */
+    suspend fun getAiDataConsent(sub: String, client: String): Map<String, AttributeValue>? =
+        withContext(Dispatchers.IO) {
+            val request = GetItemRequest.builder()
+                .tableName(CUSTOMER_PROFILE_TABLE)
+                .key(mapOf(
+                    SUB_PARTITION_KEY to AttributeValue.builder().s(sub).build(),
+                    CLIENT_SORT_KEY to AttributeValue.builder().s(client).build()
+                ))
+                .projectionExpression("customerId, aiDataConsentVersion")
+                .consistentRead(true)
+                .build()
+            dynamoDbClient.getItem(request).item().takeIf { it.isNotEmpty() }
+        }
+
     suspend fun searchByUsername(usernamePrefix: String): List<com.genflowly.models.api.SearchCustomerResponse> = withContext(Dispatchers.IO) {
         val queryReq = QueryRequest.builder()
             .tableName(DynamoDBConstants.USERNAME_LOOKUP_TABLE)

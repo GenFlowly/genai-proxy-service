@@ -14,6 +14,10 @@ data class OnboardCustomerResponse(
     val customerInstructions: List<InstructionResponse>?,
     val vectorDBConfigStatusList: List<VectorDBConfigStatus> = emptyList(),
     val onboardingCompleted: Boolean = true,
+    /** True until the customer agrees to the current version of the AI data consent screen. */
+    val aiDataConsentRequired: Boolean = false,
+    /** When the customer last agreed, ISO-8601 UTC; null if they never have. */
+    val aiDataConsentAt: String? = null,
     /**
      * Monotonic per-resource counters bumped on every server-side mutation
      * (customer + SYSTEM scope combined). The client skips refetching a
@@ -21,6 +25,11 @@ data class OnboardCustomerResponse(
      * Null = versions unavailable this response; the client must refetch.
      */
     val cacheVersions: CacheVersions? = null
+)
+
+@Serializable
+data class AiDataConsentResponse(
+    val aiDataConsentAt: String
 )
 
 @Serializable
