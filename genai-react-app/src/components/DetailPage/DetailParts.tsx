@@ -38,7 +38,14 @@ export function DetailShell({
     return (
         <div className={styles.page}>
             {narrow ? (
-                <MobileHeader title={title} subtitle={subtitle} menuItems={menuItems} menuTitle={menuTitle} menuContent={menuContent} />
+                <MobileHeader
+                    title={title}
+                    subtitle={subtitle}
+                    menuItems={menuItems}
+                    menuTitle={menuTitle}
+                    menuContent={menuContent}
+                    swipeBackTo={back?.to}
+                />
             ) : (
                 <>
                     <Navbar />

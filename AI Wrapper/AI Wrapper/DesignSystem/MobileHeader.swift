@@ -273,6 +273,7 @@ struct WebModal<Content: View>: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .ignoresSafeArea(.container, edges: .bottom)
+        .preference(key: DialogShownKey.self, value: true)
     }
 
     private var header: some View {

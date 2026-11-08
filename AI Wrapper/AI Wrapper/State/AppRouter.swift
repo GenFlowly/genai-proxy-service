@@ -4,6 +4,9 @@ import Combine
 
 enum AgentOwnership { case all, mine }
 
+/// The two full-screen menus on phones: L1 is the app's menu, L2 the page's.
+enum MenuLayer { case l1, l2 }
+
 /// Mirrors react-router routes + LayoutContext below isNarrow: navigation happens through
 /// the MobileHeader and the full-screen menu overlay.
 @MainActor
@@ -42,7 +45,11 @@ final class AppRouter: ObservableObject {
     /// False until a page has been picked: the L1 Menu has no current page to mark at launch.
     @Published var hasEnteredPage = false
     /// The current page's L2 Menu.
-    @Published var isMobileMenuOpen = false
+    @Published var isMobileMenuOpen = false {
+        didSet { if !isMobileMenuOpen { l2MenuAppearsInPlace = false } }
+    }
+    /// Picked in the L1 Menu: the L2 Menu is already there as L1 slides away.
+    private(set) var l2MenuAppearsInPlace = false
     @Published var isRightSidebarOpen = false
     /// Chat instruction picker (#19).
     @Published var showInstructionPicker = false
@@ -66,7 +73,9 @@ final class AppRouter: ObservableObject {
 
     /// An L1 Menu pick: the page's L2 Menu comes next. The page you're already on stays as it was.
     func openWithL2Menu(_ route: Route) {
+        let fromL1Menu = isAppMenuOpen
         if route != self.route { navigate(route) }
+        l2MenuAppearsInPlace = fromL1Menu
         hasEnteredPage = true
         isAppMenuOpen = false
         isMobileMenuOpen = true
@@ -79,11 +88,22 @@ final class AppRouter: ObservableObject {
         isAppMenuOpen = true
     }
 
-    /// The hamburger on a page: its L2 Menu, or the L1 Menu when it has none.
-    func openPageMenu() {
+    /// What the hamburger on a page opens: its L2 Menu, or the L1 Menu when it has none.
+    var pageMenu: MenuLayer {
         switch route {
-        case .chat, .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory, .agents, .settings: isMobileMenuOpen = true
-        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy: isAppMenuOpen = true
+        case .chat, .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory, .agents, .settings: return .l2
+        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy: return .l1
+        }
+    }
+
+    func openPageMenu() {
+        open(pageMenu)
+    }
+
+    func open(_ menu: MenuLayer) {
+        switch menu {
+        case .l1: isAppMenuOpen = true
+        case .l2: isMobileMenuOpen = true
         }
     }
 
