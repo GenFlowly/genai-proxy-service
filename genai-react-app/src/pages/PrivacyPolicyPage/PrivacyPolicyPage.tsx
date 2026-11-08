@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PillButton, TextContainer } from '@genflowly/component-library'
 import { DetailShell } from '../../components/DetailPage/DetailParts'
+import { useAuth } from '../../context/AuthContext'
+import { OPEN_L2_MENU_STATE } from '../../hooks/useAppMenu'
 import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import styles from './PrivacyPolicyPage.module.scss'
 
@@ -17,6 +19,7 @@ type PolicyState = { status: 'loading' } | { status: 'loaded'; markdown: string 
 export default function PrivacyPolicyPage(): React.ReactElement {
     const { t } = useTranslation()
     const { isNarrow } = useResponsiveBreakpoints()
+    const { isSessionAuthenticated } = useAuth()
     const [state, setState] = useState<PolicyState>({ status: 'loading' })
     const [attempt, setAttempt] = useState(0)
 
@@ -42,6 +45,8 @@ export default function PrivacyPolicyPage(): React.ReactElement {
             title={t('privacyPolicy.title')}
             breadcrumbs={[{ label: t('privacyPolicy.title') }]}
             narrow={isNarrow}
+            // Phones open it from the Settings menu, which is where it goes back to
+            swipeBack={isSessionAuthenticated ? { to: '/settings/profile', state: OPEN_L2_MENU_STATE } : undefined}
             data-testid="privacy-policy-page"
         >
             <article className={styles.document}>

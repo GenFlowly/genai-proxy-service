@@ -220,7 +220,7 @@ describe('MobileHeader', () => {
         })
 
         test('goes back on a page with a Back link', () => {
-            renderSwipeable(<MobileHeader title="History" menuContent={<div />} swipeBackTo="/memory/m1" />)
+            renderSwipeable(<MobileHeader title="History" menuContent={<div />} swipeBack={{ to: '/memory/m1' }} />)
 
             swipeFromEdge()
 

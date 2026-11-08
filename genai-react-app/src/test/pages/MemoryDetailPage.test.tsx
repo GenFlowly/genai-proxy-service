@@ -11,6 +11,7 @@ import { queryClient } from '../../queryClient'
 import { memoriesCache } from '../../services/memoriesService'
 import { MemoryChange } from '../../models/memory.models'
 import { FakeMemoryApi, memory, renderMemoryRoutes } from './MemoryPage/memoryTestKit'
+import { swipeFromLeftEdge } from '../utils/edgeSwipe'
 import { appliesLabel } from '../../pages/MemoryPage/memoryDetail'
 
 const mockFetch = jest.fn()
@@ -217,6 +218,16 @@ describe('MemoryDetailPage', () => {
         expect(await screen.findByTestId('memory-destination-PRJa')).toBeInTheDocument()
     })
 
+    test('phone: a swipe from the left edge goes back to the list it was opened from', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/memory/MEM%23m?scope=core')
+
+        swipeFromLeftEdge(await screen.findByTestId('memory-text-shown'))
+
+        expect(await screen.findByTestId('list-page')).toBeInTheDocument()
+        expect(screen.getByTestId('location')).toHaveTextContent(/^\/memory\?scope=core$/)
+    })
+
     test('phone: Edit and Restore open the edit page', async () => {
         mockBreakpoints.mockReturnValue(phone)
         renderAt('/memory/MEM%23m?scope=core&version=2')
@@ -341,6 +352,16 @@ describe('NewMemoryPage', () => {
 
         await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/memory/MEM%23new?scope=PRJa'))
         expect(api.last('POST')!.body).toEqual({ text: 'Survey has 420 responses.', kind: 'EPISODIC', projectId: 'PRJa' })
+    })
+
+    test('phone: a swipe from the left edge goes back to the list it was opened from', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/memory/new?scope=episodic')
+
+        swipeFromLeftEdge(await screen.findByTestId('new-memory-text'))
+
+        expect(await screen.findByTestId('list-page')).toBeInTheDocument()
+        expect(screen.getByTestId('location')).toHaveTextContent(/^\/memory\?scope=episodic$/)
     })
 
     test('starts in Profile from a Profile list', async () => {

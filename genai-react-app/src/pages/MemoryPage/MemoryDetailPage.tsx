@@ -200,6 +200,7 @@ export default function MemoryDetailPage(): React.ReactElement {
     return (
         <DetailShell
             narrow={isNarrow}
+            swipeBack={{ to: listPath }}
             title={t('memoryPage.page.title')}
             subtitle={scope ? scopeTitle(scope, names) : undefined}
             menuItems={menuItems}

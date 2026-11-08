@@ -9,7 +9,9 @@ import InstructionEditPage from '../../../pages/InstructionDetailPage/Instructio
 import InstructionHistoryPage from '../../../pages/InstructionDetailPage/InstructionHistoryPage'
 import InstructionUsedInPage from '../../../pages/InstructionDetailPage/InstructionUsedInPage'
 import { queryClient } from '../../../queryClient'
+import { EdgeSwipeProvider } from '../../../context/EdgeSwipeContext'
 import { LayoutProvider } from '../../../context/LayoutContext'
+import { swipeFromLeftEdge } from '../../utils/edgeSwipe'
 import { useAuth } from '../../../context/AuthContext'
 import * as instructionService from '../../../services/instructionService'
 import { InstructionResponse, InstructionUsageResponse } from '../../../models/instruction.models'
@@ -89,6 +91,7 @@ function renderAt(path: string) {
         <QueryClientProvider client={queryClient}>
             <LayoutProvider>
             <MemoryRouter initialEntries={[path]}>
+                <EdgeSwipeProvider>
                 <Routes>
                     <Route path="/instructions" element={<div data-testid="list-page" />} />
                     <Route path="/instructions/new" element={<InstructionEditPage isNew />} />
@@ -98,6 +101,7 @@ function renderAt(path: string) {
                     <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
                 </Routes>
                 <LocationProbe />
+                </EdgeSwipeProvider>
             </MemoryRouter>
             </LayoutProvider>
         </QueryClientProvider>,
@@ -269,6 +273,25 @@ describe('InstructionDetailPage', () => {
 
         await userEvent.click(screen.getByTestId('instruction-edit'))
         expect(screen.getByTestId('location')).toHaveTextContent('/instructions/INS-1/edit')
+    })
+
+    test('phone: a swipe from the left edge goes back to the instructions', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/instructions/INS-1')
+
+        swipeFromLeftEdge(await screen.findByTestId('instruction-text'))
+
+        expect(await screen.findByTestId('list-page')).toBeInTheDocument()
+        expect(screen.getByTestId('location')).toHaveTextContent(/^\/instructions$/)
+    })
+
+    test('phone: a swipe on a version\'s history goes back one step, to the instruction', async () => {
+        mockBreakpoints.mockReturnValue(phone)
+        renderAt('/instructions/INS-1/history')
+
+        swipeFromLeftEdge(await screen.findByTestId('detail-back'))
+
+        await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/instructions\/INS-1$/))
     })
 
     test('phone: a long instruction is clipped until you ask for all of it', async () => {

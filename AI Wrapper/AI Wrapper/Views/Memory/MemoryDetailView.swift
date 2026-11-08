@@ -157,7 +157,8 @@ struct MemoryDetailView: View {
             title: L("memoryPage.page.title"),
             subtitle: MemoryLabels.scopeTitle(router.memoryScope, store: memories),
             menuItems: menuItems,
-            onLeading: router.openPageMenu
+            onLeading: router.openPageMenu,
+            swipeBack: { router.navigate(.memory) }
         ) {
             if let memory, let from, let detail = loader.detail {
                 if older {
@@ -578,6 +579,7 @@ struct NewMemoryView: View {
         }
         .statusBarBand()
         .background(AppTheme.background)
+        .edgeSwipeBack { router.navigate(.memory) }
         .task { if memories.projects.isEmpty { await memories.load() } }
     }
 

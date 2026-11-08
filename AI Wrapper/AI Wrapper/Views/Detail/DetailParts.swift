@@ -165,6 +165,8 @@ struct DetailScaffold<Content: View>: View {
     /// Set on child pages: the header's left button goes back.
     var backLabel: String?
     let onLeading: () -> Void
+    /// Where a swipe from the left edge goes on a page whose header has the menu button instead.
+    var swipeBack: (() -> Void)?
     /// Edit pages: Cancel and Save, pinned above the keyboard.
     var actions: AnyView?
     @ViewBuilder var content: Content
@@ -198,7 +200,7 @@ struct DetailScaffold<Content: View>: View {
         }
         .statusBarBand()
         .background(AppTheme.background)
-        .edgeSwipeBack(backLabel == nil ? nil : onLeading)
+        .edgeSwipeBack(backLabel == nil ? swipeBack : onLeading)
     }
 }
 
