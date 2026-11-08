@@ -10,6 +10,9 @@ struct ResponseGroupView: View {
     let onSelectionChange: (AskSelection?) -> Void
 
     @State private var swipe = ResponseSwipeModel()
+    /// In the middle half of the screen: a tall response still counts, and a block at the
+    /// far edge doesn't use up the one hint.
+    @State private var isInReadingZone = false
     @State private var width: CGFloat = 0
     /// Each vendor is auto-selected at most once, or toggles would be undone mid-stream.
     @State private var autoSelected: Set<String> = []
@@ -109,6 +112,7 @@ struct ResponseGroupView: View {
                         .overlay(alignment: .top) {
                             ResponseSwipeLabel(
                                 model: swipe,
+                                isNeighbor: isNeighbor,
                                 vendor: message.aiVendor,
                                 modelName: message.model,
                                 position: vendors.firstIndex(of: message.aiVendor.rawValue) ?? 0,
@@ -123,6 +127,17 @@ struct ResponseGroupView: View {
                 .padding(8)
                 .background(swipe.isDragging ? Self.dragTint : .clear)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { swipe.pageHeight = $0 }
+                .onGeometryChange(for: Bool.self) { proxy in
+                    guard let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height else { return false }
+                    let frame = proxy.frame(in: .scrollView(axis: .vertical))
+                    return frame.maxY > viewport * 0.25 && frame.minY < viewport * 0.75
+                } action: { isInReadingZone = $0 }
+                .task(id: hintIsDue) {
+                    guard hintIsDue else { return }
+                    try? await Task.sleep(for: ResponseSwipeRules.hintDelay)
+                    guard !Task.isCancelled else { return }
+                    startSwipeHint()
+                }
                 // The blank space beside short lines and narrow tables has to count too.
                 .contentShape(.rect)
                 .gesture(ResponseSwipeGesture(
@@ -155,7 +170,28 @@ struct ResponseGroupView: View {
         return filteredMessages + [incoming]
     }
 
+    private var hintIsDue: Bool {
+        isPaged && isInReadingZone && availableVendors.count > 1
+            && !visibleMessages.contains(where: \.isLoading) && !ResponseSwipeHint.wasSeen()
+    }
+
+    private func startSwipeHint() {
+        guard !swipe.isDragging, !ResponseSwipeHint.wasSeen(),
+              let current = effectiveSelected.first,
+              let side = ResponseSwipeRules.hintSide(of: current, in: availableVendors),
+              let vendor = ResponseSwipeRules.neighbor(of: current, in: availableVendors, side: side) else { return }
+        ResponseSwipeHint.markSeen()
+        swipe.page = width
+        swipe.neighbor = .init(vendor: vendor, side: side)
+        swipe.isShowingHint = true
+        swipe.showLabel()
+        let distance = reduceMotion ? 0 : ResponseSwipeRules.hintDistance
+        swipe.runHint(distance: side == .next ? -distance : distance)
+    }
+
     private func beginSwipe() {
+        swipe.cancelHint()
+        ResponseSwipeHint.markSeen()
         swipe.page = width
         swipe.isDragging = true
         swipe.showLabel()

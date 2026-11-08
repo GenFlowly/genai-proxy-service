@@ -339,6 +339,7 @@
             "regenerate": "Regenerate",
             "onlyResponse": "Only response",
             "responseFrom": "Response from {{vendor}}",
+            "swipeHint": "Swipe to see other responses",
             "selected": "Selected",
             "sources": "Sources",
             "stop": "Stop",
