@@ -3,6 +3,7 @@ import { render } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '../../../queryClient'
+import { EdgeSwipeProvider } from '../../../context/EdgeSwipeContext'
 import { LayoutProvider } from '../../../context/LayoutContext'
 import { CustomerMemory, MemoryChange, MemoryUsagePage } from '../../../models/memory.models'
 
@@ -140,8 +141,10 @@ export function renderMemoryRoutes(path: string, routes: React.ReactElement) {
         <QueryClientProvider client={queryClient}>
             <MemoryRouter initialEntries={[path]}>
                 <LayoutProvider>
-                    <Routes>{routes}</Routes>
-                    <LocationProbe />
+                    <EdgeSwipeProvider>
+                        <Routes>{routes}</Routes>
+                        <LocationProbe />
+                    </EdgeSwipeProvider>
                 </LayoutProvider>
             </MemoryRouter>
         </QueryClientProvider>

@@ -9,8 +9,13 @@ import PrivacyPolicyPage, { PRIVACY_POLICY_URL } from '../../pages/PrivacyPolicy
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar" />)
 jest.mock('../../components/widgets/MobileHeader/MobileHeader', () => ({
     __esModule: true,
-    default: ({ title }: { title: string }) => <div data-testid="mobile-header">{title}</div>,
+    default: ({ title, swipeBack }: { title: string; swipeBack?: object }) => (
+        <div data-testid="mobile-header" data-swipe-back={JSON.stringify(swipeBack ?? null)}>{title}</div>
+    ),
 }))
+
+const mockUseAuth = jest.fn()
+jest.mock('../../context/AuthContext', () => ({ useAuth: () => mockUseAuth() }))
 
 const mockBreakpoints = jest.fn()
 jest.mock('../../hooks/useResponsiveBreakpoints', () => ({ useResponsiveBreakpoints: () => mockBreakpoints() }))
@@ -38,6 +43,7 @@ describe('PrivacyPolicyPage', () => {
 
     beforeEach(() => {
         mockBreakpoints.mockReturnValue({ isNarrow: false, isMobile: false })
+        mockUseAuth.mockReturnValue({ isSessionAuthenticated: false })
         global.fetch = jest.fn()
     })
 
@@ -69,6 +75,25 @@ describe('PrivacyPolicyPage', () => {
         await waitFor(() => expect(screen.getByTestId('markdown')).toHaveTextContent('Policy text'))
         expect(screen.queryByTestId('navbar')).not.toBeInTheDocument()
         expect(screen.getByTestId('mobile-header')).toHaveTextContent('Privacy policy')
+    })
+
+    test('signed in on a phone, a swipe from the left edge goes back to the Settings menu it was opened from', () => {
+        mockBreakpoints.mockReturnValue({ isNarrow: true, isMobile: true })
+        mockUseAuth.mockReturnValue({ isSessionAuthenticated: true })
+        respond(true, 'Policy text')
+        renderPage()
+
+        expect(screen.getByTestId('mobile-header')).toHaveAttribute(
+            'data-swipe-back', JSON.stringify({ to: '/settings/profile', state: { openMobileMenu: true } })
+        )
+    })
+
+    test('signed out there is no Settings menu, so the swipe opens the L1 Menu as the header button does', () => {
+        mockBreakpoints.mockReturnValue({ isNarrow: true, isMobile: true })
+        respond(true, 'Policy text')
+        renderPage()
+
+        expect(screen.getByTestId('mobile-header')).toHaveAttribute('data-swipe-back', 'null')
     })
 
     test('a failed load says so and can be retried', async () => {

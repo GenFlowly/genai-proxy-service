@@ -31,8 +31,8 @@ jest.mock('@genflowly/component-library', () => ({
 }));
 
 jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="navbar" />);
-jest.mock('../../../components/widgets/MobileHeader/MobileHeader', () => () => (
-    <div data-testid="mobile-header" />
+jest.mock('../../../components/widgets/MobileHeader/MobileHeader', () => ({ swipeBack }: { swipeBack?: { to: string } }) => (
+    <div data-testid="mobile-header" data-swipe-back={swipeBack?.to} />
 ));
 
 jest.mock('../../../context/AuthContext', () => ({ useAuth: jest.fn() }));
@@ -551,6 +551,7 @@ describe('GraphAgentEditorPage', () => {
         expect(screen.getByText(/This agent can only be viewed or edited on a desktop screen/)).toBeInTheDocument();
         expect(screen.getByTestId('agent-desktop-url')).toHaveTextContent(`${window.location.origin}/agents/graph-001`);
         expect(screen.getByRole('link', { name: 'Back to Agents' })).toHaveAttribute('href', '/agents');
+        expect(screen.getByTestId('mobile-header')).toHaveAttribute('data-swipe-back', '/agents');
         expect(screen.queryByTestId('graph-editor')).not.toBeInTheDocument();
         expect(agentsService.getAgent).not.toHaveBeenCalled();
     });

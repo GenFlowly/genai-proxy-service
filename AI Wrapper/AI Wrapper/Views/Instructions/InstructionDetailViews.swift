@@ -149,7 +149,8 @@ struct InstructionDetailView: View {
             title: L("instructionDetail.page.title"),
             subtitle: latest.map { _ in InstructionLabels.role(role) },
             menuItems: menuItems,
-            onLeading: router.openPageMenu
+            onLeading: router.openPageMenu,
+            swipeBack: { router.navigate(.instructions) }
         ) {
             if let latest, let shown {
                 if older {

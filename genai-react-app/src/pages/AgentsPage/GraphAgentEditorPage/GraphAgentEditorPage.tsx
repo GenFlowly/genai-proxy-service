@@ -148,7 +148,7 @@ function DesktopNeededNotice({ graphId }: { graphId?: string }) {
 
     return (
         <div className={styles.mobilePage}>
-            <MobileHeader title={t('agentsPage.graphEditorPage.desktopNeededTitle')} />
+            <MobileHeader title={t('agentsPage.graphEditorPage.desktopNeededTitle')} swipeBack={{ to: '/agents' }} />
             <div className={styles.mobileNotice}>
                 <span className={styles.mobileNoticeIcon} aria-hidden="true">🖥️</span>
                 <h1 className={styles.mobileNoticeTitle}>{t('agentsPage.graphEditorPage.desktopNeededTitle')}</h1>

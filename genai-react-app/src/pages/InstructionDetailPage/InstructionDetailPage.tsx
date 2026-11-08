@@ -240,6 +240,7 @@ export default function InstructionDetailPage(): React.ReactElement {
     return (
         <DetailShell
             narrow={isNarrow}
+            swipeBack={{ to: '/instructions' }}
             title={t('instructionDetail.page.title')}
             subtitle={latest ? roleLabel(role) : undefined}
             menuItems={latest ? [

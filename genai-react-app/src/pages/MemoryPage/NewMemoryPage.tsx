@@ -66,7 +66,7 @@ export default function NewMemoryPage(): React.ReactElement {
     return (
         <div className={styles.page}>
             {isNarrow ? (
-                <MobileHeader title={t('memoryPage.newMemory.title')} />
+                <MobileHeader title={t('memoryPage.newMemory.title')} swipeBack={{ to: listPath }} />
             ) : (
                 <>
                     <Navbar />
