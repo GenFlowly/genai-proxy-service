@@ -337,6 +337,7 @@
             "noNewFacts": "No new facts added to memory",
             "noResponsesGenerated": "No responses were generated",
             "regenerate": "Regenerate",
+            "onlyResponse": "Only response",
             "responseFrom": "Response from {{vendor}}",
             "selected": "Selected",
             "sources": "Sources",

@@ -302,6 +302,7 @@
 "conversation.response.noApiKeysSet" = "No API keys set";
 "conversation.response.noNewFacts" = "No new facts added to memory";
 "conversation.response.noResponsesGenerated" = "No responses were generated";
+"conversation.response.onlyResponse" = "Only response";
 "conversation.response.regenerate" = "Regenerate";
 "conversation.response.responseFrom" = "Response from {{vendor}}";
 "conversation.response.selected" = "Selected";
