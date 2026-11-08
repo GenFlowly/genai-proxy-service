@@ -5,9 +5,11 @@ import SwiftUI
 struct ResponseGroupView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let block: ConversationBlock
     let onSelectionChange: (AskSelection?) -> Void
 
+    @State private var swipe = ResponseSwipeModel()
     @State private var width: CGFloat = 0
     /// Each vendor is auto-selected at most once, or toggles would be undone mid-stream.
     @State private var autoSelected: Set<String> = []
@@ -89,20 +91,46 @@ struct ResponseGroupView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 if availableVendors.count > 1 { vendorToggle }
-                HStack(alignment: .top, spacing: 12) {
+                let layout = isPaged ? AnyLayout(ResponsePagerLayout()) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
+                layout {
                     let totals = cumulativeByMessage
-                    ForEach(filteredMessages) { message in
+                    let vendors = availableVendors
+                    ForEach(pagerMessages) { message in
+                        let isNeighbor = message.aiVendor.rawValue == swipe.neighbor?.vendor
                         ResponseCardView(
                             block: block,
                             message: message,
                             isLastResponseBlock: isLastResponseBlock,
                             usage: totals[message.messageId] ?? (message.hasOwnUsage ? UsageTotals(message) : nil),
-                            onSelectionChange: onSelectionChange
+                            onSelectionChange: onSelectionChange,
+                            swipe: swipe,
+                            isSwipeNeighbor: isNeighbor
                         )
+                        .overlay(alignment: .top) {
+                            ResponseSwipeLabel(
+                                model: swipe,
+                                vendor: message.aiVendor,
+                                modelName: message.model,
+                                position: vendors.firstIndex(of: message.aiVendor.rawValue) ?? 0,
+                                total: vendors.count
+                            )
+                        }
+                        .modifier(ResponseSwipeOffset(model: swipe, isNeighbor: isNeighbor))
+                        .allowsHitTesting(!isNeighbor)
                         .id(message.messageId)
                     }
                 }
                 .padding(8)
+                .background(swipe.isDragging ? Self.dragTint : .clear)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { swipe.pageHeight = $0 }
+                // The blank space beside short lines and narrow tables has to count too.
+                .contentShape(.rect)
+                .gesture(ResponseSwipeGesture(
+                    isEnabled: isPaged,
+                    onBegan: beginSwipe,
+                    onChanged: moveSwipe,
+                    onEnded: endSwipe
+                ))
             }
         }
         .frame(maxWidth: .infinity)
@@ -110,6 +138,62 @@ struct ResponseGroupView: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .onAppear(perform: autoSelectNewVendors)
         .onChange(of: availableVendors) { _, _ in autoSelectNewVendors() }
+    }
+
+    private static let dragTint = Color(uiColor: UIColor {
+        UIColor.black.withAlphaComponent($0.userInterfaceStyle == .dark ? 0.16 : 0.06)
+    })
+
+    private var isPaged: Bool { maxVendors == 1 }
+
+    /// The current response, then the one a swipe is bringing in.
+    private var pagerMessages: [Message] {
+        guard let vendor = swipe.neighbor?.vendor,
+              let incoming = visibleMessages.last(where: { $0.aiVendor.rawValue == vendor }) else {
+            return filteredMessages
+        }
+        return filteredMessages + [incoming]
+    }
+
+    private func beginSwipe() {
+        swipe.page = width
+        swipe.isDragging = true
+        swipe.showLabel()
+    }
+
+    private func moveSwipe(_ translation: CGFloat) {
+        let side: ResponseSwipeRules.Side = translation < 0 ? .next : .previous
+        let vendor = ResponseSwipeRules.neighbor(of: effectiveSelected.first, in: availableVendors, side: side)
+        let neighbor = vendor.map { ResponseSwipeModel.Neighbor(vendor: $0, side: side) }
+        if swipe.neighbor != neighbor { swipe.neighbor = neighbor }
+        swipe.dx = vendor == nil ? ResponseSwipeRules.rubberBand(translation) : max(-width, min(width, translation))
+    }
+
+    private func endSwipe(translation: CGFloat, velocity: CGFloat, wasCancelled: Bool) {
+        swipe.isDragging = false
+        let target = !wasCancelled && ResponseSwipeRules.commits(dx: swipe.dx, velocity: velocity, page: width) ? swipe.neighbor : nil
+        let landing = target.map { $0.side == .next ? -width : width } ?? 0
+        let finish = {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                if let target {
+                    conversation.setVendorSelection(for: block.conversationBlockId, vendors: [target.vendor])
+                }
+                swipe.neighbor = nil
+                swipe.dx = 0
+            }
+            swipe.hideLabelAfterLinger()
+        }
+        if reduceMotion {
+            finish()
+        } else {
+            withAnimation(.spring(duration: 0.26, bounce: 0), completionCriteria: .logicallyComplete) {
+                swipe.dx = landing
+            } completion: {
+                finish()
+            }
+        }
     }
 
     private var vendorToggle: some View {
@@ -169,6 +253,8 @@ struct ResponseCardView: View {
     let isLastResponseBlock: Bool
     let usage: UsageTotals?
     let onSelectionChange: (AskSelection?) -> Void
+    let swipe: ResponseSwipeModel
+    let isSwipeNeighbor: Bool
 
     @State private var cardHeight: CGFloat = 0
 
@@ -224,7 +310,7 @@ struct ResponseCardView: View {
             if !message.isLoading, let usage {
                 tokenBadge(usage)
             }
-            if message.isLoading || isLastResponseBlock || canFork {
+            if !isSwipeNeighbor, message.isLoading || isLastResponseBlock || canFork {
                 actionBar
             }
         }
@@ -366,6 +452,7 @@ struct ResponseCardView: View {
         .frame(maxWidth: .infinity)
         .background(ActionBarBackground())
         .modifier(StickyBottom(containerHeight: cardHeight, barHeight: 62, bottomPadding: 12))
+        .modifier(ResponseSwipeOffset(model: swipe, factor: -1))
         .padding(.horizontal, -16)
         .padding(.bottom, endsConversation ? -33 : -12)
         .zIndex(10)
