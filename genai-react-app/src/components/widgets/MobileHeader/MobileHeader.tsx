@@ -2,7 +2,7 @@ import React from 'react'
 import { useLocation } from 'react-router-dom'
 import { MobileHeader as BaseMobileHeader, MobileMenu } from '@genflowly/component-library'
 import type { MobileHeaderMenuItem, MobileMenuAction } from '@genflowly/component-library'
-import { useEdgeSwipePageAction } from '../../../context/EdgeSwipeContext'
+import { SwipeBack, useEdgeSwipePageAction } from '../../../context/EdgeSwipeContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { MenuLocationState, useOpenAppMenu } from '../../../hooks/useAppMenu'
 import { SlidePanel } from '../../common/SlidePanel/SlidePanel'
@@ -26,15 +26,16 @@ interface MobileHeaderProps {
      * Omit it and the hamburger opens the L1 Menu directly.
      */
     menuContent?: React.ReactNode
-    /** The page's Back link, where a swipe from the left edge goes instead of opening a menu. */
-    swipeBackTo?: string
+    /** Set on pages nested under another: a swipe from the left edge goes back instead of opening a menu. */
+    swipeBack?: SwipeBack
     children?: React.ReactNode
 }
 
 /**
  * 📱 App wiring around the library's presentational MobileHeader: the
  * hamburger drives the layout context and opens the page's L2 Menu, with the
- * L1 Menu one hamburger deeper. A swipe from the left edge does the same.
+ * L1 Menu one hamburger deeper. A swipe from the left edge does the same, or
+ * goes back on a nested page.
  */
 export default function MobileHeader({
     title,
@@ -44,7 +45,7 @@ export default function MobileHeader({
     menuTitle,
     menuAction,
     menuContent,
-    swipeBackTo,
+    swipeBack,
     children,
 }: MobileHeaderProps): React.ReactElement {
     const { isLeftSidebarExpanded, toggleLeftSidebar, setLeftSidebarExpanded } = useLayout()
@@ -54,7 +55,7 @@ export default function MobileHeader({
     // Picked in the L1 Menu: the L2 Menu is already there as L1 slides away
     const opensFromL1Menu = !!(location.state as MenuLocationState | null)?.openMobileMenu
 
-    useEdgeSwipePageAction(hasL2Menu ? 'l2' : 'l1', swipeBackTo)
+    useEdgeSwipePageAction(hasL2Menu ? 'l2' : 'l1', swipeBack)
 
     return (
         <>

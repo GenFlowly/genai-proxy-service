@@ -411,6 +411,7 @@ struct AgentDesktopNoticeView: View {
             .padding(.bottom, 32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .edgeSwipeBack { router.navigate(.agents) }
     }
 }
 
