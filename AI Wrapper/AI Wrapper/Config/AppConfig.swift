@@ -45,6 +45,8 @@ enum AppConfig {
     /// Web app origin — used to build shareable conversation links (`/chat/:id`) and universal links.
     static let webAppURL: URL = requireURL("WEB_APP_URL")
     static let encodeAPIURL: URL = requireURL("ENCODE_API_URL")
+    /// `POST /support`: the stage's SupportStack, the `SupportRequestUrl` output the web reads at deploy.
+    static let supportRequestURL: URL = requireURL("SUPPORT_API_URL")
 
     // MARK: - Observability
 

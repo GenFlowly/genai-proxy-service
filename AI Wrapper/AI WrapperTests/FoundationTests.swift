@@ -38,7 +38,7 @@ struct ConfigReaderTests {
     /// uses. Catches a stage value that didn't reach the app: `//` in an xcconfig truncates a
     /// URL, and an undefined key stays blank or as a literal `$(KEY)`.
     @Test func everyConfigValueResolves() throws {
-        for url in [AppConfig.backendBaseURL, AppConfig.webAppURL, AppConfig.encodeAPIURL] {
+        for url in [AppConfig.backendBaseURL, AppConfig.webAppURL, AppConfig.encodeAPIURL, AppConfig.supportRequestURL] {
             #expect(url.host?.isEmpty == false, "\(url)")
             #expect(!url.absoluteString.contains("$("), "\(url)")
         }

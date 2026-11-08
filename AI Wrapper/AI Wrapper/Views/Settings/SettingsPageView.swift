@@ -135,7 +135,7 @@ struct SettingsSidebar: View {
 
     private var normalizedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
 
-    /// Support lives outside Settings, at the web app's /support page.
+    /// Support is its own page, outside the Settings sections.
     private var supportMatches: Bool {
         L("settingsPage.settingsSidebar.support").lowercased().contains(normalizedQuery)
     }
@@ -193,7 +193,8 @@ struct SettingsSidebar: View {
                             }
                             if supportMatches {
                                 row(label: L("settingsPage.settingsSidebar.support"), icon: "chat-bubble", active: false) {
-                                    SupportLink.open()
+                                    router.navigate(.support)
+                                    onNavigate()
                                 }
                             }
                         }
@@ -205,7 +206,8 @@ struct SettingsSidebar: View {
 
                 VStack(spacing: 0) {
                     Button {
-                        SupportLink.open()
+                        router.navigate(.support)
+                        onNavigate()
                     } label: {
                         linkRowLabel(L("settingsPage.settingsSidebar.support"), icon: "chat-bubble")
                     }

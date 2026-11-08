@@ -1,6 +1,7 @@
-"""Support requests from the web and iOS apps, published to the support SNS topic.
+"""Support requests from signed-in users, published to the support SNS topic.
 
-API Gateway (HTTP API, payload format 2.0) calls `handler`. The topic's email
+API Gateway (HTTP API, payload format 2.0) calls `handler` after its Auth0 JWT
+authorizer has accepted the caller's access token. The topic's email
 subscribers receive each request as plain text.
 """
 
@@ -33,6 +34,7 @@ MESSAGE_MAX = 5000
 APP_VERSION_MAX = 40
 PAGE_MAX = 300
 USER_AGENT_MAX = 300
+SUB_MAX = 200
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 CUSTOMER_ID_RE = re.compile(r"^CU[0-9A-F]{6,30}$")
@@ -74,6 +76,13 @@ def _multi_line(value):
         return ""
     text = value.replace("\r\n", "\n").replace("\r", "\n")
     return CONTROL_RE.sub("", text).strip()
+
+
+def _caller(event):
+    """The Auth0 user ID the JWT authorizer verified, or "" when the request didn't pass through it."""
+    authorizer = (event.get("requestContext") or {}).get("authorizer") or {}
+    claims = (authorizer.get("jwt") or {}).get("claims") or {}
+    return _single_line(claims.get("sub"), SUB_MAX)
 
 
 def _read_body(event):
@@ -124,13 +133,14 @@ def subject_for(request, stage):
     return f"{prefix}Support: {TOPICS[request['topic']]}"[:99]
 
 
-def message_for(request, request_id, user_agent, received_at):
+def message_for(request, request_id, caller, user_agent, received_at):
     reply_to = f"{request['name']} <{request['email']}>" if request["name"] else request["email"]
     sent_from = request["source"] + (f", {request['page']}" if request["page"] else "")
     lines = [
         f"Support request {request_id}",
         "",
         f"Reply to: {reply_to}",
+        f"Signed in as: {caller}",
         f"Topic: {TOPICS[request['topic']]}",
     ]
     if request["customerId"]:
@@ -151,6 +161,11 @@ def message_for(request, request_id, user_agent, received_at):
 
 def handler(event, context):
     request_id = getattr(context, "aws_request_id", None) or str(uuid.uuid4())
+
+    # The route's authorizer rejects unsigned requests; this guards against the route losing it.
+    caller = _caller(event)
+    if not caller:
+        return _response(401, {"error": "unauthorized"})
 
     raw = _read_body(event)
     if len(raw.encode("utf-8")) > MAX_BODY_BYTES:
@@ -179,7 +194,7 @@ def handler(event, context):
         _client().publish(
             TopicArn=os.environ["TOPIC_ARN"],
             Subject=subject_for(request, stage),
-            Message=message_for(request, request_id, user_agent, datetime.now(timezone.utc)),
+            Message=message_for(request, request_id, caller, user_agent, datetime.now(timezone.utc)),
         )
     except Exception:
         logger.exception(json.dumps({"event": "support_request_failed", "requestId": request_id}))

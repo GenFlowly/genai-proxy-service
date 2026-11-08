@@ -20,11 +20,19 @@ class FakeSns:
         return {"MessageId": "m-1"}
 
 
-def event(payload, *, raw=None, b64=False, headers=None):
+SUB = "apple|000149.abc"
+
+
+def event(payload, *, raw=None, b64=False, headers=None, claims=None):
     body = raw if raw is not None else json.dumps(payload)
     if b64:
         body = base64.b64encode(body.encode("utf-8")).decode("ascii")
-    return {"body": body, "isBase64Encoded": b64, "headers": headers or {}}
+    return {
+        "body": body,
+        "isBase64Encoded": b64,
+        "headers": headers or {},
+        "requestContext": {"authorizer": {"jwt": {"claims": {"sub": SUB} if claims is None else claims}}},
+    }
 
 
 def valid(**overrides):
@@ -70,6 +78,7 @@ class HandlerTest(unittest.TestCase):
         message = published["Message"]
         self.assertIn("Support request req-123", message)
         self.assertIn("Reply to: Jane Doe <jane@example.com>", message)
+        self.assertIn(f"Signed in as: {SUB}\n", message)
         self.assertIn("Topic: Something isn't working", message)
         self.assertIn("Account: CU20EA760EBA18 (sent by the app, not verified)", message)
         self.assertIn("Sent from: web, https://genflowly.com/support", message)
@@ -124,6 +133,21 @@ class HandlerTest(unittest.TestCase):
         status, body = self.call(event({"email": "nope", "topic": "x", "message": ""}))
         self.assertEqual(status, 400)
         self.assertEqual(body["fields"], ["email", "topic", "message"])
+
+    def test_a_request_without_a_verified_user_is_refused_before_anything_else(self):
+        bare = {"body": json.dumps(valid()), "isBase64Encoded": False, "headers": {}}
+        for ev in (bare, event(valid(), claims={}), event(valid(), claims={"sub": "  "}), event(None, raw="not json", claims={})):
+            with self.subTest(ev=ev.get("requestContext")):
+                status, body = self.call(ev)
+                self.assertEqual(status, 401)
+                self.assertEqual(body, {"error": "unauthorized"})
+        self.assertEqual(self.sns.calls, [])
+
+    def test_the_verified_user_id_cant_add_lines_to_the_email_header(self):
+        self.call(event(valid(), claims={"sub": "auth0|1\nTopic: Refund now"}))
+        header = self.sns.calls[0]["Message"].split("\nMessage:\n")[0].split("\n")
+        self.assertIn("Signed in as: auth0|1 Topic: Refund now", header)
+        self.assertEqual(sum(line.startswith("Topic:") for line in header), 1)
 
     def test_a_filled_honeypot_looks_accepted_but_sends_nothing(self):
         status, body = self.call(event(valid(website="https://spam.example")))

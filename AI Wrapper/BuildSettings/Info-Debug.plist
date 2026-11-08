@@ -40,6 +40,8 @@
 	<string>Take a photo to attach to your message.</string>
 	<key>SENTRY_DSN</key>
 	<string>$(SENTRY_DSN)</string>
+	<key>SUPPORT_API_URL</key>
+	<string>$(SUPPORT_API_URL)</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Roboto-Variable.ttf</string>

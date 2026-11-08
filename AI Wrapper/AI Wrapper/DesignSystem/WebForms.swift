@@ -385,6 +385,43 @@ struct WebFieldSelect: View {
     private static let paddingClip = NativeSelectLabel.PaddingClip(lineTop: 14.4, clipBottom: 27.4)
 }
 
+/// A page form's `<select>` on a phone: 48pt tall, 16pt text, radius 10, the field background
+/// and border. Empty `value` shows `placeholder`.
+struct PhoneFieldSelect: View {
+    let value: String
+    var placeholder = ""
+    let options: [InputSelectWithHint.Option]
+    let onChange: (String) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(options) { option in
+                Button {
+                    onChange(option.value)
+                } label: {
+                    if option.value == value {
+                        Label(option.label, systemImage: "checkmark")
+                    } else {
+                        Text(option.label)
+                    }
+                }
+            }
+        } label: {
+            NativeSelectLabel(
+                text: options.first { $0.value == value }?.label ?? placeholder,
+                font: DSFont.ui(16),
+                horizontalPadding: 12
+            )
+            .padding(.horizontal, 1)
+            .frame(height: 48)
+            .background(AppTheme.backgroundSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: DSRadius.lg))
+            .overlay(RoundedRectangle(cornerRadius: DSRadius.lg).strokeBorder(AppTheme.border, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+    }
+}
+
 /// `<input>` styled by the `input-field` mixin (agent editor): 40pt tall, 15pt text.
 struct WebFieldInput: View {
     @Binding var text: String

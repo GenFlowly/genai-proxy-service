@@ -175,7 +175,7 @@ struct ContentView: View {
             MobileMenu(onClose: close) {
                 AgentsMenuContent(onClose: close)
             }
-        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy:
+        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy, .support:
             // These pages have no L2 Menu; their hamburger opens the L1 Menu.
             EmptyView()
         }
@@ -222,6 +222,8 @@ struct ContentView: View {
             SettingsSectionPageView(section: section)
         case .privacyPolicy:
             PrivacyPolicyView()
+        case .support:
+            SupportView()
         }
     }
 }

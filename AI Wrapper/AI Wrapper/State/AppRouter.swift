@@ -37,6 +37,7 @@ final class AppRouter: ObservableObject {
         case instructionUsage(String)   // "/instructions/:id/usage"
         case settings(SettingsSection) // "/settings/:section"
         case privacyPolicy             // "/privacy-policy"
+        case support                   // "/support"
     }
 
     @Published var route: Route = .chat
@@ -92,7 +93,7 @@ final class AppRouter: ObservableObject {
     var pageMenu: MenuLayer {
         switch route {
         case .chat, .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory, .agents, .settings: return .l2
-        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy: return .l1
+        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy, .support: return .l1
         }
     }
 
@@ -114,7 +115,7 @@ final class AppRouter: ObservableObject {
         case .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory: return "Memory"
         case .agents, .editAgent, .newAgent: return "Agents"
         case .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage: return "Instructions"
-        case .settings, .privacyPolicy: return ""
+        case .settings, .privacyPolicy, .support: return ""
         }
     }
 }

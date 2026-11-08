@@ -23,12 +23,19 @@ jest.mock('../../hooks/useResponsiveBreakpoints', () => ({ useResponsiveBreakpoi
 const mockUseAuth = useAuth as jest.Mock
 const mockSend = sendSupportRequest as jest.Mock
 
-const SIGNED_OUT = { user: null, customerId: null, isAuthenticated: false }
-const SIGNED_IN = {
+const mockGetToken = jest.fn()
+const mockLogin = jest.fn()
+const auth = (state: object) => ({ getAccessTokenSilently: mockGetToken, loginWithRedirect: mockLogin, ...state })
+
+const SIGNED_OUT = auth({ user: null, customerId: null, isAuthenticated: false, isSessionAuthenticated: false })
+// Signed in to Auth0 before the account's profile has loaded: nothing to fill in yet.
+const SESSION_ONLY = auth({ user: { sub: 'auth0|1', email: '', name: '' }, customerId: null, isAuthenticated: false, isSessionAuthenticated: true })
+const SIGNED_IN = auth({
     user: { sub: 'auth0|1', email: 'jane@example.com', name: 'Jane Doe' },
     customerId: 'CU20EA760EBA18',
     isAuthenticated: true,
-}
+    isSessionAuthenticated: true,
+})
 const MESSAGE = 'The send button does nothing after I attach a photo.'
 
 function renderPage(path = '/support') {
@@ -54,11 +61,27 @@ describe('SupportPage', () => {
     beforeEach(() => {
         jest.clearAllMocks()
         mockBreakpoints.mockReturnValue({ isNarrow: false, isMobile: false })
-        mockUseAuth.mockReturnValue(SIGNED_OUT)
+        mockUseAuth.mockReturnValue(SESSION_ONLY)
+        mockGetToken.mockResolvedValue('token-1')
         mockSend.mockResolvedValue('req-1')
     })
 
-    test('signed out, it starts empty under the navbar and only sends once the form is complete', async () => {
+    test('signed out, it asks to sign in instead of showing the form, and gives the address for sign-in problems', async () => {
+        mockUseAuth.mockReturnValue(SIGNED_OUT)
+        renderPage('/support?source=ios&appVersion=1.0%20(12)')
+
+        expect(screen.queryByTestId('support-form')).not.toBeInTheDocument()
+        expect(screen.getByTestId('support-sign-in')).toHaveTextContent('Sign in to send us a message')
+        expect(screen.getByTestId('support-sign-in')).toHaveTextContent(`Can't sign in? Email ${SUPPORT_EMAIL}.`)
+        expect(screen.getByRole('link', { name: SUPPORT_EMAIL })).toHaveAttribute('href', `mailto:${SUPPORT_EMAIL}`)
+
+        await userEvent.click(screen.getByTestId('support-sign-in-button'))
+
+        expect(mockLogin).toHaveBeenCalledWith({ appState: { returnTo: '/support?source=ios&appVersion=1.0%20(12)' } })
+        expect(mockSend).not.toHaveBeenCalled()
+    })
+
+    test('signed in, it starts with an empty topic and message under the navbar and only sends once the form is complete', async () => {
         renderPage()
 
         expect(screen.getByTestId('navbar')).toBeInTheDocument()
@@ -81,7 +104,7 @@ describe('SupportPage', () => {
         await sendAndWaitForConfirmation()
 
         expect(mockSend).toHaveBeenCalledTimes(1)
-        expect(mockSend).toHaveBeenCalledWith({
+        expect(mockSend).toHaveBeenCalledWith('token-1', {
             name: 'Sam',
             email: 'sam@example.com',
             topic: 'bug',
@@ -102,7 +125,7 @@ describe('SupportPage', () => {
         await fillForm({ email: '' })
         await sendAndWaitForConfirmation()
 
-        expect(mockSend.mock.calls[0][0]).toMatchObject({
+        expect(mockSend.mock.calls[0][1]).toMatchObject({
             name: 'Jane Doe',
             email: 'jane@example.com',
             context: { customerId: 'CU20EA760EBA18' },
@@ -131,7 +154,7 @@ describe('SupportPage', () => {
         await fillForm({ topic: '' })
         await sendAndWaitForConfirmation()
 
-        expect(mockSend.mock.calls[0][0]).toMatchObject({ topic: 'privacy', context: { source: 'ios', appVersion: '1.0 (12)' } })
+        expect(mockSend.mock.calls[0][1]).toMatchObject({ topic: 'privacy', context: { source: 'ios', appVersion: '1.0 (12)' } })
     })
 
     test('an unknown topic or source in the URL is ignored', async () => {
@@ -141,7 +164,7 @@ describe('SupportPage', () => {
         await fillForm()
         await sendAndWaitForConfirmation()
 
-        expect(mockSend.mock.calls[0][0].context.source).toBe('web')
+        expect(mockSend.mock.calls[0][1].context.source).toBe('web')
     })
 
     test('a bad email address is pointed out once the field is left', async () => {
@@ -215,6 +238,18 @@ describe('SupportPage', () => {
         expect(screen.getByTestId('support-send')).toBeEnabled()
     })
 
+    test("a token that can't be refreshed counts as a failed send and sends nothing", async () => {
+        jest.spyOn(console, 'error').mockImplementation(() => {})
+        mockGetToken.mockRejectedValue(new Error('login_required'))
+        renderPage()
+        await fillForm()
+
+        await userEvent.click(screen.getByTestId('support-send'))
+
+        expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't send your message.")
+        expect(mockSend).not.toHaveBeenCalled()
+    })
+
     test('the hidden field bots fill in is sent along', async () => {
         renderPage()
         expect(screen.getByTestId('support-website')).toHaveAttribute('tabindex', '-1')
@@ -223,7 +258,7 @@ describe('SupportPage', () => {
 
         await sendAndWaitForConfirmation()
 
-        expect(mockSend.mock.calls[0][0].website).toBe('https://spam.example')
+        expect(mockSend.mock.calls[0][1].website).toBe('https://spam.example')
     })
 
     test('links to the privacy policy', () => {

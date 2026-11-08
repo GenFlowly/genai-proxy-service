@@ -29,16 +29,16 @@ export class SupportRequestError extends Error {
 }
 
 /**
- * Sends the support form and resolves to the request's ID. Never retried:
- * a second attempt would email the support inbox twice.
+ * Sends the support form as the signed-in user and resolves to the request's
+ * ID. Never retried: a second attempt would email the support inbox twice.
  */
-export async function sendSupportRequest(request: SupportRequest): Promise<string> {
+export async function sendSupportRequest(token: string, request: SupportRequest): Promise<string> {
     const url = config.support.requestUrl
     if (!url) throw new SupportRequestError('This build has no support API URL', 0)
 
     const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(request),
     })
     const data = await response.json().catch(() => null)
