@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import { PillButton } from '@genflowly/component-library'
 import { DetailShell } from '../../components/DetailPage/DetailParts'
@@ -19,14 +19,16 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 type SendState = { status: 'idle' } | { status: 'sending' } | { status: 'sent'; email: string } | { status: 'failed' }
 
 /**
- * /support: a form that emails the support inbox, usable without signing in.
- * The iOS app opens it with ?source=ios&appVersion=… so requests say where they came from.
+ * /support: a form that emails the support inbox. Anyone can open the page (it's the App Store
+ * Support URL), but only a signed-in user can send. The iOS app opens it with
+ * ?source=ios&appVersion=… so requests say where they came from.
  */
 export default function SupportPage(): React.ReactElement {
     const { t } = useTranslation()
     const { isNarrow } = useResponsiveBreakpoints()
-    const { user, customerId, isAuthenticated } = useAuth()
+    const { user, customerId, isAuthenticated, isSessionAuthenticated, getAccessTokenSilently, loginWithRedirect } = useAuth()
     const [params] = useSearchParams()
+    const location = useLocation()
 
     const [name, setName] = useState(user?.name ?? '')
     const [email, setEmail] = useState(user?.email ?? '')
@@ -62,7 +64,7 @@ export default function SupportPage(): React.ReactElement {
         }
         setState({ status: 'sending' })
         try {
-            await sendSupportRequest({
+            await sendSupportRequest(await getAccessTokenSilently(), {
                 name: name.trim(),
                 email: trimmedEmail,
                 topic,
@@ -93,7 +95,23 @@ export default function SupportPage(): React.ReactElement {
             data-testid="support-page"
         >
             <div className={styles.page}>
-                {state.status === 'sent' ? (
+                {!isSessionAuthenticated ? (
+                    <section className={styles.signIn} data-testid="support-sign-in">
+                        <p className={styles.intro}>{t('supportPage.signInIntro')}</p>
+                        <PillButton
+                            label={t('supportPage.signIn')}
+                            onClick={() => loginWithRedirect({ appState: { returnTo: `${location.pathname}${location.search}` } })}
+                            data-testid="support-sign-in-button"
+                        />
+                        <p className={styles.help}>
+                            <Trans
+                                i18nKey="supportPage.cantSignIn"
+                                values={{ email: SUPPORT_EMAIL }}
+                                components={{ mail: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> }}
+                            />
+                        </p>
+                    </section>
+                ) : state.status === 'sent' ? (
                     <section className={styles.sent} role="status" data-testid="support-sent">
                         <h2 className={styles.sentTitle}>{t('supportPage.sentTitle')}</h2>
                         <p className={styles.intro}>{t('supportPage.sentBody', { email: state.email })}</p>

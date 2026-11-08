@@ -13,4 +13,6 @@ const app = new cdk.App();
 new SupportStack(app, `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-SupportStack`, {
     stage,
     supportEmails: process.env.SUPPORT_EMAILS,
+    auth0Domain: process.env.AUTH0_SPA_DOMAIN,
+    auth0Audience: process.env.AUTH0_API_AUDIENCE,
 });

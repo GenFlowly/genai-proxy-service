@@ -34,35 +34,35 @@ describe('supportService', () => {
             },
         })
 
-    test('posts the request as JSON once and returns its ID', async () => {
+    test("posts the request as JSON once, as the signed-in user, and returns its ID", async () => {
         respond(202, { requestId: 'req-1' })
 
-        await expect(sendSupportRequest(REQUEST)).resolves.toBe('req-1')
+        await expect(sendSupportRequest('token-1', REQUEST)).resolves.toBe('req-1')
 
         expect(global.fetch).toHaveBeenCalledTimes(1)
         expect(global.fetch).toHaveBeenCalledWith('https://support.example/support', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-1' },
             body: JSON.stringify(REQUEST),
         })
     })
 
     test('an accepted request without an ID still resolves', async () => {
         respond(202, null)
-        await expect(sendSupportRequest(REQUEST)).resolves.toBe('')
+        await expect(sendSupportRequest('token-1', REQUEST)).resolves.toBe('')
     })
 
     test('a build without the API URL fails without a request', async () => {
         config.support.requestUrl = ''
 
-        await expect(sendSupportRequest(REQUEST)).rejects.toMatchObject({ name: 'SupportRequestError', status: 0 })
+        await expect(sendSupportRequest('token-1', REQUEST)).rejects.toMatchObject({ name: 'SupportRequestError', status: 0 })
         expect(global.fetch).not.toHaveBeenCalled()
     })
 
     test('a refused request carries the fields the API named', async () => {
         respond(400, { error: 'invalid_request', fields: ['email', 7, 'message'] })
 
-        const error = await sendSupportRequest(REQUEST).catch(e => e)
+        const error = await sendSupportRequest('token-1', REQUEST).catch(e => e)
 
         expect(error).toBeInstanceOf(SupportRequestError)
         expect(error.status).toBe(400)
@@ -72,7 +72,7 @@ describe('supportService', () => {
     test('an error without a JSON body has no fields', async () => {
         respond(502, new SyntaxError('Unexpected token'))
 
-        const error = await sendSupportRequest(REQUEST).catch(e => e)
+        const error = await sendSupportRequest('token-1', REQUEST).catch(e => e)
 
         expect(error.status).toBe(502)
         expect(error.fields).toEqual([])
@@ -80,7 +80,7 @@ describe('supportService', () => {
 
     test('a network failure is passed on', async () => {
         (global.fetch as jest.Mock).mockRejectedValue(new TypeError('Failed to fetch'))
-        await expect(sendSupportRequest(REQUEST)).rejects.toThrow('Failed to fetch')
+        await expect(sendSupportRequest('token-1', REQUEST)).rejects.toThrow('Failed to fetch')
     })
 
     test('knows its topics', () => {
