@@ -1,10 +1,11 @@
-name: Production iOS App Store
+name: Production iOS TestFlight
 
 # Self-triggered: runs only when the iOS app (or this workflow) changes.
-# Runs the unit tests, uploads a signed production-stage build and submits it for App Store
-# review; Apple releases it automatically once approved. The version comes from the Xcode
-# target (MARKETING_VERSION) and must be bumped before each release. The recipe and the
-# credential names are in AI Wrapper/fastlane/Fastfile.
+# Runs the unit tests, uploads a signed production-stage build to TestFlight for internal
+# testers and selects it on the App Store version draft. Nothing is submitted for review:
+# that is done by hand in App Store Connect after testing the TestFlight build. The version
+# comes from the Xcode target (MARKETING_VERSION) and must be bumped after each release. The
+# recipe and the credential names are in AI Wrapper/fastlane/Fastfile.
 on:
   push:
     branches: [main]
@@ -13,7 +14,7 @@ on:
       - '.github/workflows/prod-ios-app-store.yml'
   workflow_dispatch:
 
-# Build numbers come from App Store Connect, so the two iOS workflows upload one at a time.
+# Build numbers come from App Store Connect, so runs upload one at a time.
 concurrency:
   group: ios-app-store-connect
   cancel-in-progress: false
@@ -22,8 +23,8 @@ permissions:
   contents: read
 
 jobs:
-  app-store:
-    name: App Store
+  testflight:
+    name: TestFlight
     runs-on: xcode-27
     environment: production
     timeout-minutes: 90
@@ -53,7 +54,7 @@ jobs:
       - name: Unit tests
         run: fastlane ios unit_tests stage:production
 
-      - name: App Store
+      - name: TestFlight and App Store draft
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}

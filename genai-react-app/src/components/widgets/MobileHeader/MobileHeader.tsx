@@ -1,8 +1,11 @@
 import React from 'react'
+import { useLocation } from 'react-router-dom'
 import { MobileHeader as BaseMobileHeader, MobileMenu } from '@genflowly/component-library'
 import type { MobileHeaderMenuItem, MobileMenuAction } from '@genflowly/component-library'
+import { useEdgeSwipePageAction } from '../../../context/EdgeSwipeContext'
 import { useLayout } from '../../../context/LayoutContext'
-import { useOpenAppMenu } from '../../../hooks/useAppMenu'
+import { MenuLocationState, useOpenAppMenu } from '../../../hooks/useAppMenu'
+import { SlidePanel } from '../../common/SlidePanel/SlidePanel'
 
 export type { MobileHeaderMenuItem }
 
@@ -23,13 +26,15 @@ interface MobileHeaderProps {
      * Omit it and the hamburger opens the L1 Menu directly.
      */
     menuContent?: React.ReactNode
+    /** The page's Back link, where a swipe from the left edge goes instead of opening a menu. */
+    swipeBackTo?: string
     children?: React.ReactNode
 }
 
 /**
  * 📱 App wiring around the library's presentational MobileHeader: the
  * hamburger drives the layout context and opens the page's L2 Menu, with the
- * L1 Menu one hamburger deeper.
+ * L1 Menu one hamburger deeper. A swipe from the left edge does the same.
  */
 export default function MobileHeader({
     title,
@@ -39,11 +44,17 @@ export default function MobileHeader({
     menuTitle,
     menuAction,
     menuContent,
+    swipeBackTo,
     children,
 }: MobileHeaderProps): React.ReactElement {
     const { isLeftSidebarExpanded, toggleLeftSidebar, setLeftSidebarExpanded } = useLayout()
     const openAppMenu = useOpenAppMenu()
+    const location = useLocation()
     const hasL2Menu = menuContent != null
+    // Picked in the L1 Menu: the L2 Menu is already there as L1 slides away
+    const opensFromL1Menu = !!(location.state as MenuLocationState | null)?.openMobileMenu
+
+    useEdgeSwipePageAction(hasL2Menu ? 'l2' : 'l1', swipeBackTo)
 
     return (
         <>
@@ -54,16 +65,18 @@ export default function MobileHeader({
                 menuItems={menuItems}
                 onMenuClick={hasL2Menu ? toggleLeftSidebar : openAppMenu}
             />
-            {hasL2Menu && isLeftSidebarExpanded && (
-                <MobileMenu
-                    title={menuTitle}
-                    action={menuAction}
-                    onOpenAppMenu={openAppMenu}
-                    onClose={() => setLeftSidebarExpanded(false)}
-                    data-testid="mobile-header-menu-overlay"
-                >
-                    {menuContent}
-                </MobileMenu>
+            {hasL2Menu && (
+                <SlidePanel layer="l2" open={isLeftSidebarExpanded} appearInPlace={opensFromL1Menu}>
+                    <MobileMenu
+                        title={menuTitle}
+                        action={menuAction}
+                        onOpenAppMenu={openAppMenu}
+                        onClose={() => setLeftSidebarExpanded(false)}
+                        data-testid="mobile-header-menu-overlay"
+                    >
+                        {menuContent}
+                    </MobileMenu>
+                </SlidePanel>
             )}
             {children}
         </>

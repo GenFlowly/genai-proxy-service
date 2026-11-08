@@ -3,7 +3,8 @@
 //  AI Wrapper
 //
 //  App shell mirroring the web app's mobile layout: routed full-screen pages under a
-//  transparent MobileHeader, plus the full-screen menu and AI-config overlays.
+//  transparent MobileHeader, plus the full-screen menu and AI-config overlays, and the
+//  swipe from the left edge that brings a menu in.
 //
 
 import SwiftUI
@@ -13,6 +14,7 @@ struct ContentView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Not the screen's: they differ in iPad split view and Stage Manager. Starts from the
     /// scene so the first layout already has it, and the keyboard's inset cancels out.
     @State private var windowHeight = UIApplication.shared.connectedScenes
@@ -24,6 +26,9 @@ struct ContentView: View {
     /// The session restores synchronously from the Keychain, so there's nothing to hold the splash
     /// for (the web waits on Auth0); it only softens the cut from the launch screen.
     @State private var isSplashVisible = true
+    /// The menu a finger is dragging in from the left edge, and how far.
+    @State private var edgeDrag: (menu: MenuLayer, translation: CGFloat)?
+    @State private var isDialogShown = false
 
     var body: some View {
         // First-run FTUE gate (web AppContent): a brand-new account (onboarding flag
@@ -68,6 +73,7 @@ struct ContentView: View {
             pageContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppTheme.background)
+                .environment(\.allowsEdgeSwipe, !isDialogShown)
 
             if router.isRightSidebarOpen {
                 RightSidebarModal()
@@ -75,19 +81,22 @@ struct ContentView: View {
                     .zIndex(5)
             }
 
-            // The menu overlay covers the whole screen (z 100 on the web).
-            if router.isMobileMenuOpen {
-                menuOverlay
-                    .transition(.opacity)
-                    .zIndex(10)
-            }
-
-            if router.isAppMenuOpen {
-                L1Menu()
-                    .transition(.opacity)
-                    .zIndex(20)
-            }
+            menus.zIndex(10)
         }
+        .gesture(EdgeSwipeGesture(
+            isEnabled: !router.isAppMenuOpen && !router.isRightSidebarOpen && !isDialogShown,
+            yieldsToPageSwipe: true,
+            onBegan: { edgeDrag = (router.isMobileMenuOpen ? .l1 : router.pageMenu, 0) },
+            onChanged: { edgeDrag?.translation = $0 },
+            onEnded: { commits in
+                guard let menu = edgeDrag?.menu else { return }
+                withAnimation(menuMotion) {
+                    if commits { router.open(menu) }
+                    edgeDrag = nil
+                }
+            }
+        ))
+        .onPreferenceChange(DialogShownKey.self) { isDialogShown = $0 }
         .overlay(alignment: .topTrailing) { ToastOverlay() }
         // A keyboard left up would cover the menu's rows.
         .onChange(of: router.isMobileMenuOpen) { _, open in
@@ -96,6 +105,43 @@ struct ContentView: View {
         .onChange(of: router.isAppMenuOpen) { _, open in
             if open { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
         }
+    }
+
+    /// Matches the web's SlidePanel: 250ms, cubic-bezier(0.2, 0, 0, 1).
+    private var menuMotion: Animation? {
+        reduceMotion ? nil : .timingCurve(0.2, 0, 0, 1, duration: 0.25)
+    }
+
+    /// The full-screen menus (z 100 and 101 on the web). They enter from the left and leave to
+    /// the left, and follow the finger while an edge swipe drags one in.
+    private var menus: some View {
+        ZStack {
+            if router.isMobileMenuOpen || edgeDrag?.menu == .l2 {
+                menuOverlay
+                    .menuEdgeShadow()
+                    .offset(x: dragOffset(.l2))
+                    .transition(.asymmetric(
+                        insertion: router.l2MenuAppearsInPlace ? .identity : .move(edge: .leading),
+                        removal: .move(edge: .leading)
+                    ))
+                    .zIndex(10)
+            }
+
+            if router.isAppMenuOpen || edgeDrag?.menu == .l1 {
+                L1Menu()
+                    .menuEdgeShadow()
+                    .offset(x: dragOffset(.l1))
+                    .transition(.move(edge: .leading))
+                    .zIndex(20)
+            }
+        }
+        .animation(menuMotion, value: router.isMobileMenuOpen)
+        .animation(menuMotion, value: router.isAppMenuOpen)
+    }
+
+    private func dragOffset(_ menu: MenuLayer) -> CGFloat {
+        guard let edgeDrag, edgeDrag.menu == menu else { return 0 }
+        return min(0, edgeDrag.translation - windowWidth)
     }
 
     @ViewBuilder

@@ -71,29 +71,29 @@ Notes:
 
 | Branch | Workflow | Stage | Result |
 |---|---|---|---|
-| `development` | `.github/workflows/dev-ios-testflight.yml` | development | Signed build in TestFlight for internal testers |
-| `main` | `.github/workflows/prod-ios-app-store.yml` | production | Submitted for App Store review; released automatically when Apple approves it |
+| `main` | `.github/workflows/prod-ios-app-store.yml` | production | Signed build in TestFlight for internal testers, selected on the App Store version draft |
 
-Both workflows run only when something under `AI Wrapper/` changes, run the unit tests on a simulator first, and upload one at a time (a shared concurrency group). The recipe is `fastlane/Fastfile`; the same lanes run locally with the same environment variables:
+Pushes to `development` publish nothing. The workflow runs only when something under `AI Wrapper/` changes, runs the unit tests on a simulator first, and uploads one run at a time (a concurrency group). It waits for Apple to finish processing the build, then creates the App Store version for `MARKETING_VERSION` (or renames the unreleased one) and selects the build on it. **Nothing is submitted for review**: after testing the TestFlight build, open the version in App Store Connect, fill in What's New, and choose Add for Review → Submit. If that version is already waiting for review, the run fails after the upload (the build stays in TestFlight) because Apple won't change the build of a waiting version.
+
+The recipe is `fastlane/Fastfile`; the same lanes run locally with the same environment variables:
 
 ```sh
 fastlane ios unit_tests stage:development   # simulator unit tests
-fastlane ios beta stage:development         # signed build → TestFlight
-fastlane ios release                        # signed production build → App Store review
+fastlane ios release                        # signed production build → TestFlight + App Store version draft
 ```
 
 Runner: GitHub's `xcode-27` image (macOS 27, Xcode 27.1 pinned through `DEVELOPER_DIR`). macOS minutes are billed at 10× Linux minutes, which is why the path filter matters.
 
 ### Versions and build numbers
 
-- **Version** (`MARKETING_VERSION`, Xcode → target `AI Wrapper` → General → Version) is the App Store version. Apple never accepts a version string twice, so bump it before merging to `main`; the release workflow stops before building if that version is already live.
+- **Version** (`MARKETING_VERSION`, Xcode → target `AI Wrapper` → General → Version) is the App Store version. Merges keep adding TestFlight builds to the same version until Apple approves it; after that Apple refuses new builds for it, so bump it before the next merge to `main`. The workflow stops before building if that version is already live.
 - **Build number** is assigned on CI: the latest build in App Store Connect + 1, passed as `CURRENT_PROJECT_VERSION`. The `1` in the project is only used by local builds.
 
 ### Stage values and secrets on CI
 
 The lane writes `BuildSettings/CI.xcconfig` (gitignored): it includes the stage file and overrides `AUTH0_CLIENT_ID` and `SENTRY_DSN` from the secrets. As a command-line xcconfig it outranks `Release.xcconfig`, so the placeholder client ID there never ships; the production lane refuses to build without `IOS_AUTH0_CLIENT_ID`.
 
-Repository secrets (shared by both workflows):
+Repository secrets:
 
 | Secret | Value |
 |---|---|
@@ -104,12 +104,12 @@ Repository secrets (shared by both workflows):
 | `IOS_DISTRIBUTION_CERT_PASSWORD` | Password given when exporting the `.p12` |
 | `IOS_DISTRIBUTION_CERT_ID` | Optional. Only when the team has several distribution certificates: the ID of the one in the `.p12`, so the profile is built for it |
 
-Environment secrets (`development` and `production`, like the web app's `AUTH0_SPA_CLIENT_ID`):
+Environment secrets (`production`, like the web app's `AUTH0_SPA_CLIENT_ID`):
 
 | Secret | Value |
 |---|---|
-| `IOS_AUTH0_CLIENT_ID` | Client ID of that stage's Auth0 **Native** iOS app. Required for production |
-| `IOS_SENTRY_DSN` | Optional. Sentry DSN for that stage |
+| `IOS_AUTH0_CLIENT_ID` | Client ID of the production Auth0 **Native** iOS app. Required |
+| `IOS_SENTRY_DSN` | Optional. Sentry DSN for production |
 
 ```sh
 gh secret set APP_STORE_CONNECT_API_KEY_ID --body "ABC123DEFG"
@@ -117,15 +117,14 @@ gh secret set APP_STORE_CONNECT_API_ISSUER_ID --body "00000000-0000-0000-0000-00
 base64 -i ~/Downloads/AuthKey_ABC123DEFG.p8 | gh secret set APP_STORE_CONNECT_API_KEY_P8
 base64 -i ~/Desktop/distribution.p12 | gh secret set IOS_DISTRIBUTION_CERT_P12
 gh secret set IOS_DISTRIBUTION_CERT_PASSWORD --body "<p12 password>"
-gh secret set IOS_AUTH0_CLIENT_ID --env development --body "7uXHWmLk1uPO3u5y98sKsNnYzCxCTTNX"
 gh secret set IOS_AUTH0_CLIENT_ID --env production --body "<production iOS Native app client ID>"
 ```
 
 ### One-time setup
 
 1. **Developer portal** → Certificates, Identifiers & Profiles → Identifiers: the App ID `com.unbiase.ai` must exist with **Associated Domains** enabled (the Release entitlements declare `applinks:genflowly.com`; a profile without the capability fails signing).
-2. **App Store Connect** → Apps → New App with that bundle ID, then the parts a binary upload cannot supply: name, subtitle, description, keywords, screenshots, privacy policy URL (`https://genflowly.com/privacy-policy`), Support URL (`https://genflowly.com/support`), App Privacy answers, age rating, pricing, and the App Review contact. The release workflow uploads the build and submits whatever is on the version page.
-3. **TestFlight** → Internal Testing: a group with automatic distribution on, with you in it. Every upload (both workflows) appears there.
+2. **App Store Connect** → Apps → New App with that bundle ID, then the parts a binary upload cannot supply: name, subtitle, description, keywords, screenshots, privacy policy URL (`https://genflowly.com/privacy-policy`), Support URL (`https://genflowly.com/support`), App Privacy answers, age rating, pricing, and the App Review contact. The workflow only uploads the build and selects it on the version page; submitting is manual.
+3. **TestFlight** → Internal Testing: a group with automatic distribution on, with you in it. Every upload appears there.
 4. **API key**: Users and Access → Integrations → App Store Connect API → Team Keys → Generate, role **Admin** (the key creates provisioning profiles, and Admin is the role certain to have Certificates, Identifiers & Profiles access). Download the `.p8` once; note the Key ID and Issuer ID.
 5. **Distribution certificate**: Xcode → Settings → Accounts → the team → Manage Certificates → `+` → Apple Distribution. Then Keychain Access → login → My Certificates → right-click "Apple Distribution: …" → Export as `.p12` with a password.
 6. **Auth0**: the production iOS Native app (same steps as Authentication above, authorized for `https://api.genflowly.com`), its client ID in the production `IOS_AUTH0_CLIENT_ID` secret.

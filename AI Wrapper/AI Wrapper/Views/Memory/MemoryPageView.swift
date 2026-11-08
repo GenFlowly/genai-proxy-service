@@ -513,6 +513,7 @@ struct MemoryActionsSheet: View {
             .accessibilityIdentifier("memory-actions-sheet")
         }
         .ignoresSafeArea(.container, edges: .bottom)
+        .preference(key: DialogShownKey.self, value: true)
     }
 
     private func select(_ item: MemoryActionItem) {

@@ -1,8 +1,9 @@
 import React from 'react'
-import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
+import { act, render as rtlRender, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import '@testing-library/jest-dom'
 import MobileHeader from '../../../../components/widgets/MobileHeader/MobileHeader'
+import { EdgeSwipeProvider } from '../../../../context/EdgeSwipeContext'
 import { useLayout } from '../../../../context/LayoutContext'
 
 jest.mock('../../../../context/LayoutContext')
@@ -11,6 +12,8 @@ const LocationProbe = () => {
     const location = useLocation()
     return <div data-testid="location-state">{JSON.stringify(location.state)}</div>
 }
+
+const PathProbe = () => <div data-testid="path">{useLocation().pathname}</div>
 
 const render = (ui: React.ReactElement) => rtlRender(
     <MemoryRouter initialEntries={['/chat/abc']}>
@@ -160,5 +163,69 @@ describe('MobileHeader', () => {
     test('hides the kebab when there are no menu items', () => {
         render(<MobileHeader title="My Chat" />)
         expect(screen.queryByTestId('mobile-header-kebab')).not.toBeInTheDocument()
+    })
+
+    describe('a swipe from the left edge', () => {
+        let appRoot: HTMLElement
+
+        beforeEach(() => {
+            jest.useFakeTimers()
+            window.innerWidth = 390
+            appRoot = document.createElement('div')
+            appRoot.id = 'root'
+            document.body.appendChild(appRoot)
+        })
+
+        afterEach(() => {
+            appRoot.remove()
+            window.innerWidth = 1280
+            jest.useRealTimers()
+        })
+
+        const renderSwipeable = (ui: React.ReactElement) => rtlRender(
+            <MemoryRouter initialEntries={['/memory/m1/history']}>
+                <EdgeSwipeProvider>
+                    <div data-testid="page">{ui}</div>
+                    <LocationProbe />
+                    <PathProbe />
+                </EdgeSwipeProvider>
+            </MemoryRouter>,
+            { container: appRoot }
+        )
+
+        const swipeFromEdge = () => {
+            const page = screen.getByTestId('page')
+            fireEvent.touchStart(page, { touches: [{ clientX: 4, clientY: 300 }] })
+            for (const clientX of [60, 200]) {
+                act(() => { jest.advanceTimersByTime(500) })
+                fireEvent.touchMove(page, { touches: [{ clientX, clientY: 300 }] })
+            }
+            fireEvent.touchEnd(page, { touches: [] })
+        }
+
+        test('opens the page\'s L2 Menu, as the hamburger does', () => {
+            renderSwipeable(<MobileHeader title="Memory" menuContent={<div />} />)
+
+            swipeFromEdge()
+
+            expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true)
+        })
+
+        test('opens the L1 Menu on a page without an L2 Menu', () => {
+            renderSwipeable(<MobileHeader title="Instructions" />)
+
+            swipeFromEdge()
+
+            expect(screen.getByTestId('location-state')).toHaveTextContent('{"appMenu":true}')
+        })
+
+        test('goes back on a page with a Back link', () => {
+            renderSwipeable(<MobileHeader title="History" menuContent={<div />} swipeBackTo="/memory/m1" />)
+
+            swipeFromEdge()
+
+            expect(screen.getByTestId('path')).toHaveTextContent('/memory/m1')
+            expect(mockSetLeftSidebarExpanded).not.toHaveBeenCalled()
+        })
     })
 })

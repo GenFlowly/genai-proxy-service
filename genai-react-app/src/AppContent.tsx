@@ -25,20 +25,20 @@ import SupportPage from './pages/SupportPage/SupportPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
-import { L1Menu } from './components/sections/L1Menu/L1Menu'
 import { AppMenuOverlay } from './components/sections/L1Menu/AppMenuOverlay'
 import AppFooter from './components/AppFooter/AppFooter'
 import ServiceWorkerUpdateNotifier from './components/common/ServiceWorkerUpdateNotifier/ServiceWorkerUpdateNotifier'
 
 import { AIProvider } from './context/AIContext'
 import { ConversationProvider } from './context/ConversationContext'
+import { EdgeSwipeProvider } from './context/EdgeSwipeContext'
 import { LayoutProvider } from './context/LayoutContext'
 import { ToastProvider } from './context/ToastContext'
 
-/** On phones the app's root is the L1 Menu; desktop has the navbar instead. */
-function HomeRoute(): React.ReactElement {
+/** On phones the app's root is the L1 Menu, which AppMenuOverlay shows; desktop has the navbar instead. */
+function HomeRoute(): React.ReactElement | null {
     const { isNarrow } = useResponsiveBreakpoints()
-    return isNarrow ? <L1Menu /> : <Navigate to="/chat" replace />
+    return isNarrow ? null : <Navigate to="/chat" replace />
 }
 
 /** Signed out on a phone, an empty chat has nothing to offer: L1 is the landing page. */
@@ -75,33 +75,35 @@ export default function AppContent(): React.ReactElement | null {
                 <ServiceWorkerUpdateNotifier />
                 <AIProvider>
                     <ConversationProvider>
-                        <Routes>
-                            <Route path="/" element={<HomeRoute />} />
-                            <Route path="/chat">
-                                <Route index element={<NewChatRoute />} />
-                                <Route path=":conversationId" element={<LandingPage />} />
-                            </Route>
-                            <Route path="/settings/*" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                            <Route path="/history" element={<ProtectedRoute><ConversationHistoryPage /></ProtectedRoute>} />
-                            <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
-                            <Route path="/memory/new" element={<ProtectedRoute><NewMemoryPage /></ProtectedRoute>} />
-                            <Route path="/memory/:memoryId" element={<ProtectedRoute><MemoryDetailPage /></ProtectedRoute>} />
-                            <Route path="/memory/:memoryId/edit" element={<ProtectedRoute><MemoryEditPage /></ProtectedRoute>} />
-                            <Route path="/memory/:memoryId/history" element={<ProtectedRoute><MemoryHistoryPage /></ProtectedRoute>} />
-                            <Route path="/memory/:memoryId/usage" element={<ProtectedRoute><MemoryUsedInPage /></ProtectedRoute>} />
-                            <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
-                            <Route path="/agents/new" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
-                            <Route path="/agents/:graphId" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
-                            <Route path="/instructions" element={<InstructionsPage />} />
-                            <Route path="/instructions/new" element={<InstructionEditPage isNew />} />
-                            <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
-                            <Route path="/instructions/:instructionId/edit" element={<InstructionEditPage />} />
-                            <Route path="/instructions/:instructionId/history" element={<InstructionHistoryPage />} />
-                            <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
-                            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-                            <Route path="/support" element={<SupportPage />} />
-                        </Routes>
-                        <AppMenuOverlay />
+                        <EdgeSwipeProvider>
+                            <Routes>
+                                <Route path="/" element={<HomeRoute />} />
+                                <Route path="/chat">
+                                    <Route index element={<NewChatRoute />} />
+                                    <Route path=":conversationId" element={<LandingPage />} />
+                                </Route>
+                                <Route path="/settings/*" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+                                <Route path="/history" element={<ProtectedRoute><ConversationHistoryPage /></ProtectedRoute>} />
+                                <Route path="/memory" element={<ProtectedRoute><MemoryPage /></ProtectedRoute>} />
+                                <Route path="/memory/new" element={<ProtectedRoute><NewMemoryPage /></ProtectedRoute>} />
+                                <Route path="/memory/:memoryId" element={<ProtectedRoute><MemoryDetailPage /></ProtectedRoute>} />
+                                <Route path="/memory/:memoryId/edit" element={<ProtectedRoute><MemoryEditPage /></ProtectedRoute>} />
+                                <Route path="/memory/:memoryId/history" element={<ProtectedRoute><MemoryHistoryPage /></ProtectedRoute>} />
+                                <Route path="/memory/:memoryId/usage" element={<ProtectedRoute><MemoryUsedInPage /></ProtectedRoute>} />
+                                <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
+                                <Route path="/agents/new" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
+                                <Route path="/agents/:graphId" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
+                                <Route path="/instructions" element={<InstructionsPage />} />
+                                <Route path="/instructions/new" element={<InstructionEditPage isNew />} />
+                                <Route path="/instructions/:instructionId" element={<InstructionDetailPage />} />
+                                <Route path="/instructions/:instructionId/edit" element={<InstructionEditPage />} />
+                                <Route path="/instructions/:instructionId/history" element={<InstructionHistoryPage />} />
+                                <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
+                                <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+                                <Route path="/support" element={<SupportPage />} />
+                            </Routes>
+                            <AppMenuOverlay />
+                        </EdgeSwipeProvider>
                         {!isNarrow && <AppFooter />}
                     </ConversationProvider>
                 </AIProvider>
