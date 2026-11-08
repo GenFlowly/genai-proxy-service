@@ -131,6 +131,24 @@ export async function updateDiscoverability(token: string, isDiscoverable: boole
     }
 }
 
+/** Records agreement to the AI data consent screen and returns when, ISO-8601 UTC. */
+export async function acceptAiDataConsent(token: string): Promise<string> {
+    const response = await fetchWithRetry(endpoints.aiDataConsent, {
+        method: HttpMethod.POST,
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error(`AI data consent failed: ${response.status} ${response.statusText}`);
+    }
+
+    const { aiDataConsentAt } = await response.json();
+    return aiDataConsentAt;
+}
+
 export async function completeOnboarding(token: string): Promise<boolean> {
     const response = await fetchWithRetry(endpoints.completeOnboarding, {
         method: HttpMethod.POST,

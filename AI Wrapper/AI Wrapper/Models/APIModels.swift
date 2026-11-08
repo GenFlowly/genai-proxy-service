@@ -69,6 +69,14 @@ struct OnboardCustomerResponse: Codable {
     var cacheVersions: [String: Int]?
     /// First-run gate for the onboarding wizard (missing → treat as true).
     var onboardingCompleted: Bool?
+    /// True until the customer agrees to the AI data consent screen (missing → don't ask).
+    var aiDataConsentRequired: Bool?
+    /// When the customer last agreed, ISO-8601 UTC.
+    var aiDataConsentAt: String?
+}
+
+struct AiDataConsentResponse: Codable {
+    var aiDataConsentAt: String
 }
 
 // MARK: - Instructions (src/models/instruction.models.ts)

@@ -13,5 +13,7 @@ data class CustomerProfile(
     val username: String? = null,
     val isDiscoverable: Boolean = false,
     val role: ShareRole? = null,
-    val onboardingCompleted: Boolean = true
+    val onboardingCompleted: Boolean = true,
+    val aiDataConsentVersion: Int? = null,
+    val aiDataConsentAt: String? = null
 )

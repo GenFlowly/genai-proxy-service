@@ -5,6 +5,7 @@ import com.genflowly.models.api.CreateInstructionRequest
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.utils.bearerToken
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -49,6 +50,7 @@ fun Route.registerCreateInstructionRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                if (!call.ensureAiDataConsent(customerProfileService)) return@post
                 val request = call.receive<CreateInstructionRequest>()
                 val token = call.bearerToken()
 

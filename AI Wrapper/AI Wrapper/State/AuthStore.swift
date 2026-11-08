@@ -25,6 +25,9 @@ final class AuthStore: ObservableObject {
     @Published var cacheVersions: [String: Int]?
     /// First-run onboarding gate (missing → true, mirroring the web).
     @Published var onboardingCompleted: Bool = true
+    /// Holds the whole app behind the AI data consent screen.
+    @Published var aiDataConsentRequired = false
+    @Published var aiDataConsentAt: String?
 
     private var onboardRetryTask: Task<Void, Never>?
     private var onboardFailed = false
@@ -103,6 +106,8 @@ final class AuthStore: ObservableObject {
         customerPicture = nil
         isInstructionsLoaded = false
         onboardingCompleted = true
+        aiDataConsentRequired = false
+        aiDataConsentAt = nil
         // Tokens (Keychain)
         auth0.clearSession()
         isAuth0Authenticated = false
@@ -118,6 +123,13 @@ final class AuthStore: ObservableObject {
             logout()
             throw Auth0Service.AuthError.loginRequired
         }
+    }
+
+    /// Not optimistic: the consent screen stays up until the server has recorded the agreement.
+    func acceptAiDataConsent() async throws {
+        let token = try await getAccessTokenSilently()
+        aiDataConsentAt = try await OnboardingService.acceptAiDataConsent(token: token)
+        aiDataConsentRequired = false
     }
 
     // MARK: - Onboard sync
@@ -154,6 +166,8 @@ final class AuthStore: ObservableObject {
             if let vectorConfigs = data.vectorDBConfigStatusList { vectorDBConfigStatusList = vectorConfigs }
             cacheVersions = data.cacheVersions ?? [:]
             onboardingCompleted = data.onboardingCompleted ?? true
+            aiDataConsentRequired = data.aiDataConsentRequired ?? false
+            aiDataConsentAt = data.aiDataConsentAt
             onboardFailed = false
             // Names and options follow when it arrives; a slow catalog mustn't hold the app back.
             Task { await ProviderCatalog.shared.load(token: token) }

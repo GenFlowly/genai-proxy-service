@@ -1,5 +1,6 @@
 package com.genflowly.service
 
+import com.genflowly.config.AppConfig
 import com.genflowly.models.api.AIConfigPreferences
 import com.genflowly.models.api.OnboardCustomerResponse
 import com.genflowly.repository.CustomerProfileRepository
@@ -8,8 +9,15 @@ import kotlinx.coroutines.coroutineScope
 import com.genflowly.models.AIConfig
 import com.genflowly.models.generateCustomerId
 import mu.KotlinLogging
+import java.time.Instant
 
 private val logger = KotlinLogging.logger {}
+
+/**
+ * Version of what the AI data consent screen discloses. Bump it when a new kind
+ * of recipient or data is added, and every customer is asked again.
+ */
+const val CURRENT_AI_DATA_CONSENT_VERSION = 1
 
 /**
  * The customer profile domain: onboarding orchestration, profile reads,
@@ -114,7 +122,9 @@ class CustomerProfileService(
                 picture = existingCustomer["picture"]?.s(),
                 username = existingCustomer["username"]?.s(),
                 isDiscoverable = existingCustomer["isDiscoverable"]?.bool() ?: false,
-                onboardingCompleted = existingCustomer["onboardingCompleted"]?.bool() ?: true
+                onboardingCompleted = existingCustomer["onboardingCompleted"]?.bool() ?: true,
+                aiDataConsentVersion = existingCustomer["aiDataConsentVersion"]?.n()?.toIntOrNull(),
+                aiDataConsentAt = existingCustomer["aiDataConsentAt"]?.s()
             )
         }
 
@@ -190,8 +200,14 @@ class CustomerProfileService(
             val customerInstructions = async { instructionService.getLatestCustomerInstructions(customerProfile.customerId) }
             val cacheVersions = async { cacheVersionService.getCacheVersions(customerProfile.customerId) }
 
-            // Fire and forget backfill missing categories/icons using AI
-            instructionService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await())
+            val aiDataConsentRequired = client != AppConfig.CLIENT_ADMIN_PANEL &&
+                !isCurrentAiDataConsent(customerProfile.aiDataConsentVersion)
+
+            // Fire and forget backfill missing categories/icons using AI. It sends
+            // instruction text to the customer's provider, so it waits for consent.
+            if (!aiDataConsentRequired) {
+                instructionService.backfillInstructionsAsync(customerProfile.customerId, customerInstructions.await())
+            }
 
             OnboardCustomerResponse(
                 customerId = customerProfile.customerId,
@@ -202,6 +218,8 @@ class CustomerProfileService(
                 customerInstructions = customerInstructions.await(),
                 vectorDBConfigStatusList = vectorDBConfigStatusList.await(),
                 onboardingCompleted = customerProfile.onboardingCompleted,
+                aiDataConsentRequired = aiDataConsentRequired,
+                aiDataConsentAt = customerProfile.aiDataConsentAt,
                 cacheVersions = cacheVersions.await()
             )
         }
@@ -220,6 +238,27 @@ class CustomerProfileService(
 
     suspend fun completeOnboarding(sub: String, client: String) =
         customerProfileRepository.markOnboardingCompleted(sub, client)
+
+    /** Records agreement to the current consent version and returns when, ISO-8601 UTC. */
+    suspend fun acceptAiDataConsent(sub: String, client: String): String {
+        val acceptedAt = Instant.now().toString()
+        customerProfileRepository.recordAiDataConsent(sub, client, CURRENT_AI_DATA_CONSENT_VERSION, acceptedAt)
+        return acceptedAt
+    }
+
+    /**
+     * Whether a request on this Auth0 token may send the customer's content to
+     * third-party services. Only the customer app shows the consent screen, so
+     * the admin panel, and an identity with no customer-app account, aren't held to it.
+     */
+    suspend fun hasAiDataConsent(sub: String, azp: String?): Boolean {
+        if (appConfig.clientAppForAzp(azp) == AppConfig.CLIENT_ADMIN_PANEL) return true
+        val consent = customerProfileRepository.getAiDataConsent(sub, AppConfig.CLIENT_REACT_APP) ?: return true
+        return isCurrentAiDataConsent(consent["aiDataConsentVersion"]?.n()?.toIntOrNull())
+    }
+
+    private fun isCurrentAiDataConsent(version: Int?): Boolean =
+        version != null && version >= CURRENT_AI_DATA_CONSENT_VERSION
 
     suspend fun searchByUsername(usernamePrefix: String) =
         customerProfileRepository.searchByUsername(usernamePrefix)

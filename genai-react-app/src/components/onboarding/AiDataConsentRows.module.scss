@@ -1,0 +1,51 @@
+@import '../../styles/themes.scss';
+
+.card {
+    display: flex;
+    flex-direction: column;
+    background-color: $color-background-secondary;
+    border: 1px solid $color-border-light;
+    border-radius: 12px;
+}
+
+.row {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+
+    & + & {
+        border-top: 1px solid $color-background-tertiary;
+    }
+}
+
+.icon {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 10px;
+    background-color: $color-background-tertiary;
+    color: $color-text-primary;
+}
+
+.text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.title {
+    font-size: 0.9375rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    color: $color-text-primary;
+}
+
+.body {
+    font-size: 0.8125rem;
+    line-height: 1.125rem;
+    color: $color-text-muted;
+}

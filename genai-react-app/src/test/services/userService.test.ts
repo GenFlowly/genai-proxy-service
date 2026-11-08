@@ -1,4 +1,4 @@
-import { searchUserByUsername, getUserProfile, updateUsername, updateDiscoverability } from '../../services/userService';
+import { searchUserByUsername, getUserProfile, updateUsername, updateDiscoverability, acceptAiDataConsent } from '../../services/userService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { endpoints } from '../../config/endpoints';
 
@@ -87,6 +87,29 @@ describe('userService', () => {
             (fetchWithRetry as jest.Mock).mockResolvedValue({ ok: false });
             const result = await updateDiscoverability(mockToken, false);
             expect(result).toBe(false);
+        });
+    });
+    describe('acceptAiDataConsent', () => {
+        it('posts the agreement and returns when it was recorded', async () => {
+            (fetchWithRetry as jest.Mock).mockResolvedValue({
+                ok: true,
+                json: async () => ({ aiDataConsentAt: '2026-11-08T21:00:00Z' }),
+            });
+
+            await expect(acceptAiDataConsent('token')).resolves.toBe('2026-11-08T21:00:00Z');
+            expect(fetchWithRetry).toHaveBeenCalledWith(
+                endpoints.aiDataConsent,
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({ Authorization: 'Bearer token' }),
+                })
+            );
+        });
+
+        it('throws when the server refuses', async () => {
+            (fetchWithRetry as jest.Mock).mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' });
+
+            await expect(acceptAiDataConsent('token')).rejects.toThrow('AI data consent failed: 500');
         });
     });
 });

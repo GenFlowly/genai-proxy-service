@@ -34,7 +34,10 @@ struct ContentView: View {
         // First-run FTUE gate (web AppContent): a brand-new account (onboarding flag
         // false) sees the wizard in place of the app until it finishes/skips.
         Group {
-            if auth.isAuthenticated && !auth.onboardingCompleted {
+            if auth.isAuthenticated && auth.aiDataConsentRequired {
+                // Before the wizard, whose key checks are the first calls to a provider.
+                AiDataConsentView()
+            } else if auth.isAuthenticated && !auth.onboardingCompleted {
                 OnboardingWizard()
             } else {
                 mainShell

@@ -168,4 +168,16 @@ class UsernameGenerationTest {
         assertTrue(updates[0].updateExpression()!!.contains("SET onboardingCompleted = :c"))
         assertEquals(true, updates[0].expressionAttributeValues()[":c"]?.bool())
     }
+
+    @Test
+    fun `recordAiDataConsent stores the version and when`() = runTest {
+        val updates = mutableListOf<UpdateItemRequest>()
+        every { client.updateItem(capture(updates)) } returns UpdateItemResponse.builder().build()
+
+        provider.recordAiDataConsent("auth0|abc", "REACT_APP", 1, "2026-11-08T21:00:00Z")
+
+        assertTrue(updates[0].updateExpression()!!.contains("aiDataConsentVersion = :v"))
+        assertEquals("1", updates[0].expressionAttributeValues()[":v"]?.n())
+        assertEquals("2026-11-08T21:00:00Z", updates[0].expressionAttributeValues()[":a"]?.s())
+    }
 }
