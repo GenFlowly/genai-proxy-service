@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { ProfileSettings } from './ProfileSettings';
 import { useAuth } from '../../../context/AuthContext';
 import { getUserProfile, updateUsername, updateDiscoverability } from '../../../services/userService';
@@ -33,13 +34,13 @@ describe('ProfileSettings', () => {
 
     test('renders loading state initially', () => {
         mockGetUserProfile.mockReturnValue(new Promise(() => {})); // pending promise
-        render(withQueryClient(<ProfileSettings />));
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
         expect(screen.getByText('Loading profile...')).toBeInTheDocument();
     });
 
     test('renders error state when profile fails to load', async () => {
         mockGetUserProfile.mockRejectedValue(new Error('Failed'));
-        render(withQueryClient(<ProfileSettings />));
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
         await waitFor(() => {
             expect(screen.getByText('Failed to load profile data.')).toBeInTheDocument();
         });
@@ -54,7 +55,7 @@ describe('ProfileSettings', () => {
             picture: 'http://example.com/pic.jpg'
         });
 
-        render(withQueryClient(<ProfileSettings />));
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
         
         await waitFor(() => {
             expect(screen.getByText('Personal Details')).toBeInTheDocument();
@@ -75,7 +76,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateUsername.mockResolvedValue(undefined);
 
-        render(withQueryClient(<ProfileSettings />));
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
         
         await waitFor(() => {
             expect(screen.getByText('Personal Details')).toBeInTheDocument();
@@ -102,7 +103,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateUsername.mockRejectedValue(new Error('Username taken'));
 
-        render(withQueryClient(<ProfileSettings />));
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
         
         await waitFor(() => {
             expect(screen.getByText('Personal Details')).toBeInTheDocument();
@@ -130,7 +131,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateDiscoverability.mockResolvedValue(true);
 
-        render(withQueryClient(<ProfileSettings />));
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
         
         await waitFor(() => {
             expect(screen.getByText('Personal Details')).toBeInTheDocument();
@@ -154,7 +155,7 @@ describe('ProfileSettings', () => {
         });
         mockUpdateDiscoverability.mockResolvedValue(false); // indicates failure
 
-        render(withQueryClient(<ProfileSettings />));
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
         
         await waitFor(() => {
             expect(screen.getByText('Personal Details')).toBeInTheDocument();
@@ -168,6 +169,37 @@ describe('ProfileSettings', () => {
             expect(screen.getByText('Failed to update discoverability')).toBeInTheDocument();
             // Should revert
             expect(checkbox).not.toBeChecked();
+        });
+    });
+
+    describe('AI data sharing', () => {
+        const profile = { username: 'ada', email: 'ada@example.com', name: 'Ada', isDiscoverable: false };
+
+        test('shows what is shared, when the customer agreed, and where to manage services', async () => {
+            mockGetUserProfile.mockResolvedValue(profile);
+            mockUseAuth.mockReturnValue({
+                getAccessTokenSilently: mockGetAccessTokenSilently,
+                isAuthenticated: true,
+                customerId: 'cust-1',
+                aiDataConsentAt: '2026-11-08T21:00:00Z',
+            });
+
+            render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
+
+            expect(await screen.findByTestId('ai-data-sharing')).toBeInTheDocument();
+            expect(screen.getByText('AI model providers')).toBeInTheDocument();
+            expect(screen.getByText(/You agreed on/)).toBeInTheDocument();
+            expect(screen.getByRole('link', { name: 'Manage your connected services' }))
+                .toHaveAttribute('href', '/settings/ai/llm-keys');
+        });
+
+        test('leaves out the date when there is none', async () => {
+            mockGetUserProfile.mockResolvedValue(profile);
+
+            render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
+
+            expect(await screen.findByTestId('ai-data-sharing')).toBeInTheDocument();
+            expect(screen.queryByText(/You agreed on/)).not.toBeInTheDocument();
         });
     });
 });

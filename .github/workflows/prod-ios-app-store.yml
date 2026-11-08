@@ -3,9 +3,9 @@ name: Production iOS TestFlight
 # Self-triggered: runs only when the iOS app (or this workflow) changes.
 # Runs the unit tests, uploads a signed production-stage build to TestFlight for internal
 # testers and selects it on the App Store version draft. Nothing is submitted for review:
-# that is done by hand in App Store Connect after testing the TestFlight build. The version
-# comes from the Xcode target (MARKETING_VERSION) and must be bumped after each release. The
-# recipe and the credential names are in AI Wrapper/fastlane/Fastfile.
+# that is done by hand in App Store Connect after testing the TestFlight build. Each run takes
+# the next patch version above what App Store Connect has seen. The recipe and the credential
+# names are in AI Wrapper/fastlane/Fastfile.
 on:
   push:
     branches: [main]
@@ -14,7 +14,7 @@ on:
       - '.github/workflows/prod-ios-app-store.yml'
   workflow_dispatch:
 
-# Build numbers come from App Store Connect, so runs upload one at a time.
+# Versions and build numbers come from App Store Connect, so runs upload one at a time.
 concurrency:
   group: ios-app-store-connect
   cancel-in-progress: false

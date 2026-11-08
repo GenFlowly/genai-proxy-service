@@ -4,6 +4,7 @@ import com.genflowly.ResponseHeaders
 import com.genflowly.Routes
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.bearerToken
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -82,6 +83,7 @@ fun Route.registerGenerateTextStreamRoutes(
                 val customerId = call.requireAuthenticatedCustomerId(
                     customerProfileService
                 )
+                if (!call.ensureAiDataConsent(customerProfileService)) return@post
 
                 logger.info(
                     "Received GenerateTextStream request from customerId {} — client={} conversationId={} " +

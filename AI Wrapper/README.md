@@ -86,7 +86,7 @@ Runner: GitHub's `xcode-27` image (macOS 27, Xcode 27.1 pinned through `DEVELOPE
 
 ### Versions and build numbers
 
-- **Version** (`MARKETING_VERSION`, Xcode → target `AI Wrapper` → General → Version) is the App Store version. Merges keep adding TestFlight builds to the same version until Apple approves it; after that Apple refuses new builds for it, so bump it before the next merge to `main`. The workflow stops before building if that version is already live.
+- **Version** is assigned on CI: each merge that changes the app takes one patch above the highest version App Store Connect has seen (the latest upload or the live version), passed as `MARKETING_VERSION`. An unreleased version page is renamed to match. To start a new minor or major, raise Version in Xcode (target `AI Wrapper` → General); the workflow never goes below it. The number in the project is otherwise only used by local builds, so it doesn't follow each release.
 - **Build number** is assigned on CI: the latest build in App Store Connect + 1, passed as `CURRENT_PROJECT_VERSION`. The `1` in the project is only used by local builds.
 
 ### Stage values and secrets on CI

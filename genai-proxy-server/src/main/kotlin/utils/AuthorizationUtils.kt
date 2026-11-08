@@ -51,6 +51,30 @@ fun ApplicationCall.authenticatedSub(): String? =
 fun ApplicationCall.authenticatedAzp(): String? =
     principal<JWTPrincipal>()?.payload?.getClaim("azp")?.asString()
 
+private val AI_DATA_CONSENT_REQUIRED_STATUS = HttpStatusCode(428, "Precondition Required")
+
+/**
+ * False, after responding 428, when the signed-in customer hasn't agreed to the
+ * AI data consent screen. Call it on routes that send the customer's content to
+ * a third-party service. 428 rather than 403 because the clients read a 403 on
+ * these routes as an expired session and sign out. Developer API keys have no
+ * consent screen, so they pass.
+ */
+suspend fun ApplicationCall.ensureAiDataConsent(
+    customerProfileService: CustomerProfileService
+): Boolean {
+    val sub = authenticatedSub() ?: return true
+    if (customerProfileService.hasAiDataConsent(sub, authenticatedAzp())) return true
+    respond(
+        AI_DATA_CONSENT_REQUIRED_STATUS,
+        mapOf(
+            "error" to "Reload the app and agree to how your data is shared to continue.",
+            "code" to "AI_DATA_CONSENT_REQUIRED"
+        )
+    )
+    return false
+}
+
 /**
  * Extract sub from JWT and fetch customerId, responding with 403 if not found
  * 

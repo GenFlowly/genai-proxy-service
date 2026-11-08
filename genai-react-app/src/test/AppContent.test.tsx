@@ -41,6 +41,15 @@ jest.mock('../components/onboarding/OnboardingWizard', () => ({
     ),
 }))
 
+jest.mock('../components/onboarding/AiDataConsentScreen', () => ({
+    AiDataConsentScreen: ({ onAgree, onDecline }: any) => (
+        <div data-testid="ai-consent-mock">
+            <button data-testid="ai-consent-mock-agree" onClick={() => onAgree()} />
+            <button data-testid="ai-consent-mock-decline" onClick={() => onDecline()} />
+        </div>
+    ),
+}))
+
 const mockLoginWithRedirect = jest.fn()
 jest.mock('@auth0/auth0-react', () => ({
     useAuth0: jest.fn(() => ({
@@ -207,6 +216,71 @@ describe('AppContent', () => {
         renderAt('/chat')
         expect(screen.queryByTestId('onboarding-wizard-mock')).not.toBeInTheDocument()
         expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+    })
+
+    describe('AI data consent gate', () => {
+        const signedIn = (overrides: object) => mockUseAuth.mockReturnValue({
+            isLoading: false,
+            isAuthenticated: true,
+            isSessionAuthenticated: true,
+            isOnboarding: false,
+            onboardingCompleted: true,
+            aiDataConsentRequired: true,
+            acceptAiDataConsent: jest.fn(),
+            logout: jest.fn(),
+            ...overrides,
+        })
+
+        it('covers the whole app until the customer agrees', () => {
+            signedIn({})
+            renderAt('/chat')
+            expect(screen.getByTestId('ai-consent-mock')).toBeInTheDocument()
+            expect(screen.queryByTestId('landing-page')).not.toBeInTheDocument()
+        })
+
+        it('comes before the setup wizard for a new account', () => {
+            signedIn({ onboardingCompleted: false })
+            renderAt('/chat')
+            expect(screen.getByTestId('ai-consent-mock')).toBeInTheDocument()
+            expect(screen.queryByTestId('onboarding-wizard-mock')).not.toBeInTheDocument()
+        })
+
+        it('waits for /onboard before asking', () => {
+            signedIn({ isOnboarding: true })
+            renderAt('/chat')
+            expect(screen.queryByTestId('ai-consent-mock')).not.toBeInTheDocument()
+        })
+
+        it('is gone once the customer has agreed', () => {
+            signedIn({ aiDataConsentRequired: false })
+            renderAt('/chat')
+            expect(screen.queryByTestId('ai-consent-mock')).not.toBeInTheDocument()
+            expect(screen.getByTestId('landing-page')).toBeInTheDocument()
+        })
+
+        it('leaves the privacy policy readable, for both gates', () => {
+            signedIn({ onboardingCompleted: false })
+            renderAt('/privacy-policy')
+            expect(screen.getByTestId('privacy-policy-page')).toBeInTheDocument()
+            expect(screen.queryByTestId('ai-consent-mock')).not.toBeInTheDocument()
+            expect(screen.queryByTestId('onboarding-wizard-mock')).not.toBeInTheDocument()
+        })
+
+        it('agrees through the auth context', () => {
+            const acceptAiDataConsent = jest.fn()
+            signedIn({ acceptAiDataConsent })
+            renderAt('/chat')
+            fireEvent.click(screen.getByTestId('ai-consent-mock-agree'))
+            expect(acceptAiDataConsent).toHaveBeenCalledTimes(1)
+        })
+
+        it('declining signs out', () => {
+            const logout = jest.fn()
+            signedIn({ logout })
+            renderAt('/chat')
+            fireEvent.click(screen.getByTestId('ai-consent-mock-decline'))
+            expect(logout).toHaveBeenCalledWith({ returnTo: window.location.origin })
+        })
     })
 
     describe('below isNarrow', () => {

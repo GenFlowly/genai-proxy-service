@@ -164,6 +164,7 @@ enum Endpoints {
     static func usageWebSearch(from: String, to: String) -> URL { URL(string: "\(base)/usage/web-search?from=\(enc(from))&to=\(enc(to))")! }
     // Onboarding FTUE
     static var completeOnboarding: URL { URL(string: "\(base)/profile/onboarding-completed")! }
+    static var aiDataConsent: URL { URL(string: "\(base)/profile/ai-data-consent")! }
     // Tools + tool credentials (built-in web search, custom tools)
     static var customerTools: URL { URL(string: "\(base)/tools")! }
     static func customerTool(_ name: String) -> URL { URL(string: "\(base)/tools/\(enc(name))")! }

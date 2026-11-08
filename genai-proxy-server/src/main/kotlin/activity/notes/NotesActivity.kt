@@ -10,6 +10,7 @@ import com.genflowly.models.api.SaveNoteRequest
 import com.genflowly.models.api.SaveNoteResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.bearerToken
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.delete
 import io.github.smiley4.ktoropenapi.get
@@ -81,6 +82,7 @@ fun Route.registerNotesRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                if (!call.ensureAiDataConsent(customerProfileService)) return@post
                 
                 val token = call.bearerToken()
                 if (token == null) {

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { useDefaultsPrefetch } from './hooks/useDefaultsPrefetch'
 import { useTapOutsideEndsEditing } from './hooks/useTapOutsideEndsEditing'
@@ -25,6 +25,7 @@ import SupportPage from './pages/SupportPage/SupportPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { OnboardingWizard } from './components/onboarding/OnboardingWizard'
+import { AiDataConsentScreen } from './components/onboarding/AiDataConsentScreen'
 import { AppMenuOverlay } from './components/sections/L1Menu/AppMenuOverlay'
 import AppFooter from './components/AppFooter/AppFooter'
 import ServiceWorkerUpdateNotifier from './components/common/ServiceWorkerUpdateNotifier/ServiceWorkerUpdateNotifier'
@@ -49,19 +50,37 @@ function NewChatRoute(): React.ReactElement {
 }
 
 export default function AppContent(): React.ReactElement | null {
-    const { isLoading, isOnboarding, isAuthenticated, onboardingCompleted, completeOnboarding } = useAuth()
+    const {
+        isLoading, isOnboarding, isAuthenticated, onboardingCompleted, completeOnboarding,
+        aiDataConsentRequired, acceptAiDataConsent, logout,
+    } = useAuth()
     const { isNarrow } = useResponsiveBreakpoints()
     const navigate = useNavigate()
+    const { pathname } = useLocation()
     useDefaultsPrefetch()
     useTapOutsideEndsEditing()
 
     // The boot splash (public/index.html) covers this until SplashScreenDismisser lifts it.
     if (isLoading) return null
 
+    // The consent screen opens the policy in a new tab of this same session,
+    // so the gates below mustn't cover the page it links to.
+    const isReadingPolicy = pathname === '/privacy-policy'
+
+    // Before the wizard, whose key checks are the first calls to a provider.
+    if (isAuthenticated && !isOnboarding && aiDataConsentRequired && !isReadingPolicy) {
+        return (
+            <AiDataConsentScreen
+                onAgree={acceptAiDataConsent}
+                onDecline={() => logout({ returnTo: window.location.origin })}
+            />
+        )
+    }
+
     // isAuthenticated here is the strict flag (Auth0 session + /onboard success);
     // isOnboarding means the /onboard sync call itself is still in flight — wait
     // for it so the wizard isn't flashed for an account that's already done.
-    if (isAuthenticated && !isOnboarding && onboardingCompleted === false) {
+    if (isAuthenticated && !isOnboarding && onboardingCompleted === false && !isReadingPolicy) {
         const finishOnboarding = async () => {
             await completeOnboarding()
             if (isNarrow) navigate('/chat', { state: OPEN_L2_MENU_STATE })

@@ -5,6 +5,7 @@ import com.genflowly.models.api.CreateConversationTitleRequest
 import com.genflowly.models.api.CreateConversationTitleResponse
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.service.CustomerProfileService
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.post
 import io.ktor.http.HttpStatusCode
@@ -52,6 +53,7 @@ fun Route.registerCreateConversationTitleRoutes(
             try {
                 val request = call.receive<CreateConversationTitleRequest>()
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                if (!call.ensureAiDataConsent(customerProfileService)) return@post
 
                 logger.info(
                     "Received CreateConversationTitle request from customerId {}: {}",

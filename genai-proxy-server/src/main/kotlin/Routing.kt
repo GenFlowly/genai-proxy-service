@@ -107,6 +107,7 @@ object Routes {
     const val UPDATE_USERNAME = "$API_V1/profile/username"
     const val UPDATE_DISCOVERABILITY = "$API_V1/profile/discoverability"
     const val COMPLETE_ONBOARDING = "$API_V1/profile/onboarding-completed"
+    const val AI_DATA_CONSENT = "$API_V1/profile/ai-data-consent"
     const val SEARCH_USERS = "$API_V1/users/search"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
     const val PROVIDERS = "$API_V1/providers"

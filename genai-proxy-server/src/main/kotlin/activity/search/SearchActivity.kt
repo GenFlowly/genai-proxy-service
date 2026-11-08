@@ -6,6 +6,7 @@ import com.genflowly.models.api.SearchErrorResponse
 import com.genflowly.models.api.SearchResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.UnifiedSearchService
+import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
@@ -58,6 +59,7 @@ fun Route.registerSearchRoutes(
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                if (!call.ensureAiDataConsent(customerProfileService)) return@get
 
                 val query = call.request.queryParameters["q"]?.trim()
                 if (query.isNullOrBlank()) {
