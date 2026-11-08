@@ -47,11 +47,18 @@ platform :ios do
   desc "Signed build of the production stage, uploaded to TestFlight for internal testers and attached to the App Store version draft. Submitting for review is left to App Store Connect."
   lane :release do
     api_key = connect_api_key
+    # Both only ever go up, across every upload including any made from Xcode.
+    build_number = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      initial_build_number: 0
+    ).to_i + 1
     # Debug and Release use different Info plists; without a configuration the action prompts
     # for one, which aborts on CI.
-    version = get_version_number(xcodeproj: PROJECT, target: APP_TARGET, configuration: "Release")
-    ensure_version_not_live(version)
-    ipa = build_signed(stage: "production", api_key: api_key)
+    floor = get_version_number(xcodeproj: PROJECT, target: APP_TARGET, configuration: "Release")
+    version = next_app_version(floor, lane_context[SharedValues::LATEST_TESTFLIGHT_VERSION], live_app_version)
+    UI.message("Releasing version #{version} (#{build_number})")
+    ipa = build_signed(stage: "production", api_key: api_key, version: version, build_number: build_number)
     # An App Store version only accepts a build Apple has finished processing, so this waits.
     upload_to_testflight(
       api_key: api_key,
@@ -86,13 +93,6 @@ platform :ios do
     get_provisioning_profile(**profile)
     profile_name = lane_context[SharedValues::SIGH_NAME]
 
-    # Build numbers only ever go up, across every upload including any made from Xcode.
-    build_number = latest_testflight_build_number(
-      api_key: api_key,
-      app_identifier: APP_IDENTIFIER,
-      initial_build_number: 0
-    ).to_i + 1
-
     # Signing goes on the app target only. As xcargs it would also reach the Swift package
     # resource bundles (SwiftMath_SwiftMath), which then demand a team of their own. The
     # action edits project.pbxproj in place, so it is restored for local runs.
@@ -121,7 +121,7 @@ platform :ios do
           signingStyle: "manual",
           provisioningProfiles: { APP_IDENTIFIER => profile_name }
         },
-        xcargs: "CURRENT_PROJECT_VERSION=#{build_number}"
+        xcargs: "MARKETING_VERSION=#{options[:version]} CURRENT_PROJECT_VERSION=#{options[:build_number]}"
       )
     ensure
       File.write(pbxproj, original_pbxproj)
@@ -163,14 +163,20 @@ def write_ci_xcconfig(stage)
   UI.message("#{CI_XCCONFIG}: stage #{stage}, overrides #{lines.drop(1).map { |l| l.split(' = ').first }.inspect}")
 end
 
-# Apple refuses a second release of a version string, so a merge to main without a version bump
-# must stop here rather than after a 15-minute build.
-def ensure_version_not_live(version)
+# One patch above the highest version App Store Connect has seen. The Xcode target's Version is
+# a floor, so raising it there starts a new minor or major.
+def next_app_version(floor, *seen)
+  highest = seen.compact.map { |version| Gem::Version.new(version) }.max
+  return floor if highest.nil?
+  major, minor, patch = (highest.segments + [0, 0, 0]).first(3)
+  bumped = "#{major}.#{minor}.#{patch + 1}"
+  Gem::Version.new(floor) > Gem::Version.new(bumped) ? floor : bumped
+end
+
+def live_app_version
   app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
   UI.user_error!("No App Store Connect app has the bundle ID #{APP_IDENTIFIER}; create it there first.") if app.nil?
-  live = app.get_live_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
-  return if live.nil? || Gem::Version.new(live.version_string) < Gem::Version.new(version)
-  UI.user_error!("Version #{version} is not newer than the live App Store version #{live.version_string}. Bump Version on the AI Wrapper target (General tab) and merge again.")
+  app.get_live_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)&.version_string
 end
 
 # Leaves the App Store version page ready to submit: the unreleased version is created (or
@@ -180,8 +186,10 @@ def draft_app_store_version(version, build_number)
   platform = Spaceship::ConnectAPI::Platform::IOS
   app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
   draft = app.get_edit_app_store_version(platform: platform)
-  if draft&.app_version_state == Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::WAITING_FOR_REVIEW
-    UI.user_error!("Build #{build_number} is in TestFlight, but version #{draft.version_string} is waiting for review and its build can't change. To ship this build instead, remove that version from review in App Store Connect and select build #{build_number} on its page.")
+  waiting = draft if draft&.app_version_state == Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::WAITING_FOR_REVIEW
+  locked = waiting || app.get_in_review_app_store_version(platform: platform)
+  if locked
+    UI.user_error!("Version #{version} (#{build_number}) is in TestFlight, but version #{locked.version_string} is with App Review and can't be renamed. To ship a newer build, remove #{locked.version_string} from review in App Store Connect and run this workflow again.")
   end
   app.ensure_version!(version, platform: platform)
   draft = app.get_edit_app_store_version(platform: platform)
