@@ -20,6 +20,9 @@ env:
   # Every support request is emailed here. A new address gets a confirmation
   # email from AWS and receives nothing until someone clicks its link.
   SUPPORT_EMAILS: customer-support@genflowly.com
+  # POST /support accepts only these Auth0 access tokens: the ones the web and iOS apps get.
+  AUTH0_SPA_DOMAIN: ${{ secrets.AUTH0_SPA_DOMAIN }}
+  AUTH0_API_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
 
 jobs:
   deploy:

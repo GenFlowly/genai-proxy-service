@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -14,6 +15,10 @@ export interface SupportStackProps extends cdk.StackProps {
     stage: STAGES;
     /** Comma-separated addresses that receive every support request. */
     supportEmails?: string;
+    /** Auth0 domain that issues the apps' access tokens, e.g. auth.genflowly.com. */
+    auth0Domain?: string;
+    /** The access tokens' audience: the stage's API identifier the web and iOS apps request. */
+    auth0Audience?: string;
 }
 
 /** The sites the support form runs on. Browsers on any other origin are refused. */
@@ -21,15 +26,26 @@ const PRODUCTION_ORIGINS = ['https://genflowly.com'];
 const DEVELOPMENT_ORIGINS = ['https://development.genflowly.com', 'http://localhost:3000'];
 
 /**
- * POST /support: the support form's request, emailed to the support inbox
- * through SNS. The API is public because the form works signed out, so the
- * stage throttle is what bounds abuse.
+ * POST /support: a signed-in user's support request, emailed to the support
+ * inbox through SNS. API Gateway checks the Auth0 access token before the
+ * Lambda runs; the stage throttle bounds what a single account can send.
  */
 export class SupportStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props: SupportStackProps) {
         super(scope, id, props);
 
         const prefix = `${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}`;
+
+        if (!props.auth0Domain || !props.auth0Audience) {
+            throw new Error(
+                'AUTH0_SPA_DOMAIN and AUTH0_API_AUDIENCE must be set: POST /support only accepts signed-in requests.'
+            );
+        }
+        const authorizer = new HttpJwtAuthorizer(
+            'Auth0Authorizer',
+            `https://${props.auth0Domain}/`,
+            { jwtAudience: [props.auth0Audience] }
+        );
 
         const topic = new sns.Topic(this, 'SupportRequestsTopic', {
             topicName: `${prefix}-support-requests`,
@@ -84,7 +100,7 @@ export class SupportStack extends cdk.Stack {
                 allowOrigins:
                     props.stage === STAGES.PROD ? PRODUCTION_ORIGINS : DEVELOPMENT_ORIGINS,
                 allowMethods: [apigatewayv2.CorsHttpMethod.POST],
-                allowHeaders: ['Content-Type'],
+                allowHeaders: ['Authorization', 'Content-Type'],
                 maxAge: cdk.Duration.days(1),
             },
         });
@@ -100,6 +116,7 @@ export class SupportStack extends cdk.Stack {
             path: '/support',
             methods: [apigatewayv2.HttpMethod.POST],
             integration: new HttpLambdaIntegration('SupportRequestIntegration', fn),
+            authorizer,
         });
 
         // Read by the web app's deploy workflows.

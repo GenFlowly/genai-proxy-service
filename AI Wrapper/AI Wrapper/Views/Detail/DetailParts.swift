@@ -169,25 +169,35 @@ struct DetailScaffold<Content: View>: View {
     var swipeBack: (() -> Void)?
     /// Edit pages: Cancel and Save, pinned above the keyboard.
     var actions: AnyView?
+    /// The `.id` to scroll to the top while a tall field below it has the keyboard, so `actions`
+    /// doesn't cover the lines being typed.
+    var keyboardScrollTarget: String?
     @ViewBuilder var content: Content
 
     var body: some View {
         ZStack(alignment: .top) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) { content }
-                    .padding(.horizontal, 16)
-                    .padding(.top, mobileHeaderHeight + 12)
-                    .padding(.bottom, 40)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if let actions {
-                    VStack(spacing: 0) {
-                        Rectangle().fill(AppTheme.borderLight).frame(height: 1)
-                        actions.padding(.horizontal, 16).padding(.vertical, 12)
-                    }
-                    .background(AppTheme.background)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) { content }
+                        .padding(.horizontal, 16)
+                        .padding(.top, mobileHeaderHeight + 12)
+                        .padding(.bottom, 40)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if let actions {
+                        VStack(spacing: 0) {
+                            Rectangle().fill(AppTheme.borderLight).frame(height: 1)
+                            actions.padding(.horizontal, 16).padding(.vertical, 12)
+                        }
+                        .background(AppTheme.background)
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    scrollToKeyboardTarget(proxy)
+                }
+                // The keyboard is already up when focus moves here from another field.
+                .onChange(of: keyboardScrollTarget) { _, _ in scrollToKeyboardTarget(proxy) }
             }
 
             if let subtitle {
@@ -201,6 +211,11 @@ struct DetailScaffold<Content: View>: View {
         .statusBarBand()
         .background(AppTheme.background)
         .edgeSwipeBack(backLabel == nil ? swipeBack : onLeading)
+    }
+
+    private func scrollToKeyboardTarget(_ proxy: ScrollViewProxy) {
+        guard let keyboardScrollTarget else { return }
+        withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(keyboardScrollTarget, anchor: .top) }
     }
 }
 

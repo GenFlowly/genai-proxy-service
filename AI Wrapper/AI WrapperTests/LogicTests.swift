@@ -1968,7 +1968,7 @@ struct MenuFlowTests {
 
     @Test(arguments: [
         (AppRouter.Route.chat, MenuLayer.l2), (.memoryDetail("id"), .l2), (.settings(.tools), .l2),
-        (.instructions, .l1), (.instructionDetail("id"), .l1), (.newAgent, .l1),
+        (.instructions, .l1), (.instructionDetail("id"), .l1), (.newAgent, .l1), (.support, .l1),
     ])
     func anEdgeSwipeOnAPageOpensWhatItsHamburgerDoes(route: AppRouter.Route, menu: MenuLayer) {
         let router = AppRouter()
