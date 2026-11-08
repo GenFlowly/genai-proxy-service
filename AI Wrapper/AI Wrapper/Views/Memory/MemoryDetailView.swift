@@ -522,7 +522,7 @@ struct NewMemoryView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         VStack(alignment: .leading, spacing: 6) {
                             WebFieldLabel(L("memoryPage.newMemory.appliesIn"), weight: 600)
-                            MemoryWhereSelect(
+                            PhoneFieldSelect(
                                 value: whereKey,
                                 options: [.init(value: Self.profileKey, label: L("memoryPage.newMemory.profileOption"))]
                                     + memories.projects.map { .init(value: $0.projectId, label: L("memoryPage.newMemory.projectOption", ["name": $0.name])) },
@@ -598,38 +598,3 @@ struct NewMemoryView: View {
     }
 }
 
-/// NewMemoryPage.tsx's `<select>` on a phone: 48pt tall, 16pt text, radius 10, the
-/// field background and border.
-private struct MemoryWhereSelect: View {
-    let value: String
-    let options: [InputSelectWithHint.Option]
-    let onChange: (String) -> Void
-
-    var body: some View {
-        Menu {
-            ForEach(options) { option in
-                Button {
-                    onChange(option.value)
-                } label: {
-                    if option.value == value {
-                        Label(option.label, systemImage: "checkmark")
-                    } else {
-                        Text(option.label)
-                    }
-                }
-            }
-        } label: {
-            NativeSelectLabel(
-                text: options.first { $0.value == value }?.label ?? "",
-                font: DSFont.ui(16),
-                horizontalPadding: 12
-            )
-            .padding(.horizontal, 1)
-            .frame(height: 48)
-            .background(AppTheme.backgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: DSRadius.lg))
-            .overlay(RoundedRectangle(cornerRadius: DSRadius.lg).strokeBorder(AppTheme.border, lineWidth: 1))
-            .contentShape(Rectangle())
-        }
-    }
-}
