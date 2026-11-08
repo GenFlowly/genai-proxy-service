@@ -1,9 +1,8 @@
 # Run from the "AI Wrapper" directory (fastlane cds to the parent of this folder), e.g.
 #   fastlane ios unit_tests            # simulator unit tests, development stage
-#   fastlane ios beta                  # signed development-stage build -> TestFlight
-#   fastlane ios release               # signed production-stage build -> App Store review
+#   fastlane ios release               # signed production-stage build -> TestFlight + App Store version draft
 #
-# Every credential is an environment variable, set by the GitHub workflows from repository and
+# Every credential is an environment variable, set by the GitHub workflow from repository and
 # environment secrets:
 #   APP_STORE_CONNECT_API_KEY_ID / APP_STORE_CONNECT_API_ISSUER_ID / APP_STORE_CONNECT_API_KEY_P8 (base64 .p8)
 #   IOS_DISTRIBUTION_CERT_P12 (base64 .p12) / IOS_DISTRIBUTION_CERT_PASSWORD / IOS_DISTRIBUTION_CERT_ID (optional)
@@ -45,20 +44,7 @@ platform :ios do
     )
   end
 
-  desc "Signed build of the development stage, uploaded to TestFlight for internal testers."
-  lane :beta do |options|
-    api_key = connect_api_key
-    ipa = build_signed(stage: options[:stage] || "development", api_key: api_key)
-    upload_to_testflight(
-      api_key: api_key,
-      ipa: ipa,
-      app_identifier: APP_IDENTIFIER,
-      distribute_external: false,
-      skip_waiting_for_build_processing: true
-    )
-  end
-
-  desc "Signed build of the production stage, submitted for App Store review and released once Apple approves it."
+  desc "Signed build of the production stage, uploaded to TestFlight for internal testers and attached to the App Store version draft. Submitting for review is left to App Store Connect."
   lane :release do
     api_key = connect_api_key
     # Debug and Release use different Info plists; without a configuration the action prompts
@@ -66,24 +52,15 @@ platform :ios do
     version = get_version_number(xcodeproj: PROJECT, target: APP_TARGET, configuration: "Release")
     ensure_version_not_live(version)
     ipa = build_signed(stage: "production", api_key: api_key)
-    upload_to_app_store(
+    # An App Store version only accepts a build Apple has finished processing, so this waits.
+    upload_to_testflight(
       api_key: api_key,
       ipa: ipa,
       app_identifier: APP_IDENTIFIER,
-      app_version: version,
-      skip_metadata: true,
-      skip_screenshots: true,
-      precheck_include_in_app_purchases: false,
-      run_precheck_before_submit: false,
-      force: true,
-      submit_for_review: true,
-      automatic_release: true,
-      reject_if_possible: true,
-      submission_information: {
-        add_id_info_uses_idfa: false,
-        export_compliance_uses_encryption: false
-      }
+      distribute_external: false,
+      skip_waiting_for_build_processing: false
     )
+    draft_app_store_version(version, FastlaneCore::IpaFileAnalyser.fetch_app_build(ipa))
   end
 
   # Archive + export with the Apple Distribution certificate from the secrets and an App Store
@@ -109,7 +86,7 @@ platform :ios do
     get_provisioning_profile(**profile)
     profile_name = lane_context[SharedValues::SIGH_NAME]
 
-    # Build numbers only ever go up, across both lanes and any upload made from Xcode.
+    # Build numbers only ever go up, across every upload including any made from Xcode.
     build_number = latest_testflight_build_number(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
@@ -194,4 +171,22 @@ def ensure_version_not_live(version)
   live = app.get_live_app_store_version(platform: Spaceship::ConnectAPI::Platform::IOS)
   return if live.nil? || Gem::Version.new(live.version_string) < Gem::Version.new(version)
   UI.user_error!("Version #{version} is not newer than the live App Store version #{live.version_string}. Bump Version on the AI Wrapper target (General tab) and merge again.")
+end
+
+# Leaves the App Store version page ready to submit: the unreleased version is created (or
+# renamed) to match the build and the build is selected on it. deliver only selects a build as
+# part of submitting for review, hence the direct API calls.
+def draft_app_store_version(version, build_number)
+  platform = Spaceship::ConnectAPI::Platform::IOS
+  app = Spaceship::ConnectAPI::App.find(APP_IDENTIFIER)
+  draft = app.get_edit_app_store_version(platform: platform)
+  if draft&.app_version_state == Spaceship::ConnectAPI::AppStoreVersion::AppVersionState::WAITING_FOR_REVIEW
+    UI.user_error!("Build #{build_number} is in TestFlight, but version #{draft.version_string} is waiting for review and its build can't change. To ship this build instead, remove that version from review in App Store Connect and select build #{build_number} on its page.")
+  end
+  app.ensure_version!(version, platform: platform)
+  draft = app.get_edit_app_store_version(platform: platform)
+  build = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version, build_number: build_number, platform: platform).first
+  UI.user_error!("Build #{version} (#{build_number}) is not in App Store Connect") if build.nil?
+  draft.select_build(build_id: build.id)
+  UI.success("App Store version #{version} has build #{build_number} selected; submit it for review in App Store Connect once it passes TestFlight.")
 end
