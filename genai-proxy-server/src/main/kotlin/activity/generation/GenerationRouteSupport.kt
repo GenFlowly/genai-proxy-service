@@ -27,6 +27,11 @@ suspend inline fun ApplicationCall.handleGenerationErrors(
             HttpStatusCode.BadRequest,
             mapOf("error" to "Invalid request format: ${e.message}")
         )
+    } catch (e: com.genflowly.service.ContentBlockedException) {
+        respond(
+            HttpStatusCode.UnprocessableEntity,
+            mapOf("error" to e.message.orEmpty(), "code" to "CONTENT_BLOCKED")
+        )
     } catch (e: IllegalArgumentException) {
         // A request the generation validator refused is the caller's mistake,
         // not a server fault — surface the client-facing message as a 400.

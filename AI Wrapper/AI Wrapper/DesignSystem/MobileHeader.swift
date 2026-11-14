@@ -4,6 +4,7 @@ struct MobileHeaderMenuItem: Identifiable {
     let id = UUID()
     let label: String
     var disabled = false
+    var destructive = false
     let action: () -> Void
 }
 
@@ -94,7 +95,8 @@ struct MobileHeader<Subtitle: View>: View {
                 } label: {
                     Text(item.label)
                         .webText(arial: 14.4)
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .foregroundStyle(item.destructive ? AppTheme.error : AppTheme.textPrimary)
+                        .lineLimit(1)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9.6)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -107,7 +109,7 @@ struct MobileHeader<Subtitle: View>: View {
         }
         .padding(.vertical, 4)
         .padding(1)
-        .frame(width: 160)
+        .frame(width: menuItems.contains(where: \.destructive) ? 220 : 160)
         .background(AppTheme.backgroundSecondary)
         .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
         .overlay(RoundedRectangle(cornerRadius: DSRadius.md).strokeBorder(AppTheme.border, lineWidth: 1))

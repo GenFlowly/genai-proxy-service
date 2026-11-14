@@ -56,6 +56,10 @@ fun Route.registerCreateInstructionShareRoutes(
 
                 call.respond(HttpStatusCode.OK, mapOf("status" to "success"))
 
+            } catch (e: com.genflowly.service.ContentBlockedException) {
+                call.respond(HttpStatusCode.UnprocessableEntity, mapOf("error" to e.message.orEmpty(), "code" to "CONTENT_BLOCKED"))
+            } catch (e: com.genflowly.service.UserBlockedException) {
+                call.respond(HttpStatusCode.Forbidden, mapOf("error" to e.message.orEmpty(), "code" to "BLOCKED"))
             } catch (e: Exception) {
                 logger.error("Unexpected error in Create Instruction Share controller: {}", e.message, e)
                 call.respond(

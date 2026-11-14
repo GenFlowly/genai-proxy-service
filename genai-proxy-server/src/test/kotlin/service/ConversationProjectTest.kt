@@ -36,7 +36,7 @@ class ConversationProjectTest {
     private val service = ConversationManagementService(
         conversationService, conversationRepo, mockk(relaxed = true), projectRepo,
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-        mockk(relaxed = true), com.genflowly.di.AppScope()
+        mockk(relaxed = true), com.genflowly.di.AppScope(), mockk(relaxed = true), ContentFilter(emptyList())
     )
 
     private fun stubRole(customerId: String, role: ShareRole?) {

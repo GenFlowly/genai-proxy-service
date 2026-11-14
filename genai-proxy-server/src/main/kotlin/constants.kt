@@ -253,6 +253,22 @@ object DynamoDBConstants {
     const val USERNAME_RECORD_TYPE_KEY = "recordType"
     const val USERNAME_RECORD_TYPE_GSI = "recordTypeIndex"
 
+    // Reports of shared content: PK=entityId, SK=reporterCustomerId. The index
+    // lists one status newest first.
+    const val CONTENT_REPORTS_TABLE = "ContentReports"
+    const val CONTENT_REPORTS_STATUS_GSI = "statusCreatedIndex"
+    const val ENTITY_ID_KEY = "entityId"
+    const val REPORTER_CUSTOMER_ID_KEY = "reporterCustomerId"
+    const val REPORT_STATUS_KEY = "status"
+    const val CREATED_AT_KEY = "createdAt"
+
+    // Who blocked whom: PK=blockerCustomerId, SK=blockedCustomerId. The
+    // keys-only index answers "who blocked me".
+    const val CUSTOMER_BLOCKS_TABLE = "CustomerBlocks"
+    const val CUSTOMER_BLOCKS_BLOCKED_GSI = "blockedCustomerIdIndex"
+    const val BLOCKER_CUSTOMER_ID_KEY = "blockerCustomerId"
+    const val BLOCKED_CUSTOMER_ID_KEY = "blockedCustomerId"
+
     // GSI on CustomerProfile keyed by customerId (profiles are stored under sub+client).
     const val CUSTOMER_PROFILE_CUSTOMER_ID_GSI = "customerIdIndex"
 

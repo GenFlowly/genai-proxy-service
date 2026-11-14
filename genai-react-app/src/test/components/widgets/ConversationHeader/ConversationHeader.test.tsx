@@ -8,6 +8,7 @@ import { useAuth } from '../../../../context/AuthContext'
 import { useAuth0 } from '@auth0/auth0-react'
 import { useToast } from '../../../../context/ToastContext'
 import * as conversationService from '../../../../services/conversationService'
+import { ModerationError } from '../../../../services/moderationService'
 
 jest.mock('../../../../context/ConversationContext')
 jest.mock('../../../../context/AuthContext', () => ({
@@ -20,6 +21,10 @@ jest.mock('../../../../context/ToastContext')
 jest.mock('../../../../services/conversationService')
 jest.mock('../../../../context/AIContext', () => ({
     useAI: jest.fn(),
+}))
+const mockModeration = jest.fn()
+jest.mock('../../../../hooks/useSharedItemModeration', () => ({
+    useSharedItemModeration: (options: unknown) => mockModeration(options),
 }))
 jest.mock('../../../../hooks/useWindowSize', () => ({
     useWindowSize: jest.fn(),
@@ -73,6 +78,8 @@ describe('ConversationHeader', () => {
         mockUseAuth.mockReturnValue({
             entitlements: { canShare: true },
         })
+
+        mockModeration.mockReturnValue({ owner: undefined, ownerLabel: '', actions: [], dialogs: null })
 
         // Desktop viewport and no instruction selected by default
         mockUseWindowSize.mockReturnValue({ width: 1200, height: 800 })
@@ -369,6 +376,61 @@ describe('ConversationHeader', () => {
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByTestId('loaded-instruction')).toHaveTextContent('Plain Persona')
+    })
+
+    describe('an item shared with the viewer', () => {
+        const report = jest.fn()
+        const shared = (role: 'VIEW' | 'EDIT' = 'VIEW') => {
+            mockUseConversation.mockReturnValue({ conversationId: '123', conversationTitle: 'Test', conversationRole: role, resetConversation: jest.fn() })
+            mockModeration.mockReturnValue({
+                owner: { ownerCustomerId: 'CU1' },
+                ownerLabel: '@mara',
+                actions: [{ key: 'report', label: 'Report conversation', onSelect: report, testId: 'conversation-report' }],
+                dialogs: <div data-testid="moderation-dialogs" />,
+            })
+        }
+
+        test('asks for moderation only on a conversation the viewer does not own', () => {
+            mockUseConversation.mockReturnValue({ conversationId: '123', conversationTitle: 'Test', conversationRole: 'OWNER', resetConversation: jest.fn() })
+            render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+            expect(mockModeration).toHaveBeenLastCalledWith(expect.objectContaining({ entityType: 'CONVERSATION', entityId: '123', enabled: false }))
+            expect(screen.queryByTestId('shared-by')).not.toBeInTheDocument()
+        })
+
+        test('desktop: shows who shared it and the actions', () => {
+            shared()
+            render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+            expect(mockModeration).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }))
+            expect(screen.getByTestId('shared-by')).toHaveTextContent('Shared by @mara · View only')
+            expect(screen.getByTestId('moderation-dialogs')).toBeInTheDocument()
+            fireEvent.click(screen.getByTestId('detail-more'))
+            fireEvent.click(screen.getByTestId('conversation-report'))
+            expect(report).toHaveBeenCalled()
+        })
+
+        test('phone: shows who shared it, with the editor role', () => {
+            mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+            shared('EDIT')
+            render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+            expect(screen.getByTestId('shared-by')).toHaveTextContent('Shared by @mara · Can edit')
+        })
+    })
+
+    test.each([
+        ['CONTENT_BLOCKED', "Can't share this. It contains language that breaks our content rules, so it stays private."],
+        ['BLOCKED', "You can't share with this user."],
+    ])('a share refused with %s says why', async (code, message) => {
+        mockUseConversation.mockReturnValue({ conversationId: '123', conversationTitle: 'Test', conversationRole: 'OWNER', resetConversation: jest.fn() })
+        ;(conversationService.getConversationSharedUsers as jest.Mock).mockResolvedValue([])
+        ;(conversationService.shareConversation as jest.Mock).mockRejectedValue(new ModerationError('refused', code as 'BLOCKED'))
+        jest.spyOn(console, 'error').mockImplementation(() => undefined)
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+        fireEvent.click(screen.getByTestId('conversation-share-button'))
+        fireEvent.click(await screen.findByLabelText('Make public to everyone'))
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+        await waitFor(() => expect(showToastMock).toHaveBeenCalledWith(message))
     })
 
     test("mobile: the slide-out menu is titled after the page's navbar item", () => {

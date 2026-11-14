@@ -148,6 +148,7 @@ class AccountDeletionService(
             if ((index + 1) % LEASE_RENEW_EVERY == 0) purgeJobs.reschedule(job, clock().plus(PurgeJobRunner.LEASE))
         }
         purge.deleteSharesWith(customerId)
+        purge.deleteBlocks(customerId)
 
         val instructions = purge.instructionIdsByCreator(customerId)
         val kept = instructions.intersect(instructionsUsedBySystemAgents())

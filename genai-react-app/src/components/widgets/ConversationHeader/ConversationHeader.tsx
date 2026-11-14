@@ -22,6 +22,9 @@ import {
 } from '../../../services/conversationService'
 import { SearchUserResponse } from '../../../models/user.models'
 import { ICONS } from '../../../constants/icons'
+import { MoreMenu } from '../../DetailPage/DetailParts'
+import { useSharedItemModeration } from '../../../hooks/useSharedItemModeration'
+import { ModerationError } from '../../../services/moderationService'
 
 export default function ConversationHeader(): React.ReactElement | null {
     const { t } = useTranslation()
@@ -48,6 +51,18 @@ export default function ConversationHeader(): React.ReactElement | null {
     // nothing to share yet
     const showShare = entitlements.canShare && !isNewChat && canShare
     const displayTitle = isNewChat ? t('conversation.conversationHeader.newChat') : (conversationTitle ?? t('conversation.conversationHeader.untitledConversation'))
+    const moderation = useSharedItemModeration({
+        entityType: 'CONVERSATION',
+        entityId: conversationId,
+        enabled: !isNewChat && conversationRole !== 'OWNER',
+        onGone: resetConversation,
+    })
+    const sharedByLabel = moderation.owner
+        ? t('moderation.sharedByRole', {
+            name: moderation.ownerLabel,
+            role: t(conversationRole === 'VIEW' ? 'moderation.roleView' : 'moderation.roleEdit'),
+        })
+        : null
 
     const handleShareSave = async (
         mode: VisibilityMode,
@@ -77,7 +92,9 @@ export default function ConversationHeader(): React.ReactElement | null {
             }
         } catch (err) {
             console.error('Failed to update conversation share', err)
-            showToast(t('conversation.conversationHeader.shareSettingsUpdateFailed'))
+            showToast(err instanceof ModerationError
+                ? t(err.code === 'CONTENT_BLOCKED' ? 'moderation.shareRefusedByFilter' : 'moderation.shareRefusedByBlock')
+                : t('conversation.conversationHeader.shareSettingsUpdateFailed'))
         }
     }
 
@@ -102,6 +119,7 @@ export default function ConversationHeader(): React.ReactElement | null {
                     return getConversationSharedUsers(token, id)
                 }}
             />
+            {moderation.dialogs}
         </>
     )
 
@@ -124,6 +142,11 @@ export default function ConversationHeader(): React.ReactElement | null {
                 onClick: toggleRightSidebar,
                 'data-testid': 'mobile-ai-config-button',
             },
+            ...moderation.actions.map(action => ({
+                label: action.label,
+                onClick: action.onSelect,
+                'data-testid': action.testId,
+            })),
         ]
 
         return (
@@ -159,6 +182,7 @@ export default function ConversationHeader(): React.ReactElement | null {
                 }}
                 menuContent={<ChatMenuContent onClose={() => setLeftSidebarExpanded(false)} />}
             >
+                {sharedByLabel && <div className={styles.sharedByFloating} data-testid="shared-by">{sharedByLabel}</div>}
                 {modals}
             </MobileHeader>
         )
@@ -212,6 +236,10 @@ export default function ConversationHeader(): React.ReactElement | null {
                             onClick={() => setShareModalOpen(true)}
                             data-testid="conversation-share-button"
                         />
+                    )}
+                    {sharedByLabel && <span className={styles.sharedBy} data-testid="shared-by">{sharedByLabel}</span>}
+                    {moderation.actions.length > 0 && (
+                        <MoreMenu label={t('moderation.more')} items={moderation.actions} />
                     )}
                 </>
             )}

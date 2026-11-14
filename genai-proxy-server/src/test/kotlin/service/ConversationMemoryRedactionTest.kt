@@ -37,7 +37,7 @@ class ConversationMemoryRedactionTest {
     private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
     private val shareRepo = mockk<ShareRepository>(relaxed = true)
     private val customerProfileRepo = mockk<CustomerProfileRepository>(relaxed = true)
-    private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo, mockk(relaxed = true))
+    private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo, mockk(relaxed = true), mockk(relaxed = true), ContentFilter(emptyList()))
 
     private val thinkingStepsJson = """
         [

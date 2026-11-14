@@ -1,3 +1,4 @@
+import { moderationErrorFrom } from './moderationService';
 import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
 import { endpoints } from '../config/endpoints';
@@ -229,7 +230,7 @@ export async function shareConversation(
     });
 
     if (!response.ok) {
-        throw new Error(`Share Conversation failed: ${response.status} ${response.statusText}`);
+        throw await moderationErrorFrom(response, 'Share Conversation failed');
     }
 }
 

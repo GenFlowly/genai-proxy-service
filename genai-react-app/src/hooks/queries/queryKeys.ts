@@ -6,6 +6,8 @@
 export const CUSTOMER_AGENTS_QUERY_KEY = 'customerAgents'
 export const AGENT_DETAIL_QUERY_KEY = 'agentDetail'
 export const PROFILE_QUERY_KEY = 'profile'
+export const SHARED_ITEM_OWNER_QUERY_KEY = 'shared-item-owner'
+export const BLOCKED_USERS_QUERY_KEY = 'blocked-users'
 export const REQUEST_AGENTS_QUERY_KEY = 'requestAgents'
 export const EMBEDDING_MODELS_QUERY_KEY = 'embeddingModels'
 export const PROVIDER_CATALOG_QUERY_KEY = 'providerCatalog'

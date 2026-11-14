@@ -152,6 +152,13 @@ enum GenerateTextStreamService {
         if http.statusCode == 401 || http.statusCode == 403 {
             throw Auth0Service.AuthError.loginRequired
         }
+        if http.statusCode == 422 {
+            var body = Data()
+            for try await byte in bytes { body.append(byte) }
+            if ModerationRefusal(body: body) == .contentBlocked {
+                throw APIError(status: 422, message: L("moderation.postRefusedByFilter"))
+            }
+        }
         guard (200..<300).contains(http.statusCode) else {
             throw APIError(status: http.statusCode, message: L("errors.ai.generateTextStreamFailed"))
         }

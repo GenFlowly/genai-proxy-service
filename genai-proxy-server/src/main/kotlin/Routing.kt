@@ -54,6 +54,8 @@ import com.genflowly.activity.admin.registerDefaultGraphRoutes
 import com.genflowly.activity.admin.registerSystemAgentsRoutes
 import com.genflowly.activity.admin.registerRequestAgentMapRoutes
 import com.genflowly.activity.admin.registerVendorAllowlistRoutes
+import com.genflowly.activity.admin.registerContentReportsAdminRoutes
+import com.genflowly.activity.moderation.registerModerationRoutes
 import com.genflowly.activity.admin.registerUsageRateCardRoutes
 import com.genflowly.activity.usage.registerUsageRoutes
 import com.genflowly.activity.admin.registerSystemVendorApiKeysRoutes
@@ -109,6 +111,12 @@ object Routes {
     const val COMPLETE_ONBOARDING = "$API_V1/profile/onboarding-completed"
     const val AI_DATA_CONSENT = "$API_V1/profile/ai-data-consent"
     const val SEARCH_USERS = "$API_V1/users/search"
+    const val REPORTS = "$API_V1/reports"
+    const val SHARED_ITEM_OWNER = "$API_V1/shared-item/owner"
+    const val BLOCKS = "$API_V1/blocks"
+    const val BLOCK = "$API_V1/blocks/{customerId}"
+    const val ADMIN_REPORTS = "$API_V1/admin/reports"
+    const val ADMIN_REPORT = "$API_V1/admin/reports/{entityId}/{reporterCustomerId}"
     const val GET_TEXT_GENERATION_MODELS = "$API_V1/models"
     const val PROVIDERS = "$API_V1/providers"
     const val SAVE_AI_CONFIG_PREFERENCES = "$API_V1/save-ai-config"
@@ -259,6 +267,8 @@ fun Application.configureRouting(
     usageRateCardRepository: com.genflowly.repository.UsageRateCardRepository,
     accountDeletionService: com.genflowly.service.AccountDeletionService,
     conversationIndexingService: com.genflowly.service.ConversationIndexingService,
+    contentReportService: com.genflowly.service.ContentReportService,
+    blockService: com.genflowly.service.BlockService,
     appConfig: AppConfig,
 ) {
     routing {
@@ -341,7 +351,8 @@ fun Application.configureRouting(
         registerUsageRoutes(usageSummaryService, customerProfileService)
 
         registerCustomerProfileSettingsRoutes(customerProfileService)
-        registerSearchRoutes(customerProfileService)
+        registerSearchRoutes(customerProfileService, blockService)
+        registerModerationRoutes(contentReportService, blockService, customerProfileService)
         registerGetProfileRoutes(customerProfileService)
         registerAttachmentRoutes(attachmentService, customerProfileService)
         registerNotesRoutes(notesService, customerProfileService)
@@ -355,6 +366,7 @@ fun Application.configureRouting(
         registerRequestAgentMapRoutes(requestAgentMapAdminService, customerProfileService, appConfig)
         registerVendorAllowlistRoutes(vendorAllowlistService, aiModelsService, customerProfileService, appConfig)
         registerUsageRateCardRoutes(usageRateCardRepository, customerProfileService, appConfig)
+        registerContentReportsAdminRoutes(contentReportService, customerProfileService, appConfig)
         registerDefaultGraphRoutes(graphService, customerProfileService, appConfig)
         registerSystemAgentsRoutes(graphService, customerProfileService, appConfig)
         registerNodePresetRoutes(nodePresetService, customerProfileService, appConfig)
