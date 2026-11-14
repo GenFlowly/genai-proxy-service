@@ -35,7 +35,9 @@ class ConversationManagementService(
     private val agentResolutionService: AgentResolutionService,
     private val generationAgentExecutor: GenerationAgentExecutor,
     private val contentDeletionService: ContentDeletionService,
-    private val appScope: AppScope
+    private val appScope: AppScope,
+    private val blockService: BlockService,
+    private val contentFilter: ContentFilter
 ) {
     private val logger = LoggerFactory.getLogger("ConversationManagementService")
 
@@ -405,7 +407,21 @@ class ConversationManagementService(
         if (conversationRepository.isConversationArchived(conversationId, owner.customerId)) {
             throw ConversationArchivedException("Cannot share an archived conversation")
         }
+        blockService.ensureNotBlocked(sharedByCustomerId, targetCustomerId)
+        blockService.ensureNotBlocked(owner.customerId, targetCustomerId)
+        if (shareRepository.getConversationShare(conversationId, targetCustomerId) == null) {
+            ensureConversationIsShareable(conversationId, owner.customerId)
+        }
         shareRepository.shareConversationWithCustomer(conversationId, targetCustomerId, sharedByCustomerId, role)
+    }
+
+    private suspend fun ensureConversationIsShareable(conversationId: String, ownerId: String) {
+        val title = conversationRepository.getConversationTitle(conversationId, ownerId).orEmpty()
+        val texts = sequenceOf(title) + conversationRepository.getMessagesForConversation(conversationId).asSequence().map { it.text }
+        if (texts.any { !contentFilter.isAllowed(it) }) {
+            logger.warn("Refused to share conversation {}: it breaks the content rules", conversationId)
+            throw ContentBlockedException("This can't be shared because it contains language that breaks our content rules.")
+        }
     }
 
     suspend fun unshareConversation(

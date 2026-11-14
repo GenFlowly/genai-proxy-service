@@ -260,8 +260,8 @@ class CustomerProfileService(
     private fun isCurrentAiDataConsent(version: Int?): Boolean =
         version != null && version >= CURRENT_AI_DATA_CONSENT_VERSION
 
-    suspend fun searchByUsername(usernamePrefix: String) =
-        customerProfileRepository.searchByUsername(usernamePrefix)
+    suspend fun searchByUsername(usernamePrefix: String, excludeCustomerIds: Set<String> = emptySet()) =
+        customerProfileRepository.searchByUsername(usernamePrefix, excludeCustomerIds)
 
     suspend fun getProfileByCustomerId(customerId: String) =
         customerProfileRepository.getCustomerProfileByCustomerId(customerId)

@@ -3,6 +3,7 @@ package com.genflowly.activity.customer
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.models.api.SearchCustomerResponse
+import com.genflowly.service.BlockService
 import com.genflowly.service.CustomerProfileService
 import io.github.smiley4.ktoropenapi.get
 import io.ktor.http.HttpStatusCode
@@ -16,7 +17,8 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 fun Route.registerSearchRoutes(
-    customerProfileService: CustomerProfileService
+    customerProfileService: CustomerProfileService,
+    blockService: BlockService
 ) {
     authenticate("auth0") {
         get(Routes.SEARCH_USERS, {
@@ -59,10 +61,10 @@ fun Route.registerSearchRoutes(
                 val currentUserProfile = customerProfileService.getProfile(sub, client)
                 val currentCustomerId = currentUserProfile?.get("customerId")?.s()
                 
-                val response = customerProfileService.searchByUsername(username)
-                val filteredResponse = response.filter { it.customerId != currentCustomerId }
-                
-                call.respond(HttpStatusCode.OK, filteredResponse)
+                val excluded = listOfNotNull(currentCustomerId).toSet() +
+                    (currentCustomerId?.let { blockService.relatedCustomerIds(it) } ?: emptySet())
+
+                call.respond(HttpStatusCode.OK, customerProfileService.searchByUsername(username, excluded))
             } catch (e: Exception) {
                 logger.error("Failed to search by username", e)
                 call.respond(HttpStatusCode.InternalServerError)
