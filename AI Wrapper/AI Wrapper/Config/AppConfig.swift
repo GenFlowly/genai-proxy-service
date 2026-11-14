@@ -139,6 +139,9 @@ enum Endpoints {
     static func deleteConversation(_ conversationId: String) -> URL { conversation(conversationId) }
     static var getAIUsage: URL { URL(string: "\(base)/message/usage")! }
     static var searchUsers: URL { URL(string: "\(base)/users/search")! }
+    static var reports: URL { URL(string: "\(base)/reports")! }
+    static var sharedItemOwner: URL { URL(string: "\(base)/shared-item/owner")! }
+    static var blocks: URL { URL(string: "\(base)/blocks")! }
     static var getProfile: URL { URL(string: "\(base)/profile")! }
     static var updateUsername: URL { URL(string: "\(base)/profile/username")! }
     static var updateDiscoverability: URL { URL(string: "\(base)/profile/discoverability")! }
