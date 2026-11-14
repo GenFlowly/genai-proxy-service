@@ -11,6 +11,8 @@ import RequestAgentsPage from './pages/RequestAgentsPage'
 import NodePresetsPage from './pages/NodePresetsPage'
 import VendorAllowlistPage from './pages/VendorAllowlistPage'
 import UsageRateCardPage from './pages/UsageRateCardPage'
+import ReportsPage from './pages/ReportsPage'
+import { listContentReports } from './services/reportsService'
 import { onboardCustomer } from './services/onboardService'
 
 const NAV_ITEMS: { path: string; label: string }[] = [
@@ -21,6 +23,7 @@ const NAV_ITEMS: { path: string; label: string }[] = [
     { path: '/mappings', label: 'Default Actions Mapping' },
     { path: '/node-presets', label: 'Node Presets' },
     { path: '/usage-rate-card', label: 'Cost and Usage Rate Card' },
+    { path: '/reports', label: 'Reports' },
 ]
 
 export default function App() {
@@ -28,6 +31,7 @@ export default function App() {
     const [onboarded, setOnboarded] = useState(false)
     const [onboardError, setOnboardError] = useState<string | null>(null)
     const onboardStartedRef = useRef(false)
+    const [openReports, setOpenReports] = useState(0)
 
     // The admin allowlist matches the DDB profile email, so make sure this
     // account has a profile before any page hits an authenticated endpoint
@@ -45,6 +49,18 @@ export default function App() {
             }
         })()
     }, [isAuthenticated, user, getAccessTokenSilently])
+
+    useEffect(() => {
+        if (!onboarded) return
+        void (async () => {
+            try {
+                const response = await listContentReports(await getAccessTokenSilently(), 'OPEN', null, 1)
+                setOpenReports(response.openCount)
+            } catch {
+                // The count is a convenience; the Reports page shows its own error.
+            }
+        })()
+    }, [onboarded, getAccessTokenSilently])
 
     if (isLoading) {
         return <div className="centered">Loading…</div>
@@ -115,7 +131,10 @@ export default function App() {
                             to={item.path}
                             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                         >
-                            {item.label}
+                            <span>{item.label}</span>
+                            {item.path === '/reports' && openReports > 0 && (
+                                <span className="nav-count" data-testid="open-reports-count">{openReports}</span>
+                            )}
                         </NavLink>
                     ))}
                 </nav>
@@ -137,6 +156,7 @@ export default function App() {
                         <Route path="/default-agents/mappings" element={<Navigate to="/mappings" replace />} />
                         <Route path="/node-presets" element={<NodePresetsPage />} />
                         <Route path="/usage-rate-card" element={<UsageRateCardPage />} />
+                        <Route path="/reports" element={<ReportsPage onOpenCountChange={setOpenReports} />} />
                         <Route path="/request-agents" element={<Navigate to="/default-agents" replace />} />
                         <Route path="/default-graph" element={<Navigate to="/default-agents" replace />} />
                         <Route path="*" element={<Navigate to="/system-api-keys" replace />} />
