@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { InputTextWithHint, PillButton, TextEditor } from '@genflowly/component-library'
 import { DetailShell, detailStyles as styles } from '../../components/DetailPage/DetailParts'
 import { useAuth } from '../../context/AuthContext'
+import { ModerationError } from '../../services/moderationService'
 import { useToast } from '../../context/ToastContext'
 import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import { createInstruction } from '../../services/instructionService'
@@ -51,7 +52,7 @@ export default function InstructionEditPage({ isNew = false }: { isNew?: boolean
             navigate(instructionPath(created.id), { replace: true })
         } catch (error) {
             console.error('Failed to save instruction', error)
-            showToast(t('instructionDetail.instructionDetailPage.saveFailedAlert'))
+            showToast(error instanceof ModerationError ? t('moderation.saveRefusedByFilter') : t('instructionDetail.instructionDetailPage.saveFailedAlert'))
         } finally {
             setSaving(false)
         }

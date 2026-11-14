@@ -230,10 +230,13 @@ export async function generateTextStream(
         // The proxy returns {"error": "<reason>"} on failures — surface the
         // real reason instead of a generic status line when it's available
         let reason = '';
+        let code: unknown;
         try {
             const body = await response.text();
             try {
-                reason = JSON.parse(body)?.error ?? '';
+                const parsed = JSON.parse(body);
+                reason = parsed?.error ?? '';
+                code = parsed?.code;
             } catch {
                 reason = body;
             }
@@ -241,6 +244,8 @@ export async function generateTextStream(
             // Body unreadable — fall back to status text only
         }
         reason = (reason || '').trim();
+        // Written for the person who sent it, so it needs no status code.
+        if (code === 'CONTENT_BLOCKED' && reason) throw new Error(reason);
         throw new Error(
             reason
                 ? `${reason} (HTTP ${response.status})`
