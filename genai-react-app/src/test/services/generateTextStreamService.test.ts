@@ -256,6 +256,21 @@ describe('generateTextStreamService', () => {
         )).rejects.toThrow('Text generation failed: 400 Bad Request');
     });
 
+    test('generateTextStream shows a content-rules refusal as written, without a status code', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: false,
+            status: 422,
+            statusText: 'Unprocessable Entity',
+            text: jest.fn().mockResolvedValue('{"error":"This can\'t be posted.","code":"CONTENT_BLOCKED"}')
+        });
+
+        await expect(generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            jest.fn()
+        )).rejects.toThrow(/^This can't be posted\.$/);
+    });
+
     test('generateTextStream surfaces the error reason from a JSON error body', async () => {
         mockFetchWithRetry.mockResolvedValue({
             ok: false,

@@ -14,6 +14,12 @@ jest.mock('./DeleteDataSettings', () => ({
     DeleteDataSettings: () => <div data-testid="delete-data-section" />,
 }));
 
+jest.mock('../../../components/common/BlockedUsersList/BlockedUsersList', () => ({
+    BlockedUsersList: () => <div data-testid="blocked-users-list" />,
+}));
+const mockBreakpoints = jest.fn();
+jest.mock('../../../hooks/useResponsiveBreakpoints', () => ({ useResponsiveBreakpoints: () => mockBreakpoints() }));
+
 const mockUseAuth = useAuth as jest.Mock;
 const mockGetUserProfile = getUserProfile as jest.Mock;
 const mockUpdateUsername = updateUsername as jest.Mock;
@@ -24,12 +30,29 @@ describe('ProfileSettings', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        mockBreakpoints.mockReturnValue({ isNarrow: false });
         mockGetAccessTokenSilently.mockResolvedValue('test-token');
         mockUseAuth.mockReturnValue({
             getAccessTokenSilently: mockGetAccessTokenSilently,
             isAuthenticated: true,
             customerId: 'cust-1',
         });
+    });
+
+    const profile = { customerId: 'cust-1', username: 'u', isDiscoverable: false };
+
+    test('desktop: Blocked users is listed in place', async () => {
+        mockGetUserProfile.mockResolvedValue(profile);
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
+        expect(await screen.findByTestId('blocked-users-list')).toBeInTheDocument();
+    });
+
+    test('phone: Blocked users links to its own page', async () => {
+        mockBreakpoints.mockReturnValue({ isNarrow: true });
+        mockGetUserProfile.mockResolvedValue(profile);
+        render(withQueryClient(<MemoryRouter><ProfileSettings /></MemoryRouter>));
+        expect(await screen.findByTestId('blocked-users-link')).toHaveAttribute('href', '/blocked-users');
+        expect(screen.queryByTestId('blocked-users-list')).not.toBeInTheDocument();
     });
 
     test('renders loading state initially', () => {

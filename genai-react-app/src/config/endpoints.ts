@@ -60,6 +60,9 @@ export const endpoints = {
     usageWebSearch: (from: string, to: string) =>
         `${BASE}${API_PREFIX}/usage/web-search?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     searchUsers: `${BASE}${API_PREFIX}/users/search`,
+    reports: `${BASE}${API_PREFIX}/reports`,
+    sharedItemOwner: `${BASE}${API_PREFIX}/shared-item/owner`,
+    blocks: `${BASE}${API_PREFIX}/blocks`,
     getProfile: `${BASE}${API_PREFIX}/profile`,
     updateUsername: `${BASE}${API_PREFIX}/profile/username`,
     updateDiscoverability: `${BASE}${API_PREFIX}/profile/discoverability`,

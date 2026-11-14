@@ -2,7 +2,7 @@
 
 **Effective date:** November 7, 2026
 
-**Last updated:** November 7, 2026
+**Last updated:** November 9, 2026
 
 Unbiase AI ("Unbiase AI", "we", "us") is operated by Genflowly, based in Seattle, Washington, United States. This policy explains what we collect when you use our web app at genflowly.com, our iOS app and our developer API, where that information goes, and the choices you have.
 
@@ -173,6 +173,7 @@ Because requests will run under our accounts, we'll be responsible for how the s
 | **Settings** | Model choices and feature preferences | You |
 | **Usage** | Token counts, estimated costs, and counts of searches and database operations, grouped by day | Generated as you use the app |
 | **Technical** | Request IDs, error messages and timestamps | Generated automatically |
+| **Reports and blocks** | Reports you make, or that others make about something you shared, with a copy of the reported content; and the people you block | You and other users |
 | **Payment** (Pay-as-you-go only) | Billing details, handled by our payment processor | You |
 
 Our application doesn't store your IP address. The infrastructure providers listed below process it to deliver the service and may keep it in their own logs.
@@ -187,6 +188,7 @@ We don't ask you to provide sensitive information. If you include it in your con
 | Memory, which is on by default | Our legitimate interest in personalizing your replies. You can object by turning it off in Settings |
 | Provide optional features you turn on, such as indexing and web search | Your consent, which you can withdraw in Settings |
 | Keep the service secure and reliable: fix errors, prevent abuse, monitor performance | Our legitimate interest in running a secure service |
+| Enforce our content rules: check what you share, review reports and act on them | Our legitimate interest in keeping the service safe for the people you share with |
 | Show you your usage and costs, and bill you in Pay-as-you-go | Performance of our contract |
 | Meet legal obligations | Legal obligation |
 
@@ -221,6 +223,9 @@ These companies process your information under their data protection terms with 
 - **Forks.** Someone with access to a conversation can copy it into their own account. **That copy remains theirs, even if you later delete the original or stop sharing it.**
 - **Instructions and agents.** The ones you share become visible to the people you share them with.
 - **Being discoverable.** This is off by default. If you turn it on, other users can find your username, name and picture when sharing.
+- **Content rules.** What you share must follow our [content rules](https://genflowly.com/content-rules). Before something you share reaches anyone else, our servers check its text against a list of words and refuse it if one matches: when you share it or make it public, when you save an instruction that is shared, and when you add to a conversation someone shared with you. The check runs only on our servers. We record that something was refused, not what it said.
+- **Reporting.** If you report something shared with you, we store the reason and note you give, the item's title, a copy of what you reported as it was at that moment (for a conversation, its most recent messages and replies), and the account identifiers and usernames of you and its owner. The report is emailed to our support team and listed in our moderation tool, where our staff review it. We don't tell the owner who reported it. If it breaks the rules, we may make the item private, which removes its shares and its public link.
+- **Blocking.** If you block someone, we store who you blocked, when, and their username and name at that time. Neither of you can then find the other by username, share with the other, or see the other's shared items while signed in, and any shares between you are removed. We don't notify them, but they may notice. Public links still open for people who aren't signed in.
 - **Connected tools and services.** Anything you connect receives what section 1.2 describes.
 
 Deleting a conversation ends its public link and its shares. If someone shared a conversation with you, deleting it removes only your own access.
@@ -238,6 +243,8 @@ Deleting a conversation ends its public link and its shares. If someone shared a
 | **Account details** | Until you delete your account. Your sign-in record with Auth0 is deleted on request. |
 | **Backups** | Deleted data can remain in encrypted backups for up to 35 more days, then it is gone. |
 | **Operational logs** | Currently kept indefinitely. |
+| **Blocks** | Until you unblock the person, or either of your accounts is deleted. |
+| **Reports** | Kept after the reported item or either account is deleted, as a record of what we did and to recognize repeated abuse. Currently kept indefinitely. |
 | **Usage totals** | For the life of your account. In Pay-as-you-go, billing records will be kept as section 2.4 describes. |
 | **Copies on your device** | Until you sign out. |
 | **Providers you use** | In BYOK, set by each provider's own terms, and we can't delete what they hold. In Pay-as-you-go, as section 2.3 describes. |
@@ -253,7 +260,7 @@ No system is perfectly secure. If a breach affects your information, we'll notif
 
 ### Who at Unbiase AI can see your content
 
-Our systems process your content automatically, and it is not end-to-end encrypted, so authorized staff have the technical ability to access it. We access it only when necessary to fix a problem you report or that affects the service, to protect security, or to comply with the law. Access is limited to people who need it.
+Our systems process your content automatically, and it is not end-to-end encrypted, so authorized staff have the technical ability to access it. We access it only when necessary to fix a problem you report or that affects the service, to protect security, or to comply with the law. When something is reported, our staff see the copy stored with the report. Access is limited to people who need it.
 
 ### Your rights and choices
 
@@ -268,6 +275,9 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 | Turn indexing on or off, and delete indexed chats | Settings > Defaults > Search index |
 | Delete all your API keys | Settings > Profile > Delete your data |
 | Stop sharing a conversation | Share menu |
+| Report something shared with you, or block its owner | The item's menu |
+| Block someone you shared with | Share menu |
+| See and unblock the people you've blocked | Settings > Profile > Blocked users |
 | Delete your account | Settings > Profile > Delete your data |
 
 **By email:** to get a copy of your data, or to delete notes saved in earlier versions of the app, email privacy@genflowly.com.
@@ -295,6 +305,8 @@ We don't use advertising or analytics cookies.
 ### Mobile app
 
 The iOS app stores conversation history, memories, instructions and unsent drafts on your device so that they open quickly, and keeps sign-in tokens in the iOS Keychain. Signing out clears this data, apart from your theme choice. The camera is used only if you take a photo to attach. The app doesn't track you across other companies' apps or websites.
+
+Before any of your content is first sent to an AI service, the web and iOS apps ask for your permission and explain which kinds of services receive it. You can review this in Settings > Profile.
 
 ### Changes to this policy
 

@@ -211,7 +211,14 @@
             "shareWithOnlySomeUsers": "Share with only some users",
             "sharedWith": "Shared with:",
             "title": "Share Options",
-            "view": "View"
+            "view": "View",
+            "moreActions": "More actions for {{name}}",
+            "remove": "Remove",
+            "block": "Block {{name}}",
+            "blockConfirm": "Block {{name}}? Shares between you are removed.",
+            "blocked": "Blocked {{name}}.",
+            "blockFailed": "Couldn't block {{name}}. Please try again.",
+            "rulesNote": "By sharing you agree to the <rules>content rules</rules>."
         },
         "textContainer": {
             "askSelection": "Ask",
@@ -523,7 +530,8 @@
         "footer": {
             "copyright": "© {{year}} Genflowly",
             "privacyPolicy": "Privacy policy",
-            "support": "Support"
+            "support": "Support",
+            "contentRules": "Content rules"
         },
         "l1Menu": {
             "headlineOne": "One prompt.",
@@ -1441,5 +1449,102 @@
         "sentTitle": "Message sent",
         "sentBody": "Thanks. We'll reply to {{email}}.",
         "sendAnother": "Send another message"
+    },
+    "moderation": {
+        "sharedBy": "Shared by {{name}}",
+        "sharedByRole": "Shared by {{name}} · {{role}}",
+        "roleView": "View only",
+        "roleEdit": "Can edit",
+        "theOwner": "the owner",
+        "more": "More actions",
+        "shareRefusedByFilter": "Can't share this. It contains language that breaks our content rules, so it stays private.",
+        "shareRefusedByBlock": "You can't share with this user.",
+        "saveRefusedByFilter": "Can't save this. It's shared with other people and contains language that breaks our content rules.",
+        "report": {
+            "menuConversation": "Report conversation",
+            "menuInstruction": "Report instruction",
+            "titleConversation": "Report this conversation",
+            "titleInstruction": "Report this instruction",
+            "sharedBy": "Shared by {{name}}. Tell us what's wrong with it.",
+            "reasonsLabel": "What is wrong with it?",
+            "reasons": {
+                "SPAM": "Spam",
+                "HARASSMENT": "Harassment or bullying",
+                "HATE": "Hate or discrimination",
+                "SEXUAL": "Sexual content",
+                "VIOLENCE": "Violence or threats",
+                "ILLEGAL": "Illegal activity",
+                "OTHER": "Something else"
+            },
+            "detailsLabel": "Details (optional)",
+            "detailsPlaceholder": "What happened? Which message?",
+            "note": "Our team reviews reports promptly. The owner is not told who reported. <rules>Content rules</rules>",
+            "send": "Send report",
+            "sending": "Sending...",
+            "cancel": "Cancel",
+            "failed": "Couldn't send your report. Please try again.",
+            "sentTitle": "Report sent",
+            "sentBody": "Thanks. Our team reviews reports promptly and acts when something breaks the content rules.",
+            "blockTitle": "Block {{name}}",
+            "blockBody": "They can't find you, share with you or see your shared items. Shares between you are removed.",
+            "blockButton": "Block",
+            "removeTitle": "Remove from my list",
+            "removeBodyConversation": "Leaves this shared conversation. The owner keeps it.",
+            "removeBodyInstruction": "Leaves this shared instruction. The owner keeps it.",
+            "removeButton": "Remove",
+            "done": "Done",
+            "removed": "Removed from your list.",
+            "removeFailed": "Couldn't remove it. Please try again."
+        },
+        "block": {
+            "menu": "Block {{name}}",
+            "title": "Block {{name}}?",
+            "message": "They can't find you by username, share with you or see your shared items, and you can't do those things with them. Shares between you are removed.",
+            "confirm": "Block",
+            "blocking": "Blocking...",
+            "cancel": "Cancel",
+            "done": "Blocked {{name}}.",
+            "failed": "Couldn't block {{name}}. Please try again."
+        },
+        "blockedUsers": {
+            "title": "Blocked users",
+            "intro": "Blocked users can't find you by username, share with you or see your shared items. Blocking works both ways.",
+            "note": "Unblocking doesn't bring back shares that were removed. Either of you can share again.",
+            "empty": "You haven't blocked anyone.",
+            "loading": "Loading...",
+            "loadFailed": "Couldn't load your blocked users.",
+            "retry": "Try again",
+            "unblock": "Unblock",
+            "unblocking": "Unblocking...",
+            "unblocked": "Unblocked {{name}}.",
+            "unblockFailed": "Couldn't unblock {{name}}. Please try again.",
+            "blockedOn": "Blocked {{date}}",
+            "countRow_one": "{{count}} blocked",
+            "countRow_other": "{{count}} blocked",
+            "unknownUser": "Unknown user",
+            "settingsLabel": "Settings"
+        }
+    },
+    "contentRules": {
+        "title": "Content rules",
+        "scope": "Applies to anything you share with other users or make public.",
+        "intro": "Your conversations and instructions are private until you share them. Once another person can see them, they have to follow these rules. We don't read private content to enforce them.",
+        "reportsTitle": "Reports",
+        "reportsBody": "Anyone who can see a shared item can report it from its menu. Our team reviews every report promptly. The owner is not told who reported. If the item breaks these rules we make it private, and repeat offenders can lose the ability to share.",
+        "blockingTitle": "Blocking",
+        "blockingBody": "You can block any user from an item they shared with you, from the share dialog or from Settings › Profile. Blocking works both ways: neither of you can find the other by username, share with the other or see the other's shared items while signed in. Shares between you are removed.",
+        "contactTitle": "Contact",
+        "contactBody": "Questions, appeals or something urgent: <support>genflowly.com/support</support>. The <policy>privacy policy</policy> explains what we store.",
+        "listTitle": "You can't share",
+        "list": [
+            "Harassment, bullying or threats against a person",
+            "Hate or discrimination based on who someone is",
+            "Sexual content involving minors, or sexual content shared with people who didn't ask for it",
+            "Instructions for violence or other serious harm",
+            "Illegal activity, or content that belongs to someone else",
+            "Spam, scams or impersonation",
+            "Other people's private information"
+        ],
+        "filterNote": "An automatic check refuses to share text with slurs or explicit language. It is a first line, not the whole rule."
     }
 }

@@ -20,6 +20,8 @@ import InstructionDetailPage from './pages/InstructionDetailPage/InstructionDeta
 import InstructionEditPage from './pages/InstructionDetailPage/InstructionEditPage'
 import InstructionHistoryPage from './pages/InstructionDetailPage/InstructionHistoryPage'
 import InstructionUsedInPage from './pages/InstructionDetailPage/InstructionUsedInPage'
+import ContentRulesPage from './pages/ContentRulesPage/ContentRulesPage'
+import BlockedUsersPage from './pages/BlockedUsersPage/BlockedUsersPage'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage/PrivacyPolicyPage'
 import SupportPage from './pages/SupportPage/SupportPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
@@ -65,7 +67,7 @@ export default function AppContent(): React.ReactElement | null {
 
     // The consent screen opens the policy in a new tab of this same session,
     // so the gates below mustn't cover the page it links to.
-    const isReadingPolicy = pathname === '/privacy-policy'
+    const isReadingPolicy = pathname === '/privacy-policy' || pathname === '/content-rules'
 
     // Before the wizard, whose key checks are the first calls to a provider.
     if (isAuthenticated && !isOnboarding && aiDataConsentRequired && !isReadingPolicy) {
@@ -120,6 +122,8 @@ export default function AppContent(): React.ReactElement | null {
                                 <Route path="/instructions/:instructionId/usage" element={<InstructionUsedInPage />} />
                                 <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                                 <Route path="/support" element={<SupportPage />} />
+                                <Route path="/content-rules" element={<ContentRulesPage />} />
+                                <Route path="/blocked-users" element={<ProtectedRoute><BlockedUsersPage /></ProtectedRoute>} />
                             </Routes>
                             <AppMenuOverlay />
                         </EdgeSwipeProvider>
