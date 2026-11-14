@@ -424,6 +424,16 @@ struct ProfileSettingsView: View {
                 aiDataSharing
             }
 
+            section(L("moderation.blockedUsers.title")) {
+                Button { router.navigate(.blockedUsers) } label: {
+                    Text(L("moderation.blockedUsers.title"))
+                        .webText(14, 500)
+                        .foregroundStyle(AppTheme.primary)
+                }
+                .buttonStyle(WebPressStyle())
+                .accessibilityIdentifier("blocked-users-link")
+            }
+
             DeleteDataSettingsView()
         }
     }

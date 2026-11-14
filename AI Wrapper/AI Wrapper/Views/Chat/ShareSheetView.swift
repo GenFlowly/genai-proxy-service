@@ -28,7 +28,10 @@ struct ShareModal: View {
     @State private var isLoading = true
     @State private var searchTask: Task<Void, Never>?
     @State private var isSearchFocused = false
+    @State private var blockingUser: SearchUserResponse?
+    @State private var isBlocking = false
 
+    private static let contentRulesURL = AppConfig.webAppURL.appendingPathComponent("content-rules")
     private static let searchFont = DSFont.uiArial(15.2)
 
     var body: some View {
@@ -48,11 +51,21 @@ struct ShareModal: View {
                     }
                     if mode == .publicMode { publicSection }
                     if mode == .specific { specificSection }
+                    Text(SupportForm.linked(L("common.shareModal.rulesNote"), tag: "rules", to: Self.contentRulesURL))
+                        .webText(13, lineHeight: 18)
+                        .foregroundStyle(AppTheme.textMuted)
+                        .tint(AppTheme.primary)
                     actions
                 }
             }
         }
         .task { await loadInitial() }
+        .webConfirm(blockingUser.map { L("common.shareModal.blockConfirm", ["name": "@\($0.username)"]) }, isPresented: Binding(
+            get: { blockingUser != nil },
+            set: { if !$0 { blockingUser = nil } }
+        )) {
+            if let user = blockingUser { Task { await block(user) } }
+        }
     }
 
     private func radio(_ title: String, _ value: VisibilityMode) -> some View {
@@ -159,10 +172,16 @@ struct ShareModal: View {
                             HStack(spacing: 6) {
                                 Text(user.username).webText(13.6).foregroundStyle(AppTheme.textPrimary)
                                 rolePicker(selection: user.role ?? "VIEW") { setRole(user, $0) }
-                                Button { selectedUsers.removeAll { $0.customerId == user.customerId } } label: {
-                                    Text("×").webText(arial: 17.6, lineHeight: 17.6).foregroundStyle(AppTheme.textSecondary)
+                                Menu {
+                                    Button(L("common.shareModal.remove")) { selectedUsers.removeAll { $0.customerId == user.customerId } }
+                                    Button(L("common.shareModal.block", ["name": "@\(user.username)"]), role: .destructive) { blockingUser = user }
+                                } label: {
+                                    Text("⋯").webText(arial: 17.6, lineHeight: 17.6).foregroundStyle(AppTheme.textSecondary)
+                                        .frame(minWidth: 24, minHeight: 24)
+                                        .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                                .accessibilityLabel(L("common.shareModal.moreActions", ["name": "@\(user.username)"]))
+                                .accessibilityIdentifier("share-user-menu-\(user.customerId)")
                             }
                             .padding(.horizontal, 10 + 1)
                             .padding(.vertical, 4 + 1)
@@ -183,7 +202,7 @@ struct ShareModal: View {
             PillButton(label: L("common.shareModal.cancel"), style: .secondary, disabled: isSaving, action: onClose)
             PillButton(
                 label: isSaving ? L("common.shareModal.saving") : L("common.shareModal.save"),
-                disabled: isSaving || (mode == .specific && selectedUsers.isEmpty)
+                disabled: isSaving || isBlocking || (mode == .specific && selectedUsers.isEmpty)
             ) {
                 Task { await save() }
             }
@@ -281,9 +300,23 @@ struct ShareModal: View {
                 toasts.showToast(L("conversation.conversationHeader.shareSettingsUpdated"))
             }
         } catch {
-            toasts.showToast(L("conversation.conversationHeader.shareSettingsUpdateFailed"))
+            toasts.showToast(ModerationRefusal(error: error)?.shareMessage ?? L("conversation.conversationHeader.shareSettingsUpdateFailed"))
         }
         onClose()
+    }
+
+    private func block(_ user: SearchUserResponse) async {
+        isBlocking = true
+        defer { isBlocking = false }
+        do {
+            let token = try await auth.getAccessTokenSilently()
+            try await ModerationService.block(token: token, customerId: user.customerId)
+            selectedUsers.removeAll { $0.customerId == user.customerId }
+            initialUsers.removeAll { $0.customerId == user.customerId }
+            toasts.showToast(L("common.shareModal.blocked", ["name": "@\(user.username)"]))
+        } catch {
+            toasts.showToast(L("common.shareModal.blockFailed", ["name": "@\(user.username)"]))
+        }
     }
 
     private func share(_ token: String, _ customerId: String, _ role: String) async throws {
