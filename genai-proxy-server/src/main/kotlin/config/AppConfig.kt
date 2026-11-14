@@ -37,7 +37,9 @@ data class AppConfig(
     /** Versioned bucket of batch-mode note documents (CUSTOMER_DOCUMENTS_BUCKET); null skips its purge. */
     val customerDocumentsBucket: String? = null,
     /** Auth0 Management API credentials for deleting a user's login; null unless all of AUTH0_MGMT_* are set. */
-    val auth0Management: Auth0ManagementConfig? = null
+    val auth0Management: Auth0ManagementConfig? = null,
+    /** SNS topic that emails the support inbox; null skips the email for a content report. */
+    val supportTopicArn: String? = null
 ) {
     val isProduction: Boolean get() = environment == "production"
 
@@ -77,7 +79,8 @@ data class AppConfig(
                 ?.takeIf { it.isNotEmpty() } ?: "development",
             durableRunsEnabled = System.getenv("DURABLE_RUNS_ENABLED")?.trim()?.lowercase() == "true",
             customerDocumentsBucket = System.getenv("CUSTOMER_DOCUMENTS_BUCKET")?.trim()?.takeIf { it.isNotEmpty() },
-            auth0Management = auth0ManagementFromEnv()
+            auth0Management = auth0ManagementFromEnv(),
+            supportTopicArn = System.getenv("SUPPORT_TOPIC_ARN")?.trim()?.takeIf { it.isNotEmpty() }
         )
 
         private fun auth0ManagementFromEnv(): Auth0ManagementConfig? {

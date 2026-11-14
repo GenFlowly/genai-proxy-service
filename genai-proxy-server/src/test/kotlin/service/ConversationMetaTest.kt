@@ -27,7 +27,7 @@ class ConversationMetaTest {
     private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
     private val shareRepo = mockk<ShareRepository>(relaxed = true)
     private val service = ConversationService(
-        conversationRepo, shareRepo, mockk(relaxed = true), mockk(relaxed = true)
+        conversationRepo, shareRepo, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), ContentFilter(emptyList())
     )
 
     private fun stubConversation(exists: Boolean = true) {

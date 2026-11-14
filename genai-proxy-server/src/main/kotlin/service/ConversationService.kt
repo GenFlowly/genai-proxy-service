@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory
 class ConversationAccessDeniedException(message: String) : Exception(message)
 class ConversationArchivedException(message: String) : Exception(message)
 
+private const val PUBLIC_CUSTOMER_ID = "PUBLIC"
+
 private val webSourcesJsonParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
 /**
@@ -35,7 +37,9 @@ class ConversationService(
     private val conversationRepository: ConversationRepository,
     private val shareRepository: ShareRepository,
     private val customerProfileRepository: CustomerProfileRepository,
-    private val projectRepository: ProjectRepository
+    private val projectRepository: ProjectRepository,
+    private val customerBlockRepository: com.genflowly.repository.CustomerBlockRepository,
+    private val contentFilter: ContentFilter
 ) {
     private val logger = LoggerFactory.getLogger("ConversationService")
 
@@ -72,7 +76,9 @@ class ConversationService(
     /**
      * Returns the effective role [callerCustomerId] has on [conversationId]:
      * [ShareRole.OWNER] if they own it, otherwise the role from a direct share,
-     * otherwise the PUBLIC role if one exists, otherwise null (no access).
+     * otherwise the PUBLIC role if one exists, otherwise null (no access). A
+     * signed-in caller who has a block with the owner gets no PUBLIC role; a
+     * signed-out caller has no identity to check, so public links keep working.
      */
     suspend fun getConversationRole(conversationId: String, callerCustomerId: String): ShareRole? {
         val conversation = conversationRepository.getConversationById(conversationId) ?: return null
@@ -81,7 +87,11 @@ class ConversationService(
         val directShareRole = shareRepository.getConversationShare(conversationId, callerCustomerId)
         if (directShareRole != null) return directShareRole
 
-        return shareRepository.getConversationShare(conversationId, "PUBLIC")
+        val publicRole = shareRepository.getConversationShare(conversationId, PUBLIC_CUSTOMER_ID) ?: return null
+        if (callerCustomerId != PUBLIC_CUSTOMER_ID &&
+            customerBlockRepository.isBlockedEitherWay(callerCustomerId, conversation.customerId)
+        ) return null
+        return publicRole
     }
 
     /**
@@ -283,12 +293,15 @@ class ConversationService(
      * conversation when none is given, otherwise enforces write access
      * (OWNER/EDIT) on the existing one. [projectId] only applies to the
      * create branch — it places the new conversation in that project.
+     * [prompt] from someone the conversation is shared with goes through the
+     * content filter, since the owner and other recipients will see it.
      */
     suspend fun resolveWritableConversationId(
         customerId: String,
         client: String,
         conversationId: String? = null,
-        projectId: String? = null
+        projectId: String? = null,
+        prompt: String? = null
     ): String {
         if (conversationId.isNullOrBlank()) {
             // A project that doesn't exist for this customer is dropped rather
@@ -311,6 +324,12 @@ class ConversationService(
         val role = getConversationRole(conversationId, customerId)
         if (role == null || !role.canEdit) {
             throw ConversationAccessDeniedException("Customer $customerId cannot write to conversation $conversationId")
+        }
+        if (role == ShareRole.EDIT && prompt != null) {
+            if (!contentFilter.isAllowed(prompt)) {
+                logger.warn("Refused a post into shared conversation $conversationId: it breaks the content rules")
+                throw ContentBlockedException("This can't be posted because it contains language that breaks our content rules.")
+            }
         }
         return conversationId
     }

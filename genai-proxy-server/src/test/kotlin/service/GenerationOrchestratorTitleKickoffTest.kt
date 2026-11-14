@@ -50,7 +50,7 @@ class GenerationOrchestratorTitleKickoffTest {
             id = "i1", version = 1, name = "Coach", instruction = "be kind"
         )
         coEvery {
-            conversationService.resolveWritableConversationId(cust, any(), any())
+            conversationService.resolveWritableConversationId(cust, any(), any(), any(), any())
         } answers { thirdArg<String?>().takeUnless { it.isNullOrBlank() } ?: "conv-new" }
         coEvery { conversationService.findActiveTurnUserMessage(any(), any(), any(), any()) } returns null
         coEvery { conversationService.getLatestMessageId(any()) } returns "prev-1"

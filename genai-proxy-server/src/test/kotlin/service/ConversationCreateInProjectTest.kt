@@ -31,7 +31,7 @@ class ConversationCreateInProjectTest {
     private val shareRepo = mockk<ShareRepository>(relaxed = true)
     private val customerProfileRepo = mockk<CustomerProfileRepository>(relaxed = true)
     private val projectRepo = mockk<ProjectRepository>()
-    private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo, projectRepo)
+    private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo, projectRepo, mockk(relaxed = true), ContentFilter(emptyList()))
 
     private fun project() = Project(
         projectId = proj, name = "Research",

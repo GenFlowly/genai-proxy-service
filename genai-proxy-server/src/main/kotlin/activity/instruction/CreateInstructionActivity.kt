@@ -64,6 +64,8 @@ fun Route.registerCreateInstructionRoutes(
 
                 call.respond(response)
 
+            } catch (e: com.genflowly.service.ContentBlockedException) {
+                call.respond(HttpStatusCode.UnprocessableEntity, mapOf("error" to e.message.orEmpty(), "code" to "CONTENT_BLOCKED"))
             } catch (e: Exception) {
                 logger.error(
                     "Unexpected error in Create Instruction controller: {}",

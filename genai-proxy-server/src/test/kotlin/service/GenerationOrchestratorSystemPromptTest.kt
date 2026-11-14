@@ -58,7 +58,7 @@ class GenerationOrchestratorSystemPromptTest {
         coEvery { instructionService.getInstructionVersion(cust, "i1", 1) } returns InstructionResponse(
             id = "i1", version = 1, name = "Coach", instruction = instruction
         )
-        coEvery { conversationService.resolveWritableConversationId(cust, any(), any(), any()) } returns "conv-1"
+        coEvery { conversationService.resolveWritableConversationId(cust, any(), any(), any(), any()) } returns "conv-1"
         coEvery { credentialsService.getCustomerApiKeyForVendor(any(), cust) } returns "api-key"
         coEvery {
             retrievalService.retrieveAndGenerate(

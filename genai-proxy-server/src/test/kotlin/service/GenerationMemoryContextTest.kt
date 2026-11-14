@@ -57,7 +57,7 @@ class GenerationMemoryContextTest {
     init {
         coEvery { memoryService.getMemorySettings(cust) } returns
             MemorySettings(learnFromChats = true, learnFromNotes = true, useInReplies = true)
-        coEvery { conversationService.resolveWritableConversationId(cust, any(), any(), any()) } returns "conv-1"
+        coEvery { conversationService.resolveWritableConversationId(cust, any(), any(), any(), any()) } returns "conv-1"
         coEvery { conversationService.getOwnedConversationProjectId("conv-1", cust) } returns "PRJ1"
         coEvery { credentialsService.getCustomerApiKeyForVendor(any(), cust) } returns "api-key"
         coEvery {

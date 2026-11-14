@@ -22,7 +22,7 @@ class InstructionPersonaFallbackTest {
     private val service = InstructionService(
         repository, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
         mockk(relaxed = true), executor, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-        entitlementServiceWith()
+        entitlementServiceWith(), mockk(relaxed = true), ContentFilter(emptyList())
     )
     private val saved = slot<Instruction>()
 

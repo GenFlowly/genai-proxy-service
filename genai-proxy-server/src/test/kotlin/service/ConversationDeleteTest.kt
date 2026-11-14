@@ -36,7 +36,7 @@ class ConversationDeleteTest {
     private val service = ConversationManagementService(
         conversationService, conversationRepo, shareRepo,
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-        mockk(relaxed = true), contentDeletion, com.genflowly.di.AppScope()
+        mockk(relaxed = true), contentDeletion, com.genflowly.di.AppScope(), mockk(relaxed = true), ContentFilter(emptyList())
     )
 
     private fun stubRole(customerId: String, role: ShareRole?) {
@@ -85,7 +85,7 @@ class LateMessageTest {
     private val recipient = "cust-recipient"
 
     private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
-    private val conversations = ConversationService(conversationRepo, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+    private val conversations = ConversationService(conversationRepo, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), ContentFilter(emptyList()))
 
     private fun message(author: String) = Message(
         conversationId = conv, text = "reply", client = "test", role = "assistant", customerId = author,

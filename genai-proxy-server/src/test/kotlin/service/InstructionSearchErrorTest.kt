@@ -33,7 +33,7 @@ class InstructionSearchErrorTest {
         mockk(relaxed = true),
         CustomerEntitlementService(
             mockk { coEvery { getEntitlements(any()) } answers { entitlements } }, mockk(), mockk()
-        )
+        ), mockk(relaxed = true), ContentFilter(emptyList())
     )
 
     private fun instruction(id: String, version: Int, name: String, text: String, synced: Boolean) = Instruction(

@@ -288,6 +288,36 @@ class PurgeRepository(
             DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY, customerId, DynamoDBConstants.INSTRUCTION_ID_KEY
         )
 
+    /** Deletes [customerId]'s shares of these conversations. */
+    suspend fun deleteConversationSharesWith(customerId: String, conversationIds: List<String>): Int =
+        deleteKeys(
+            DynamoDBConstants.SHARED_CONVERSATIONS_TABLE,
+            conversationIds.map {
+                mapOf(DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to s(customerId), DynamoDBConstants.CONVERSATION_ID_KEY to s(it))
+            }
+        )
+
+    /** Deletes [customerId]'s shares of these instructions. */
+    suspend fun deleteEntitySharesWith(customerId: String, entityIds: List<String>): Int =
+        deleteKeys(
+            DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE,
+            entityIds.map {
+                mapOf(DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY to s(customerId), DynamoDBConstants.INSTRUCTION_ID_KEY to s(it))
+            }
+        )
+
+    /** Deletes the customer's blocks, both those they made and those made against them. */
+    suspend fun deleteBlocks(customerId: String): Int {
+        val blocker = DynamoDBConstants.BLOCKER_CUSTOMER_ID_KEY
+        val blocked = DynamoDBConstants.BLOCKED_CUSTOMER_ID_KEY
+        val table = DynamoDBConstants.CUSTOMER_BLOCKS_TABLE
+        return deleteKeys(
+            table,
+            keys(table, blocker, customerId, listOf(blocker, blocked)) +
+                keys(table, blocked, customerId, listOf(blocker, blocked), DynamoDBConstants.CUSTOMER_BLOCKS_BLOCKED_GSI)
+        )
+    }
+
     suspend fun instructionIdsByCreator(customerId: String): Set<String> =
         values(
             DynamoDBConstants.INSTRUCTION_TABLE, DynamoDBConstants.INSTRUCTION_CREATOR_KEY, customerId,
@@ -376,7 +406,7 @@ class PurgeRepository(
 
     // ── generic helpers ──────────────────────────────────────────────────────
 
-    private suspend fun deleteEntityShares(entityId: String): Int =
+    suspend fun deleteEntityShares(entityId: String): Int =
         deleteKeys(
             DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE,
             keys(

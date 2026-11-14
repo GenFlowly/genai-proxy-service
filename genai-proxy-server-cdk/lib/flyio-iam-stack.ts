@@ -111,6 +111,20 @@ export class FlyioIamStack extends cdk.Stack {
             ],
         });
 
+        // Content reports are emailed through the support topic, which belongs to
+        // the separately deployed SupportStack, so it is referenced by name.
+        new iam.ManagedPolicy(this, 'ProxySupportTopicPublish', {
+            users: [flyioUser],
+            statements: [
+                new iam.PolicyStatement({
+                    actions: ['sns:Publish'],
+                    resources: [
+                        `arn:${cdk.Aws.PARTITION}:sns:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:${RESOURCE_NAMES.GEN_AI_PROXY_SERVICE}-${props.stage}-support-requests`,
+                    ],
+                }),
+            ],
+        });
+
         // The proxy's customer-documents purge worker lists and hard-deletes
         // object VERSIONS in the per-stage customer-documents bucket. That
         // bucket belongs to the encoding service's stacks, so it is referenced
