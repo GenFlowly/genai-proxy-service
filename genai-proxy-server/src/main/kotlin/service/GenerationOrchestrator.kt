@@ -210,7 +210,7 @@ class GenerationOrchestrator(
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
-            conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId)
+            conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId, userRequestRawPrompt)
         val turnStartedAt = java.time.Instant.now().toString()
         val memoryProjectId = if (memoryEnabled) {
             conversationService.getOwnedConversationProjectId(activeConversationId, customerId)
@@ -436,7 +436,7 @@ class GenerationOrchestrator(
 
         // Step 1 - Fetch existing or Create new conversation
         val activeConversationId =
-            conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId)
+            conversationService.resolveWritableConversationId(customerId, client, conversationId, projectId, userRequestRawPrompt)
         val turnStartedAt = java.time.Instant.now().toString()
         val memoryProjectId = if (memoryEnabled) {
             conversationService.getOwnedConversationProjectId(activeConversationId, customerId)

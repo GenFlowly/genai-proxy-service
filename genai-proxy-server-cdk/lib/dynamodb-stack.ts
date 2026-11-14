@@ -467,6 +467,61 @@ export class DynamoDBStack extends cdk.Stack {
             ],
         };
 
+        // One row per person who reported an item: PK=entityId, SK=reporterCustomerId.
+        // The status index is the admin panel's list, newest first.
+        const contentReportsTableProps: CreateTableProps = {
+            tableName: 'ContentReports',
+            partitionKey: {
+                name: 'entityId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'reporterCustomerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'statusCreatedIndex',
+                    partitionKey: {
+                        name: 'status',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'createdAt',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.ALL,
+                },
+            ],
+        };
+
+        // PK=blockerCustomerId answers "who did I block"; the index answers "who blocked me".
+        const customerBlocksTableProps: CreateTableProps = {
+            tableName: 'CustomerBlocks',
+            partitionKey: {
+                name: 'blockerCustomerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            sortKey: {
+                name: 'blockedCustomerId',
+                type: dynamodb.AttributeType.STRING,
+            },
+            globalSecondaryIndexes: [
+                {
+                    indexName: 'blockedCustomerIdIndex',
+                    partitionKey: {
+                        name: 'blockedCustomerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    sortKey: {
+                        name: 'blockerCustomerId',
+                        type: dynamodb.AttributeType.STRING,
+                    },
+                    projectionType: dynamodb.ProjectionType.KEYS_ONLY,
+                },
+            ],
+        };
+
         // Tracks how many distinct conversations each (customerId, instructionId) pair
         // has been used in, plus the timestamp of the most recent use.
         // PK=customerId, SK=instructionId.
@@ -725,6 +780,8 @@ export class DynamoDBStack extends cdk.Stack {
         const customerToolsTable = createDefaultDynamoDbTable(this, customerToolsTableProps);
         const sharedInstructionsTable = createDefaultDynamoDbTable(this, sharedInstructionsTableProps);
         const sharedConversationsTable = createDefaultDynamoDbTable(this, sharedConversationsTableProps);
+        const contentReportsTable = createDefaultDynamoDbTable(this, contentReportsTableProps);
+        const customerBlocksTable = createDefaultDynamoDbTable(this, customerBlocksTableProps);
         const instructionUsageTable = createDefaultDynamoDbTable(this, instructionUsageTableProps);
         const instructionUsageSeenTable = createDefaultDynamoDbTable(this, instructionUsageSeenTableProps);
         const usernameLookupTable = createDefaultDynamoDbTable(this, usernameLookupTableProps);
@@ -747,7 +804,7 @@ export class DynamoDBStack extends cdk.Stack {
             instructionUsageTable, instructionUsageSeenTable,
             usernameLookupTable, customerNotesTable, customerDeveloperApiKeyTable,
             requestAgentMapTable, customerMemoryTable, nodePresetsTable, customerProjectsTable,
-            purgeJobsTable, usageRateCardTable, vectorSyncPendingTable
+            purgeJobsTable, usageRateCardTable, vectorSyncPendingTable, contentReportsTable, customerBlocksTable
         );
     }
 }

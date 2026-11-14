@@ -39,7 +39,7 @@ class ConversationForkTest {
         conversationService, conversationRepo, mockk(relaxed = true),
         mockk(relaxed = true), indexingService,
         mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true),
-        mockk(relaxed = true), com.genflowly.di.AppScope()
+        mockk(relaxed = true), com.genflowly.di.AppScope(), mockk(relaxed = true), ContentFilter(emptyList())
     )
 
     private fun msg(

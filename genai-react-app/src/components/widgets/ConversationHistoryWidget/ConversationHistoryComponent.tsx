@@ -21,7 +21,7 @@ import { CollapsedVendorBrandName } from '../../common/BrandName/BrandName'
 import { DeleteConfirmModal } from '../../common/DeleteConfirmModal/DeleteConfirmModal'
 import { Icon } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
-import { CONVERSATION_FORKED_EVENT } from '../../../constants/events'
+import { CONVERSATION_FORKED_EVENT, CONVERSATION_LIST_CHANGED_EVENT } from '../../../constants/events'
 import { SidebarListPanel, SidebarListGroup, SidebarListItem, Modal, InputTextWithHint, VerticalSplit } from '@genflowly/component-library'
 import { sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import styles from './ConversationHistory.module.scss'
@@ -416,6 +416,12 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
         window.addEventListener(CONVERSATION_FORKED_EVENT, onForked)
         return () => window.removeEventListener(CONVERSATION_FORKED_EVENT, onForked)
     }, [projects, upsertIntoProjectItems])
+
+    useEffect(() => {
+        const onChanged = () => { fetchPage() }
+        window.addEventListener(CONVERSATION_LIST_CHANGED_EVENT, onChanged)
+        return () => window.removeEventListener(CONVERSATION_LIST_CHANGED_EVENT, onChanged)
+    }, [fetchPage])
 
     const handleLoadMore = () => fetchPage(lastKey)
 

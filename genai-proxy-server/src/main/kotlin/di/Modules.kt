@@ -163,6 +163,10 @@ fun appModule(): Module = module {
     single { ConversationRepository(get(), get(), get()) }
     single { CustomerProfileRepository(get(), get()) }
     single { ShareRepository(get(), get()) }
+    single { com.genflowly.repository.CustomerBlockRepository(get(), get()) }
+    single { com.genflowly.repository.ContentReportRepository(get()) }
+    single { com.genflowly.providers.SnsNotifier(get()) }
+    single { com.genflowly.service.ContentFilter.fromResource() }
     single { CustomerCredentialsRepository(get(), get()) }
     single { com.genflowly.repository.CustomerToolsRepository(get(), get()) }
     single { com.genflowly.repository.EmbeddingModelCatalogRepository(get(), get()) }
@@ -212,10 +216,12 @@ fun appModule(): Module = module {
     single { RequestAgentMapAdminService(get(), get(), get(), get()) }
     single { com.genflowly.service.CustomerRequestAgentMapService(get(), get(), get(), get()) }
     single { CustomerProfileService(get(), get(), get(), get(), get()) }
-    single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { ConversationService(get(), get(), get(), get()) }
+    single { InstructionService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { ConversationService(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.BlockService(get(), get(), get(), get(), get(), get()) }
+    single { com.genflowly.service.ContentReportService(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.InstructionUsageService(get(), get(), get()) }
-    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { ConversationManagementService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.ProjectService(get(), get(), get(), get()) }
     single { GenerationRequestValidator(get()) }
     single { com.genflowly.service.MemoryVectorService(get(), get(), get(), get(), get()) }

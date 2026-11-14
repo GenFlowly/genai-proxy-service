@@ -28,6 +28,8 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
+private const val PUBLIC_CUSTOMER_ID = "PUBLIC"
+
 /**
  * The instruction (persona) domain: CRUD with immutable versioning, sharing
  * with role checks, default-instruction resolution, usage tracking, and
@@ -43,7 +45,9 @@ class InstructionService(
     private val encodingServerClient: EncodingServerClient,
     private val retrievalServerClient: RetrievalServerClient,
     private val appScope: AppScope,
-    private val customerEntitlementService: CustomerEntitlementService
+    private val customerEntitlementService: CustomerEntitlementService,
+    private val blockService: BlockService,
+    private val contentFilter: ContentFilter
 ) {
 
     /**
@@ -69,6 +73,7 @@ class InstructionService(
 
             val share = specificShare ?: publicShare
             if (share == null) return null // Not shared with this customer
+            if (customerId != PUBLIC_CUSTOMER_ID && blockService.isBlockedEitherWay(customerId, instruction.creator)) return null
 
             val specificRole = specificShare?.role
             val publicRole = publicShare?.role
@@ -112,7 +117,7 @@ class InstructionService(
                 val existingInstruction = instructionRepository.getInstruction(instructionId, latestVersion)
                 if (existingInstruction != null && existingInstruction.creator != customerId) {
                     // Check if they have EDIT role
-                    val hasEdit = hasEditAccess(customerId, instructionId)
+                    val hasEdit = hasEditAccess(customerId, instructionId, existingInstruction.creator)
                     if (hasEdit) {
                         version = latestVersion + 1
                         creator = existingInstruction.creator
@@ -131,6 +136,10 @@ class InstructionService(
         } else {
             instructionId = "INS-${UUID.randomUUID()}"
             version = 1
+        }
+
+        if (version > 1 && shareRepository.getSharesForEntity(instructionId!!).isNotEmpty()) {
+            ensureInstructionIsShareable(instructionId, instructionName, instruction)
         }
 
         val newInstruction = com.genflowly.models.Instruction(
@@ -260,12 +269,20 @@ class InstructionService(
             ?.let { if (it.length > FALLBACK_NAME_CHARS) it.take(FALLBACK_NAME_CHARS - 1).trimEnd() + "…" else it }
             ?: "Untitled instruction"
 
-    /** True when [customerId] has EDIT via a direct or PUBLIC share on [instructionId]. */
-    private suspend fun hasEditAccess(customerId: String, instructionId: String): Boolean {
+    /** True when [customerId] has EDIT via a direct or PUBLIC share on [instructionId], which [creator] owns. */
+    private suspend fun hasEditAccess(customerId: String, instructionId: String, creator: String): Boolean {
         val sharedUsers = sharedUsersResolver.getUsersWithSharedEntity(instructionId)
         val specificShare = sharedUsers.find { it.customerId == customerId }
         val publicShare = sharedUsers.find { it.customerId == "PUBLIC" }
-        return specificShare?.role == ShareRole.EDIT || publicShare?.role == ShareRole.EDIT
+        if (specificShare?.role == ShareRole.EDIT) return true
+        return publicShare?.role == ShareRole.EDIT && !blockService.isBlockedEitherWay(customerId, creator)
+    }
+
+    private fun ensureInstructionIsShareable(instructionId: String, name: String, text: String) {
+        if (!contentFilter.isAllowed(name) || !contentFilter.isAllowed(text)) {
+            logger.warn { "Refused shared instruction content on $instructionId: it breaks the content rules" }
+            throw ContentBlockedException("This can't be shared because it contains language that breaks our content rules.")
+        }
     }
 
     suspend fun getCustomerInstructions(customerId: String): GetCustomerInstructionListResponse =
@@ -286,12 +303,16 @@ class InstructionService(
             }
         }
 
+        // A signed-out viewer has no identity to check, so public instructions stay listed for them.
+        val hiddenCreators = if (customerId == PUBLIC_CUSTOMER_ID || roleMap.isEmpty()) emptySet()
+            else blockService.relatedCustomerIds(customerId)
+
         val sharedInstructions = mutableListOf<com.genflowly.models.Instruction>()
         for (id in roleMap.keys) {
             val latestVersion = instructionRepository.getLatestInstructionVersion(id)
             if (latestVersion != null) {
                 val instruction = instructionRepository.getInstruction(id, latestVersion)
-                if (instruction != null) {
+                if (instruction != null && instruction.creator !in hiddenCreators) {
                     sharedInstructions.add(instruction)
                 }
             }
@@ -404,22 +425,28 @@ class InstructionService(
     }
 
     suspend fun shareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String, role: ShareRole) {
-        requireOwnerOrEdit(sharedByCustomerId, instructionId)
+        val instruction = requireOwnerOrEdit(sharedByCustomerId, instructionId)
+        blockService.ensureNotBlocked(sharedByCustomerId, targetCustomerId)
+        instruction?.let { blockService.ensureNotBlocked(it.creator, targetCustomerId) }
+        val alreadyShared = shareRepository.getSharesForEntity(instructionId).any { it.first == targetCustomerId }
+        if (!alreadyShared && instruction != null) ensureInstructionIsShareable(instructionId, instruction.name, instruction.instructions)
         shareRepository.shareEntityWithCustomer(instructionId, targetCustomerId, sharedByCustomerId, role)
     }
 
+    /** Anyone may take themselves off a share; removing someone else needs owner or EDIT rights. */
     suspend fun unshareInstruction(instructionId: String, targetCustomerId: String, sharedByCustomerId: String) {
-        requireOwnerOrEdit(sharedByCustomerId, instructionId)
+        if (targetCustomerId != sharedByCustomerId) requireOwnerOrEdit(sharedByCustomerId, instructionId)
         shareRepository.unshareEntityWithCustomer(instructionId, targetCustomerId)
     }
 
-    private suspend fun requireOwnerOrEdit(customerId: String, instructionId: String) {
+    private suspend fun requireOwnerOrEdit(customerId: String, instructionId: String): com.genflowly.models.Instruction? {
         val latestVersion = instructionRepository.getLatestInstructionVersion(instructionId)
         val instruction = if (latestVersion != null) instructionRepository.getInstruction(instructionId, latestVersion) else null
 
-        if (instruction?.creator != customerId && !hasEditAccess(customerId, instructionId)) {
+        if (instruction?.creator != customerId && !hasEditAccess(customerId, instructionId, instruction?.creator.orEmpty())) {
             throw SecurityException("Customer $customerId does not own or have EDIT rights to instruction $instructionId")
         }
+        return instruction
     }
 
     suspend fun getSharedUsersForInstruction(customerId: String, instructionId: String): List<com.genflowly.models.CustomerProfile> {

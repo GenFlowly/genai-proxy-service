@@ -128,9 +128,11 @@ struct InstructionDetailView: View {
     @State private var showShare = false
     @State private var confirmDelete = false
     @State private var showFull = false
+    @StateObject private var moderation = SharedItemModeration()
 
     private var versions: [InstructionResponse] { auth.versions(of: instructionId) }
     private var latest: InstructionResponse? { versions.first }
+    private var sharedItem: SharedItem? { latest != nil && role != "OWNER" ? .instruction(instructionId) : nil }
     private var shown: InstructionResponse? { versions.first { $0.version == version && version != latest?.version } ?? latest }
     private var older: Bool { shown != nil && shown?.version != latest?.version }
     private var role: String { latest?.role ?? "VIEW" }
@@ -147,7 +149,7 @@ struct InstructionDetailView: View {
     var body: some View {
         DetailScaffold(
             title: L("instructionDetail.page.title"),
-            subtitle: latest.map { _ in InstructionLabels.role(role) },
+            subtitle: latest.map { _ in moderation.owner.map { L("moderation.sharedBy", ["name": $0.label]) } ?? InstructionLabels.role(role) },
             menuItems: menuItems,
             onLeading: router.openPageMenu,
             swipeBack: { router.navigate(.instructions) }
@@ -239,6 +241,8 @@ struct InstructionDetailView: View {
         .webConfirm(L("instructionDetail.instructionDetailPage.deleteConfirm"), isPresented: $confirmDelete) {
             Task { await delete() }
         }
+        .task(id: sharedItem) { await moderation.load(item: sharedItem, auth: auth) }
+        .sharedItemModerationDialogs(moderation) { router.navigate(.instructions) }
     }
 
     private var menuItems: [MobileHeaderMenuItem] {
@@ -246,7 +250,7 @@ struct InstructionDetailView: View {
         var items: [MobileHeaderMenuItem] = []
         if canShare { items.append(MobileHeaderMenuItem(label: L("instructionDetail.instructionDetailPage.share")) { showShare = true }) }
         if role == "OWNER" { items.append(MobileHeaderMenuItem(label: L("instructionDetail.instructionDetailPage.delete")) { confirmDelete = true }) }
-        return items
+        return items + moderation.menuItems
     }
 
     private func load() async {
@@ -375,7 +379,9 @@ struct InstructionEditView: View {
             await auth.refreshInstructions()
             router.navigate(.instructionDetail(response.id))
         } catch {
-            toasts.showToast(L("instructionDetail.instructionDetailPage.saveFailedAlert"))
+            toasts.showToast(ModerationRefusal(error: error) == .contentBlocked
+                ? L("moderation.saveRefusedByFilter")
+                : L("instructionDetail.instructionDetailPage.saveFailedAlert"))
         }
     }
 }

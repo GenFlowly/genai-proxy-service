@@ -4,14 +4,17 @@ import '@testing-library/jest-dom';
 import ShareModal from '../../../../components/common/ShareModal/ShareModal';
 import { useAuth0 } from '@auth0/auth0-react';
 import { searchUserByUsername } from '../../../../services/userService';
+import { blockUser } from '../../../../services/moderationService';
 
 jest.mock('@auth0/auth0-react', () => ({
     useAuth0: jest.fn()
 }));
 jest.mock('../../../../services/userService');
+jest.mock('../../../../services/moderationService', () => ({ blockUser: jest.fn() }));
 
 const mockUseAuth0 = useAuth0 as jest.MockedFunction<typeof useAuth0>;
 const mockSearchUserByUsername = searchUserByUsername as jest.MockedFunction<typeof searchUserByUsername>;
+const mockBlockUser = blockUser as jest.Mock;
 
 describe('ShareModal Component', () => {
     beforeEach(() => {
@@ -92,8 +95,8 @@ describe('ShareModal Component', () => {
         await waitFor(() => expect(screen.getByText('user2')).toBeInTheDocument());
         
         // Remove user2
-        const removeButtons = screen.getAllByRole('button', { name: '×' });
-        fireEvent.click(removeButtons[1]);
+        fireEvent.click(screen.getByTestId('share-user-menu-c2'));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
         expect(screen.queryByText('user2')).not.toBeInTheDocument();
         
         fireEvent.click(screen.getByLabelText('Not shared (Private)'));
@@ -191,5 +194,53 @@ describe('ShareModal Component', () => {
             const select = screen.getByRole('combobox') as HTMLSelectElement;
             expect(select.value).toBe('EDIT');
         });
+    });
+
+    describe('blocking a recipient', () => {
+        const user = { customerId: 'c2', username: 'mara', role: 'VIEW' as const };
+        const open = async () => {
+            render(<ShareModal isOpen={true} onClose={jest.fn()} onSave={jest.fn()} entityId="e1" fetchSharedUsers={jest.fn().mockResolvedValue([user])} />);
+            fireEvent.click(await screen.findByTestId('share-user-menu-c2'));
+        };
+
+        beforeEach(() => {
+            mockBlockUser.mockReset();
+        });
+
+        it('asks first, then blocks and drops the person from the list', async () => {
+            mockBlockUser.mockResolvedValue(undefined);
+            await open();
+            fireEvent.click(screen.getByTestId('share-user-block-c2'));
+            expect(mockBlockUser).not.toHaveBeenCalled();
+            fireEvent.click(screen.getByTestId('share-block-confirm-button'));
+            await waitFor(() => expect(mockBlockUser).toHaveBeenCalledWith('mock-token', 'c2'));
+            expect(await screen.findByText('Blocked @mara.')).toBeInTheDocument();
+            expect(screen.queryByTestId('share-user-menu-c2')).not.toBeInTheDocument();
+        });
+
+        it('keeps the person when the block fails', async () => {
+            jest.spyOn(console, 'error').mockImplementation(() => undefined);
+            mockBlockUser.mockRejectedValue(new Error('nope'));
+            await open();
+            fireEvent.click(screen.getByTestId('share-user-block-c2'));
+            fireEvent.click(screen.getByTestId('share-block-confirm-button'));
+            expect(await screen.findByText("Couldn't block @mara. Please try again.")).toBeInTheDocument();
+            expect(screen.getByTestId('share-user-menu-c2')).toBeInTheDocument();
+        });
+
+        it('can back out of the block and can still remove someone from the menu', async () => {
+            await open();
+            fireEvent.click(screen.getByTestId('share-user-block-c2'));
+            fireEvent.click(screen.getAllByText('Cancel')[0]);
+            expect(screen.queryByTestId('share-block-confirm')).not.toBeInTheDocument();
+            fireEvent.click(screen.getByTestId('share-user-menu-c2'));
+            fireEvent.click(screen.getByText('Remove'));
+            expect(screen.queryByTestId('share-user-menu-c2')).not.toBeInTheDocument();
+        });
+    });
+
+    it('links the content rules', () => {
+        render(<ShareModal isOpen={true} onClose={jest.fn()} onSave={jest.fn()} />);
+        expect(screen.getByRole('link', { name: 'content rules' })).toHaveAttribute('href', '/content-rules');
     });
 });

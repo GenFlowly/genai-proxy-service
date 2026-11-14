@@ -201,6 +201,22 @@ struct ChatHeader: View {
     @EnvironmentObject var conversation: ConversationStore
     @Binding var showShare: Bool
     @Binding var showPicker: Bool
+    @StateObject private var moderation = SharedItemModeration()
+
+    /// The open conversation, when someone else owns it.
+    private var sharedItem: SharedItem? {
+        guard !conversation.conversationId.isEmpty, conversation.conversationRole != .owner else { return nil }
+        return .conversation(conversation.conversationId)
+    }
+
+    private var sharedByLabel: String? {
+        moderation.owner.map {
+            L("moderation.sharedByRole", [
+                "name": $0.label,
+                "role": L(conversation.conversationRole == .view ? "moderation.roleView" : "moderation.roleEdit"),
+            ])
+        }
+    }
 
     private var displayTitle: String {
         conversation.conversationId.isEmpty
@@ -224,25 +240,43 @@ struct ChatHeader: View {
             items.append(MobileHeaderMenuItem(label: L("conversation.conversationHeader.share")) { showShare = true })
         }
         items.append(MobileHeaderMenuItem(label: L("conversation.conversationHeader.aiConfig")) { router.isRightSidebarOpen = true })
-        return items
+        return items + moderation.menuItems
     }
 
     var body: some View {
-        MobileHeader(
-            title: displayTitle,
-            menuItems: menuItems,
-            onSubtitleClick: { showPicker = true },
-            onMenuClick: { router.isMobileMenuOpen = true }
-        ) {
-            if let instruction = loadedInstruction {
-                if let icon = instruction.icon, !icon.isEmpty {
-                    EmojiIcon(text: icon, size: 12, advance: 15, lineHeight: 20)
+        ZStack(alignment: .top) {
+            if let sharedByLabel {
+                Text(sharedByLabel)
+                    .webText(13)
+                    .foregroundStyle(AppTheme.textPrimary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(AppTheme.primaryLight)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().strokeBorder(AppTheme.border, lineWidth: 1))
+                    .padding(.top, mobileHeaderHeight + 2)
+                    .allowsHitTesting(false)
+                    .accessibilityIdentifier("shared-by")
+            }
+            MobileHeader(
+                title: displayTitle,
+                menuItems: menuItems,
+                onSubtitleClick: { showPicker = true },
+                onMenuClick: { router.isMobileMenuOpen = true }
+            ) {
+                if let instruction = loadedInstruction {
+                    if let icon = instruction.icon, !icon.isEmpty {
+                        EmojiIcon(text: icon, size: 12, advance: 15, lineHeight: 20)
+                    }
+                    Text(instruction.name)
+                } else {
+                    Text(L("conversation.conversationHeader.chooseInstruction"))
                 }
-                Text(instruction.name)
-            } else {
-                Text(L("conversation.conversationHeader.chooseInstruction"))
             }
         }
+        .task(id: sharedItem) { await moderation.load(item: sharedItem, auth: auth) }
+        .sharedItemModerationDialogs(moderation) { conversation.resetConversation() }
     }
 }
 

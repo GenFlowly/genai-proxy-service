@@ -68,6 +68,8 @@ dependencies {
     implementation("software.amazon.awssdk:kms")
     // Attachments bucket: presigned upload/download URLs + object metadata checks
     implementation("software.amazon.awssdk:s3")
+    // Emails content reports through the support topic
+    implementation("software.amazon.awssdk:sns")
     // Core HTTP client (Netty works well in Ktor)
     implementation("software.amazon.awssdk:url-connection-client")
 

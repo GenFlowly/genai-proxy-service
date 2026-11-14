@@ -18,6 +18,7 @@ import { ICONS } from '../../constants/icons'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
+import { useSharedItemModeration } from '../../hooks/useSharedItemModeration'
 import { useInstructionSharedUsers, useInstructionUsage } from '../../hooks/queries/useInstructionDetail'
 import { InstructionResponse } from '../../models/instruction.models'
 import { SearchUserResponse } from '../../models/user.models'
@@ -28,6 +29,7 @@ import {
     shareInstruction,
     unshareInstruction,
 } from '../../services/instructionService'
+import { ModerationError } from '../../services/moderationService'
 import { formatServerDateOnly, formatServerTime } from '../../utils/timeUtils'
 import { instructionHistory, instructionPath, roleLabel, usageSummary, useInstructionPage } from './instructionDetail'
 
@@ -80,6 +82,12 @@ export default function InstructionDetailPage(): React.ReactElement {
     const canEdit = role !== 'VIEW'
     const usageQuery = useInstructionUsage(instructionId, !!latest)
     const sharesQuery = useInstructionSharedUsers(instructionId, !!latest && canEdit)
+    const moderation = useSharedItemModeration({
+        entityType: 'INSTRUCTION',
+        entityId: instructionId,
+        enabled: !!latest && role !== 'OWNER',
+        onGone: () => navigate('/instructions'),
+    })
 
     const [editing, setEditing] = useState(false)
     const [name, setName] = useState('')
@@ -127,7 +135,7 @@ export default function InstructionDetailPage(): React.ReactElement {
             else if (older) navigate(latestPath, { replace: true })
         } catch (error) {
             console.error('Failed to save instruction', error)
-            showToast(t('instructionDetail.instructionDetailPage.saveFailedAlert'))
+            showToast(error instanceof ModerationError ? t('moderation.saveRefusedByFilter') : t('instructionDetail.instructionDetailPage.saveFailedAlert'))
         } finally {
             setSaving(false)
         }
@@ -154,7 +162,9 @@ export default function InstructionDetailPage(): React.ReactElement {
             sharesQuery.refetch()
         } catch (error) {
             console.error('Failed to share instruction', error)
-            showToast(t('instructionDetail.instructionDetailPage.shareFailedAlert'))
+            showToast(error instanceof ModerationError
+                ? t(error.code === 'CONTENT_BLOCKED' ? 'moderation.shareRefusedByFilter' : 'moderation.shareRefusedByBlock')
+                : t('instructionDetail.instructionDetailPage.shareFailedAlert'))
         }
     }
 
@@ -242,10 +252,11 @@ export default function InstructionDetailPage(): React.ReactElement {
             narrow={isNarrow}
             swipeBack={{ to: '/instructions' }}
             title={t('instructionDetail.page.title')}
-            subtitle={latest ? roleLabel(role) : undefined}
+            subtitle={latest ? (moderation.owner ? t('moderation.sharedBy', { name: moderation.ownerLabel }) : roleLabel(role)) : undefined}
             menuItems={latest ? [
                 ...(canShare ? [{ label: t('instructionDetail.instructionDetailPage.share'), onClick: () => setShareOpen(true), 'data-testid': 'instruction-share' }] : []),
                 ...(role === 'OWNER' ? [{ label: t('instructionDetail.instructionDetailPage.delete'), onClick: remove, 'data-testid': 'instruction-delete' }] : []),
+                ...moderation.actions.map(action => ({ label: action.label, onClick: action.onSelect, 'data-testid': action.testId })),
             ] : undefined}
             breadcrumbs={[
                 { label: t('instructionDetail.instructionDetailPage.breadcrumbInstructions'), onClick: () => navigate('/instructions') },
@@ -268,6 +279,7 @@ export default function InstructionDetailPage(): React.ReactElement {
                             items={[{ label: t('instructionDetail.page.deleteInstruction'), onSelect: remove, danger: true, testId: 'instruction-delete' }]}
                         />
                     )}
+                    {moderation.actions.length > 0 && <MoreMenu label={t('instructionDetail.page.more')} items={moderation.actions} />}
                 </>
             ) : undefined}
             data-testid="instruction-detail"
@@ -406,6 +418,7 @@ export default function InstructionDetailPage(): React.ReactElement {
                 entityId={latest ? instructionId : undefined}
                 fetchSharedUsers={async id => getInstructionSharedUsers(await getAccessTokenSilently(), id)}
             />
+            {moderation.dialogs}
         </DetailShell>
     )
 }

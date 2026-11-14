@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Modal } from '@genflowly/component-library';
 import { PillButton } from '@genflowly/component-library';
 import { searchUserByUsername } from '../../../services/userService';
+import { blockUser } from '../../../services/moderationService';
 import { SearchUserResponse } from '../../../models/user.models';
+import { ContentRulesLink } from '../ModerationDialogs/ContentRulesLink';
 import styles from './ShareModal.module.scss';
 
 export type VisibilityMode = 'PRIVATE' | 'PUBLIC' | 'SPECIFIC';
@@ -29,6 +31,10 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
     const [isSaving, setIsSaving] = useState(false);
     const [isLoadingInitial, setIsLoadingInitial] = useState(false);
     const [publicRole, setPublicRole] = useState<'VIEW' | 'EDIT'>('VIEW');
+    const [menuUserId, setMenuUserId] = useState<string | null>(null);
+    const [blockingUser, setBlockingUser] = useState<SearchUserResponse | null>(null);
+    const [isBlocking, setIsBlocking] = useState(false);
+    const [blockMessage, setBlockMessage] = useState<{ text: string; failed: boolean } | null>(null);
 
     useEffect(() => {
         if (!isOpen) {
@@ -37,6 +43,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
             setSearchResults([]);
             setSelectedUsers([]);
             setInitialUsers([]);
+            setMenuUserId(null);
+            setBlockingUser(null);
+            setBlockMessage(null);
         } else if (entityId && fetchSharedUsers) {
             setIsLoadingInitial(true);
             fetchSharedUsers(entityId)
@@ -103,6 +112,25 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
 
     const handleRoleChange = (customerId: string, role: 'VIEW' | 'EDIT') => {
         setSelectedUsers(prev => prev.map(u => u.customerId === customerId ? { ...u, role } : u));
+    };
+
+    const displayName = (user: SearchUserResponse) => `@${user.username}`;
+
+    const handleBlock = async (user: SearchUserResponse) => {
+        setIsBlocking(true);
+        setBlockMessage(null);
+        try {
+            await blockUser(await getAccessTokenSilently(), user.customerId);
+            setSelectedUsers(prev => prev.filter(u => u.customerId !== user.customerId));
+            setInitialUsers(prev => prev.filter(u => u.customerId !== user.customerId));
+            setBlockMessage({ text: t('common.shareModal.blocked', { name: displayName(user) }), failed: false });
+        } catch (err) {
+            console.error('Failed to block user', err);
+            setBlockMessage({ text: t('common.shareModal.blockFailed', { name: displayName(user) }), failed: true });
+        } finally {
+            setIsBlocking(false);
+            setBlockingUser(null);
+        }
     };
 
     const handleSave = async () => {
@@ -225,7 +253,38 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                                                 <option value="VIEW">{t('common.shareModal.view')}</option>
                                                 <option value="EDIT">{t('common.shareModal.edit')}</option>
                                             </select>
-                                            <button onClick={() => handleRemoveUser(user.customerId)}>&times;</button>
+                                            <div className={styles.rowMenu}>
+                                                <button
+                                                    type="button"
+                                                    aria-label={t('common.shareModal.moreActions', { name: displayName(user) })}
+                                                    aria-haspopup="menu"
+                                                    aria-expanded={menuUserId === user.customerId}
+                                                    onClick={() => setMenuUserId(id => id === user.customerId ? null : user.customerId)}
+                                                    data-testid={`share-user-menu-${user.customerId}`}
+                                                >
+                                                    &#8943;
+                                                </button>
+                                                {menuUserId === user.customerId && (
+                                                    <div className={styles.rowMenuList} role="menu">
+                                                        <button
+                                                            type="button"
+                                                            role="menuitem"
+                                                            onClick={() => { setMenuUserId(null); handleRemoveUser(user.customerId); }}
+                                                        >
+                                                            {t('common.shareModal.remove')}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            role="menuitem"
+                                                            className={styles.rowMenuDanger}
+                                                            onClick={() => { setMenuUserId(null); setBlockingUser(user); }}
+                                                            data-testid={`share-user-block-${user.customerId}`}
+                                                        >
+                                                            {t('common.shareModal.block', { name: displayName(user) })}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -233,6 +292,36 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                         )}
                     </div>
                 )}
+
+                {blockingUser && (
+                    <div className={styles.blockConfirm} role="alertdialog" data-testid="share-block-confirm">
+                        <span>{t('common.shareModal.blockConfirm', { name: displayName(blockingUser) })}</span>
+                        <div className={styles.blockConfirmActions}>
+                            <button type="button" onClick={() => setBlockingUser(null)} disabled={isBlocking}>
+                                {t('common.shareModal.cancel')}
+                            </button>
+                            <button
+                                type="button"
+                                className={styles.rowMenuDanger}
+                                onClick={() => handleBlock(blockingUser)}
+                                disabled={isBlocking}
+                                data-testid="share-block-confirm-button"
+                            >
+                                {t('moderation.block.confirm')}
+                            </button>
+                        </div>
+                    </div>
+                )}
+                {blockMessage && (
+                    <p className={blockMessage.failed ? styles.blockError : styles.blockDone} role="status">{blockMessage.text}</p>
+                )}
+
+                <p className={styles.rulesNote}>
+                    <Trans
+                        i18nKey="common.shareModal.rulesNote"
+                        components={{ rules: <ContentRulesLink className={styles.rulesLink} /> }}
+                    />
+                </p>
 
                 <div className={styles.actions}>
                     <PillButton

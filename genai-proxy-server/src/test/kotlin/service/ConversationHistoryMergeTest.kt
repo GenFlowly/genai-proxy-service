@@ -31,7 +31,7 @@ class ConversationHistoryMergeTest {
     private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
     private val shareRepo = mockk<ShareRepository>(relaxed = true)
     private val customerProfileRepo = mockk<CustomerProfileRepository>(relaxed = true)
-    private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo, mockk(relaxed = true))
+    private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo, mockk(relaxed = true), mockk(relaxed = true), ContentFilter(emptyList()))
 
     private fun userMsg(id: String, text: String, seq: Int, prev: String? = null, createdAt: String? = null) = Message(
         messageId = id, conversationId = conv, text = text, client = "REACT_APP", role = "user",

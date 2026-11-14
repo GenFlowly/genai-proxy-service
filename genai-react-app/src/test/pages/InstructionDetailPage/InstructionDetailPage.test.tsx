@@ -14,6 +14,7 @@ import { LayoutProvider } from '../../../context/LayoutContext'
 import { swipeFromLeftEdge } from '../../utils/edgeSwipe'
 import { useAuth } from '../../../context/AuthContext'
 import * as instructionService from '../../../services/instructionService'
+import * as moderationService from '../../../services/moderationService'
 import { InstructionResponse, InstructionUsageResponse } from '../../../models/instruction.models'
 
 jest.mock('../../../components/navbar/Navbar', () => () => <div data-testid="navbar" />)
@@ -249,6 +250,59 @@ describe('InstructionDetailPage', () => {
         expect(screen.queryByTestId('instruction-share')).not.toBeInTheDocument()
         expect(screen.queryByTestId('detail-more')).not.toBeInTheDocument()
         expect(instructionService.getInstructionSharedUsers).not.toHaveBeenCalled()
+    })
+
+    describe('shared with you', () => {
+        const owner = { ownerCustomerId: 'CU-M', ownerUsername: 'mara', canBlock: true, canRemove: true, alreadyReported: false }
+
+        beforeEach(() => {
+            jest.spyOn(moderationService, 'getSharedItemOwner').mockResolvedValue(owner)
+            auth({ customerInstructions: [{ ...V1, role: 'VIEW' }, { ...V2, role: 'VIEW' }] })
+        })
+
+        test('desktop: Report and Block are in the more menu and name the owner', async () => {
+            renderAt('/instructions/INS-1')
+            const more = await screen.findByTestId('detail-more')
+            await userEvent.click(more)
+            expect(screen.getByTestId('instruction-report')).toHaveTextContent('Report instruction')
+            expect(screen.getByTestId('instruction-block')).toHaveTextContent('Block @mara')
+        })
+
+        test('Report opens the report dialog', async () => {
+            renderAt('/instructions/INS-1')
+            await userEvent.click(await screen.findByTestId('detail-more'))
+            await userEvent.click(screen.getByTestId('instruction-report'))
+            expect(await screen.findByTestId('report-form')).toBeInTheDocument()
+        })
+
+        test('the owner sees neither', async () => {
+            auth()
+            renderAt('/instructions/INS-1')
+            await screen.findByTestId('instruction-card')
+            expect(moderationService.getSharedItemOwner).not.toHaveBeenCalled()
+            expect(screen.queryByTestId('instruction-report')).not.toBeInTheDocument()
+        })
+    })
+
+    test.each([
+        ['CONTENT_BLOCKED', "Can't share this. It contains language that breaks our content rules, so it stays private."],
+        ['BLOCKED', "You can't share with this user."],
+    ])('a share refused with %s says why', async (code, message) => {
+        ;(instructionService.shareInstruction as jest.Mock).mockRejectedValueOnce(new moderationService.ModerationError('no', code as 'BLOCKED'))
+        jest.spyOn(console, 'error').mockImplementation(() => undefined)
+        renderAt('/instructions/INS-1')
+        await userEvent.click((await screen.findAllByTestId('instruction-share'))[0])
+        await userEvent.click(screen.getByText('Save sharing'))
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith(message))
+    })
+
+    test('saving a listed word into a shared instruction says why', async () => {
+        ;(instructionService.createInstruction as jest.Mock).mockRejectedValueOnce(new moderationService.ModerationError('no', 'CONTENT_BLOCKED'))
+        jest.spyOn(console, 'error').mockImplementation(() => undefined)
+        renderAt('/instructions/INS-1')
+        await userEvent.click(await screen.findByTestId('instruction-edit'))
+        await userEvent.click(screen.getByTestId('instruction-save'))
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith("Can't save this. It's shared with other people and contains language that breaks our content rules."))
     })
 
     test('an instruction you cannot see says so, and a signed-out visitor is sent to sign in', () => {

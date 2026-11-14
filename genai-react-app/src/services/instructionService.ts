@@ -1,3 +1,4 @@
+import { moderationErrorFrom } from './moderationService'
 import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import {
@@ -75,7 +76,7 @@ export async function createInstruction(
     })
 
     if (!response.ok) {
-        throw new Error(`Create Instruction failed: ${response.status} ${response.statusText}`)
+        throw await moderationErrorFrom(response, 'Create Instruction failed')
     }
 
     const created = (await response.json()) as InstructionResponse
@@ -105,7 +106,7 @@ export async function shareInstruction(
     })
 
     if (!response.ok) {
-        throw new Error(`Share Instruction failed: ${response.status} ${response.statusText}`)
+        throw await moderationErrorFrom(response, 'Share Instruction failed')
     }
 }
 

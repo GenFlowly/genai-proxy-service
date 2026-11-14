@@ -297,7 +297,11 @@ class CustomerProfileRepository(
             dynamoDbClient.getItem(request).item().takeIf { it.isNotEmpty() }
         }
 
-    suspend fun searchByUsername(usernamePrefix: String): List<com.genflowly.models.api.SearchCustomerResponse> = withContext(Dispatchers.IO) {
+    /** Up to [MAX_SEARCH_RESULTS] discoverable users; [excludeCustomerIds] are dropped before their profiles are read. */
+    suspend fun searchByUsername(
+        usernamePrefix: String,
+        excludeCustomerIds: Set<String> = emptySet()
+    ): List<com.genflowly.models.api.SearchCustomerResponse> = withContext(Dispatchers.IO) {
         val queryReq = QueryRequest.builder()
             .tableName(DynamoDBConstants.USERNAME_LOOKUP_TABLE)
             .indexName(DynamoDBConstants.USERNAME_RECORD_TYPE_GSI)
@@ -306,14 +310,16 @@ class CustomerProfileRepository(
                 ":type" to AttributeValue.builder().s("USER").build(),
                 ":prefix" to AttributeValue.builder().s(usernamePrefix).build()
             ))
-            .limit(5)
+            .limit(SEARCH_SCAN_LIMIT)
             .build()
 
         val response = dynamoDbClient.query(queryReq)
         val results = mutableListOf<com.genflowly.models.api.SearchCustomerResponse>()
 
         for (item in response.items()) {
+            if (results.size == MAX_SEARCH_RESULTS) break
             val customerId = item["customerId"]?.s() ?: continue
+            if (customerId in excludeCustomerIds) continue
             val username = item["username"]?.s() ?: continue
 
             val profileItem = getCustomerProfileByCustomerId(customerId) ?: continue
@@ -645,6 +651,9 @@ class CustomerProfileRepository(
         }
 
     companion object {
+        private const val MAX_SEARCH_RESULTS = 5
+        // Read past the limit so hits dropped as blocked or undiscoverable don't empty the results.
+        private const val SEARCH_SCAN_LIMIT = 10
         private const val VENDOR_ALLOWLIST_ITEM_ID = "SYSTEM#VENDOR_ALLOWLIST"
         private const val MEMORY_LEARN_FROM_CHATS = "memoryLearnFromChats"
         private const val MEMORY_LEARN_FROM_NOTES = "memoryLearnFromNotes"

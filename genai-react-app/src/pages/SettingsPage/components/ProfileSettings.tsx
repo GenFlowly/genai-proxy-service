@@ -7,11 +7,14 @@ import { updateUsername, updateDiscoverability } from '../../../services/userSer
 import { useProfile } from '../../../hooks/queries/useProfile';
 import { DeleteDataSettings } from './DeleteDataSettings';
 import { AiDataConsentRows } from '../../../components/onboarding/AiDataConsentRows';
+import { BlockedUsersList } from '../../../components/common/BlockedUsersList/BlockedUsersList';
+import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints';
 import styles from './ProfileSettings.module.scss';
 
 export function ProfileSettings(): React.ReactElement {
     const { t } = useTranslation();
     const { getAccessTokenSilently, aiDataConsentAt } = useAuth();
+    const { isNarrow } = useResponsiveBreakpoints();
     const { data: profile, isLoading } = useProfile();
     const [usernameInput, setUsernameInput] = useState('');
     const [isDiscoverable, setIsDiscoverable] = useState(false);
@@ -150,6 +153,17 @@ export function ProfileSettings(): React.ReactElement {
                             {t('aiDataConsent.manageServices')}
                         </Link>
                     </div>
+                </div>
+
+                <div className={styles.section} data-testid="blocked-users-section">
+                    <h3 className={styles.sectionTitle}>{t('moderation.blockedUsers.title')}</h3>
+                    {isNarrow ? (
+                        <Link to="/blocked-users" className={styles.settingsLink} data-testid="blocked-users-link">
+                            {t('moderation.blockedUsers.title')}
+                        </Link>
+                    ) : (
+                        <BlockedUsersList />
+                    )}
                 </div>
 
                 <DeleteDataSettings />

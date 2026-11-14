@@ -14,6 +14,8 @@ import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 
+data class ReceivedShare(val entityId: String, val sharedBy: String?)
+
 /**
  * Data access for the SharedInstructions (generic entity shares) and
  * SharedConversations tables. Returns raw (customerId, role) share pairs —
@@ -81,6 +83,26 @@ class ShareRepository(
             val role = ShareRole.fromDb(item[DynamoDBConstants.ENTITY_ROLE_KEY]?.s())
             if (id != null) id to role else null
         }.filter { prefix == null || it.first.startsWith(prefix) }
+    }
+
+    /** Every entity share [customerId] has received, with who shared it. */
+    suspend fun entitySharesWith(customerId: String): List<ReceivedShare> =
+        sharesWith(DynamoDBConstants.SHARED_INSTRUCTIONS_TABLE, INSTRUCTION_ID_KEY, customerId)
+
+    /** Every conversation share [customerId] has received, with who shared it. */
+    suspend fun conversationSharesWith(customerId: String): List<ReceivedShare> =
+        sharesWith(DynamoDBConstants.SHARED_CONVERSATIONS_TABLE, CONVERSATION_ID_KEY, customerId)
+
+    private suspend fun sharesWith(table: String, idKey: String, customerId: String): List<ReceivedShare> = withContext(Dispatchers.IO) {
+        dynamoDbClient.queryPaginator(
+            QueryRequest.builder()
+                .tableName(table)
+                .keyConditionExpression("${DynamoDBConstants.SHARED_WITH_CUSTOMER_ID_KEY} = :cid")
+                .expressionAttributeValues(mapOf(":cid" to AttributeValue.builder().s(customerId).build()))
+                .build()
+        ).items().mapNotNull { item ->
+            item[idKey]?.s()?.let { ReceivedShare(it, item[DynamoDBConstants.SHARED_BY_CUSTOMER_ID_KEY]?.s()) }
+        }.toList()
     }
 
     /** Raw (sharedWithCustomerId, role) pairs for an entity, role defaulting to VIEW. */

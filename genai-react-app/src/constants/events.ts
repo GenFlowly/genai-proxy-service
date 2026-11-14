@@ -8,3 +8,6 @@
 
 /** detail: ForkConversationResponse — a conversation was just forked. */
 export const CONVERSATION_FORKED_EVENT = 'genflowly:conversation-forked';
+
+/** Conversations left the list from outside it, e.g. blocking someone removed what they shared. */
+export const CONVERSATION_LIST_CHANGED_EVENT = 'genflowly:conversation-list-changed';

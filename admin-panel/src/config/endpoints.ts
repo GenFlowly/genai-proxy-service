@@ -16,6 +16,9 @@ export const endpoints = {
     agent: (graphId: string) => `${BASE}${API_PREFIX}/agents/${graphId}`,
     requestAgentMap: `${BASE}${API_PREFIX}/admin/request-agent-map`,
     vendorAllowlist: `${BASE}${API_PREFIX}/admin/vendor-allowlist`,
+    adminReports: `${BASE}${API_PREFIX}/admin/reports`,
+    adminReport: (entityId: string, reporterCustomerId: string) =>
+        `${BASE}${API_PREFIX}/admin/reports/${encodeURIComponent(entityId)}/${encodeURIComponent(reporterCustomerId)}`,
     usageRateCard: `${BASE}${API_PREFIX}/admin/usage-rate-card`,
     nodePresets: `${BASE}${API_PREFIX}/node-presets`,
     adminNodePresets: `${BASE}${API_PREFIX}/admin/node-presets`,
