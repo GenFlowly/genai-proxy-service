@@ -69,11 +69,11 @@ Notes:
 
 ## Publishing (GitHub Actions)
 
-| Branch | Workflow | Stage | Result |
-|---|---|---|---|
-| `main` | `.github/workflows/prod-ios-app-store.yml` | production | Signed build in TestFlight for internal testers, selected on the App Store version draft |
+| Branch | Workflow | Trigger | Stage | Result |
+|---|---|---|---|---|
+| `main` | `.github/workflows/prod-ios-app-store.yml` | Manual | production | Signed build in TestFlight for internal testers, selected on the App Store version draft |
 
-Pushes to `development` publish nothing. The workflow runs only when something under `AI Wrapper/` changes, runs the unit tests on a simulator first, and uploads one run at a time (a concurrency group). It waits for Apple to finish processing the build, then creates the App Store version for `MARKETING_VERSION` (or renames the unreleased one) and selects the build on it. **Nothing is submitted for review**: after testing the TestFlight build, open the version in App Store Connect, fill in What's New, and choose Add for Review → Submit. If that version is already waiting for review, the run fails after the upload (the build stays in TestFlight) because Apple won't change the build of a waiting version.
+Nothing publishes on a push or merge. To release, open Actions → **Production iOS TestFlight** → Run workflow with `main` selected, or run `gh workflow run prod-ios-app-store.yml --ref main`. A run started from any other branch is skipped. The workflow runs the unit tests on a simulator first and uploads one run at a time (a concurrency group). It waits for Apple to finish processing the build, then creates the App Store version for `MARKETING_VERSION` (or renames the unreleased one) and selects the build on it. **Nothing is submitted for review**: after testing the TestFlight build, open the version in App Store Connect, fill in What's New, and choose Add for Review → Submit. If that version is already waiting for review, the run fails after the upload (the build stays in TestFlight) because Apple won't change the build of a waiting version.
 
 The recipe is `fastlane/Fastfile`; the same lanes run locally with the same environment variables:
 
@@ -82,11 +82,11 @@ fastlane ios unit_tests stage:development   # simulator unit tests
 fastlane ios release                        # signed production build → TestFlight + App Store version draft
 ```
 
-Runner: GitHub's `xcode-27` image (macOS 27, Xcode 27.1 pinned through `DEVELOPER_DIR`). macOS minutes are billed at 10× Linux minutes, which is why the path filter matters.
+Runner: GitHub's `xcode-27` image (macOS 27, Xcode 27.1 pinned through `DEVELOPER_DIR`). macOS minutes are billed at 10× Linux minutes, which is why runs are manual.
 
 ### Versions and build numbers
 
-- **Version** is assigned on CI: each merge that changes the app takes one patch above the highest version App Store Connect has seen (the latest upload or the live version), passed as `MARKETING_VERSION`. An unreleased version page is renamed to match. To start a new minor or major, raise Version in Xcode (target `AI Wrapper` → General); the workflow never goes below it. The number in the project is otherwise only used by local builds, so it doesn't follow each release.
+- **Version** is assigned on CI: each run takes one patch above the highest version App Store Connect has seen (the latest upload or the live version), passed as `MARKETING_VERSION`. An unreleased version page is renamed to match. To start a new minor or major, raise Version in Xcode (target `AI Wrapper` → General); the workflow never goes below it. The number in the project is otherwise only used by local builds, so it doesn't follow each release.
 - **Build number** is assigned on CI: the latest build in App Store Connect + 1, passed as `CURRENT_PROJECT_VERSION`. The `1` in the project is only used by local builds.
 
 ### Stage values and secrets on CI
