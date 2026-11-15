@@ -27,5 +27,5 @@ test('renders App shell and verifies authenticated state', async () => {
   // Navbar waits for Auth -> Onboard -> Authenticated
   const avatarImage = await screen.findByTestId('user-avatar-button-image', {}, { timeout: 10000 });
   expect(avatarImage).toBeInTheDocument();
-  expect(avatarImage).toHaveAttribute('alt', 'Neel');
+  expect(avatarImage).toHaveAttribute('alt', 'Test User');
 });
