@@ -2,8 +2,6 @@
 //  AI_WrapperTests.swift
 //  AI WrapperTests
 //
-//  Created by Neel Kirit on 8/11/26.
-//
 
 import Testing
 @testable import AI_Wrapper

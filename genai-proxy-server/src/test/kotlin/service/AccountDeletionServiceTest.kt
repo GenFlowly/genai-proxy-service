@@ -75,14 +75,14 @@ class AccountDeletionServiceTest {
     private fun profile(client: String) = mapOf(
         DynamoDBConstants.SUB_PARTITION_KEY to AttributeValue.builder().s("auth0|u1").build(),
         DynamoDBConstants.CLIENT_SORT_KEY to AttributeValue.builder().s(client).build(),
-        DynamoDBConstants.USERNAME_KEY to AttributeValue.builder().s("neel-abc123").build(),
+        DynamoDBConstants.USERNAME_KEY to AttributeValue.builder().s("alex-abc123").build(),
         DynamoDBConstants.CUSTOMER_ID_KEY to AttributeValue.builder().s("CU1").build(),
     )
 
     private fun MockKMatcherScope.account(): PurgeJob = match { it.jobKey == "ACCOUNT#CU1" }
 
     private fun job(stage: Int, requestedAt: Instant = now, attempts: Int = 1) = PurgeJob(
-        type = PurgeJobType.ACCOUNT, customerId = "CU1", sub = "auth0|u1", client = "REACT_APP", username = "neel-abc123",
+        type = PurgeJobType.ACCOUNT, customerId = "CU1", sub = "auth0|u1", client = "REACT_APP", username = "alex-abc123",
         requestedAt = requestedAt, stage = stage, attempts = attempts, dueAt = "2026-11-05T11:00:00Z"
     )
 
@@ -94,10 +94,10 @@ class AccountDeletionServiceTest {
         service.requestDeletion("CU1")
 
         coVerifyOrder {
-            jobs.createIfAbsent(match { it.sub == "auth0|u1" && it.username == "neel-abc123" }, now.plus(PurgeJobRunner.LEASE))
+            jobs.createIfAbsent(match { it.sub == "auth0|u1" && it.username == "alex-abc123" }, now.plus(PurgeJobRunner.LEASE))
             purge.deleteDeveloperApiKeys("CU1")
             purge.deleteProfile("auth0|u1", "REACT_APP", "CU1")
-            purge.deleteUsername("neel-abc123", "CU1")
+            purge.deleteUsername("alex-abc123", "CU1")
             jobs.recordStage(account(), STAGE_DISCONNECTED, any())
         }
         coVerify(timeout = 5_000) { auth0.deleteUser("auth0|u1") }
