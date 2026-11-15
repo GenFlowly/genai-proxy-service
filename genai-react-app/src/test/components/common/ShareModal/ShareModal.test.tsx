@@ -87,6 +87,27 @@ describe('ShareModal Component', () => {
         });
     });
 
+    it('keeps what is being typed when the parent re-renders with a new fetchSharedUsers', async () => {
+        // A phone keyboard resizes the page, and the parent passes a fresh inline function on every render
+        const fetchSharedUsers = jest.fn().mockResolvedValue([]);
+        const { rerender } = render(
+            <ShareModal isOpen={true} onClose={jest.fn()} onSave={jest.fn()} entityId="conv-1" fetchSharedUsers={id => fetchSharedUsers(id)} />
+        );
+        await waitFor(() => expect(screen.getByLabelText('Not shared (Private)')).toBeChecked());
+
+        fireEvent.click(screen.getByLabelText('Share with only some users'));
+        fireEvent.change(screen.getByPlaceholderText('Search username...'), { target: { value: 'ali' } });
+
+        rerender(
+            <ShareModal isOpen={true} onClose={jest.fn()} onSave={jest.fn()} entityId="conv-1" fetchSharedUsers={id => fetchSharedUsers(id)} />
+        );
+
+        expect(fetchSharedUsers).toHaveBeenCalledTimes(1);
+        expect(screen.getByLabelText('Share with only some users')).toBeChecked();
+        expect(screen.getByPlaceholderText('Search username...')).toHaveValue('ali');
+        await waitFor(() => expect(mockSearchUserByUsername).toHaveBeenCalledWith('mock-token', 'ali'));
+    });
+
     it('removes initial users when saving', async () => {
         const fetchSharedUsers = jest.fn().mockResolvedValue([{ customerId: 'c2', username: 'user2', role: 'EDIT' }]);
         const handleSave = jest.fn();
