@@ -86,7 +86,7 @@ class RenderAgentVariablesTests(unittest.TestCase):
         self.assertEqual(out, "Content: X end")
 
     def test_json_valued_variable_with_braces_is_safe(self):
-        memories = '[{"memoryId": "MEM#1", "text": "Is named Neel"}]'
+        memories = '[{"memoryId": "MEM#1", "text": "Is named Alex"}]'
         out = self._render(
             "Existing: {{existingMemories}}", {"existingMemories": memories}
         )
@@ -331,7 +331,7 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         payload = {
             "customer_id": "cust-1",
             "memory_key": "MEM#abc",
-            "memory_value": "Is named Neel.",
+            "memory_value": "Is named Alex.",
             "title": "[memory] profile",
             "created_at": "2026-10-10T00:00:00Z",
             "model_type": "voyage",
@@ -378,7 +378,7 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         record = data[0]
         self.assertEqual(record["id"], "MEM#abc_0")
         self.assertEqual(record["customer_id"], "cust-1")
-        self.assertEqual(record["note_value"], "Is named Neel.")
+        self.assertEqual(record["note_value"], "Is named Alex.")
         self.assertEqual(record["memory_key"], "MEM#abc")
         self.assertEqual(record["created_at"], "2026-10-10T00:00:00Z")
         self.assertEqual(client.flushed, "memory_voyage_4_large")

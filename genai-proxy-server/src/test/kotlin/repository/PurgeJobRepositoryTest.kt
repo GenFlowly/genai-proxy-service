@@ -36,7 +36,7 @@ class PurgeJobRepositoryTest {
 
     private val account = PurgeJob(
         type = PurgeJobType.ACCOUNT, customerId = "CU1", requestedAt = requestedAt,
-        sub = "auth0|u1", client = "REACT_APP", username = "neel-abc123"
+        sub = "auth0|u1", client = "REACT_APP", username = "alex-abc123"
     )
     private val conversation = PurgeJob(
         type = PurgeJobType.CONVERSATION, customerId = "CU1", itemId = "C1", requestedAt = requestedAt, parentId = "C0"

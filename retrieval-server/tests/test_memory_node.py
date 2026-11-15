@@ -98,14 +98,14 @@ class MemoryNodeTests(unittest.IsolatedAsyncioTestCase):
     async def test_core_block_format_unchanged_and_no_recall_without_episodic(self):
         memories = [
             _mem("MEM#a", "CORE", "Works as an engineer.", "2026-01-02T00:00:00Z"),
-            _mem("MEM#b", "CORE", "Is named Neel.", "2026-01-01T00:00:00Z"),
+            _mem("MEM#b", "CORE", "Is named Alex.", "2026-01-01T00:00:00Z"),
         ]
         result, _ = await self._run(_state(), memories)
 
         block = result["memories_block"]
         self.assertIn("## What you know about this user", block)
         # Newest first, exact bullet format
-        self.assertLess(block.index("- Works as an engineer."), block.index("- Is named Neel."))
+        self.assertLess(block.index("- Works as an engineer."), block.index("- Is named Alex."))
         self.assertNotIn("Possibly relevant", block)
         self.assertEqual(result["scratch"]["memory_stats"], {"core": 2, "recalled": 0})
         # No EPISODIC memories stored → the vector store is never touched
