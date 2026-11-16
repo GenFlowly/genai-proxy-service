@@ -363,15 +363,17 @@ Non-durable and internal generations keep the existing stateless `/retrieve` and
 > the conversation GET, and true durable cancel (Stop also cancels the run). Web app:
 > reattach-on-reload, the shared NDJSON reader + `ai` (awaiting_input) frame, and an
 > app-side HITL prompt/reply banner (the polished in-card UI belongs in the compiled
-> component library). All shipped; still behind DURABLE_RUNS_ENABLED.
+> component library). All shipped; every agentic chat now takes the durable path
+> whenever the retrieval-server has DATABASE_URL (the DURABLE_RUNS_ENABLED flag is gone).
 
 > **⚠️ Environment isolation (found during P2).** Every process pointed at the same
-> `DATABASE_URL` shares one DBOS system DB **and one `agent_runs` queue**, so their
-> workers cross-execute each other's runs. During P2, the deployed dev server's
-> worker dequeued a run enqueued from a local process and executed it with the
-> deployed code. This is fine for the throwaway dev DB, but **before real use each
-> environment (local / dev / prod) must have its own Supabase** (or a distinct DBOS
-> app name / queue) so runs execute only where intended. Track in P3.
+> `DATABASE_URL` shares one DBOS system DB. While runs went through the `agent_runs`
+> queue, the deployed dev server's worker dequeued a run enqueued from a local
+> process and executed it with the deployed code. Runs now start directly in the
+> process that receives them (the queue is gone, to stop its 1-second polling), so
+> that path is closed; startup recovery can still claim an interrupted run from
+> another process with the same executor id (`local`) and app version. **Prod must
+> have its own Supabase project**; local and dev still share one.
 
 ---
 
