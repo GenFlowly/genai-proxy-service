@@ -2,7 +2,7 @@
 
 **Effective date:** November 7, 2026
 
-**Last updated:** November 9, 2026
+**Last updated:** November 14, 2026
 
 Unbiase AI ("Unbiase AI", "we", "us") is operated by Genflowly, based in Seattle, Washington, United States. This policy explains what we collect when you use our web app at genflowly.com, our iOS app and our developer API, where that information goes, and the choices you have.
 
@@ -206,6 +206,7 @@ We don't ask you to provide sensitive information. If you include it in your con
 |---|---|---|
 | **Amazon Web Services** (United States) | Database, file storage, key encryption, background processing | Your account data and content, encrypted at rest |
 | **Fly.io** (United States) | Runs our servers | Your content and keys in memory while processing requests |
+| **Supabase** (United States) | Database that lets a reply in progress resume after an interruption | While a reply is being generated: your message, the conversation history and what's sent with it (instructions, memories, and notes or search results the AI looks up), and the reply so far. Deleted within an hour after the reply finishes. Never your API keys. |
 | **Cloudflare** (global network) | Website hosting and delivery, security, routing of web app requests | Web app traffic, including your content in transit, and your IP address |
 | **Auth0 by Okta** (United States) | Sign-in | Your sign-in details, email, name, picture, and login records |
 | **Grafana Labs** | Service health dashboards and alerts | Performance metrics and operational logs |
@@ -238,6 +239,7 @@ Deleting a conversation ends its public link and its shares. If someone shared a
 | **Notes saved in earlier versions of the app** | Until you delete your account, or ask us to delete them. |
 | **Deleted items** | Erased from our active systems shortly after you delete them. Copies in backups expire within 35 days. |
 | **Memories** | Until you delete them or your account. A memory keeps its earlier versions and its history until it is deleted. Deleting a conversation doesn't delete the memories learned from it. |
+| **Replies in progress** | Deleted from Supabase within an hour after the reply finishes. The finished reply is kept with its conversation. |
 | **Temporary files used by AI tools** | 1 day for files created since November 6, 2026. Files created before then are kept until they are deleted. |
 | **API keys and connection details** | Until you delete them or your account. |
 | **Account details** | Until you delete your account. Your sign-in record with Auth0 is deleted on request. |
@@ -288,7 +290,7 @@ Our systems process your content automatically, and it is not end-to-end encrypt
 
 ### International transfers
 
-We're based in Seattle, Washington, in the United States, and our main systems are in the United States (AWS and Fly.io in the Virginia region). Cloudflare operates a global network. In BYOK mode your content also goes wherever your chosen providers and vector database are located. In Pay-as-you-go, our providers will process it in the locations we list in section 2 before launch. Where the law requires it, we rely on appropriate safeguards for transfers, such as Standard Contractual Clauses.
+We're based in Seattle, Washington, in the United States, and our main systems are in the United States (AWS, Fly.io and Supabase in the Virginia region). Cloudflare operates a global network. In BYOK mode your content also goes wherever your chosen providers and vector database are located. In Pay-as-you-go, our providers will process it in the locations we list in section 2 before launch. Where the law requires it, we rely on appropriate safeguards for transfers, such as Standard Contractual Clauses.
 
 ### Children
 
