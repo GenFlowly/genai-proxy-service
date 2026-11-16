@@ -145,7 +145,7 @@ packaging==26.3
     #   langsmith
 pandas==3.1.0
     # via pymilvus
-pillow==12.2.0
+pillow==13.0.0
     # via voyageai
 propcache==0.5.4
     # via

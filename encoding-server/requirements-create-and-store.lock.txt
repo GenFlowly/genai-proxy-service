@@ -228,7 +228,7 @@ packaging==26.3
     #   transformers
 pandas==3.0.6
     # via pymilvus
-pillow==12.2.0
+pillow==13.0.0
     # via voyageai
 propcache==0.5.4
     # via
