@@ -82,7 +82,7 @@ fastlane ios unit_tests stage:development   # simulator unit tests
 fastlane ios release                        # signed production build → TestFlight + App Store version draft
 ```
 
-Runner: GitHub's `xcode-27` image (macOS 27, Xcode 27.1 pinned through `DEVELOPER_DIR`). macOS minutes are billed at 10× Linux minutes, which is why runs are manual.
+Runner: GitHub's `xcode-27` image (macOS 27, Xcode 27.2 pinned through `DEVELOPER_DIR`). Unit tests run on the `iPhone 18 Pro` simulator with its newest installed runtime; pass `device:"iPhone 17"` to the lane to use another one. macOS minutes are billed at 10× Linux minutes, which is why runs are manual.
 
 ### Versions and build numbers
 
