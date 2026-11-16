@@ -127,6 +127,33 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(summary["error"])
 
 
+class StartRunTest(unittest.IsolatedAsyncioTestCase):
+    async def test_starts_the_workflow_directly_under_the_run_id(self):
+        from dbos import DBOS
+        from dbos._context import get_workflow_start_options
+
+        seen = {}
+
+        async def fake_start(func, *args):
+            seen["func"], seen["args"] = func, args
+            seen["workflow_id"] = get_workflow_start_options().assigned_id.workflow_id
+            return "handle"
+
+        with patch.object(runs.durable_runtime, "is_ready", return_value=True), \
+             patch.object(DBOS, "start_workflow_async", fake_start):
+            handle = await runs.start_run("run_x", dict(_RUN_INPUT))
+
+        self.assertEqual(handle, "handle")
+        self.assertIs(seen["func"], runs.agent_run)
+        self.assertEqual(seen["args"], ("run_x", _RUN_INPUT))
+        self.assertEqual(seen["workflow_id"], "run_x")
+
+    async def test_refuses_before_the_runtime_is_ready(self):
+        with patch.object(runs.durable_runtime, "is_ready", return_value=False):
+            with self.assertRaises(RuntimeError):
+                await runs.start_run("run_x", dict(_RUN_INPUT))
+
+
 def _is_terminal(ev: dict) -> bool:
     return ev.get("status") in ("completed", "error")
 

@@ -471,7 +471,7 @@ async def execute_agent_graph(req: ExecuteAgentGraphRequest):
             req.graph_id, req.customer_id, run_id, req.llm_provider,
         )
         try:
-            result = await runs_module.request_agent_run(run_id, run_input)
+            result = await runs_module.run_request_agent(run_id, run_input)
             return JSONResponse(result)
         except Exception as e:
             logger.error("Durable agent graph %s failed: %s", req.graph_id, e, exc_info=True)
