@@ -259,6 +259,21 @@ class WebSearchRegistrationTest(unittest.TestCase):
         # schema offered one (run() still clamps a value passed anyway).
         self.assertNotIn("max_results", spec["parameters"]["properties"])
 
+    async def test_counts_provider_calls_by_status(self):
+        # web_search_total is the spend signal: one increment per call that
+        # reached (or tried to reach) Tavily, by outcome.
+        tool = WebSearchTool()
+        with patch("encoding_library.observability.count") as count, \
+             patch("encoding_library.observability.observe"), \
+             patch("encoding_library.utils.usage_tracking.record_web_search_usage"):
+            with patch.object(tool, "_search", AsyncMock(return_value=_SAMPLE)):
+                await tool.run({"query": "q"}, _keyed_ctx())
+            with patch.object(tool, "_search", AsyncMock(side_effect=RuntimeError("boom"))):
+                await tool.run({"query": "q"}, _keyed_ctx())
+            await tool.run({"query": "q"}, _ctx())
+        statuses = [c.kwargs["status"] for c in count.call_args_list if c.args[0] == "web_search_total"]
+        self.assertEqual(statuses, ["ok", "error", "missing_key"])
+
 
 if __name__ == "__main__":
     unittest.main()

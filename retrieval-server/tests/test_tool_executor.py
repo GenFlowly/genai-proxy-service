@@ -16,6 +16,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 import graph.nodes.tool_executor as tool_executor_module
+from graph.lookup_pool import LookupPool
 from graph.nodes.tool_executor import tool_executor
 from graph_tools.base import GraphTool, Source, ToolContext, ToolResult
 
@@ -691,3 +692,71 @@ class HardSearchCapTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LookupPoolIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    """Shareable tools route through the per-message lookup pool: a sibling
+    run of the same turn gets the first run's results instead of executing;
+    everything else — other tools, runs without a turn id — is untouched."""
+
+    def setUp(self):
+        patcher = patch.object(tool_executor_module, "lookup_pool", LookupPool())
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    @staticmethod
+    def _search_state(query, run, turn="turn-1"):
+        state = _state([{"id": "1", "name": "web_search", "args": {"query": query}}], ["web_search"])
+        state["scratch"] = {"fs_namespace": run}
+        state["turn_id"] = turn
+        return state
+
+    @staticmethod
+    def _shareable_tool(**kw):
+        tool = _Recorder("web_search", sources=[Source(title="T", url="https://x", content="c")], **kw)
+        tool.shareable = True
+        return tool
+
+    async def test_sibling_run_is_served_from_the_pool(self):
+        tool = self._shareable_tool()
+        await _run(self._search_state("q a", "run-a"), [tool])
+        out = await _run(self._search_state("q b", "run-b"), [tool])
+
+        self.assertEqual(tool.run_count, 1)
+        content = out["loop_messages"][1]["content"]
+        self.assertIn("parallel run", content)
+        self.assertIn("Your query was 'q b'", content)
+        self.assertIn("[1] T (https://x)", content)  # rendered + numbered like a real result
+        self.assertEqual(out["tool_sources"], [{"index": 1, "title": "T", "url": "https://x"}])
+        self.assertEqual(out["trace"][0]["calls"][0]["details"]["pool"], "shared")
+        # The run's own budget still counts the call it issued.
+        self.assertEqual(out["scratch"]["web_search_calls"], 1)
+
+    async def test_without_a_turn_id_every_run_searches(self):
+        tool = self._shareable_tool()
+        await _run(self._search_state("q a", "run-a", turn=None), [tool])
+        await _run(self._search_state("q b", "run-b", turn=None), [tool])
+        self.assertEqual(tool.run_count, 2)
+
+    async def test_non_shareable_tools_never_touch_the_pool(self):
+        tool = _Recorder("fs_read")
+        with patch.object(tool_executor_module.lookup_pool, "execute", AsyncMock(side_effect=AssertionError)):
+            state = _state([{"id": "1", "name": "fs_read", "args": {"path": "p"}}], ["fs_read"])
+            state["turn_id"] = "turn-1"
+            out = await _run(state, [tool])
+        self.assertEqual(tool.run_count, 1)
+        self.assertEqual(out["loop_messages"][1]["content"], "fs_read ran")
+
+    async def test_pooled_calls_are_counted_apart_from_executions(self):
+        tool = self._shareable_tool()
+        with patch.object(tool_executor_module, "count") as count:
+            await _run(self._search_state("q a", "run-a"), [tool])
+            await _run(self._search_state("q b", "run-b"), [tool])
+        statuses = [c.kwargs["status"] for c in count.call_args_list
+                    if c.args[0] == "tool_execution_total" and c.kwargs.get("tool") == "web_search"]
+        self.assertEqual(statuses, ["ok", "pooled"])
+
+    async def test_a_failing_shared_tool_still_isolates_the_error(self):
+        tool = self._shareable_tool(raises=RuntimeError("boom"))
+        out = await _run(self._search_state("q a", "run-a"), [tool])
+        self.assertIn("Error executing web_search: boom", out["loop_messages"][1]["content"])

@@ -26,6 +26,16 @@ Setup is already done once in `app.py` — `configure_observability(service="ret
 
 **Production logs problems only — and never user content.** Two layers, both keyed off `APP_ENV` (`production` in `fly.production.toml`; the dev Fly app and local machines are development). (1) Level: `app.py` sets WARNING+ in production, INFO in development; an explicit `LOG_LEVEL` env var overrides. (2) Content gate: lines carrying user content — prompts, system prompts/instructions, LLM responses, memories, queries — are gated by `content_logging.py`: wrap whole-line dumps in `if LOG_USER_CONTENT:` and single content fields in `redact(value, limit)`. The gate is independent of level, so content stays out of production logs even under a temporary `LOG_LEVEL=INFO`. When adding a log line, ask: could this contain something a user typed or the model generated for them? If yes, gate it — and never log emails or names at any level. Repo-wide policy: `genai-proxy-server/development.md` → "Logging policy".
 
+## Per-message lookup pool (multi-model turns)
+
+A turn with N selected models is N independent graph runs of the same user message, each free to call `web_search`. `graph/lookup_pool.py` makes them fetch once: the proxy sends the user message id as `turn_id` on `/retrieve` and `/runs` (null on regenerate and for internal generations), the executor keys the pool by `(turn_id, tool)`, and a run's **first** call to a `shareable` tool is served from the results its siblings already fetched — or are fetching, the waiter blocks on the in-flight call — instead of running. Later calls from that run execute normally and join the pool ("refine and retry" still works), and an identical query is never fetched twice within a turn by any run. Only results that carry sources are shared; a failed or empty lookup makes the waiter fall back to its own call.
+
+- Opt a tool in with `shareable = True` on the `GraphTool` (today: `web_search`). It must be a pure lookup — result determined by its arguments, no side effects.
+- The run identity inside the pool is the scratch `fs_namespace`, so subagents count as their parent's run.
+- The per-run search budget (`max_web_searches`, hard cap) is unchanged and still counts a pooled call as issued — the pool only ever removes provider calls, never adds any.
+- State is in-process (`BoundedCache`, 10-minute TTL); with more than one retrieval machine, siblings landing on different machines simply search as before.
+- Metrics: `lookup_pool_total{tool,status}` (outcomes above), `lookup_pool_wait_duration_seconds{tool}`, and `web_search_total` now counts only calls that reached Tavily. Backend Services dashboard → "Web search, tools, streaming, voice" row: *Web search*, *Web search pool*, *Searches avoided 24h*.
+
 ## Third-party calls: retry with exponential backoff
 
 Every outbound call to a third-party API MUST go through `encoding_library.utils.retry` (`@retry`, `retry_call`, or a `RetryingProxy`-wrapped client). Each retry emits `retry_attempt_total{operation}`; giving up emits `retry_exhausted_total{operation}`.
