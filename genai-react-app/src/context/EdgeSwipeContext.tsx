@@ -74,6 +74,22 @@ function canScrollBack(target: Element): boolean {
 }
 
 /**
+ * The touch had to be cancelled at its start to keep Safari's back swipe off
+ * it, which also cost it the browser's click, so a tap gets one here.
+ */
+function tap(target: Element, touch: Touch | undefined): void {
+    const editable = target.closest<HTMLElement>('input, textarea, select, [contenteditable="true"]')
+    editable?.focus()
+    target.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: touch?.clientX ?? 0,
+        clientY: touch?.clientY ?? 0,
+    }))
+}
+
+/**
  * Below isNarrow, a swipe from the left edge opens the page's L2 Menu (or the
  * L1 Menu when it has none), or goes back on a page nested under another. On
  * the L2 Menu it opens the L1 Menu. Menus follow the finger; released early
@@ -133,6 +149,8 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
             }
             if (!action) return
 
+            // Safari's own back swipe starts from the same edge; only a cancelled touchstart keeps it out
+            if (event.cancelable) event.preventDefault()
             swipe.current = {
                 startX: touch.clientX,
                 startY: touch.clientY,
@@ -197,14 +215,19 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
             setDraggedLayer(null)
         }
 
-        const handleEnd = () => {
+        const handleEnd = (event: TouchEvent) => {
             const current = swipe.current
+            if (current && !current.isClaimed) {
+                swipe.current = null
+                tap(current.target, event.changedTouches?.[0])
+                return
+            }
             finish(!!current && (current.dx > window.innerWidth * COMMIT_FRACTION || current.velocity > COMMIT_VELOCITY))
         }
         // The browser took the touch over, e.g. for its own back swipe
         const handleCancel = () => finish(false)
 
-        document.addEventListener('touchstart', handleStart, { capture: true, passive: true })
+        document.addEventListener('touchstart', handleStart, { capture: true, passive: false })
         document.addEventListener('touchmove', handleMove, { capture: true, passive: false })
         document.addEventListener('touchend', handleEnd, { capture: true })
         document.addEventListener('touchcancel', handleCancel, { capture: true })

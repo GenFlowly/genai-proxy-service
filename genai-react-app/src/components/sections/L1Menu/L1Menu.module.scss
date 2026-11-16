@@ -59,7 +59,7 @@
     margin-top: auto;
     display: flex;
     flex-direction: column;
-    padding: 1rem 0 1.75rem;
+    padding: 1rem 0 0.5rem;
 }
 
 .navItem {
@@ -102,7 +102,8 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0 max(1rem, env(safe-area-inset-right, 0px)) max(1.75rem, env(safe-area-inset-bottom, 0px))
+    // In the browser the toolbar below already leaves a gap, and the safe area is 0
+    padding: 0 max(1rem, env(safe-area-inset-right, 0px)) max(0.75rem, env(safe-area-inset-bottom, 0px))
         max(1rem, env(safe-area-inset-left, 0px));
 }
 

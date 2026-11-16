@@ -19,8 +19,8 @@ struct L1Menu: View {
                     headline
                 }
                 footer
-                    // CSS: max(1.75rem, env(safe-area-inset-bottom))
-                    .padding(.bottom, max(0, 28 - proxy.safeAreaInsets.bottom))
+                    // CSS: max(0.75rem, env(safe-area-inset-bottom))
+                    .padding(.bottom, max(0, 12 - proxy.safeAreaInsets.bottom))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -107,7 +107,7 @@ struct L1Menu: View {
                 .accessibilityIdentifier("l1-menu-item-\(item.key.lowercased())")
             }
         }
-        .padding(.bottom, 28)
+        .padding(.bottom, 8)
     }
 
     private var footer: some View {
