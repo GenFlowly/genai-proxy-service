@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import styles from './Navbar.module.scss'
 import { useLayout } from '../../context/LayoutContext'
 import { ICONS } from '../../constants/icons'
-import { Icon } from '@genflowly/component-library'
+import { Icon, Tooltip } from '@genflowly/component-library'
 
 import logo from '../../assets/icons/logo.png'
 import { UserAvatarButton } from '@genflowly/component-library'
@@ -40,9 +40,11 @@ export default function Navbar(): React.ReactElement {
                     <button onClick={openAppMenu} className={styles.mobileToggle} aria-label={t("layout.mobileMenu.menu")} data-testid="mobile-left-sidebar-toggle">
                         <Icon src={ICONS.MENU} size={18} />
                     </button>
-                    <Link to="/" className={styles.logoLink} title={t("layout.navbar.home")} data-testid="navbar-logo-link">
-                        <img src={logo} alt={t("layout.navbar.logoAlt")} className={styles.logoImage} />
-                    </Link>
+                    <Tooltip content={t("layout.navbar.home")} position="bottom">
+                        <Link to="/" className={styles.logoLink} aria-label={t("layout.navbar.home")} data-testid="navbar-logo-link">
+                            <img src={logo} alt={t("layout.navbar.logoAlt")} className={styles.logoImage} />
+                        </Link>
+                    </Tooltip>
                 </div>
 
                 <div className={styles.centerControls}>
@@ -71,12 +73,15 @@ export default function Navbar(): React.ReactElement {
                             </button>
                         ) : (
                             <div className={styles.accountMenu}>
-                                <UserAvatarButton
-                                    onClick={handleSettingsClick}
-                                    displayName={displayName}
-                                    displayPicture={displayPicture}
-                                    data-testid="user-avatar-button"
-                                />
+                                <Tooltip content={t("layout.navbar.settings")} position="bottom">
+                                    <UserAvatarButton
+                                        onClick={handleSettingsClick}
+                                        displayName={displayName}
+                                        displayPicture={displayPicture}
+                                        title={undefined}
+                                        data-testid="user-avatar-button"
+                                    />
+                                </Tooltip>
                             </div>
                         )}
                     </div>

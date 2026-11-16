@@ -1,165 +1,108 @@
-import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { LayoutProvider, useLayout } from '../../context/LayoutContext';
-import { AuthProvider } from '../../context/AuthContext';
-import { AIProvider } from '../../context/AIContext';
-import { ConversationProvider } from '../../context/ConversationContext';
-import { ToastProvider } from '../../context/ToastContext';
-import LeftSidebar from '../../components/sections/LeftSidebar/LeftSidebar';
-import RightSidebar from '../../components/sections/RightSidebar/RightSidebar';
-import InstructionSidebarWidget from '../../components/widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget';
-import { MemoryRouter } from 'react-router-dom';
+import React from 'react'
+import { render, screen, fireEvent } from '@testing-library/react'
+import '@testing-library/jest-dom'
+import {
+    LayoutProvider,
+    useLayout,
+    CHAT_SIDEBAR_STORAGE_KEY,
+    AI_DOCK_STORAGE_KEY,
+} from '../../context/LayoutContext'
 
-// Mock child widgets to avoid deep rendering complexity
-jest.mock('../../components/widgets/SidebarWidgets/ThreadWidget/ThreadWidget', () => () => <div data-testid="thread-widget">ThreadWidget</div>);
-jest.mock('../../components/widgets/SidebarWidgets/NewChatWidget/NewChatWidget', () => () => <div>NewChatWidget</div>);
-jest.mock('../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget', () => () => <div>AIVendorWidget</div>);
-jest.mock('../../components/widgets/SidebarWidgets/TokenCounter/TokenCounter', () => () => <div>TokenCounter</div>);
-// Mock TextEditor to avoid CodeMirror issues
-jest.mock('@genflowly/component-library', () => ({
-    ...jest.requireActual('@genflowly/component-library'),
-    TextEditor: () => <div data-testid="mock-text-editor">TextEditor</div>,
-}));
+const Probe = () => {
+    const layout = useLayout()
+    return (
+        <div>
+            <div data-testid="l2">{layout.isLeftSidebarExpanded ? 'ON' : 'OFF'}</div>
+            <div data-testid="ai-modal">{layout.isRightSidebarExpanded ? 'ON' : 'OFF'}</div>
+            <div data-testid="chat-sidebar">{layout.isChatSidebarExpanded ? 'ON' : 'OFF'}</div>
+            <div data-testid="ai-dock">{layout.isAiDockExpanded ? 'ON' : 'OFF'}</div>
+            <button data-testid="toggle-l2" onClick={layout.toggleLeftSidebar}>L</button>
+            <button data-testid="toggle-ai-modal" onClick={layout.toggleRightSidebar}>R</button>
+            <button data-testid="open-l2" onClick={() => layout.setLeftSidebarExpanded(true)}>LO</button>
+            <button data-testid="close-ai-modal" onClick={() => layout.setRightSidebarExpanded(false)}>RO</button>
+            <button data-testid="toggle-chat-sidebar" onClick={layout.toggleChatSidebar}>C</button>
+            <button data-testid="collapse-chat-sidebar" onClick={() => layout.setChatSidebarExpanded(false)}>CC</button>
+            <button data-testid="toggle-ai-dock" onClick={layout.toggleAiDock}>D</button>
+            <button data-testid="collapse-ai-dock" onClick={() => layout.setAiDockExpanded(false)}>DC</button>
+        </div>
+    )
+}
 
-// Mock other contexts that components might need
-const mockUseAuth = jest.fn();
-jest.mock('../../context/AuthContext', () => ({
-    useAuth: () => mockUseAuth(),
-    AuthProvider: ({ children }: any) => children
-}));
+const renderProbe = () => render(<LayoutProvider><Probe /></LayoutProvider>)
 
-// Mock AIContext
-jest.mock('../../context/AIContext', () => ({
-    useAI: () => ({
-        systemPrompt: 'Sys Prompt',
-        setSystemPrompt: jest.fn(),
-        selectedInstructionId: null,
-        setSelectedInstructionId: jest.fn(),
-    }),
-    AIProvider: ({ children }: any) => children
-}));
+describe('LayoutContext', () => {
+    beforeEach(() => localStorage.clear())
 
-// Mock ConversationContext
-jest.mock('../../context/ConversationContext', () => ({
-    useConversation: () => ({ conversationBlockList: [] }),
-    ConversationProvider: ({ children }: any) => children
-}));
+    test('phone overlays start closed; desktop panels start expanded', () => {
+        renderProbe()
+        expect(screen.getByTestId('l2')).toHaveTextContent('OFF')
+        expect(screen.getByTestId('ai-modal')).toHaveTextContent('OFF')
+        expect(screen.getByTestId('chat-sidebar')).toHaveTextContent('ON')
+        expect(screen.getByTestId('ai-dock')).toHaveTextContent('ON')
+    })
 
+    test('phone overlays toggle and take explicit values', () => {
+        renderProbe()
+        fireEvent.click(screen.getByTestId('toggle-l2'))
+        expect(screen.getByTestId('l2')).toHaveTextContent('ON')
+        fireEvent.click(screen.getByTestId('toggle-l2'))
+        expect(screen.getByTestId('l2')).toHaveTextContent('OFF')
+        fireEvent.click(screen.getByTestId('open-l2'))
+        expect(screen.getByTestId('l2')).toHaveTextContent('ON')
 
-const customRender = (ui: React.ReactElement) => {
-    return render(
-        <MemoryRouter>
-            <ToastProvider>
-                <LayoutProvider>
-                    <AuthProvider>
-                        <AIProvider>
-                            <ConversationProvider>
-                                {ui}
-                            </ConversationProvider>
-                        </AIProvider>
-                    </AuthProvider>
-                </LayoutProvider>
-            </ToastProvider>
-        </MemoryRouter>
-    );
-};
+        fireEvent.click(screen.getByTestId('toggle-ai-modal'))
+        expect(screen.getByTestId('ai-modal')).toHaveTextContent('ON')
+        fireEvent.click(screen.getByTestId('close-ai-modal'))
+        expect(screen.getByTestId('ai-modal')).toHaveTextContent('OFF')
+    })
 
-// Helper component to verify context state
-const LayoutStateTester = () => {
-    const { isRightSidebarExpanded } = useLayout();
-    return <div data-testid="layout-state">{isRightSidebarExpanded ? 'expanded' : 'collapsed'}</div>;
-};
+    test('desktop panels toggle and remember their state', () => {
+        renderProbe()
+        fireEvent.click(screen.getByTestId('toggle-chat-sidebar'))
+        fireEvent.click(screen.getByTestId('toggle-ai-dock'))
+        expect(screen.getByTestId('chat-sidebar')).toHaveTextContent('OFF')
+        expect(screen.getByTestId('ai-dock')).toHaveTextContent('OFF')
+        expect(localStorage.getItem(CHAT_SIDEBAR_STORAGE_KEY)).toBe('collapsed')
+        expect(localStorage.getItem(AI_DOCK_STORAGE_KEY)).toBe('collapsed')
 
-describe('LayoutContext UI Integration', () => {
-    beforeEach(() => {
-        mockUseAuth.mockReturnValue({
-            isAuthenticated: true,
-            aiVendorAPIKeyStatusList: [],
-            customerInstructions: [],
-            refreshInstructions: jest.fn(),
-            updateInstruction: jest.fn(),
-        });
-    });
+        fireEvent.click(screen.getByTestId('toggle-chat-sidebar'))
+        expect(localStorage.getItem(CHAT_SIDEBAR_STORAGE_KEY)).toBe('expanded')
+    })
 
-    test('useLayout throws error when used outside provider', () => {
-        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
-        const TestThrow = () => {
-            useLayout();
-            return null;
-        };
-        expect(() => render(<TestThrow />)).toThrow('useLayout must be used within a LayoutProvider');
-        consoleSpy.mockRestore();
-    });
+    test('a reload restores the remembered panel state', () => {
+        localStorage.setItem(CHAT_SIDEBAR_STORAGE_KEY, 'collapsed')
+        localStorage.setItem(AI_DOCK_STORAGE_KEY, 'collapsed')
+        renderProbe()
+        expect(screen.getByTestId('chat-sidebar')).toHaveTextContent('OFF')
+        expect(screen.getByTestId('ai-dock')).toHaveTextContent('OFF')
+    })
 
-    test('RightSidebar toggles correctly', () => {
-        customRender(<RightSidebar widgetIds={[]} />);
+    test('explicit setters collapse the desktop panels', () => {
+        renderProbe()
+        fireEvent.click(screen.getByTestId('collapse-chat-sidebar'))
+        fireEvent.click(screen.getByTestId('collapse-ai-dock'))
+        expect(screen.getByTestId('chat-sidebar')).toHaveTextContent('OFF')
+        expect(screen.getByTestId('ai-dock')).toHaveTextContent('OFF')
+    })
 
-        const sidebar = screen.getByTestId('right-sidebar');
-        const toggleBtn = screen.getByTestId('right-sidebar-toggle');
+    test('works when storage is unavailable', () => {
+        const getItem = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
+        const setItem = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied') })
+        renderProbe()
+        expect(screen.getByTestId('chat-sidebar')).toHaveTextContent('ON')
+        fireEvent.click(screen.getByTestId('toggle-chat-sidebar'))
+        expect(screen.getByTestId('chat-sidebar')).toHaveTextContent('OFF')
+        getItem.mockRestore()
+        setItem.mockRestore()
+    })
 
-        expect(sidebar.className).not.toContain('collapsed');
-
-        fireEvent.click(toggleBtn);
-        expect(sidebar.className).toContain('collapsed');
-
-        fireEvent.click(toggleBtn);
-        expect(sidebar.className).not.toContain('collapsed');
-    });
-
-    test('InstructionWidget toggles state with sidebar widget', () => {
-        customRender(<InstructionSidebarWidget />);
-        const toggleBtn = screen.getByTestId('instruction-widget-toggle');
-
-        expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
-
-        fireEvent.click(toggleBtn);
-        expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
-
-        fireEvent.click(toggleBtn);
-        expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
-    });
-
-    test('LeftSidebar initializes correctly', () => {
-        customRender(<LeftSidebar widgetIds={[]} />);
-        const sidebar = screen.getByTestId('left-sidebar');
-        expect(sidebar.className).toContain('collapsed');
-    });
-
-});
-
-describe('LayoutContext Responsive Initialization', () => {
-    const originalInnerWidth = window.innerWidth;
-
-    afterEach(() => {
-        // Restore window.innerWidth
-        Object.defineProperty(window, 'innerWidth', {
-            writable: true,
-            configurable: true,
-            value: originalInnerWidth,
-        });
-    });
-
-    test('Initializes with Right Sidebar EXPANDED on Desktop (>768px)', () => {
-        // Set width to desktop
-        Object.defineProperty(window, 'innerWidth', {
-            writable: true,
-            configurable: true,
-            value: 1024,
-        });
-
-        customRender(<LayoutStateTester />);
-        expect(screen.getByTestId('layout-state')).toHaveTextContent('expanded');
-    });
-
-    test('Initializes with Right Sidebar COLLAPSED on Mobile (<=768px)', () => {
-        // Set width to mobile
-        Object.defineProperty(window, 'innerWidth', {
-            writable: true,
-            configurable: true,
-            value: 500,
-        });
-
-        customRender(<LayoutStateTester />);
-        expect(screen.getByTestId('layout-state')).toHaveTextContent('collapsed');
-    });
-});
+    test('useLayout throws outside the provider', () => {
+        const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
+        const Orphan = () => {
+            useLayout()
+            return null
+        }
+        expect(() => render(<Orphan />)).toThrow('useLayout must be used within a LayoutProvider')
+        consoleError.mockRestore()
+    })
+})

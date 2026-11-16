@@ -55,8 +55,7 @@ interface ConversationHistoryComponentProps {
     // waiting on the (async, failure-prone) conversation load to flip some
     // unrelated piece of state
     onSelect?: () => void
-    // The full-screen mobile menu: a single collapsible History card whose
-    // Pinned and Recents scroll together, with touch rows and a visible grip
+    // The full-screen mobile menu: touch rows and a visible grip
     menu?: boolean
 }
 
@@ -101,7 +100,7 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     // re-reads the session expansion memory
     const [expandEpochs, setExpandEpochs] = useState<Record<string, number>>({})
 
-    // Mirrors the Projects/Pinned/Recents sections' own expanded state (the
+    // Mirrors the Projects and Chats sections' own expanded state (the
     // library owns the real toggle; this is just our copy, kept in sync via
     // onToggle) so we can tell the split when every section is collapsed —
     // otherwise its panes keep reserving their full dragged/fill height and
@@ -109,8 +108,6 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     const [sectionExpanded, setSectionExpanded] = useState<Record<string, boolean>>(() => ({
         projects: getExpandedSection('projects') ?? true,
         history: getExpandedSection('history') ?? true,
-        pinned: getExpandedSection('pinned') ?? true,
-        recent: getExpandedSection('recent') ?? true,
     }))
     const toggleSection = (id: string, expanded: boolean) => {
         setExpandedSection(id, expanded)
@@ -822,55 +819,19 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
         },
     ]
 
-    // The History panel below it: global Pinned sits in the panel's fixed
-    // (non-scrolling) block, so it stays put — uncapped, pushing Recents
-    // down as it grows — while only the Recents list scrolls. Both headers
-    // are collapsible: collapsing Pinned hands its space straight to Recents
-    // (it's a flex block that hugs its content), collapsing Recents just
-    // empties the scroll area — either way the panel reflows on its own.
-    const historyFixedGroups: SidebarListGroup[] = globalPinned.length > 0
-        ? [{
-            id: 'pinned',
-            label: t('conversation.conversationHistory.pinned'),
-            collapsible: true,
-            defaultExpanded: sectionExpanded.pinned,
-            onToggle: expanded => toggleSection('pinned', expanded),
-            testId: 'conv-history-pinned-heading',
-            items: toTreeRows(globalPinned, true),
-        }]
-        : []
-
-    const historyGroups: SidebarListGroup[] = globalRecent.length > 0
-        ? [{
-            id: 'recent',
-            label: t('conversation.conversationHistory.recents'),
-            collapsible: true,
-            defaultExpanded: sectionExpanded.recent,
-            onToggle: expanded => toggleSection('recent', expanded),
-            testId: 'conv-history-recents-heading',
-            items: toTreeRows(globalRecent, false),
-        }]
-        : []
-
-    // Projects and History (Pinned + Recents) are two separate panel
-    // widgets, each with its own collapsed state — collapsing one must not
-    // affect the other. A widget counts as collapsed once none of ITS OWN
-    // sections have anything expanded (including "nothing to expand at
-    // all", e.g. zero projects), so it hugs its header instead of still
-    // reserving its full dragged/fill height — see VerticalSplit's
-    // `topCollapsed`/`bottomCollapsed` props.
+    // The Chats card below it: one collapsible section whose Pinned and
+    // Recents scroll together. Projects and Chats are two separate cards,
+    // each with its own collapsed state, so either one hugs its header once
+    // nothing in it is expanded (VerticalSplit's topCollapsed/bottomCollapsed)
     const topCollapsed = projectBuckets.length === 0 || !sectionExpanded.projects
     const pinnedPresent = globalPinned.length > 0
     const recentPresent = globalRecent.length > 0
-    const bottomCollapsed = (pinnedPresent || recentPresent)
-        && (menu
-            ? !sectionExpanded.history
-            : (!pinnedPresent || !sectionExpanded.pinned) && (!recentPresent || !sectionExpanded.recent))
+    const bottomCollapsed = (pinnedPresent || recentPresent) && !sectionExpanded.history
 
-    const menuHistoryGroups: SidebarListGroup[] = pinnedPresent || recentPresent
+    const chatsGroups: SidebarListGroup[] = pinnedPresent || recentPresent
         ? [{
             id: 'history',
-            label: t('conversation.conversationHistory.history'),
+            label: t('conversation.conversationHistory.chats'),
             collapsible: true,
             defaultExpanded: sectionExpanded.history,
             onToggle: expanded => toggleSection('history', expanded),
@@ -894,7 +855,7 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
             ],
         }]
         : []
-    const recentsVisible = menu ? sectionExpanded.history : sectionExpanded.recent
+    const recentsVisible = sectionExpanded.history
 
     return (
         <>
@@ -921,8 +882,7 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
                 bottom={
                     <SidebarListPanel
                         variant={menu ? 'menu' : 'default'}
-                        groups={menu ? menuHistoryGroups : historyGroups}
-                        fixedGroups={menu ? undefined : historyFixedGroups}
+                        groups={chatsGroups}
                         testIds={{ list: 'history-scroll-list', endSentinel: 'history-end-sentinel' }}
                         // Older pages stream in as the end of the list nears;
                         // paused while a fetch runs and after a failure —

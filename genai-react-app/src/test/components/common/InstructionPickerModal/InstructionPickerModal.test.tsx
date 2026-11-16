@@ -8,11 +8,12 @@ import * as instructionService from '../../../../services/instructionService';
 import { SearchError } from '../../../../services/searchError';
 import { loadRecentInstructionsCache, saveRecentInstructionsCache, clearRecentInstructionsCache } from '../../../../components/common/InstructionPickerModal/recentInstructionsCache';
 
-const mockAuth = { isAuthenticated: true };
+const mockAuth = { isAuthenticated: true, isSignedOut: false };
 jest.mock('../../../../context/AuthContext', () => ({
     useAuth: () => ({
         customerId: 'cust-1',
         isAuthenticated: mockAuth.isAuthenticated,
+        isSignedOut: mockAuth.isSignedOut,
         getAccessTokenSilently: jest.fn().mockResolvedValue('mock-token')
     })
 }));
@@ -35,6 +36,7 @@ describe('InstructionPickerModal', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockAuth.isAuthenticated = true;
+        mockAuth.isSignedOut = false;
         clearRecentInstructionsCache(); // The module-level SWR cache must not leak between tests
         mockGetRecent.mockResolvedValue({ instructions: [recentInstruction] });
         mockSearch.mockResolvedValue({ instructions: [searchedInstruction] });
@@ -60,6 +62,7 @@ describe('InstructionPickerModal', () => {
 
     test('signed-out users are asked to sign in instead of searching', async () => {
         mockAuth.isAuthenticated = false;
+        mockAuth.isSignedOut = true;
         render(<InstructionPickerModal isOpen onClose={jest.fn()} onSelect={jest.fn()} />);
 
         await userEvent.type(screen.getByTestId('instruction-picker-search'), 'tax');
@@ -67,6 +70,16 @@ describe('InstructionPickerModal', () => {
         expect(await screen.findByText('Sign in to search instructions.')).toBeInTheDocument();
         await new Promise(resolve => setTimeout(resolve, 400));
         expect(mockSearch).not.toHaveBeenCalled();
+    });
+
+    test('signed-out users are asked to log in instead of loading recent instructions', async () => {
+        mockAuth.isAuthenticated = false;
+        mockAuth.isSignedOut = true;
+        render(<InstructionPickerModal isOpen onClose={jest.fn()} onSelect={jest.fn()} />);
+
+        expect(await screen.findByTestId('instruction-picker-log-in')).toHaveTextContent('Please log in first.');
+        expect(screen.queryByText('Failed to load instructions. Please try again.')).not.toBeInTheDocument();
+        expect(mockGetRecent).not.toHaveBeenCalled();
     });
 
     test('selecting a tile fires onSelect with the instruction', async () => {

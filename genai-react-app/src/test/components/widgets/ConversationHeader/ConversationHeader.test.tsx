@@ -29,6 +29,11 @@ jest.mock('../../../../hooks/useSharedItemModeration', () => ({
 jest.mock('../../../../hooks/useWindowSize', () => ({
     useWindowSize: jest.fn(),
 }))
+const mockScrollToTurn = jest.fn()
+const mockOutline = jest.fn()
+jest.mock('../../../../hooks/useConversationOutline', () => ({
+    useConversationOutline: () => mockOutline(),
+}))
 jest.mock('../../../../components/common/InstructionPickerModal/InstructionPickerModal', () => ({
     __esModule: true,
     default: ({ isOpen }: { isOpen: boolean }) =>
@@ -36,12 +41,19 @@ jest.mock('../../../../components/common/InstructionPickerModal/InstructionPicke
 }))
 jest.mock('../../../../components/widgets/MobileHeader/MobileHeader', () => ({
     __esModule: true,
-    default: ({ title, subtitle, onSubtitleClick, menuTitle, menuAction, children }: any) => (
+    default: ({ title, subtitle, onSubtitleClick, onTitleClick, titleActionLabel, titleExpanded, menuItems, menuTitle, menuAction, children }: any) => (
         <div data-testid="mobile-header">
-            <span>{title}</span>
+            {onTitleClick
+                ? <button data-testid="mobile-title" aria-label={titleActionLabel} aria-expanded={titleExpanded} onClick={onTitleClick}>{title}</button>
+                : <span>{title}</span>}
             <span data-testid="mobile-menu-title">{menuTitle}</span>
             <button data-testid="mobile-menu-action" onClick={menuAction?.onClick}>{menuAction?.label}</button>
             <button data-testid="mobile-subtitle" onClick={onSubtitleClick}>{subtitle}</button>
+            <ul data-testid="mobile-kebab-items">
+                {(menuItems ?? []).map((item: any) => (
+                    <li key={item.label}><button data-testid={item['data-testid']} onClick={item.onClick}>{item.label}</button></li>
+                ))}
+            </ul>
             {children}
         </div>
     ),
@@ -80,6 +92,7 @@ describe('ConversationHeader', () => {
         })
 
         mockModeration.mockReturnValue({ owner: undefined, ownerLabel: '', actions: [], dialogs: null })
+        mockOutline.mockReturnValue({ items: [], currentId: null, scrollToTurn: mockScrollToTurn })
 
         // Desktop viewport and no instruction selected by default
         mockUseWindowSize.mockReturnValue({ width: 1200, height: 800 })
@@ -99,9 +112,10 @@ describe('ConversationHeader', () => {
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        expect(screen.getByRole('heading', { name: 'New Chat' })).toBeInTheDocument()
-        expect(screen.getByTestId('new-chat-button')).toBeInTheDocument()
-        // No conversation loaded yet — nothing to share
+        expect(screen.getByTestId('sub-bar-title')).toHaveTextContent('New Chat')
+        // New Chat lives in the sidebar now; a new chat has no turns and nothing to share
+        expect(screen.queryByTestId('new-chat-button')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('sub-bar-crumb')).not.toBeInTheDocument()
         expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument()
     })
 
@@ -132,7 +146,7 @@ describe('ConversationHeader', () => {
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        expect(screen.getByRole('heading', { name: 'New Chat' })).toBeInTheDocument()
+        expect(screen.getByTestId('sub-bar-title')).toHaveTextContent('New Chat')
         expect(screen.queryByTestId('conversation-share-button')).not.toBeInTheDocument()
     })
 
@@ -307,75 +321,104 @@ describe('ConversationHeader', () => {
         })
     })
 
-    test('shows Choose instruction placeholder when none is loaded and opens the picker', () => {
+    test('desktop: the sub-bar shows the turn in view and the Outline jumps to a turn', () => {
         mockUseConversation.mockReturnValue({
             conversationId: '123',
-            conversationTitle: 'Test',
+            conversationTitle: 'Water heater',
             conversationRole: 'OWNER',
+        })
+        mockOutline.mockReturnValue({
+            items: [
+                { id: 'b1', number: 1, prompt: 'What fails first?', meta: '1 response · OpenAI' },
+                { id: 'b2', number: 2, prompt: 'How often should I flush it?', meta: '2 responses' },
+            ],
+            currentId: 'b1',
+            scrollToTurn: mockScrollToTurn,
         })
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        const placeholder = screen.getByTestId('choose-instruction')
-        expect(placeholder).toHaveTextContent('Choose instruction')
-        expect(screen.queryByTestId('instruction-picker-modal')).not.toBeInTheDocument()
+        expect(screen.getByTestId('sub-bar-title')).toHaveTextContent('Water heater')
+        expect(screen.getByTestId('sub-bar-crumb')).toHaveTextContent('Q1')
+        expect(screen.getByTestId('sub-bar-counter')).toHaveTextContent('1 / 2')
 
-        fireEvent.click(placeholder)
-        expect(screen.getByTestId('instruction-picker-modal')).toBeInTheDocument()
+        fireEvent.click(screen.getByTestId('sub-bar-next'))
+        expect(mockScrollToTurn).toHaveBeenLastCalledWith('b2')
+
+        fireEvent.click(screen.getByTestId('sub-bar-crumb'))
+        fireEvent.click(screen.getByTestId('outline-row-b2'))
+        expect(mockScrollToTurn).toHaveBeenLastCalledWith('b2')
     })
 
-    test('shows the latest version of the loaded instruction as a badge and opens the picker', () => {
+    test('desktop: the instruction picker is not in the sub-bar (it is the editor chip)', () => {
         mockUseConversation.mockReturnValue({
             conversationId: '123',
             conversationTitle: 'Test',
             conversationRole: 'OWNER',
         })
-        mockUseAuth.mockReturnValue({
-            entitlements: { canShare: true },
-            customerInstructions: [
-                { id: 'INS-1', version: 1, name: 'Old Helper', icon: '🤖', instruction: 'v1' },
-                { id: 'INS-1', version: 2, name: 'Smart Helper', icon: '🤖', instruction: 'v2' },
-                { id: 'INS-2', version: 1, name: 'Other', instruction: 'x' },
-            ],
-        })
-        mockUseAI.mockReturnValue({
-            selectedInstructionId: 'INS-1',
-            setSelectedInstructionId: jest.fn(),
-            setSystemPrompt: jest.fn(),
-        })
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        const badge = screen.getByTestId('loaded-instruction')
-        expect(badge).toHaveTextContent('Smart Helper')
-        expect(badge).toHaveTextContent('🤖')
         expect(screen.queryByTestId('choose-instruction')).not.toBeInTheDocument()
-
-        fireEvent.click(badge)
-        expect(screen.getByTestId('instruction-picker-modal')).toBeInTheDocument()
+        expect(screen.queryByTestId('loaded-instruction')).not.toBeInTheDocument()
     })
 
-    test('renders the loaded instruction badge without an icon', () => {
+    test('mobile: the title opens the Outline sheet when there are turns', () => {
+        mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
         mockUseConversation.mockReturnValue({
             conversationId: '123',
-            conversationTitle: 'Test',
+            conversationTitle: 'Water heater',
             conversationRole: 'OWNER',
+            resetConversation: jest.fn(),
         })
-        mockUseAuth.mockReturnValue({
-            entitlements: { canShare: true },
-            customerInstructions: [
-                { id: 'INS-2', version: 1, name: 'Plain Persona', instruction: 'x' },
-            ],
-        })
-        mockUseAI.mockReturnValue({
-            selectedInstructionId: 'INS-2',
-            setSelectedInstructionId: jest.fn(),
-            setSystemPrompt: jest.fn(),
+        mockOutline.mockReturnValue({
+            items: [{ id: 'b1', number: 1, prompt: 'What fails first?' }],
+            currentId: 'b1',
+            scrollToTurn: mockScrollToTurn,
         })
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        expect(screen.getByTestId('loaded-instruction')).toHaveTextContent('Plain Persona')
+        const title = screen.getByRole('button', { name: 'Outline: Water heater' })
+        expect(screen.queryByTestId('outline-sheet')).not.toBeInTheDocument()
+        expect(title).toHaveAttribute('aria-expanded', 'false')
+        fireEvent.click(title)
+        expect(screen.getByTestId('outline-sheet')).toBeInTheDocument()
+        expect(title).toHaveAttribute('aria-expanded', 'true')
+
+        fireEvent.click(screen.getByTestId('outline-row-b1'))
+        expect(mockScrollToTurn).toHaveBeenCalledWith('b1')
+        expect(screen.queryByTestId('outline-sheet')).not.toBeInTheDocument()
+        expect(title).toHaveAttribute('aria-expanded', 'false')
+    })
+
+    test('mobile: a new chat has no Outline to open', () => {
+        mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+        mockUseConversation.mockReturnValue({
+            conversationId: null,
+            conversationTitle: null,
+            conversationRole: 'OWNER',
+            resetConversation: jest.fn(),
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        expect(screen.queryByTestId('mobile-title')).not.toBeInTheDocument()
+    })
+
+    test('mobile: the kebab offers New Chat, Share and AI Settings', () => {
+        mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+        mockUseConversation.mockReturnValue({
+            conversationId: '123',
+            conversationTitle: 'Test',
+            conversationRole: 'OWNER',
+            resetConversation: jest.fn(),
+        })
+
+        render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+        expect(screen.getByTestId('mobile-kebab-items')).toHaveTextContent('New ChatShareAI Settings')
+        expect(screen.getByTestId('mobile-ai-config-button')).toHaveTextContent('AI Settings')
     })
 
     describe('an item shared with the viewer', () => {

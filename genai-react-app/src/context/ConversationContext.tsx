@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom'
 import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'
-import { useLayout } from './LayoutContext'
 import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
 import { generateTextStream, StreamMetadata, AwaitingInput, StreamGenerationError } from '../services/generateTextStreamService'
@@ -91,12 +90,6 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         customerInstructions,
         selectedAgentId,
     } = useAI()
-    const { 
-        setLeftSidebarExpanded, 
-        setRightSidebarExpanded, 
-        setLeftSidebarMinimized, 
-        setHistoryWidgetExpanded 
-    } = useLayout()
     const navigate = useNavigate()
 
 
@@ -678,11 +671,6 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         const { aiConfigs, finalSelectedResponseId, promptToUse } = prep
 
         updateConversationBlock(id, { isLoading: true, responseMessages: [], sentAt: Date.now() })
-        setLeftSidebarExpanded(false)
-        setRightSidebarExpanded(false)
-        setLeftSidebarMinimized(false)
-        setHistoryWidgetExpanded(false)
-
         try {
             const token = await getAccessTokenSilently()
 
@@ -797,11 +785,6 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
              }
              return block
         }))
-
-        setLeftSidebarExpanded(false)
-        setRightSidebarExpanded(false)
-        setLeftSidebarMinimized(false)
-        setHistoryWidgetExpanded(false)
 
         try {
             const token = await getAccessTokenSilently()

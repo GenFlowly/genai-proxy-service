@@ -5,13 +5,12 @@ import { saveAIConfigPreferences } from '../../../../services/saveAIConfigServic
 import { useToast } from '../../../../context/ToastContext'
 import { Agent, agentCategory, effectiveDefaultAgentId } from '../../../../models/agents.models'
 import styles from './AgentPickerWidget.module.scss'
-import { Icon, Tooltip } from '@genflowly/component-library'
+import { SidebarCard } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
-import SidebarWidgetContainer from '../../../common/SidebarWidgetContainer/SidebarWidgetContainer'
 
 /**
- * Right-sidebar picker for the agent (graph) a conversation runs through.
+ * The Agent card: the agent (graph) a conversation runs through.
  * Lists only CONVERSATION-category agents the customer can access (own +
  * System-published) — memory/title/instruction agents never belong in a
  * conversation, whether mapped (requestType set) or not. No explicit pick
@@ -22,7 +21,7 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
     const { t } = useTranslation()
     const { ai, auth } = useSidebarWidget()
     const { selectedAgentId, setSelectedAgentId } = ai
-    const { getAccessTokenSilently } = auth
+    const { getAccessTokenSilently, isSignedOut } = auth
     const { showToast } = useToast()
 
     // Shared query (one /agents request per login at most): the cached copy
@@ -54,8 +53,6 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
         }
     }, [agents, selectedAgentId, setSelectedAgentId])
 
-    const isSelected = (agent: Agent) => agent.graphId === defaultId
-
     // Picking an agent MAKES it the default — stored locally and pushed to the
     // account preferences so it follows the user across devices; localStorage
     // keeps it working when the save fails.
@@ -74,9 +71,6 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
         })()
     }
 
-    const activeAgentName =
-        agents.find(a => isSelected(a))?.name ?? t('sidebar.agentPickerWidget.title')
-
     const optionLabel = (agent: Agent) => {
         const badges = [
             agent.isSystem ? t('sidebar.agentPickerWidget.systemBadge') : null,
@@ -85,72 +79,37 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
         return badges.length ? `${agent.name} (${badges.join(', ')})` : agent.name
     }
 
-    // Collapsed: only the agent icon (no circle), current default in the tooltip —
-    // switching happens in the expanded dropdown.
-    const headerCollapsed = (
-        <Tooltip content={activeAgentName} position="left">
-            <div className={styles.buttonWrapper}>
-                <div className={styles.plainIcon} data-testid="agent-collapsed-icon">
-                    <Icon src={ICONS.USER_ROLE} size={24} />
-                </div>
-            </div>
-        </Tooltip>
-    )
-
-    const agentInitials = activeAgentName
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map(w => w.charAt(0).toUpperCase())
-        .join('')
-
-    const collapsedContent = (
-        <Tooltip content={activeAgentName} position="left">
-            <div className={styles.buttonWrapper}>
-                <div className={styles.initialsCircle} data-testid="agent-collapsed-initials">
-                    {agentInitials || '?'}
-                </div>
-            </div>
-        </Tooltip>
-    )
-
-    const header = (
-        <div className={styles.header}>
-            <Icon src={ICONS.USER_ROLE} size={20} />
-            <h3 className={styles.title}>{t('sidebar.agentPickerWidget.title')}</h3>
-        </div>
-    )
-
     return (
-        <SidebarWidgetContainer
-            header={header}
-            headerCollapsed={headerCollapsed}
-            collapsedContent={collapsedContent}
+        <SidebarCard
+            title={t('sidebar.agentPickerWidget.title')}
+            icon={ICONS.USER_ROLE}
+            bodyClassName={styles.body}
             data-testid={testId || 'agent-picker-widget'}
         >
-            <div className={styles.agentList}>
-                {loadFailed && (
-                    <span className={styles.errorText}>{t('sidebar.agentPickerWidget.failedToLoad')}</span>
-                )}
-                {!loadFailed && agents.length === 0 && (
-                    <span className={styles.emptyText}>{t('sidebar.agentPickerWidget.noAgents')}</span>
-                )}
-                {agents.length > 0 && (
-                    <select
-                        className={styles.agentSelect}
-                        value={defaultId ?? ''}
-                        onChange={e => handlePickId(e.target.value)}
-                        data-testid="agent-picker-select"
-                        aria-label={t('sidebar.agentPickerWidget.title')}
-                    >
-                        {agents.map(agent => (
-                            <option key={agent.graphId} value={agent.graphId} data-testid={`agent-option-${agent.graphId}`}>
-                                {optionLabel(agent)}
-                            </option>
-                        ))}
-                    </select>
-                )}
-            </div>
-        </SidebarWidgetContainer>
+            {isSignedOut && (
+                <span className={styles.emptyText}>{t('sidebar.agentPickerWidget.pleaseLogInFirst')}</span>
+            )}
+            {loadFailed && (
+                <span className={styles.errorText}>{t('sidebar.agentPickerWidget.failedToLoad')}</span>
+            )}
+            {!isSignedOut && !loadFailed && agents.length === 0 && (
+                <span className={styles.emptyText}>{t('sidebar.agentPickerWidget.noAgents')}</span>
+            )}
+            {agents.length > 0 && (
+                <select
+                    className={styles.agentSelect}
+                    value={defaultId ?? ''}
+                    onChange={e => handlePickId(e.target.value)}
+                    data-testid="agent-picker-select"
+                    aria-label={t('sidebar.agentPickerWidget.title')}
+                >
+                    {agents.map(agent => (
+                        <option key={agent.graphId} value={agent.graphId} data-testid={`agent-option-${agent.graphId}`}>
+                            {optionLabel(agent)}
+                        </option>
+                    ))}
+                </select>
+            )}
+        </SidebarCard>
     )
 }

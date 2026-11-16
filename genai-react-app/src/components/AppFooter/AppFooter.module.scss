@@ -8,12 +8,19 @@
     height: var(--app-footer-height);
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-end;
     gap: 16px;
-    border-top: 1px solid $color-border-light;
+    padding: 0 12px;
+    border-top: 1px solid $color-border;
     background-color: $color-background;
     color: $color-text-muted;
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
+}
+
+:global([data-theme='dark']) .footer {
+    border-top-color: rgba(255, 255, 255, 0.09);
+    background-color: $color-navbar-background;
+    color: #b9bcc2;
 }
 
 .link {
@@ -25,4 +32,9 @@
         color: $color-text-primary;
         text-decoration: underline;
     }
+}
+
+:global([data-theme='dark']) .link:hover,
+:global([data-theme='dark']) .link:focus-visible {
+    color: #ffffff;
 }

@@ -1,0 +1,45 @@
+@import '../../../../styles/themes.scss';
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 18rem;
+    height: 26px;
+    padding: 0 10px;
+    border: 1px solid $color-border;
+    border-radius: 13px;
+    background-color: $color-background-tertiary;
+    color: $color-text-secondary;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+        border-color: $color-text-muted;
+    }
+
+    &:focus-visible {
+        outline: 2px solid $color-primary;
+        outline-offset: 1px;
+    }
+}
+
+.empty {
+    border-style: dashed;
+    background-color: transparent;
+    color: $color-text-muted;
+}
+
+.name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chevron {
+    flex: none;
+    transform: rotate(90deg);
+}

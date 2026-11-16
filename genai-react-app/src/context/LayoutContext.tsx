@@ -1,6 +1,27 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react'
 import { LayoutContextType } from '../models/layout.models'
-import { MOBILE_BREAKPOINT } from '../constants/breakpoints'
+
+/* ---------- Persistence ---------- */
+
+export const CHAT_SIDEBAR_STORAGE_KEY = 'chat_left_sidebar'
+export const AI_DOCK_STORAGE_KEY = 'chat_right_dock'
+
+// Per-browser memory of the desktop chat panels; anything unreadable means expanded
+const readExpanded = (key: string): boolean => {
+    try {
+        return localStorage.getItem(key) !== 'collapsed'
+    } catch {
+        return true
+    }
+}
+
+const saveExpanded = (key: string, expanded: boolean): void => {
+    try {
+        localStorage.setItem(key, expanded ? 'expanded' : 'collapsed')
+    } catch {
+        // Best-effort persistence only
+    }
+}
 
 /* ---------- Context ---------- */
 
@@ -9,25 +30,24 @@ const LayoutContext = createContext<LayoutContextType | undefined>(undefined)
 /* ---------- Provider ---------- */
 
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
+    // 📱 Phone overlays: the page's L2 Menu and the chat page's AI Settings modal
     const [isLeftSidebarExpanded, setIsLeftSidebarExpanded] = useState(false)
-    // Default to collapsed on mobile, expanded on desktop
-    const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return window.innerWidth > MOBILE_BREAKPOINT
-        }
-        return true
-    })
-
-    const [isInstructionWidgetExpanded, setInstructionWidgetExpanded] = useState(false)
-    const [isHistoryWidgetExpanded, setHistoryWidgetExpanded] = useState(true)
+    const [isRightSidebarExpanded, setIsRightSidebarExpanded] = useState(false)
 
     const toggleLeftSidebar = useCallback(() => setIsLeftSidebarExpanded(prev => !prev), [])
     const toggleRightSidebar = useCallback(() => setIsRightSidebarExpanded(prev => !prev), [])
-
     const setLeftSidebarExpanded = useCallback((visible: boolean) => setIsLeftSidebarExpanded(visible), [])
     const setRightSidebarExpanded = useCallback((visible: boolean) => setIsRightSidebarExpanded(visible), [])
 
-    const [isLeftSidebarMinimized, setLeftSidebarMinimized] = useState(false)
+    // 🖥️ Chat page panels: only the user opens or closes them
+    const [isChatSidebarExpanded, setChatSidebarExpanded] = useState(() => readExpanded(CHAT_SIDEBAR_STORAGE_KEY))
+    const [isAiDockExpanded, setAiDockExpanded] = useState(() => readExpanded(AI_DOCK_STORAGE_KEY))
+
+    useEffect(() => saveExpanded(CHAT_SIDEBAR_STORAGE_KEY, isChatSidebarExpanded), [isChatSidebarExpanded])
+    useEffect(() => saveExpanded(AI_DOCK_STORAGE_KEY, isAiDockExpanded), [isAiDockExpanded])
+
+    const toggleChatSidebar = useCallback(() => setChatSidebarExpanded(prev => !prev), [])
+    const toggleAiDock = useCallback(() => setAiDockExpanded(prev => !prev), [])
 
     return (
         <LayoutContext.Provider
@@ -38,12 +58,12 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
                 toggleRightSidebar,
                 setLeftSidebarExpanded,
                 setRightSidebarExpanded,
-                isInstructionWidgetExpanded,
-                setInstructionWidgetExpanded,
-                isHistoryWidgetExpanded,
-                setHistoryWidgetExpanded,
-                isLeftSidebarMinimized,
-                setLeftSidebarMinimized,
+                isChatSidebarExpanded,
+                setChatSidebarExpanded,
+                toggleChatSidebar,
+                isAiDockExpanded,
+                setAiDockExpanded,
+                toggleAiDock,
             }}
         >
             {children}

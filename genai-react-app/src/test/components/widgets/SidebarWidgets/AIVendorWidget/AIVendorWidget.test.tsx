@@ -18,34 +18,11 @@ jest.mock('../../../../../context/ToastContext');
 jest.mock('../../../../../services/getTextGenerationModelsService');
 jest.mock('../../../../../services/saveAIConfigService');
 
-// Mock child components
-jest.mock('../../../../../components/common/SidebarWidgetContainer/SidebarWidgetContainer', () =>
-    ({ children, header, headerCollapsed, 'data-testid': testId }: any) => (
-        <div data-testid={testId}>
-            <div data-testid="widget-header">{header}</div>
-            <div data-testid="widget-content">{children}</div>
-        </div>
-    )
-);
-
-jest.mock('@genflowly/component-library', () => ({
-    ...jest.requireActual('@genflowly/component-library'),
-    PillButton: ({ label, onClick, variant, disabled, 'data-testid': testId }: any) => (
-        <button data-testid={testId} onClick={onClick} disabled={disabled} className={`pillButton ${variant}`}>
-            {label}
-        </button>
-    ),
-}));
-
 // Real display names come from the provider catalog; the mock uses fixed
 // per-vendor labels so widget behavior can be asserted deterministically.
-jest.mock('../../../../../components/common/BrandName/BrandName', () => ({
-    VendorBrandName: ({ vendorId }: any) => (
-        <span>{({ OPENAI: 'OpenAI', CLAUDE: 'Claude', GEMINI: 'Gemini' } as any)[vendorId] ?? vendorId}</span>
-    ),
-    CollapsedVendorBrandName: ({ vendorId }: any) => (
-        <span>{({ OPENAI: 'O', CLAUDE: 'C', GEMINI: 'G' } as any)[vendorId] ?? vendorId.charAt(0)}</span>
-    )
+jest.mock('../../../../../hooks/useVendorDisplayNames', () => ({
+    useVendorDisplayNames: () => (vendorId: string) =>
+        ({ OPENAI: 'OpenAI', CLAUDE: 'Claude', GEMINI: 'Gemini' } as Record<string, string>)[vendorId] ?? vendorId,
 }));
 
 describe('AIVendorWidget', () => {
@@ -107,15 +84,15 @@ describe('AIVendorWidget', () => {
         render(withQueryClient(<AIVendorWidget />));
 
         // OpenAI has a valid key → rendered; Claude's key is NOT_SET → hidden
+        expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
         expect(screen.getByText('OpenAI')).toBeInTheDocument();
         expect(screen.queryByTestId(`vendor-toggle-${AIVendor.CLAUDE}`)).not.toBeInTheDocument();
 
-        // Check active state (OpenAI mocked as having model 'gpt-4')
-        const openAIToggle = screen.getByTestId(`vendor-toggle-${AIVendor.OPENAI}`);
-        expect(openAIToggle).toHaveClass('primary'); // Assuming PillButton variant='primary' adds this class or check via other means if needed.
-        // Better: We check interaction logic
+        // OpenAI is on: the config holds a model for it
+        const openAIToggle = screen.getByRole('switch', { name: 'OpenAI' });
+        expect(openAIToggle).toHaveAttribute('aria-checked', 'true');
 
-        // Deactivate OpenAI
+        // Switching it off clears the model
         fireEvent.click(openAIToggle);
         expect(mockSetSelectedModelForAIVendor).toHaveBeenCalledWith(AIVendor.OPENAI, '');
 
@@ -142,6 +119,29 @@ describe('AIVendorWidget', () => {
 
         expect(screen.queryByTestId(`vendor-toggle-${AIVendor.OPENAI}`)).not.toBeInTheDocument();
         expect(screen.getByText('No API keys set')).toBeInTheDocument();
+    });
+
+    test('asks a signed-out user to log in instead of reporting missing keys', () => {
+        mockUseSidebarWidget.mockReturnValue({
+            ai: {
+                config: [],
+                setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
+            },
+            auth: {
+                getAccessTokenSilently: mockGetAccessTokenSilently,
+                customerId: null,
+                isAuthenticated: false,
+                isSignedOut: true,
+                aiVendorAPIKeyStatusList: []
+            }
+        });
+
+        render(withQueryClient(<AIVendorWidget />));
+
+        expect(screen.getByText('Please log in first.')).toBeInTheDocument();
+        expect(screen.queryByText('No API keys set')).not.toBeInTheDocument();
+        expect(screen.getByTestId('refresh-models-button')).toHaveAttribute('aria-label', 'Please log in first.');
+        expect(screen.getByTestId('save-models-button')).toHaveAttribute('aria-label', 'Please log in first.');
     });
 
     test('activates vendor when enabled', async () => {
@@ -243,7 +243,7 @@ describe('AIVendorWidget', () => {
         });
 
         render(withQueryClient(<AIVendorWidget />));
-        const saveBtn = screen.getByLabelText('Set as default');
+        const saveBtn = screen.getByRole('button', { name: 'Set as default' });
 
         fireEvent.click(saveBtn);
 
@@ -255,5 +255,66 @@ describe('AIVendorWidget', () => {
             });
             expect(mockShowToast).toHaveBeenCalledWith('Preferences saved successfully!');
         });
+    });
+
+    test('a vendor whose key is invalid shows its key status, switched off', () => {
+        mockUseSidebarWidget.mockReturnValue({
+            ai: {
+                config: [{ aiVendor: AIVendor.CLAUDE, model: 'claude-2' }],
+                setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
+            },
+            auth: {
+                getAccessTokenSilently: mockGetAccessTokenSilently,
+                customerId: 'cust-123',
+                isAuthenticated: true,
+                aiVendorAPIKeyStatusList: [
+                    { aiVendor: AIVendor.CLAUDE, status: APIKeyStatus.INVALID, isAPIKeyValid: true }
+                ]
+            }
+        });
+
+        render(withQueryClient(<AIVendorWidget />));
+
+        const toggle = screen.getByRole('switch', { name: 'Claude' });
+        expect(toggle).toBeDisabled();
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
+        expect(screen.getByText(APIKeyStatus.INVALID)).toBeInTheDocument();
+        fireEvent.click(toggle);
+        expect(mockSetSelectedModelForAIVendor).not.toHaveBeenCalled();
+    });
+
+    test('the reasoning select sets the vendor\'s thinking level', async () => {
+        const mockSetThinkingLevel = jest.fn();
+        mockUseSidebarWidget.mockReturnValue({
+            ai: {
+                config: [{ aiVendor: AIVendor.OPENAI, model: 'gpt-5', thinkingLevel: '' }],
+                setSelectedModelForAIVendor: mockSetSelectedModelForAIVendor,
+                setThinkingLevelForAIVendor: mockSetThinkingLevel,
+            },
+            auth: {
+                getAccessTokenSilently: mockGetAccessTokenSilently,
+                customerId: 'cust-123',
+                isAuthenticated: true,
+                aiVendorAPIKeyStatusList: [
+                    { aiVendor: AIVendor.OPENAI, status: APIKeyStatus.VALID, isAPIKeyValid: true }
+                ]
+            }
+        });
+        mockGetTextGenerationModels.mockResolvedValue({
+            aiVendorModelList: [{ aiVendor: AIVendor.OPENAI, modelsList: ['gpt-5'] }]
+        });
+
+        render(withQueryClient(<AIVendorWidget />));
+        const reasoning = await screen.findByTestId(`thinking-select-${AIVendor.OPENAI}`);
+        const firstLevel = (reasoning as HTMLSelectElement).options[1].value;
+        fireEvent.change(reasoning, { target: { value: firstLevel } });
+        expect(mockSetThinkingLevel).toHaveBeenCalledWith(AIVendor.OPENAI, firstLevel);
+    });
+
+    test('save failures are reported in a toast', async () => {
+        mockSaveAIConfigPreferences.mockRejectedValueOnce(new Error('offline'));
+        render(withQueryClient(<AIVendorWidget />));
+        fireEvent.click(screen.getByRole('button', { name: 'Set as default' }));
+        await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('Failed to save preferences: offline'));
     });
 });

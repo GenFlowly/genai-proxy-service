@@ -2,6 +2,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarCard, SidebarListLoadMore, SidebarListPanel, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
+import { useAuth } from '../../../context/AuthContext'
 import { useContentSearch } from '../../../hooks/queries/useContentSearch'
 import { SearchDataType, SearchResultItem } from '../../../services/searchService'
 import { isSearchNotConfigured, searchSetupMessageKey, searchSetupPath } from '../../../services/searchError'
@@ -25,6 +26,7 @@ export default function MenuSearchResults({
 }: MenuSearchResultsProps): React.ReactElement {
     const { t } = useTranslation()
     const navigate = useNavigate()
+    const { isSignedOut } = useAuth()
     const { data, isFetching, isError, error } = useContentSearch(query, types)
     const results = data ?? []
     const notConfigured = isSearchNotConfigured(error) ? error : null
@@ -46,12 +48,12 @@ export default function MenuSearchResults({
                         })),
                     }]
                     : []}
-                isLoading={isFetching || (data === undefined && !isError)}
+                isLoading={!isSignedOut && (isFetching || (data === undefined && !isError))}
                 hasError={isError}
                 errorText={notConfigured
                     ? t(searchSetupMessageKey(notConfigured.reason))
                     : t('layout.mobileMenu.searchFailed')}
-                emptyText={t('layout.mobileMenu.noSearchResults')}
+                emptyText={isSignedOut ? t('layout.mobileMenu.pleaseLogInFirst') : t('layout.mobileMenu.noSearchResults')}
                 listAriaLabel={t('layout.mobileMenu.searchResults')}
                 footer={notConfigured && !isFetching ? (
                     <SidebarListLoadMore

@@ -24,7 +24,7 @@ export default function InstructionPickerModal({
     onSelect,
 }: InstructionPickerModalProps) {
     const { t } = useTranslation()
-    const { getAccessTokenSilently, customerId, isAuthenticated } = useAuth()
+    const { getAccessTokenSilently, customerId, isAuthenticated, isSignedOut } = useAuth()
 
     const [query, setQuery] = useState('')
     const [recent, setRecent] = useState<InstructionResponse[]>([])
@@ -44,6 +44,7 @@ export default function InstructionPickerModal({
         setResults([])
         setHasError(false)
         setSetupError(null)
+        if (isSignedOut) return
         const cached = loadRecentInstructionsCache(customerId)
         if (cached) setRecent(cached)
         let cancelled = false
@@ -69,7 +70,7 @@ export default function InstructionPickerModal({
         // getAccessTokenSilently is intentionally omitted: it is not
         // referentially stable and would re-trigger the fetch on renders
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, customerId])
+    }, [isOpen, customerId, isSignedOut])
 
     // Debounced server-side search, for signed-in users only
     useEffect(() => {
@@ -129,6 +130,10 @@ export default function InstructionPickerModal({
                 {isSearching && !isAuthenticated ? (
                     <p className={styles.stateText} data-testid="instruction-picker-sign-in">
                         {t('conversation.instructionPicker.signInToSearch')}
+                    </p>
+                ) : isSignedOut ? (
+                    <p className={styles.stateText} data-testid="instruction-picker-log-in">
+                        {t('conversation.instructionPicker.pleaseLogInFirst')}
                     </p>
                 ) : isSearching && setupError ? (
                     <p className={styles.stateText} data-testid="instruction-picker-not-set-up">
