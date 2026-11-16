@@ -34,7 +34,13 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 DBOS_SYSTEM_SCHEMA = os.getenv("DBOS_SYSTEM_SCHEMA", "dbos")
-_CHECKPOINTER_POOL_MAX = int(os.getenv("CHECKPOINTER_POOL_MAX", "5"))
+# Connections per process. The Supabase session pooler refuses clients past its
+# pool size (15 on the smallest compute), counted across every machine on the
+# project, so two machines must stay at 7 each or under. DBOS keeps every
+# connection it opens until the process exits (its default pool is 20); the
+# checkpointer pool closes idle extras after 10 minutes.
+_DBOS_POOL_SIZE = int(os.getenv("DBOS_POOL_SIZE", "4"))
+_CHECKPOINTER_POOL_MAX = int(os.getenv("CHECKPOINTER_POOL_MAX", "3"))
 # How long startup waits for the first database connection. Startup blocks the
 # server from answering /health, and Fly's health-check grace period is 30 s, so
 # an unreachable database must give up well before that.
@@ -107,6 +113,7 @@ def _construct_dbos() -> None:
                 use_listen_notify=False,
                 dbos_system_schema=DBOS_SYSTEM_SCHEMA,
                 run_migrations=True,
+                sys_db_pool_size=_DBOS_POOL_SIZE,
                 scheduler_polling_interval_sec=_SCHEDULER_POLL_SEC,
             )
         )
