@@ -292,3 +292,11 @@ deletes runs that ended more than `RUN_RETENTION_SEC` (default 30 minutes) ago, 
 or event rows left without a run. Customer content therefore stays in Supabase only while a run is
 in flight and for under an hour after, which is what the privacy policy promises; keep the two
 settings' sum under an hour.
+
+**Connection budget.** The session pooler refuses new clients once the project's pool is full (15
+on the smallest compute), counting every machine and laptop pointed at that project. Each process
+opens at most `DBOS_POOL_SIZE` (default 4) connections for DBOS plus `CHECKPOINTER_POOL_MAX`
+(default 3) for checkpoints and run events, so two machines use at most 14. DBOS keeps every
+connection it opens until the process exits; when all are busy, a statement waits in the process
+for one to free up instead of being refused by Supabase. Raise the caps only together with the
+project's pool size.
