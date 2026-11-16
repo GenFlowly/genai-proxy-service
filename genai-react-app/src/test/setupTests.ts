@@ -64,16 +64,16 @@ window.HTMLElement.prototype.scrollIntoView = jest.fn();
 // This ensures components that useAuth0 don't crash in tests.
 // Individual test files can override this mock if they need specific states.
 const MOCK_USER = {
-    nickname: "nkirit",
-    name: "Neel",
-    picture: "https://avatars.githubusercontent.com/u/7536192?v=4",
+    nickname: "test-user",
+    name: "Test User",
+    picture: "https://example.com/avatar.png",
     updated_at: "2026-01-04T22:25:23.343Z",
     iss: "https://dev-abh5z7416lwy3xhv.us.auth0.com/",
-    sub: "github|7536192",
-    email: "neel@example.com"
+    sub: "auth0|test-user",
+    email: "test.user@example.com"
 };
 
-const ACCESS_TOKEN = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InpqYUNCU1ZmUE84bk80NmZ0Q0VrSCJ9...";
+const ACCESS_TOKEN = "test-access-token";
 
 const mockLoginWithRedirect = jest.fn();
 const mockLogout = jest.fn();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Modal } from '@genflowly/component-library';
@@ -36,7 +36,15 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
     const [isBlocking, setIsBlocking] = useState(false);
     const [blockMessage, setBlockMessage] = useState<{ text: string; failed: boolean } | null>(null);
 
+    // Callers pass a new function on every render, and a reload resets the form.
+    // A phone keyboard opening re-renders the parent, so the load keys on the dialog opening only.
+    const fetchSharedUsersRef = useRef(fetchSharedUsers);
     useEffect(() => {
+        fetchSharedUsersRef.current = fetchSharedUsers;
+    }, [fetchSharedUsers]);
+
+    useEffect(() => {
+        const fetchSharedUsers = fetchSharedUsersRef.current;
         if (!isOpen) {
             setMode('PRIVATE');
             setSearchTerm('');
@@ -74,7 +82,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, onSave, entity
                     setIsLoadingInitial(false);
                 });
         }
-    }, [isOpen, entityId, fetchSharedUsers]);
+    }, [isOpen, entityId]);
 
     useEffect(() => {
         const delayDebounceFn = setTimeout(async () => {

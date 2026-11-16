@@ -266,5 +266,19 @@ enabled.
   name is `genai-retrieval-server-<stage>`, not the `retrieval-server` in `fly.toml`). Set it via
   the Fly dashboard or `flyctl secrets set --app genai-retrieval-server-<stage> DATABASE_URL=…`.
   CI (`dev`/`prod-proxy-server.yml`, "Deploy Retrieval Server" step) also sets it from an
-  environment-scoped **`DATABASE_URL` GitHub Actions secret** if that secret exists — so add it per
+  environment-scoped **`SUPABASE_URL` GitHub Actions secret** if that secret exists — so add it per
   environment (dev/prod point at different Supabase projects) to keep deploys reproducible.
+
+**Idle polling and cleanup.** DBOS polls Postgres on fixed timers even when no run exists, and
+Supabase bills what those polls return as egress: at DBOS's 1-second defaults, one always-on
+process uses up the free plan's egress. So runs start directly rather than through a DBOS queue
+(startup deletes any queue registered under this app), and `durable_runtime._quiet_idle_polling`
+slows DBOS's remaining loops to about one statement per second per process. It sets DBOS
+internals, which is why `dbos` is pinned exactly; re-check those internals before bumping it.
+
+Ended runs don't linger. Each workflow deletes its LangGraph checkpoints when it ends, and a sweep
+(`run_cleanup.sweep`, at startup and then every `RUN_CLEANUP_INTERVAL_SEC`, default 10 minutes)
+deletes runs that ended more than `RUN_RETENTION_SEC` (default 30 minutes) ago, plus any checkpoint
+or event rows left without a run. Customer content therefore stays in Supabase only while a run is
+in flight and for under an hour after, which is what the privacy policy promises; keep the two
+settings' sum under an hour.

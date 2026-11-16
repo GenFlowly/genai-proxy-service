@@ -87,7 +87,7 @@ class MemoryExtractionLifecycleTest {
         coEvery { memoryRepo.getMemories("CU1") } returns emptyList()
         coEvery { resolution.resolve(RequestType.MEMORY_EXTRACTION, "CU1") } returns agent
         coEvery { memoryRepo.createMemory(any(), any(), any(), any(), any(), any(), any()) } returns CustomerMemory(
-            memoryId = "MEM#new", text = "Is named Neel.", kind = MemoryKind.EPISODIC,
+            memoryId = "MEM#new", text = "Is named Alex.", kind = MemoryKind.EPISODIC,
             sourceType = MemorySourceType.CONVERSATION, createdAt = "t", updatedAt = "t"
         )
     }
@@ -108,19 +108,19 @@ class MemoryExtractionLifecycleTest {
     @Test
     fun `success - applies operations, writes facts, finalizes, drains the row`() = runTest {
         baseline()
-        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Neel.","kind":"EPISODIC","category":"profile"}]}""")
+        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Alex.","kind":"EPISODIC","category":"profile"}]}""")
 
         service.processDuePendingExtractions()
 
         coVerify {
             memoryRepo.createMemory(
-                "CU1", "Is named Neel.", listOf(MemoryPlacement(null, MemoryKind.EPISODIC)), "profile",
+                "CU1", "Is named Alex.", listOf(MemoryPlacement(null, MemoryKind.EPISODIC)), "profile",
                 MemorySourceType.CONVERSATION, "CONV1", match { it.type == MemoryChangeType.LEARNED }
             )
         }
-        coVerify { retrievalClient.encodeMemoryVector("CU1", "MEM#new", "Is named Neel.", any(), any(), any(), any()) }
+        coVerify { retrievalClient.encodeMemoryVector("CU1", "MEM#new", "Is named Alex.", any(), any(), any(), any()) }
         coVerify {
-            conversationService.setMessageLearnedFacts("CONV1", "MSG9", match { it.contains("Is named Neel.") })
+            conversationService.setMessageLearnedFacts("CONV1", "MSG9", match { it.contains("Is named Alex.") })
         }
         coVerify { memoryRepo.finalizeConversationExtraction("CU1", "CONV1", 6) }
         coVerify { memoryRepo.deletePendingExtraction("CU1", "CONV1") }
@@ -130,7 +130,7 @@ class MemoryExtractionLifecycleTest {
     @Test
     fun `a failed memory embed is recorded for a retry`() = runTest {
         baseline()
-        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Neel.","kind":"EPISODIC","category":"profile"}]}""")
+        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Alex.","kind":"EPISODIC","category":"profile"}]}""")
         coEvery { retrievalClient.encodeMemoryVector(any(), any(), any(), any(), any(), any(), any()) } throws
             com.genflowly.providers.VectorEncodeException(500, "zilliz down")
 
@@ -143,7 +143,7 @@ class MemoryExtractionLifecycleTest {
     @Test
     fun `a memory that can never be embedded is not retried`() = runTest {
         baseline()
-        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Neel.","kind":"EPISODIC","category":"profile"}]}""")
+        executorReturns("""{"operations":[{"op":"ADD","text":"Is named Alex.","kind":"EPISODIC","category":"profile"}]}""")
         coEvery { retrievalClient.encodeMemoryVector(any(), any(), any(), any(), any(), any(), any()) } throws
             com.genflowly.providers.VectorEncodeException(409, "No vector DB configured")
 
@@ -278,7 +278,7 @@ class MemoryExtractionLifecycleTest {
     fun `the transcript is numbered so each change can name its message`() = runTest {
         baseline()
         val variables = executorCapturing(
-            """{"operations":[{"op":"ADD","text":"Is named Neel.","kind":"CORE","reason":"States their name","messageIndex":2}]}"""
+            """{"operations":[{"op":"ADD","text":"Is named Alex.","kind":"CORE","reason":"States their name","messageIndex":2}]}"""
         )
 
         service.processDuePendingExtractions()
@@ -288,7 +288,7 @@ class MemoryExtractionLifecycleTest {
         assertTrue(content.contains("[2] User: msg 2"), content)
         coVerify {
             memoryRepo.createMemory(
-                "CU1", "Is named Neel.", listOf(MemoryPlacement(null, MemoryKind.CORE)), any(),
+                "CU1", "Is named Alex.", listOf(MemoryPlacement(null, MemoryKind.CORE)), any(),
                 MemorySourceType.CONVERSATION, "CONV1",
                 MemoryChangeCause(
                     type = MemoryChangeType.LEARNED, sourceType = MemorySourceType.CONVERSATION,

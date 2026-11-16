@@ -1,13 +1,13 @@
 export const mockOnboardRequest = {
-    sub: "github|7536192",
+    sub: "auth0|test-user",
     email: "",
-    name: "Neel",
-    picture: "https://avatars.githubusercontent.com/u/7536192?v=4",
+    name: "Test User",
+    picture: "https://example.com/avatar.png",
     client: "REACT_APP"
 };
 
 export const mockOnboardResponse = {
-    customerId: "CU1C040186FF2F",
+    customerId: "CUTESTCUSTOMER",
     aiConfigPreferences: {
         preferredModels: [
             { aiVendor: "CLAUDE", model: "claude-3-haiku-20240307" },
@@ -21,8 +21,8 @@ export const mockOnboardResponse = {
         { aiVendor: "GEMINI", isAPIKeyValid: true, status: "API key is valid", updateSuccessful: false },
         { aiVendor: "CLAUDE", isAPIKeyValid: true, status: "API key is valid", updateSuccessful: false }
     ],
-    customerName: "Neel",
-    customerPicture: "https://avatars.githubusercontent.com/u/7536192?v=4",
+    customerName: "Test User",
+    customerPicture: "https://example.com/avatar.png",
     customerInstructions: [
         { id: "INS-1069c6f5-a20b-4de0-b294-a92dfef1e051", version: 12, name: "Pokemon", instruction: "You are a pokemon" },
         { id: "INS-9b2d0d5c-769c-46f5-91c1-b9c5e6299140", version: 9, name: "Piano Teacher", instruction: "You are an artist.\nYour expertise is in piano.\nYou also teach piano to young kids. " },

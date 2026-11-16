@@ -132,12 +132,14 @@ jobs:
           flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET
 
           # Supabase Postgres for durable agent runs (DBOS + LangGraph checkpointer;
-          # see retrieval-server/DURABLE_AGENTS_DBOS_PLAN.md). Use the SESSION-pooler
-          # URL (port 5432, sslmode=require) — NOT the transaction pooler (6543).
-          # Set it as an environment-scoped GitHub Actions secret. Inert if unset:
-          # the server starts as today and durable /runs stays inactive.
-          if [ -n "${{ secrets.DATABASE_URL }}" ]; then
-            flyctl secrets set --app $APP_NAME --stage DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          # see retrieval-server/DURABLE_AGENTS_DBOS_PLAN.md), from the
+          # environment-scoped SUPABASE_URL secret: the SESSION-pooler connection
+          # string (postgresql://…:5432/postgres?sslmode=require), not the https
+          # project URL and not the transaction pooler (6543). The server reads it
+          # as DATABASE_URL. Inert if unset: the server starts and durable /runs
+          # stays inactive.
+          if [ -n "${{ secrets.SUPABASE_URL }}" ]; then
+            flyctl secrets set --app $APP_NAME --stage DATABASE_URL="${{ secrets.SUPABASE_URL }}"
           fi
 
           # Pin the prod config: the default fly.toml is dev-only (Flycast + auto_stop)

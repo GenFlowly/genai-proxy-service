@@ -17,15 +17,20 @@ is checkpointer-bound and keyed by thread_id=run_id, astream_events RESUMES from
 the last LangGraph checkpoint instead of restarting — completed nodes are not
 re-run. (Exactly-once LLM billing and in-graph interrupt()/resume are P2.)
 
+Run id = DBOS workflow id = checkpoint thread_id = run_events run_id, for both
+workflows (start_run / run_request_agent); run_cleanup depends on it. Each
+workflow drops its checkpoints when it ends.
+
 Everything here is guarded: with durable runs unconfigured (no DATABASE_URL /
 DBOS not constructed) the module still imports, but agent_run is a stub and
-enqueue_run raises — routes/runs.py surfaces that as 503.
+start_run raises — routes/runs.py surfaces that as 503.
 """
 import logging
 import os
 import time
 
 import durable_runtime
+import run_cleanup
 import run_events
 from encoding_library.observability import count, observe
 from graph.dynamic_graph import get_or_build_durable_graph
@@ -45,9 +50,6 @@ from routes.retrieve import (
 from streaming import stream_events_dicts
 
 logger = logging.getLogger(__name__)
-
-QUEUE_NAME = "agent_runs"
-_run_queue = None  # set by register_run_queue() after DBOS.launch()
 
 # In-graph HITL (interrupt/resume) config.
 _RESUME_TOPIC = "resume"
@@ -275,11 +277,13 @@ if durable_runtime.dbos_constructed():
 
     @DBOS.workflow(name="agent_run")
     async def agent_run(run_id: str, run_input: dict) -> dict:
-        return await _run_agent_graph(run_id, run_input)
+        async with run_cleanup.checkpoints_dropped_at_end(run_id):
+            return await _run_agent_graph(run_id, run_input)
 
     @DBOS.workflow(name="request_agent_run")
     async def request_agent_run(run_id: str, run_input: dict) -> dict:
-        return await _request_agent_run(run_id, run_input)
+        async with run_cleanup.checkpoints_dropped_at_end(run_id):
+            return await _request_agent_run(run_id, run_input)
 else:
     async def agent_run(run_id: str, run_input: dict) -> dict:  # type: ignore[misc]
         raise RuntimeError("durable runs not configured (DATABASE_URL unset)")
@@ -288,31 +292,22 @@ else:
         raise RuntimeError("durable runs not configured (DATABASE_URL unset)")
 
 
-async def register_run_queue() -> None:
-    """Register the agent-runs queue. Called from durable_runtime.startup AFTER
-    DBOS.launch() (queues touch the system DB, so they can't be registered at
-    import time). Uses the async API because startup runs inside the event loop."""
-    global _run_queue
-    if not durable_runtime.dbos_constructed():
-        return
-    import os
+async def start_run(run_id: str, run_input: dict):
+    """Start a run in the background under workflow-id=run_id (idempotent: a
+    duplicate run_id returns the existing workflow's handle). Started directly,
+    not through a DBOS queue: a queue costs a worker polling Postgres every
+    second and up to a poll interval of start latency. Returns the DBOS handle."""
+    if not durable_runtime.is_ready():
+        raise RuntimeError("durable runs not ready")
+    from dbos import DBOS, SetWorkflowID
 
-    from dbos import DBOS
-
-    # global_concurrency bounds how many runs execute at once across the fleet —
-    # a safety cap on concurrent LLM workloads; tuned further in P3.
-    _run_queue = await DBOS.register_queue_async(
-        QUEUE_NAME, global_concurrency=int(os.getenv("AGENT_RUNS_CONCURRENCY", "20"))
-    )
-    logger.info("agent_runs queue registered")
+    with SetWorkflowID(run_id):
+        return await DBOS.start_workflow_async(agent_run, run_id, run_input)
 
 
-async def enqueue_run(run_id: str, run_input: dict):
-    """Durably enqueue a run under workflow-id=run_id (idempotent: a duplicate
-    run_id returns the existing workflow handle). Returns the DBOS handle."""
-    if _run_queue is None:
-        raise RuntimeError("durable runs not ready — queue not registered")
+async def run_request_agent(run_id: str, run_input: dict) -> dict:
+    """Run a request agent to completion under workflow-id=run_id."""
     from dbos import SetWorkflowID
 
     with SetWorkflowID(run_id):
-        return await _run_queue.enqueue_async(agent_run, run_id, run_input)
+        return await request_agent_run(run_id, run_input)

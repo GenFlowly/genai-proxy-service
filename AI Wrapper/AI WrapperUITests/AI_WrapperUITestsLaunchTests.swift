@@ -2,8 +2,6 @@
 //  AI_WrapperUITestsLaunchTests.swift
 //  AI WrapperUITests
 //
-//  Created by Neel Kirit on 8/11/26.
-//
 
 import XCTest
 

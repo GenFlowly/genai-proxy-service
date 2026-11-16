@@ -1,17 +1,13 @@
 name: Production iOS TestFlight
 
-# Self-triggered: runs only when the iOS app (or this workflow) changes.
+# Manual only: start it from the Actions tab (or `gh workflow run`) with `main` selected;
+# runs from any other branch are skipped. Merges to main publish nothing on their own.
 # Runs the unit tests, uploads a signed production-stage build to TestFlight for internal
 # testers and selects it on the App Store version draft. Nothing is submitted for review:
 # that is done by hand in App Store Connect after testing the TestFlight build. Each run takes
 # the next patch version above what App Store Connect has seen. The recipe and the credential
 # names are in AI Wrapper/fastlane/Fastfile.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'AI Wrapper/**'
-      - '.github/workflows/prod-ios-app-store.yml'
   workflow_dispatch:
 
 # Versions and build numbers come from App Store Connect, so runs upload one at a time.
@@ -25,6 +21,7 @@ permissions:
 jobs:
   testflight:
     name: TestFlight
+    if: github.ref == 'refs/heads/main'
     runs-on: xcode-27
     environment: production
     timeout-minutes: 90
