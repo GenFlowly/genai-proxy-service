@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// MobileFullPageModal + the chat page's right-sidebar widgets (AI_VENDOR, AGENT_PICKER,
-/// TOKEN_COUNTER): covers the page, with a full-width outlined "Close Settings" footer.
+/// MobileFullPageModal + the chat page's AI settings cards (Models, Agent, Tokens): covers the
+/// page, with a full-width outlined "Close Settings" footer.
 struct RightSidebarModal: View {
     @EnvironmentObject var router: AppRouter
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var ai: AIStore
     @EnvironmentObject var conversation: ConversationStore
     @EnvironmentObject var toasts: ToastCenter
+    @ObservedObject private var catalog = ProviderCatalog.shared
 
     @State private var isRefreshing = false
     @State private var isSaving = false
@@ -29,10 +30,10 @@ struct RightSidebarModal: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    widget(header: modelsHeader) { modelsContent }
-                    widget(header: agentsHeader) { agentsContent }
-                    widget(header: tokensHeader, isLast: true) { tokensContent }
+                VStack(alignment: .leading, spacing: 8) {
+                    card(icon: "models", title: L("sidebar.aiVendorWidget.title"), actions: { modelsActions }) { modelsContent }
+                    card(icon: "user-role", title: L("sidebar.agentPickerWidget.title")) { agentsContent }
+                    card(icon: "tokens", title: L("sidebar.tokenCounter.title")) { tokensContent }
                 }
                 .padding(4.8)
             }
@@ -52,18 +53,37 @@ struct RightSidebarModal: View {
         .task(id: conversation.editorPrompt) { await updateTokenCount() }
     }
 
-    /// SidebarWidgetContainer: a divider and 16pt either side of it, except after the last.
-    private func widget<Header: View, Content: View>(header: Header, isLast: Bool = false, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            content()
+    /// SidebarCard with a header: 16pt icon, 12/500 title, actions at the right end, a
+    /// hairline under the 34pt header, and the body padded 8 by 10.
+    private func card<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
+        card(icon: icon, title: title, actions: { EmptyView() }, content: content)
+    }
+
+    private func card<Actions: View, Content: View>(icon: String, title: String, @ViewBuilder actions: () -> Actions, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                WebIcon(name: icon, size: 16, color: AppTheme.textSecondary)
+                Text(title)
+                    .webText(12, 500)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                actions()
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 6)
+            .frame(height: 34)
+            .overlay(alignment: .bottom) { Rectangle().fill(AppTheme.sidebarHairline).frame(height: 1) }
+
+            VStack(alignment: .leading, spacing: 6) {
+                content()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.bottom, isLast ? 0 : 17)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .bottom) {
-            if !isLast { Rectangle().fill(AppTheme.border).frame(height: 1) }
-        }
-        .padding(.bottom, isLast ? 0 : 16)
+        .sidebarCard()
     }
 
     private func loadData() async {
@@ -72,47 +92,51 @@ struct RightSidebarModal: View {
         await ai.fetchAgents(token: token, version: auth.cacheVersions?["agents"])
     }
 
-    // MARK: - AIVendorWidget
+    // MARK: - Models card (AIVendorWidget)
 
-    private var modelsHeader: some View {
-        HStack {
-            HStack(spacing: 8) {
-                WebIcon(name: "models", size: 20)
-                Text(L("sidebar.aiVendorWidget.title")).webText(16, 600).foregroundStyle(AppTheme.textPrimary)
+    private var modelsActions: some View {
+        HStack(spacing: 2) {
+            iconAction("refresh-icon", label: hasAnyValidApiKey ? L("sidebar.aiVendorWidget.refreshModels") : L("sidebar.aiVendorWidget.noApiKeysSet"), disabled: isRefreshing || !hasAnyValidApiKey, spinning: isRefreshing) {
+                Task { await handleRefresh() }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 8) {
-                iconAction("refresh-icon", label: L("sidebar.aiVendorWidget.refreshModels"), disabled: isRefreshing || !hasAnyValidApiKey, spinning: isRefreshing) {
-                    Task { await handleRefresh() }
-                }
-                iconAction("save-icon", label: L("sidebar.aiVendorWidget.setAsDefault"), disabled: isSaving || !hasAnyValidApiKey) {
-                    Task { await handleSave() }
-                }
+            iconAction("save-icon", label: hasAnyValidApiKey ? L("sidebar.aiVendorWidget.setAsDefault") : L("sidebar.aiVendorWidget.noApiKeysSet"), disabled: isSaving || !hasAnyValidApiKey) {
+                Task { await handleSave() }
             }
         }
     }
 
+    /// IconButton size sm: a 22pt target around a 14pt glyph.
     private func iconAction(_ icon: String, label: String, disabled: Bool, spinning: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            WebIcon(name: icon, size: 20, color: AppTheme.textSecondary)
+            WebIcon(name: icon, size: 14, color: AppTheme.textMuted)
                 .rotationEffect(.degrees(spinning ? 360 : 0))
                 .animation(spinning ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: spinning)
-                .padding(7.4)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
         }
         .buttonStyle(WebPressStyle())
         .disabled(disabled)
-        .opacity(disabled ? 0.5 : 1)
+        .opacity(disabled ? 0.4 : 1)
         .accessibilityLabel(label)
     }
 
     private var modelsContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 6) {
             if vendors.isEmpty {
-                Text(L("sidebar.aiVendorWidget.noApiKeysSet")).webText(13.6).foregroundStyle(Color(hex: "#D9534F"))
+                Text(L("sidebar.aiVendorWidget.noApiKeysSet")).webText(12).foregroundStyle(Color(hex: "#D9534F"))
             }
             ForEach(vendors) { vendor in
                 vendorBlock(vendor)
             }
+        }
+    }
+
+    private func toggle(_ vendor: AIVendor) {
+        guard isEnabled(vendor) else { return }
+        if ai.isVendorPopulated(vendor) {
+            ai.setSelectedModel(for: vendor, model: "")
+        } else if let first = (ai.modelsByVendor[vendor] ?? []).first {
+            ai.setSelectedModel(for: vendor, model: first)
         }
     }
 
@@ -123,42 +147,58 @@ struct RightSidebarModal: View {
         let models = ai.modelsByVendor[vendor] ?? []
         let selectedModel = ai.selectedModel(for: vendor)
         let reasoning = ThinkingLevels.options(for: selectedModel)
+        let name = catalog.displayName(for: vendor.rawValue)
 
-        VStack(alignment: .leading, spacing: 8) {
-            PillButton(style: isActive ? .primary : .secondary, disabled: !enabled, fullWidth: true, action: {
-                guard enabled else { return }
-                if isActive {
-                    ai.setSelectedModel(for: vendor, model: "")
-                } else if let first = models.first {
-                    ai.setSelectedModel(for: vendor, model: first)
+        VStack(alignment: .leading, spacing: 6) {
+            Button { toggle(vendor) } label: {
+                HStack(spacing: 10) {
+                    WebSwitch(isOn: isActive && enabled)
+                    Text(name)
+                        .webText(13, isActive ? 500 : 400)
+                        .foregroundStyle(isActive ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .lineLimit(1)
                 }
-            }, label: {
-                VendorBrandName(vendor: vendor)
-            })
+                .padding(.horizontal, 2)
+                .frame(minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.5)
+            .accessibilityLabel(name)
+            .accessibilityAddTraits(.isToggle)
+            .accessibilityValue(isActive && enabled ? "1" : "0")
+            .accessibilityIdentifier("vendor-toggle-\(vendor.rawValue)")
 
             if !enabled {
                 Text(auth.aiVendorAPIKeyStatusList.first { $0.aiVendor == vendor.rawValue }?.status ?? APIKeyStatus.notSet)
-                    .webText(13.6)
+                    .webText(12)
                     .foregroundStyle(Color(hex: "#D9534F"))
             }
-            if isActive, enabled, !models.isEmpty {
-                WebSelect(value: selectedModel, options: models.map { .init(id: $0, label: $0) }) {
-                    ai.setSelectedModel(for: vendor, model: $0)
+            if isActive, enabled, !models.isEmpty || !reasoning.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !models.isEmpty {
+                        WebSelect(value: selectedModel, options: models.map { .init(id: $0, label: $0) }, style: .card) {
+                            ai.setSelectedModel(for: vendor, model: $0)
+                        }
+                    }
+                    // Reasoning effort rides the request's aiConfig and overrides the agent's
+                    // node-level thinking_level on the response generator.
+                    if !selectedModel.isEmpty, !reasoning.isEmpty {
+                        WebSelect(
+                            value: ai.thinkingLevel(for: vendor),
+                            options: [.init(id: "", label: L("sidebar.aiVendorWidget.reasoningDefault"))] + reasoning.map { .init(id: $0.value.rawValue, label: $0.label) },
+                            style: .card
+                        ) {
+                            ai.setThinkingLevel(for: vendor, level: $0)
+                        }
+                        .accessibilityLabel(L("sidebar.aiVendorWidget.reasoning"))
+                    }
                 }
-            }
-            // Reasoning effort rides the request's aiConfig and overrides the agent's
-            // node-level thinking_level on the response generator.
-            if isActive, enabled, !selectedModel.isEmpty, !reasoning.isEmpty {
-                WebSelect(
-                    value: ai.thinkingLevel(for: vendor),
-                    options: [.init(id: "", label: L("sidebar.aiVendorWidget.reasoningDefault"))] + reasoning.map { .init(id: $0.value.rawValue, label: $0.label) }
-                ) {
-                    ai.setThinkingLevel(for: vendor, level: $0)
-                }
-                .accessibilityLabel(L("sidebar.aiVendorWidget.reasoning"))
+                .padding(.leading, 42)
             }
             if isActive, enabled, models.isEmpty, !isRefreshing {
-                Text(L("sidebar.aiVendorWidget.noModelsAvailable")).webText(13.6).foregroundStyle(Color(hex: "#D9534F"))
+                Text(L("sidebar.aiVendorWidget.noModelsAvailable")).webText(12).foregroundStyle(Color(hex: "#D9534F"))
             }
         }
     }
@@ -184,29 +224,20 @@ struct RightSidebarModal: View {
         }
     }
 
-    // MARK: - AgentPickerWidget
-
-    private var agentsHeader: some View {
-        HStack(spacing: 8) {
-            WebIcon(name: "user-role", size: 20)
-            Text(L("sidebar.agentPickerWidget.title")).webText(16, 600).foregroundStyle(AppTheme.textPrimary)
-        }
-    }
+    // MARK: - Agent card (AgentPickerWidget)
 
     @ViewBuilder
     private var agentsContent: some View {
         let agents = ai.conversationAgents
-        VStack(alignment: .leading, spacing: 6.4) {
-            if ai.agentsLoadFailed {
-                Text(L("sidebar.agentPickerWidget.failedToLoad")).webText(12.8).foregroundStyle(AppTheme.textSecondary)
-            } else if agents.isEmpty {
-                Text(L("sidebar.agentPickerWidget.noAgents")).webText(12.8).foregroundStyle(AppTheme.textSecondary)
-            } else {
-                WebSelect(value: ai.effectiveAgentId ?? "", options: agents.map { .init(id: $0.graphId, label: optionLabel($0)) }) { id in
-                    pickAgent(id)
-                }
-                .accessibilityLabel(L("sidebar.agentPickerWidget.title"))
+        if ai.agentsLoadFailed {
+            Text(L("sidebar.agentPickerWidget.failedToLoad")).webText(12).foregroundStyle(AppTheme.textSecondary)
+        } else if agents.isEmpty {
+            Text(L("sidebar.agentPickerWidget.noAgents")).webText(12).foregroundStyle(AppTheme.textSecondary)
+        } else {
+            WebSelect(value: ai.effectiveAgentId ?? "", options: agents.map { .init(id: $0.graphId, label: optionLabel($0)) }, style: .card) { id in
+                pickAgent(id)
             }
+            .accessibilityLabel(L("sidebar.agentPickerWidget.title"))
         }
     }
 
@@ -225,26 +256,88 @@ struct RightSidebarModal: View {
         }
     }
 
-    // MARK: - TokenCounter
-
-    private var tokensHeader: some View {
-        HStack(spacing: 8) {
-            WebIcon(name: "tokens", size: 20)
-            Text(L("sidebar.tokenCounter.promptTokens")).webText(14.4, 600).foregroundStyle(AppTheme.textSecondary)
-        }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 8)
-    }
+    // MARK: - Tokens card (TokenCounter)
 
     private var tokensContent: some View {
-        Text(L("sidebar.tokenCounter.estimated", ["tokenCount": displayedTokens]))
-            .webText(16)
-            .foregroundStyle(AppTheme.textPrimary)
-            .padding(.horizontal, 4)
+        let usage = VendorUsage.byVendor(conversation.blocks)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(L("sidebar.tokenCounter.promptEstimated")).foregroundStyle(AppTheme.textMuted)
+                Spacer(minLength: 8)
+                Text(displayedTokens.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))))
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .monospacedDigit()
+                    .accessibilityIdentifier("token-count-display")
+            }
+            .webText(12)
+            .frame(minHeight: 22)
+
+            Text(L("sidebar.tokenCounter.thisConversation").uppercased())
+                .webText(10.5, 500)
+                .kerning(0.63)
+                .foregroundStyle(AppTheme.textMuted)
+                .padding(.top, 8)
+
+            if usage.isEmpty {
+                Text(L("sidebar.tokenCounter.noUsageYet"))
+                    .webText(12)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .padding(.top, 4)
+            }
+            ForEach(usage) { entry in
+                vendorUsage(entry)
+            }
+        }
     }
 
-    /// TextEditor is only rendered when the active block isn't resolved yet; the debounce
-    /// only throttles re-renders while typing.
+    private func vendorUsage(_ entry: VendorUsage) -> some View {
+        let name = catalog.displayName(for: entry.vendor.rawValue)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(name).webText(12, 500).foregroundStyle(AppTheme.textSecondary)
+                Spacer(minLength: 8)
+                if let cost = entry.totals.costUsd {
+                    Text(ResponseCardView.formatUsd(cost))
+                        .webText(12)
+                        .foregroundStyle(AppTheme.textSecondary)
+                        .monospacedDigit()
+                        .accessibilityLabel(L("conversation.response.conversationCostUsd", ["vendor": name]))
+                }
+            }
+            .frame(minHeight: 22)
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 2) {
+                GridRow {
+                    stat("input-tokens", entry.totals.inputTokens, L("conversation.response.totalInputTokens"))
+                    stat("output-tokens", entry.totals.outputTokens, L("conversation.response.totalOutputTokens"))
+                }
+                GridRow {
+                    stat("cache-tokens", entry.totals.tokensReadFromCache, L("conversation.response.tokensReadFromCache"))
+                    stat("total-tokens", entry.totals.totalTokens, L("conversation.response.totalTokens"))
+                }
+            }
+            .padding(.top, 2)
+            .padding(.bottom, 6)
+        }
+        .padding(.top, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("token-usage-\(entry.vendor.rawValue)")
+    }
+
+    private func stat(_ icon: String, _ value: Int, _ label: String) -> some View {
+        HStack(spacing: 4) {
+            WebIcon(name: icon, size: 12, color: AppTheme.textMuted)
+            Text(value.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))))
+                .webText(11.5)
+                .foregroundStyle(AppTheme.textMuted)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
+    }
+
+    /// The editor only shows while a block is still a draft; the debounce only throttles
+    /// re-renders while typing.
     private func updateTokenCount() async {
         try? await Task.sleep(nanoseconds: 500_000_000)
         guard !Task.isCancelled else { return }
@@ -254,17 +347,50 @@ struct RightSidebarModal: View {
     }
 }
 
-/// A `<select>` styled like the web's `.modelSelect`: 1pt border, radius 8, 14.4pt, padding
-/// 4.8/8, opening the system picker menu.
+/// Switch.module.scss: a 32 by 18 track, 14pt thumb; on, the track takes the button colour.
+struct WebSwitch: View {
+    let isOn: Bool
+
+    var body: some View {
+        ZStack(alignment: isOn ? .trailing : .leading) {
+            Capsule()
+                .fill(isOn ? AppTheme.buttonPrimary : AppTheme.backgroundTertiary)
+                .overlay(Capsule().strokeBorder(isOn ? AppTheme.buttonPrimary : AppTheme.border, lineWidth: 1))
+            Circle()
+                .fill(.white)
+                .frame(width: 14, height: 14)
+                .shadow(color: .black.opacity(0.25), radius: 1, y: 1)
+                .padding(2)
+        }
+        .frame(width: 32, height: 18)
+        .animation(.easeInOut(duration: 0.2), value: isOn)
+    }
+}
+
+/// A `<select>` opening the system picker menu. `.legacy` is the web's `.modelSelect`: 1pt
+/// border, radius 8, 14.4pt, padding 4.8/8; `.card` is the AI settings cards' select: 30pt
+/// tall, radius 6, 12pt.
 struct WebSelect: View {
     struct Option: Identifiable {
         let id: String
         let label: String
     }
 
+    enum Style {
+        case legacy, card
+    }
+
     let value: String
     let options: [Option]
+    var style: Style = .legacy
     let onChange: (String) -> Void
+
+    init(value: String, options: [Option], style: Style = .legacy, onChange: @escaping (String) -> Void) {
+        self.value = value
+        self.options = options
+        self.style = style
+        self.onChange = onChange
+    }
 
     private var label: String { options.first { $0.id == value }?.label ?? options.first?.label ?? "" }
 
@@ -282,12 +408,12 @@ struct WebSelect: View {
                 }
             }
         } label: {
-            NativeSelectLabel(text: label, font: DSFont.uiArial(14.4), horizontalPadding: 8)
+            NativeSelectLabel(text: label, font: DSFont.uiArial(style == .card ? 12 : 14.4), horizontalPadding: 8)
                 .padding(.horizontal, 1)
-                .frame(height: 29.6)
+                .frame(height: style == .card ? 30 : 29.6)
                 .background(AppTheme.backgroundSecondary)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.border, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: style == .card ? 6 : 8))
+                .overlay(RoundedRectangle(cornerRadius: style == .card ? 6 : 8).strokeBorder(AppTheme.border, lineWidth: 1))
         }
     }
 }

@@ -12,6 +12,14 @@ struct ChatView: View {
 
     @State private var showShare = false
     @State private var showPicker = false
+    @State private var showOutline = false
+    /// A turn the Outline asked to jump to.
+    @State private var outlineTarget: String?
+    /// The turn in view: the last one whose top passed 30% of the way down.
+    @State private var viewedBlockId: String?
+    /// Where each block starts in the scroll content; read while scrolling, so not @State.
+    @State private var blockTops = BlockTops()
+    @ObservedObject private var catalog = ProviderCatalog.shared
     @State private var scrollViewHeight: CGFloat = 0
     /// Docked "Ask" pill (`.selectionAskDocked`): the selection and where it came from.
     @State private var askSelection: AskSelection?
@@ -22,6 +30,18 @@ struct ChatView: View {
     @State private var followArmed = false
     /// The conversation is taller than the screen, so its end can reach the home indicator.
     @State private var contentFillsViewport = false
+    /// From the top of the page to the keyboard, or to the bottom edge while it is closed.
+    @State private var screenHeight: CGFloat = 0
+
+    private var outlineItems: [OutlineItem] {
+        ChatOutline.items(blocks: conversation.blocks, vendorName: catalog.displayName(for:))
+    }
+
+    /// Changes whenever the last block finishes or a conversation loads.
+    private var trailingDraftKey: String {
+        guard let last = conversation.blocks.last else { return "" }
+        return "\(last.conversationBlockId)|\(last.status.rawValue)|\(last.isLoading)|\(conversation.conversationRole.rawValue)"
+    }
 
     private var isFreshChat: Bool {
         conversation.blocks.count == 1 && conversation.blocks[0].status == .draft && conversation.blocks[0].responseMessages.isEmpty && !conversation.blocks[0].isLoading
@@ -39,7 +59,23 @@ struct ChatView: View {
                 conversationScroll
             }
 
-            ChatHeader(showShare: $showShare, showPicker: $showPicker)
+            ChatHeader(
+                showShare: $showShare,
+                showPicker: $showPicker,
+                isOutlineOpen: showOutline,
+                onOpenOutline: outlineItems.isEmpty ? nil : { showOutline = true }
+            )
+
+            if showOutline {
+                let items = outlineItems
+                OutlineSheet(
+                    items: items,
+                    currentId: ChatOutline.currentId(items: items, viewedId: viewedBlockId),
+                    onSelect: { outlineTarget = $0 },
+                    onClose: { showOutline = false }
+                )
+                .zIndex(2)
+            }
 
             if let selection = askSelection {
                 VStack {
@@ -49,6 +85,8 @@ struct ChatView: View {
                 }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { screenHeight = $0 }
+        .environment(\.chatScreenHeight, screenHeight)
         .statusBarBand()
         .background(AppTheme.background)
         .webModal(isPresented: $showPicker, title: L("conversation.instructionPicker.title"), maxWidth: 768, scrollsContent: false) {
@@ -67,8 +105,10 @@ struct ChatView: View {
                 router.showInstructionPicker = false
             }
         }
+        .animation(.easeOut(duration: 0.2), value: showOutline)
         .task(id: auth.customerId) { await loadSharedQueries() }
         .onChange(of: conversation.conversationId) { _, _ in askSelection = nil }
+        .onChange(of: trailingDraftKey, initial: true) { _, _ in conversation.ensureTrailingDraft() }
     }
 
     /// `useDefaultsPrefetch` + the AI widget's query: warm what the page reads.
@@ -97,13 +137,23 @@ struct ChatView: View {
                 // draw, and the first drag could swap the screen for a different response.
                 VStack(spacing: 0) {
                     ForEach(conversation.blocks) { block in
+                        let blockId = block.conversationBlockId
                         ConversationBlockView(block: block, onSelectionChange: { selection in
                             askSelection = selection
                         })
-                        .id(block.conversationBlockId)
+                        .id(blockId)
+                        // The web's 5rem scroll margin: an Outline jump lands the turn this far
+                        // below the top of the page, clear of the overlay header.
+                        .overlay(alignment: .top) {
+                            Color.clear.frame(height: 1).offset(y: mobileHeaderHeight - 80).id(Self.turnAnchor(blockId)).allowsHitTesting(false)
+                        }
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.contentSpace)).minY } action: { top in
+                            blockTops.values[blockId] = top
+                        }
                     }
                     Color.clear.frame(height: 0).id("conversation-end")
                 }
+                .coordinateSpace(.named(Self.contentSpace))
             }
             .contentMargins(.top, mobileHeaderHeight, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
@@ -121,6 +171,20 @@ struct ChatView: View {
             .onScrollPhaseChange { _, phase in
                 if phase == .interacting { followPaused = true }
             }
+            .onScrollGeometryChange(for: String?.self) { geometry in
+                ChatOutline.viewedBlockId(
+                    blockTops: blockTops.values.map { (id: $0.key, top: $0.value) },
+                    scrollOffset: geometry.contentOffset.y,
+                    viewportHeight: geometry.containerSize.height
+                )
+            } action: { _, id in
+                viewedBlockId = id
+            }
+            .onChange(of: outlineTarget) { _, target in
+                guard let target else { return }
+                outlineTarget = nil
+                withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.turnAnchor(target), anchor: .top) }
+            }
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height < 50
             } action: { _, nearBottom in
@@ -129,6 +193,11 @@ struct ChatView: View {
             .onChange(of: conversation.focusDraftRequest) { _, _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("conversation-end", anchor: .bottom) }
+                }
+            }
+            .onChange(of: conversation.revealDraftRequest) { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("conversation-end", anchor: .bottom) }
                 }
             }
             // A response appearing for the first time jumps to its start: animated as it generates,
@@ -164,6 +233,9 @@ struct ChatView: View {
         }
     }
 
+    static let contentSpace = "chat-content"
+    static func turnAnchor(_ blockId: String) -> String { "turn-\(blockId)" }
+
     /// Touch selection: the pill docks above the response action bar because the OS
     /// selection callout draws over the page wherever the selection sits.
     private func askPill(_ selection: AskSelection) -> some View {
@@ -186,14 +258,21 @@ struct ChatView: View {
     }
 }
 
+/// Where each block starts in the scroll content, kept out of SwiftUI's change tracking so
+/// scrolling doesn't redraw the page.
+final class BlockTops {
+    var values: [String: CGFloat] = [:]
+}
+
 struct AskSelection {
     let text: String
     let blockId: String
     let message: Message
 }
 
-/// ConversationHeader below isNarrow: title, loaded instruction (tappable → picker) and
-/// the New Chat / Share / AI Config kebab; the hamburger opens the history menu.
+/// ConversationHeader below isNarrow: title (tappable → Outline), loaded instruction
+/// (tappable → picker) and the New Chat / Share / AI Settings kebab; the hamburger opens the
+/// Chats and Projects menu.
 struct ChatHeader: View {
     @EnvironmentObject var router: AppRouter
     @EnvironmentObject var auth: AuthStore
@@ -201,6 +280,9 @@ struct ChatHeader: View {
     @EnvironmentObject var conversation: ConversationStore
     @Binding var showShare: Bool
     @Binding var showPicker: Bool
+    var isOutlineOpen = false
+    /// Opens the Outline; nil while there are no turns yet.
+    var onOpenOutline: (() -> Void)?
     @StateObject private var moderation = SharedItemModeration()
 
     /// The open conversation, when someone else owns it.
@@ -239,7 +321,7 @@ struct ChatHeader: View {
         if showShareItem {
             items.append(MobileHeaderMenuItem(label: L("conversation.conversationHeader.share")) { showShare = true })
         }
-        items.append(MobileHeaderMenuItem(label: L("conversation.conversationHeader.aiConfig")) { router.isRightSidebarOpen = true })
+        items.append(MobileHeaderMenuItem(label: L("layout.mobileFullPageModal.aiSettings")) { router.isRightSidebarOpen = true })
         return items + moderation.menuItems
     }
 
@@ -263,6 +345,9 @@ struct ChatHeader: View {
                 title: displayTitle,
                 menuItems: menuItems,
                 onSubtitleClick: { showPicker = true },
+                onTitleClick: onOpenOutline,
+                titleActionLabel: L("conversation.outline.openFor", ["title": displayTitle]),
+                titleExpanded: isOutlineOpen,
                 onMenuClick: { router.isMobileMenuOpen = true }
             ) {
                 if let instruction = loadedInstruction {
@@ -339,18 +424,20 @@ struct ResolvedRequestView: View {
         return auth.customerPicture
     }
 
+    /// The phone boards' prompt: on the page, 8pt in from the screen's edges and 16pt below the
+    /// header or the turn above, one header row with the copy icon on the right.
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .trailing) {
                 UserBrandName(name: displayName, picture: displayPicture)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.trailing, 50)
-                CopyToClipboardButton(content: block.prompt, accessibilityLabel: L("common.textContainer.copyResponse"))
+                    .padding(.trailing, 40)
+                CopyToClipboardButton(content: block.prompt, accessibilityLabel: L("common.textContainer.copyPrompt"), style: .turn)
             }
-            .frame(height: 27.2)
-            .padding(.bottom, 20)
+            .frame(height: 32)
+            .padding(.bottom, 8)
 
-            MarkdownView(text: block.prompt, options: .init(capitalizeFirstLetter: true, tightFirstHeading: false))
+            MarkdownView(text: block.prompt, options: .init(capitalizeFirstLetter: true, tightFirstHeading: false, turnTextSize: 17))
 
             if !block.attachments.isEmpty {
                 ResolvedAttachmentThumbnails(attachments: block.attachments)
@@ -358,19 +445,15 @@ struct ResolvedRequestView: View {
 
             if let sentAt = block.sentAt {
                 Text(ServerDate.dateTime(sentAt))
-                    .webText(11.2, lineHeight: 19.04)
+                    .webText(12, lineHeight: 16.8)
                     .foregroundStyle(AppTheme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.top, 8)
+                    .padding(.top, 6)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(AppTheme.background)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .padding(8)
+        .padding(.top, 16)
+        .padding(.horizontal, 8)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.background)
     }
 }
 
@@ -434,4 +517,10 @@ struct RunHitlBanner: View {
         drafts[id] = ""
         Task { await conversation.submitRunReply(messageId: id, reply: text) }
     }
+}
+
+extension EnvironmentValues {
+    /// The chat page's height down to the keyboard, or to the bottom edge while it is closed: the
+    /// room the composer grows into.
+    @Entry var chatScreenHeight: CGFloat = 0
 }

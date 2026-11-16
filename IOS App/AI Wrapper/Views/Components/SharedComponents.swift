@@ -127,40 +127,18 @@ struct FitContent: Layout {
     }
 }
 
-// MARK: - RectangleButton (padding 10/24/10/16, h 38, radius 4, Arial 13.33 — no font set)
-
-struct RectangleButton: View {
-    var label: String
-    var icon: String?
-    var disabled = false
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Text(label).webText(arial: 13.3333)
-                if let icon {
-                    WebIcon(name: icon, size: 13.33, color: .white)
-                }
-            }
-            .foregroundStyle(.white)
-            .padding(.leading, 17)
-            .padding(.trailing, 25)
-            .frame(height: 38)
-            .background(disabled ? AppTheme.disabled : AppTheme.buttonPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-        }
-        .buttonStyle(WebPressStyle())
-        .disabled(disabled)
-        .opacity(disabled ? 0.5 : 1)
-    }
-}
-
 // MARK: - CopyToClipboard (sm secondary: 6.4/12.8 padding, 1pt border, icon 1.2em)
 
 struct CopyToClipboardButton: View {
+    enum Style {
+        case boxed
+        /// A conversation turn's on phones: a plain 32pt target, the 16pt icon muted.
+        case turn
+    }
+
     let content: String
     let accessibilityLabel: String
+    var style: Style = .boxed
     @State private var copied = false
 
     var body: some View {
@@ -172,20 +150,34 @@ struct CopyToClipboardButton: View {
                 copied = false
             }
         } label: {
-            Group {
-                if copied {
-                    Text("✓").webText(arial: 12, bold: true)
-                } else {
-                    WebIcon(name: "copy-icon", size: 14.4, color: AppTheme.legacyText)
+            switch style {
+            case .boxed:
+                Group {
+                    if copied {
+                        Text("✓").webText(arial: 12, bold: true)
+                    } else {
+                        WebIcon(name: "copy-icon", size: 14.4, color: AppTheme.legacyText)
+                    }
                 }
+                .foregroundStyle(AppTheme.legacyText)
+                .frame(minHeight: 17.4)
+                .padding(.horizontal, 13.8)
+                .padding(.vertical, 7.4)
+                .background(AppTheme.legacyGray)
+                .clipShape(RoundedRectangle(cornerRadius: DSRadius.sm))
+                .overlay(RoundedRectangle(cornerRadius: DSRadius.sm).strokeBorder(AppTheme.legacyBorder, lineWidth: 1))
+            case .turn:
+                Group {
+                    if copied {
+                        Text("✓").webText(arial: 13.33, bold: true)
+                    } else {
+                        WebIcon(name: "copy-icon", size: 16, color: AppTheme.textMuted)
+                    }
+                }
+                .foregroundStyle(AppTheme.textMuted)
+                .frame(width: 32, height: 32)
+                .contentShape(RoundedRectangle(cornerRadius: 6))
             }
-            .foregroundStyle(AppTheme.legacyText)
-            .frame(minHeight: 17.4)
-            .padding(.horizontal, 13.8)
-            .padding(.vertical, 7.4)
-            .background(AppTheme.legacyGray)
-            .clipShape(RoundedRectangle(cornerRadius: DSRadius.sm))
-            .overlay(RoundedRectangle(cornerRadius: DSRadius.sm).strokeBorder(AppTheme.legacyBorder, lineWidth: 1))
         }
         .buttonStyle(WebPressStyle())
         .disabled(content.isEmpty)
@@ -315,8 +307,8 @@ struct UserBrandName: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            AvatarImage(picture: picture, size: 24)
-            WebTruncatedLine(name).webText(16, 500, lineHeight: 27.2).foregroundStyle(AppTheme.textPrimary)
+            AvatarImage(picture: picture, size: 26, placeholderColor: AppTheme.textMuted)
+            WebTruncatedLine(name).webText(15, 500, lineHeight: 23.25).foregroundStyle(AppTheme.textPrimary)
         }
     }
 }
@@ -382,6 +374,13 @@ final class BackdropBlurView: UIVisualEffectView {
     @objc private func restart() {
         guard window != nil else { return }
         stop()
+        #if DEBUG
+        // A paused animator never lets XCTest see the app go idle, so UI tests get the full blur.
+        if CommandLine.arguments.contains("--ui-testing") {
+            effect = UIBlurEffect(style: .regular)
+            return
+        }
+        #endif
         effect = nil
         let animator = UIViewPropertyAnimator(duration: 1, curve: .linear) { [weak self] in
             guard let self else { return }

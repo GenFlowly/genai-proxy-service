@@ -242,11 +242,9 @@ struct ResponseSwipeLabel: View {
             : UIColor(white: 1, alpha: 0.92)
     })
     private static let hairline = Color(uiColor: UIColor {
-        $0.userInterfaceStyle == .dark ? UIColor.white.withAlphaComponent(0.14) : UIColor.black.withAlphaComponent(0.1)
+        $0.userInterfaceStyle == .dark ? UIColor.white.withAlphaComponent(0.14) : UIColor.black.withAlphaComponent(0.08)
     })
-    private static let shadow = Color(uiColor: UIColor {
-        UIColor.black.withAlphaComponent($0.userInterfaceStyle == .dark ? 0.4 : 0.22)
-    })
+    private static let shadow = Color.black.opacity(0.4)
 
     var body: some View {
         if model.isLabelVisible {
@@ -267,11 +265,10 @@ struct ResponseSwipeLabel: View {
                     HStack(spacing: 6) {
                         ForEach(0..<total, id: \.self) { index in
                             Circle()
-                                .fill(AppTheme.textPrimary.opacity(index == position ? 1 : 0.3))
-                                .frame(width: 6, height: 6)
+                                .fill(index == position ? AppTheme.primary : AppTheme.textMuted.opacity(0.5))
+                                .frame(width: 7, height: 7)
                         }
                     }
-                    .padding(.top, 4)
                 } else {
                     Text(L("conversation.response.onlyResponse"))
                         .webText(11, lineHeight: 13)
@@ -292,7 +289,7 @@ struct ResponseSwipeLabel: View {
             .background(BackdropBlur(fraction: 0.16))
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Self.hairline, lineWidth: 1))
-            .shadow(color: Self.shadow, radius: 14, y: 8)
+            .shadow(color: Self.shadow, radius: 12, y: 8)
             .visualEffect { [pageHeight = model.pageHeight] view, proxy in
                 let frame = proxy.frame(in: .scrollView(axis: .vertical))
                 let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height ?? 0

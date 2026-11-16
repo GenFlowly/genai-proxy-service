@@ -246,6 +246,55 @@ enum MarkdownParser {
         var tightFirstHeading = true
         /// Detail cards: `.markdown ol, ul { padding-left: 1.5rem }`, so markers sit inside the text column.
         var listIndent: CGFloat = 0
+        /// A conversation turn (`.article.turn`): text at this size (16 a response, 17 a prompt),
+        /// line height 1.55, 12pt between blocks, lists indented 22pt a level with 4pt between
+        /// items, and no margin before the first block or after the last.
+        var turnTextSize: CGFloat?
+    }
+
+    /// The metrics a document is laid out with: the card's (the rules above) or a turn's.
+    struct Typography {
+        let paragraphSize: CGFloat
+        let listItemSize: CGFloat
+        /// `h1`–`h6` are 2, 1.5, 1.17, 1, 0.83 and 0.67em of it.
+        let headingBase: CGFloat
+        let lineHeight: CGFloat
+        let blockGap: CGFloat
+        let listItemGap: CGFloat
+        /// Below a list that isn't inside another one.
+        let listGap: CGFloat
+        let listIndent: CGFloat
+        /// A nested list adds its own indent (a turn's `padding-left` per list).
+        let nestsListIndent: Bool
+        let trimsEdges: Bool
+
+        init(_ options: Options) {
+            if let size = options.turnTextSize {
+                paragraphSize = size
+                listItemSize = size
+                headingBase = size
+                lineHeight = 1.55
+                blockGap = 12
+                listItemGap = 4
+                listGap = 12
+                listIndent = 22
+                nestsListIndent = true
+                trimsEdges = true
+            } else {
+                paragraphSize = 16.8
+                listItemSize = 16
+                headingBase = 16
+                lineHeight = 1.7
+                blockGap = 16
+                listItemGap = 0
+                listGap = 0
+                listIndent = options.listIndent
+                nestsListIndent = false
+                trimsEdges = false
+            }
+        }
+
+        static let card = Typography(Options())
     }
 
     private static let cache: NSCache<NSString, Box> = {
@@ -262,7 +311,7 @@ enum MarkdownParser {
     }
 
     static func segments(for markdown: String, options: Options = Options()) -> [MarkdownSegment] {
-        let key = "\(options.capitalizeFirstLetter ? 1 : 0)\(options.tightFirstHeading ? 1 : 0)\(options.listIndent)|\(markdown)" as NSString
+        let key = "\(options.capitalizeFirstLetter ? 1 : 0)\(options.tightFirstHeading ? 1 : 0)\(options.listIndent)|\(options.turnTextSize ?? 0)|\(markdown)" as NSString
         if let hit = cache.object(forKey: key) { return hit.segments }
         let result = build(markdown, options: options)
         cache.setObject(Box(result), forKey: key)
@@ -403,8 +452,9 @@ enum MarkdownParser {
             interpretedSyntax: .full,
             failurePolicy: .returnPartiallyParsedIfPossible
         )
+        let typography = Typography(options)
         guard let document = try? AttributedString(markdown: source, options: parseOptions) else {
-            return [.text(id: 0, paragraphFallback(raw), marginTop: 0, marginBottom: 16)]
+            return [.text(id: 0, paragraphFallback(raw, typography), marginTop: 0, marginBottom: typography.trimsEdges ? 0 : typography.blockGap)]
         }
 
         let leaves = collectLeaves(document)
@@ -489,8 +539,9 @@ enum MarkdownParser {
                 while j < leaves.count, case .tableCell(let row, let col, let id, _) = leaves[j].kind, id == tableId {
                     let style: InlineStyle = row == 0 ? .tableHeader : .tableCell
                     let cell = tableBlock(
-                        inlineString(leaves[j].runs, style: style, maths: maths),
+                        inlineString(leaves[j].runs, style: style, maths: maths, typography: typography),
                         style: style,
+                        typography: typography,
                         alignment: numericColumns.contains(col) ? .right : (col < alignments.count ? alignments[col] : .left),
                         fixedLineHeight: maths.isEmpty
                     )
@@ -510,19 +561,20 @@ enum MarkdownParser {
                         return tableBlock(
                             NSAttributedString(string: text, attributes: [.font: DSFont.ui(15.2, weight: 600), .foregroundColor: AppTheme.UI.textSecondary]),
                             style: .tableHeader,
+                            typography: typography,
                             alignment: column < alignments.count ? alignments[column] : .left,
                             fixedLineHeight: true
                         )
                     }
                 )
-                let marginTop = max(pendingMargin, quoteMargin)
+                let marginTop = typography.trimsEdges && !seenFirstBlock ? 0 : max(pendingMargin, quoteMargin)
                 pendingMargin = 24
                 seenFirstBlock = true
                 emit { .table(id: nextId, table, marginTop: marginTop, marginBottom: 0) }
                 continue
             case .code(let language):
                 let code = String(leaf.runs.characters).replacingOccurrences(of: "\\n$", with: "", options: .regularExpression)
-                let marginTop = max(pendingMargin, quoteMargin)
+                let marginTop = typography.trimsEdges && !seenFirstBlock ? 0 : max(pendingMargin, quoteMargin)
                 pendingMargin = 24
                 seenFirstBlock = true
                 emit { .code(id: nextId, language: language, code: code, marginTop: marginTop, marginBottom: 0) }
@@ -537,8 +589,8 @@ enum MarkdownParser {
             if case .paragraph = leaf.kind {
                 if plain.hasPrefix(mathOpen + "D"), plain.hasSuffix(mathClose),
                    let index = Int(plain.dropFirst(2).dropLast()), index < maths.count {
-                    let marginTop = max(pendingMargin, quoteMargin)
-                    pendingMargin = 16
+                    let marginTop = typography.trimsEdges && !seenFirstBlock ? 0 : max(pendingMargin, quoteMargin)
+                    pendingMargin = typography.blockGap
                     seenFirstBlock = true
                     emit { .math(id: nextId, latex: maths[index], marginTop: marginTop, marginBottom: 0) }
                     i += 1
@@ -546,8 +598,8 @@ enum MarkdownParser {
                 }
                 let runs = Array(leaf.runs.runs)
                 if runs.count == 1, let url = runs[0].imageURL {
-                    let marginTop = max(pendingMargin, quoteMargin)
-                    pendingMargin = 16
+                    let marginTop = typography.trimsEdges && !seenFirstBlock ? 0 : max(pendingMargin, quoteMargin)
+                    pendingMargin = typography.blockGap
                     seenFirstBlock = true
                     emit { .image(id: nextId, url: url, alt: plain, marginTop: marginTop, marginBottom: 0) }
                     i += 1
@@ -572,23 +624,31 @@ enum MarkdownParser {
                 style = .paragraph
             case .html:
                 style = .paragraph
-                marginBottom = 16
+                marginBottom = typography.blockGap
             default:
                 if inList && !loose {
                     style = .listItem
                 } else {
                     style = .paragraph
-                    marginBottom = 16
+                    marginBottom = typography.blockGap
                 }
             }
             let isQuote = quoteDepth > 0
             let finalStyle: InlineStyle = isQuote ? style.quoted : style
 
+            if inList {
+                if isFirstLeafOfItem(leaves, i) { marginTop = max(marginTop, typography.listItemGap) }
+                if isLastLeafOfItem(leaves, i) { marginBottom = max(marginBottom, typography.listItemGap) }
+                if endsOutermostList(leaves, i) { marginBottom = max(marginBottom, typography.listGap) }
+            }
             marginTop = max(marginTop, quoteMargin)
             marginBottom = max(marginBottom, quoteBottom)
-            let collapsedTop = max(pendingMargin, marginTop)
+            // A turn's first block: only a list item's own margin stays (it collapses through the list's).
+            let collapsedTop = typography.trimsEdges && !seenFirstBlock
+                ? (inList ? typography.listItemGap : 0)
+                : max(pendingMargin, marginTop)
 
-            var content = inlineString(leaf.runs, style: finalStyle, maths: maths)
+            var content = inlineString(leaf.runs, style: finalStyle, maths: maths, typography: typography)
             if options.capitalizeFirstLetter, !didCapitalize, case .paragraph = leaf.kind, content.length > 0 {
                 didCapitalize = true
                 let mutable = NSMutableAttributedString(attributedString: content)
@@ -601,10 +661,10 @@ enum MarkdownParser {
                 content = NSAttributedString(string: "\u{200B}", attributes: [.font: UIFont.systemFont(ofSize: 1), .mdRule: true])
             }
 
-            let metrics = finalStyle.metrics
+            let metrics = finalStyle.metrics(typography)
             let paragraph = NSMutableParagraphStyle()
             let quoteIndent = CGFloat(quoteDepth) * 16
-            let listIndent = inList ? options.listIndent : 0
+            let listIndent = inList ? typography.listIndent * (typography.nestsListIndent ? CGFloat(listDepth(leaf.containers)) : 1) : 0
             paragraph.firstLineHeadIndent = hangingInset + quoteIndent + listIndent
             paragraph.headIndent = hangingInset + quoteIndent + listIndent
             paragraph.tailIndent = -hangingInset
@@ -627,12 +687,12 @@ enum MarkdownParser {
                 mutable.addAttribute(.mdQuoteBars, value: quoteDepth, range: full)
             }
             if inList, isFirstLeafOfItem(leaves, i), mutable.length > 0 {
-                mutable.addAttribute(.mdMarker, value: marker(for: leaf.containers, metrics: metrics, style: finalStyle), range: NSRange(location: 0, length: 1))
+                mutable.addAttribute(.mdMarker, value: marker(for: leaf.containers, metrics: metrics, style: finalStyle, typography: typography), range: NSRange(location: 0, length: 1))
             }
 
             if current == nil {
                 current = NSMutableAttributedString()
-                if collapsedTop > 0, seenFirstBlock || marginTop > 0 {
+                if collapsedTop > 0, seenFirstBlock || marginTop > 0 || typography.trimsEdges {
                     currentTopMargin = collapsedTop
                 }
             } else if let existing = current {
@@ -652,11 +712,15 @@ enum MarkdownParser {
             seenFirstBlock = true
             i += 1
         }
-        flushText(marginBottom: pendingMargin)
+        // A turn's last block keeps only a list item's own margin (it collapses through the list's).
+        let endMargin = typography.trimsEdges
+            ? (leaves.last.map { leaf in leaf.containers.contains { if case .listItem = $0.kind { return true }; return false } } == true ? typography.listItemGap : 0)
+            : pendingMargin
+        flushText(marginBottom: endMargin)
         // A block view that ends the document keeps its own margin (web: margins stay
         // inside `.markdownBody`, a block formatting context).
         if !lastWasText, let last = segments.last {
-            segments[segments.count - 1] = withBottomMargin(last, pendingMargin)
+            segments[segments.count - 1] = withBottomMargin(last, endMargin)
         }
         return segments
     }
@@ -672,8 +736,8 @@ enum MarkdownParser {
     }
 
     /// A cell's text as the single block of its own text view.
-    private static func tableBlock(_ content: NSAttributedString, style: InlineStyle, alignment: MarkdownTable.Alignment, fixedLineHeight: Bool) -> NSAttributedString {
-        let metrics = style.metrics
+    private static func tableBlock(_ content: NSAttributedString, style: InlineStyle, typography: Typography, alignment: MarkdownTable.Alignment, fixedLineHeight: Bool) -> NSAttributedString {
+        let metrics = style.metrics(typography)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
         paragraph.minimumLineHeight = metrics.lineHeight
@@ -694,8 +758,8 @@ enum MarkdownParser {
         (style.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
     }
 
-    private static func paragraphFallback(_ text: String) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: DSFont.ui(16.8), .foregroundColor: AppTheme.UI.textPrimary])
+    private static func paragraphFallback(_ text: String, _ typography: Typography) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [.font: DSFont.ui(typography.paragraphSize), .foregroundColor: AppTheme.UI.textPrimary])
     }
 
     private static func collectLeaves(_ document: AttributedString) -> [Leaf] {
@@ -783,7 +847,31 @@ enum MarkdownParser {
         return !previous
     }
 
-    private static func marker(for containers: [PresentationIntent.IntentType], metrics: InlineStyle.Metrics, style: InlineStyle) -> MarkdownMarker {
+    private static func isLastLeafOfItem(_ leaves: [Leaf], _ index: Int) -> Bool {
+        guard let id = itemId(leaves[index]) else { return false }
+        guard index + 1 < leaves.count else { return true }
+        return !leaves[index + 1].containers.contains { $0.identity == id }
+    }
+
+    private static func isList(_ intent: PresentationIntent.IntentType) -> Bool {
+        switch intent.kind {
+        case .orderedList, .unorderedList: return true
+        default: return false
+        }
+    }
+
+    /// The last leaf of a list that isn't inside another one.
+    private static func endsOutermostList(_ leaves: [Leaf], _ index: Int) -> Bool {
+        guard let outermost = leaves[index].containers.last(where: isList) else { return false }
+        guard index + 1 < leaves.count else { return true }
+        return !leaves[index + 1].containers.contains { $0.identity == outermost.identity }
+    }
+
+    private static func listDepth(_ containers: [PresentationIntent.IntentType]) -> Int {
+        containers.filter(isList).count
+    }
+
+    private static func marker(for containers: [PresentationIntent.IntentType], metrics: InlineStyle.Metrics, style: InlineStyle, typography: Typography) -> MarkdownMarker {
         var depth = 0
         var kind: MarkdownMarker.Kind?
         var ordinal = 1
@@ -802,8 +890,8 @@ enum MarkdownParser {
         if case .disc = resolved {
             resolved = depth == 0 ? .disc : (depth == 1 ? .circle : .square)
         }
-        // `::marker` takes the li's font (16px) even when a loose item's <p> is 16.8.
-        return MarkdownMarker(kind: resolved, font: DSFont.ui(16), color: style.color, baselineFromTop: metrics.baselineFromTop)
+        // `::marker` takes the li's font (16px in a card) even when a loose item's <p> is 16.8.
+        return MarkdownMarker(kind: resolved, font: DSFont.ui(typography.listItemSize), color: style.color, baselineFromTop: metrics.baselineFromTop)
     }
 
     // MARK: - Inline
@@ -825,14 +913,14 @@ enum MarkdownParser {
 
         var base: InlineStyle { if case .quote(let inner) = self { return inner }; return self }
 
-        var size: CGFloat {
+        func size(_ typography: Typography) -> CGFloat {
             switch base {
-            case .paragraph: return 16.8
-            case .listItem: return 16
+            case .paragraph: return typography.paragraphSize
+            case .listItem: return typography.listItemSize
             case .heading(let level):
-                return [32, 24, 18.72, 16, 13.28, 10.72][max(0, min(5, level - 1))]
+                return typography.headingBase * [2, 1.5, 1.17, 1, 0.83, 0.67][max(0, min(5, level - 1))]
             case .tableHeader, .tableCell: return 15.2
-            case .quote: return 16.8
+            case .quote: return typography.paragraphSize
             }
         }
 
@@ -846,18 +934,19 @@ enum MarkdownParser {
 
         var color: UIColor { isQuoted ? AppTheme.UI.textSecondary : AppTheme.UI.textPrimary }
 
-        var metrics: Metrics {
+        func metrics(_ typography: Typography) -> Metrics {
+            let size = size(typography)
             let font = DSFont.ui(size, weight: weight, italic: isQuoted)
-            let box = WebLineBox(font: font, lineHeight: DSFont.scaledSize(size * 1.7))
+            let box = WebLineBox(font: font, lineHeight: DSFont.scaledSize(size * typography.lineHeight))
             // TextKit rests the descender on the bottom of a fixed line box.
             return Metrics(font: font, lineHeight: box.height, baselineOffset: box.height + font.descender - box.baseline, baselineFromTop: box.baseline)
         }
     }
 
-    static func inlineString(_ runs: AttributedString, style: InlineStyle, maths: [String] = []) -> NSAttributedString {
+    static func inlineString(_ runs: AttributedString, style: InlineStyle, maths: [String] = [], typography: Typography = .card) -> NSAttributedString {
         let out = NSMutableAttributedString()
         let base = style
-        let metrics = style.metrics
+        let metrics = style.metrics(typography)
         for run in runs.runs {
             var text = String(runs[run.range].characters)
             let intent = run.inlinePresentationIntent ?? []
@@ -865,7 +954,7 @@ enum MarkdownParser {
             if intent.contains(.softBreak) { text = " " }
 
             if text.contains(mathOpen) {
-                appendMath(text, to: out, style: base, maths: maths)
+                appendMath(text, to: out, style: base, maths: maths, typography: typography)
                 continue
             }
 
@@ -877,7 +966,7 @@ enum MarkdownParser {
             if intent.contains(.code) {
                 let codeFont = DSFont.uiMono(15.2)
                 attributes[.font] = codeFont
-                attributes[.mdInlineCode] = InlineCodeBox(baselineFromTop: metrics.baselineFromTop, font: codeFont, parentLineHeight: metrics.lineHeight)
+                attributes[.mdInlineCode] = InlineCodeBox(baselineFromTop: metrics.baselineFromTop, font: codeFont, parentLineHeight: metrics.lineHeight, lineHeight: typography.lineHeight)
                 // The kern on a word joiner is padding that wraps onto the next line with the code.
                 // A word joiner also forbids the break after a preceding space, except that a
                 // zero-width space always gets its break.
@@ -891,7 +980,7 @@ enum MarkdownParser {
                 continue
             }
 
-            attributes[.font] = DSFont.ui(base.size, weight: bold ? max(700, base.weight) : base.weight, italic: italic)
+            attributes[.font] = DSFont.ui(base.size(typography), weight: bold ? max(700, base.weight) : base.weight, italic: italic)
             if intent.contains(.strikethrough) {
                 attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
                 attributes[.strikethroughColor] = base.color
@@ -905,15 +994,15 @@ enum MarkdownParser {
         return out
     }
 
-    private static func appendMath(_ text: String, to out: NSMutableAttributedString, style: InlineStyle, maths: [String]) {
+    private static func appendMath(_ text: String, to out: NSMutableAttributedString, style: InlineStyle, maths: [String], typography: Typography) {
         let ns = text as NSString
         let regex = try! NSRegularExpression(pattern: "\(mathOpen)[DI](\\d+)\(mathClose)")
         var cursor = 0
-        let attributes: [NSAttributedString.Key: Any] = [.font: DSFont.ui(style.size, weight: style.weight, italic: style.isQuoted), .foregroundColor: style.color]
+        let attributes: [NSAttributedString.Key: Any] = [.font: DSFont.ui(style.size(typography), weight: style.weight, italic: style.isQuoted), .foregroundColor: style.color]
         for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             out.append(NSAttributedString(string: ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor)), attributes: attributes))
             if let index = Int(ns.substring(with: match.range(at: 1))), index < maths.count {
-                out.append(MathRenderer.inlineAttachment(latex: maths[index], fontSize: style.size))
+                out.append(MathRenderer.inlineAttachment(latex: maths[index], fontSize: style.size(typography)))
             }
             cursor = match.range.location + match.range.length
         }
@@ -932,10 +1021,10 @@ final class InlineCodeBox: NSObject {
     let growsLineAbove: CGFloat
     let growsLineBelow: CGFloat
 
-    init(baselineFromTop: CGFloat, font: UIFont, parentLineHeight: CGFloat) {
+    init(baselineFromTop: CGFloat, font: UIFont, parentLineHeight: CGFloat, lineHeight: CGFloat = 1.7) {
         self.baselineFromTop = baselineFromTop
         self.font = font
-        let own = WebLineBox(font: font, lineHeight: font.pointSize * 1.7)
+        let own = WebLineBox(font: font, lineHeight: font.pointSize * lineHeight)
         growsLineAbove = max(0, own.baseline - baselineFromTop)
         growsLineBelow = max(0, (own.height - own.baseline) - (parentLineHeight - baselineFromTop))
     }

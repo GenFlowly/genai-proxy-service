@@ -11,6 +11,7 @@ struct MarkdownView: View {
 
     var body: some View {
         let segments = MarkdownParser.segments(for: text, options: options)
+        let typography = MarkdownParser.Typography(options)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(segments) { segment in
                 switch segment {
@@ -20,7 +21,7 @@ struct MarkdownView: View {
                         .padding(.top, marginTop)
                         .padding(.bottom, marginBottom)
                 case .code(_, let language, let code, let top, let bottom):
-                    CodeBlockView(language: language, code: code)
+                    CodeBlockView(language: language, code: code, lineHeight: 15.2 * typography.lineHeight)
                         .padding(.top, top)
                         .padding(.bottom, bottom)
                 case .table(_, let table, let top, let bottom):
@@ -35,7 +36,9 @@ struct MarkdownView: View {
                     AsyncImage(url: url) { image in
                         image.resizable().scaledToFit()
                     } placeholder: {
-                        Text(alt).webText(16.8, lineHeight: 28.56).foregroundStyle(AppTheme.textPrimary)
+                        Text(alt)
+                            .webText(typography.paragraphSize, lineHeight: typography.paragraphSize * typography.lineHeight)
+                            .foregroundStyle(AppTheme.textPrimary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, top)
@@ -51,11 +54,13 @@ struct MarkdownView: View {
 // MARK: - Code block
 
 /// `pre`: bg secondary (dark) / tertiary (light), 1pt border, radius 6, padding 16/24,
-/// 14.4pt, scrolling horizontally; `code.hljs`: block, padding 1em (15.2), 15.2/25.84.
+/// 14.4pt, scrolling horizontally; `code.hljs`: block, padding 1em (15.2), 15.2 on the
+/// text's line height (25.84 in a card, 23.56 in a turn).
 /// Copy button: CopyToClipboard sm secondary pinned 8pt from the top-right corner.
 struct CodeBlockView: View {
     var language: String?
     var code: String
+    var lineHeight: CGFloat = 25.84
     @Environment(\.colorScheme) private var colorScheme
     @State private var highlighted: AttributedString?
 
@@ -84,10 +89,10 @@ struct CodeBlockView: View {
 
     @ViewBuilder private var codeText: some View {
         if let highlighted {
-            Text(highlighted).webText(mono: 15.2, lineHeight: 25.84)
+            Text(highlighted).webText(mono: 15.2, lineHeight: lineHeight)
         } else {
             Text(verbatim: code)
-                .webText(mono: 15.2, lineHeight: 25.84)
+                .webText(mono: 15.2, lineHeight: lineHeight)
                 .foregroundStyle(colorScheme == .dark ? Color(hex: "#C9D1D9") : Color(hex: "#24292E"))
         }
     }

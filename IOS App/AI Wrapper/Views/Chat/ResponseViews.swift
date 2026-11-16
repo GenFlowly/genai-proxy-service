@@ -66,23 +66,6 @@ struct ResponseGroupView: View {
         conversation.lastResponseBlockId == block.conversationBlockId
     }
 
-    /// Running per-vendor totals up to and including each response: the footer shows
-    /// conversation-so-far numbers; one turn's usage is the difference between responses.
-    private var cumulativeByMessage: [String: UsageTotals] {
-        var perVendor: [String: UsageTotals] = [:]
-        var byMessage: [String: UsageTotals] = [:]
-        for block in conversation.blocks {
-            for message in block.responseMessages {
-                guard message.inputTokens != nil || message.outputTokens != nil || message.totalTokens != nil || message.costUsd != nil else { continue }
-                var totals = perVendor[message.aiVendor.rawValue] ?? UsageTotals()
-                totals.add(message)
-                perVendor[message.aiVendor.rawValue] = totals
-                byMessage[message.messageId] = totals
-            }
-        }
-        return byMessage
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             if visibleMessages.isEmpty {
@@ -96,7 +79,6 @@ struct ResponseGroupView: View {
                 if availableVendors.count > 1 { vendorToggle }
                 let layout = isPaged ? AnyLayout(ResponsePagerLayout()) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))
                 layout {
-                    let totals = cumulativeByMessage
                     let vendors = availableVendors
                     ForEach(pagerMessages) { message in
                         let isNeighbor = message.aiVendor.rawValue == swipe.neighbor?.vendor
@@ -104,7 +86,7 @@ struct ResponseGroupView: View {
                             block: block,
                             message: message,
                             isLastResponseBlock: isLastResponseBlock,
-                            usage: totals[message.messageId] ?? (message.hasOwnUsage ? UsageTotals(message) : nil),
+                            hasUsage: message.hasOwnUsage,
                             onSelectionChange: onSelectionChange,
                             swipe: swipe,
                             isSwipeNeighbor: isNeighbor
@@ -124,7 +106,9 @@ struct ResponseGroupView: View {
                         .id(message.messageId)
                     }
                 }
-                .padding(8)
+                .padding(.top, 18)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
                 .background(swipe.isDragging ? Self.dragTint : .clear)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { swipe.pageHeight = $0 }
                 .onGeometryChange(for: Bool.self) { proxy in
@@ -149,7 +133,6 @@ struct ResponseGroupView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .background(AppTheme.responseContainerBackground)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .onAppear(perform: autoSelectNewVendors)
         .onChange(of: availableVendors) { _, _ in autoSelectNewVendors() }
@@ -287,15 +270,16 @@ struct ResponseCardView: View {
     let block: ConversationBlock
     let message: Message
     let isLastResponseBlock: Bool
-    let usage: UsageTotals?
+    /// The response went through the whole pipeline, so memory extraction ran for it.
+    let hasUsage: Bool
     let onSelectionChange: (AskSelection?) -> Void
     let swipe: ResponseSwipeModel
     let isSwipeNeighbor: Bool
 
     @State private var cardHeight: CGFloat = 0
 
-    /// Nothing follows, so the bar takes up the padding below it (12 card, 1 card edge, 8 group)
-    /// and its buttons end where the scrolled page does, the same place they stick to.
+    /// Nothing follows, so the bar takes up the group's 8pt below it and its buttons end where
+    /// the scrolled page does, the same place they stick to.
     private var endsConversation: Bool { conversation.blocks.last?.conversationBlockId == block.conversationBlockId }
 
     private var hasAnyValidApiKey: Bool { auth.aiVendorAPIKeyStatusList.contains { $0.isAPIKeyValid == true } }
@@ -314,7 +298,7 @@ struct ResponseCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(.bottom, 20)
+                .padding(.bottom, 6)
 
             ThinkingSection(
                 steps: message.thinkingSteps,
@@ -327,6 +311,7 @@ struct ResponseCardView: View {
             if !isThinkingPhase {
                 MarkdownView(
                     text: Self.linkifyCitations(message.text, sources: message.webSources),
+                    options: .init(turnTextSize: 16),
                     onSelectionChange: selectionHandler
                 )
             }
@@ -343,17 +328,14 @@ struct ResponseCardView: View {
             if !message.isLoading, let stopReason = message.stopReason {
                 StopReasonNote(reason: stopReason)
             }
-            if !message.isLoading, let usage {
-                tokenBadge(usage)
+            if !message.isLoading, hasUsage {
+                statsRow
             }
             if !isSwipeNeighbor, message.isLoading || isLastResponseBlock || canFork {
                 actionBar
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 1)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
     }
 
@@ -366,36 +348,29 @@ struct ResponseCardView: View {
         }
     }
 
-    /// Centered vendor name + model chip; the copy button pinned right.
+    /// The vendor with a model tag on the left; the copy icon on the right.
     private var header: some View {
-        ZStack(alignment: .trailing) {
-            HStack(spacing: 8) {
-                VendorBrandName(vendor: message.aiVendor)
-                    .webText(16, 500, lineHeight: 27.2)
-                    .foregroundStyle(AppTheme.textPrimary)
+        HStack(spacing: 8) {
+            VendorBrandName(vendor: message.aiVendor)
+                .webText(16, 500, lineHeight: 24.8)
+                .foregroundStyle(AppTheme.textPrimary)
+                .lineLimit(1)
+                .fixedSize()
+            if let model = message.model, !model.isEmpty {
+                Text(model)
+                    .webText(11, lineHeight: 20)
+                    .foregroundStyle(AppTheme.textMuted)
                     .lineLimit(1)
-                    .fixedSize()
-                if let model = message.model, !model.isEmpty {
-                    Text(model)
-                        .webText(11.2, 500, lineHeight: 11.2)
-                        .kerning(0.224)
-                        .foregroundStyle(AppTheme.textMuted)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .padding(.horizontal, 10.6)
-                        .padding(.vertical, 5)
-                        .background(AppTheme.backgroundTertiary)
-                        .clipShape(Capsule())
-                        .overlay(Capsule().strokeBorder(AppTheme.borderLight, lineWidth: 1))
-                }
+                    .truncationMode(.tail)
+                    .padding(.horizontal, 8)
+                    .frame(height: 20)
+                    .background(AppTheme.backgroundTertiary)
+                    .clipShape(Capsule())
             }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 50)
-
-            CopyToClipboardButton(content: message.text, accessibilityLabel: L("common.textContainer.copyResponse"))
+            Spacer(minLength: 0)
+            CopyToClipboardButton(content: message.text, accessibilityLabel: L("common.textContainer.copyResponse"), style: .turn)
         }
-        // The button is taller than the row and positioned out of flow: it doesn't push it.
-        .frame(height: 27.2)
+        .frame(height: 32)
     }
 
     private func errorBanner(_ error: String) -> some View {
@@ -411,63 +386,40 @@ struct ResponseCardView: View {
             .padding(.vertical, 8)
     }
 
-    /// `.tokenBadge`: input, output, cache, total, $cost, learned-facts brain.
-    private func tokenBadge(_ usage: UsageTotals) -> some View {
+    /// `.statsRow`: the learned-facts brain. Tokens and cost live in the AI Settings Tokens card.
+    private var statsRow: some View {
         HStack(spacing: 12) {
-            tokenItem("input-tokens", usage.inputTokens, L("conversation.response.totalInputTokens"))
-            tokenItem("output-tokens", usage.outputTokens, L("conversation.response.totalOutputTokens"))
-            tokenItem("cache-tokens", usage.tokensReadFromCache, L("conversation.response.tokensReadFromCache"))
-            tokenItem("total-tokens", usage.totalTokens, L("conversation.response.totalTokens"))
-            if let cost = usage.costUsd {
-                Text(Self.formatUsd(cost))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .accessibilityLabel(L("conversation.response.conversationCostUsd", ["vendor": message.aiVendor.rawValue]))
-                    .webTooltip(L("conversation.response.conversationCostUsd", ["vendor": message.aiVendor.rawValue]))
-            }
             LearnedFactsStat(
                 conversationId: conversation.conversationId,
                 message: message
             )
         }
-        .webText(11.2, lineHeight: 19.04)
+        .webText(12, lineHeight: 16.8)
         .monospacedDigit()
-        .kerning(0.112)
+        .kerning(0.12)
         .foregroundStyle(AppTheme.textMuted)
-        .opacity(0.8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 14)
     }
 
-    private func tokenItem(_ icon: String, _ value: Int, _ label: String) -> some View {
-        HStack(spacing: 4) {
-            WebIcon(name: icon, size: 12, color: AppTheme.textMuted)
-            Text(value.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_US"))))
-                .lineLimit(1)
-                .fixedSize()
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(label)
-        .webTooltip(label)
-    }
-
-    /// `.responseActionButtonsWrapper`: spans the card edge to edge, sticks to the bottom
-    /// of the viewport while the card is taller than the screen, with a light backdrop.
+    /// `.responseActionButtonsWrapper`: spans the screen edge to edge and sticks to the bottom
+    /// of the viewport while the response is taller than the screen, over the page's color.
     private var actionBar: some View {
         HStack(spacing: 8) {
             if message.isLoading {
-                RectangleButton(label: L("conversation.response.stop")) {
+                ActionPill(label: L("conversation.response.stop")) {
                     conversation.stopGenerating(blockId: block.conversationBlockId, vendor: message.aiVendor)
                 }
             } else {
                 if isLastResponseBlock {
-                    RectangleButton(label: L("conversation.response.regenerate"), icon: "refresh-icon", disabled: !hasAnyValidApiKey) {
+                    ActionPill(label: L("conversation.response.regenerate"), icon: "refresh-icon", disabled: !hasAnyValidApiKey) {
                         Task {
                             await conversation.generateResponsesStream(blockId: block.conversationBlockId, vendorToRegenerate: message.aiVendor)
                         }
                     }
                 }
                 if isLastResponseBlock, !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    RectangleButton(
+                    ActionPill(
                         label: isSelected ? L("conversation.response.selected") : L("conversation.response.followUp"),
                         icon: isSelected ? nil : "send-icon",
                         disabled: isSelected || !hasAnyValidApiKey
@@ -476,21 +428,21 @@ struct ResponseCardView: View {
                     }
                 }
                 if canFork {
-                    PillButton(label: L("conversation.response.fork"), icon: "git-fork", style: .secondary, minWidth: nil) {
+                    ActionPill(label: L("conversation.response.fork"), icon: "git-fork", iconLeads: true, style: .secondary) {
                         Task { await conversation.forkFromMessage(message.messageId) }
                     }
                     .accessibilityHint(L("conversation.response.forkHint"))
                 }
             }
         }
-        .opacity(0.85)
-        .padding(.vertical, 12)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
         .background(ActionBarBackground())
         .modifier(StickyBottom(containerHeight: cardHeight, barHeight: 62, bottomPadding: 12))
         .modifier(ResponseSwipeOffset(model: swipe, factor: -1))
-        .padding(.horizontal, -16)
-        .padding(.bottom, endsConversation ? -33 : -12)
+        .padding(.horizontal, -8)
+        .padding(.bottom, endsConversation ? -8 : 0)
         .zIndex(10)
     }
 
@@ -541,17 +493,60 @@ private struct StickyBottom: ViewModifier {
     }
 }
 
-/// `backdrop-filter: blur(4px)` over `color-mix(page 20%, transparent)`. Past the web's, it
-/// reaches both screen edges, and runs under the home indicator to the bottom of the screen.
+/// `backdrop-filter: blur(4px)` over `color-mix(page 85%, transparent)`. Past the web's, it runs
+/// under the home indicator to the bottom of the screen.
 private struct ActionBarBackground: View {
-    /// The group's side padding, on top of the card's that the bar already cancels.
-    private static let groupPadding: CGFloat = 8
+    var body: some View {
+        AppTheme.background.opacity(0.85)
+            .background(BackdropBlur(fraction: 0.1))
+            .padding(.bottom, -40)
+    }
+}
+
+/// `.responseActionButtonsWrapper button`: the boards' 34pt pills in Roboto 14/500, 14pt in from
+/// the 1pt border, the 14pt icon 8pt from the text (Fork's leads it).
+private struct ActionPill: View {
+    enum Style { case primary, secondary }
+
+    let label: String
+    var icon: String?
+    var iconLeads = false
+    var style: Style = .primary
+    var disabled = false
+    let action: () -> Void
 
     var body: some View {
-        AppTheme.background.opacity(0.2)
-            .background(BackdropBlur(fraction: 0.1))
-            .padding(.horizontal, -Self.groupPadding)
-            .padding(.bottom, -40)
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if iconLeads { iconView }
+                Text(label).webText(14, 500)
+                if !iconLeads { iconView }
+            }
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 15)
+            .frame(height: 34)
+            .background(background)
+            .clipShape(Capsule())
+            .overlay {
+                if style == .secondary {
+                    Capsule().strokeBorder(AppTheme.border, lineWidth: 1)
+                }
+            }
+        }
+        .buttonStyle(WebPressStyle())
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+    }
+
+    @ViewBuilder private var iconView: some View {
+        if let icon { WebIcon(name: icon, size: 14, color: foreground) }
+    }
+
+    private var foreground: Color { style == .primary ? .white : AppTheme.textPrimary }
+
+    private var background: Color {
+        guard style == .primary else { return .clear }
+        return disabled ? AppTheme.disabled : AppTheme.buttonPrimary
     }
 }
 

@@ -1492,6 +1492,15 @@ struct StartupTests {
         #expect(ComposerView.textAreaHeight(windowHeight: 700) == 224)
         #expect(ComposerView.textAreaHeight(windowHeight: 400) == 192)
     }
+
+    @Test func composerTextGrowsItUpToTheHeaderThenScrolls() {
+        // Its frame around the text is 88: 16 + 8 of padding and the 64 button strip
+        #expect(ComposerView.grownHeight(textHeight: 40, resting: 320, tallest: 700) == 320)
+        #expect(ComposerView.grownHeight(textHeight: 400, resting: 320, tallest: 700) == 488)
+        #expect(ComposerView.grownHeight(textHeight: 1600, resting: 320, tallest: 700) == 700)
+        // A resting height above the limit still wins, as min-height does over max-height
+        #expect(ComposerView.grownHeight(textHeight: 1600, resting: 320, tallest: 250) == 320)
+    }
 }
 
 @Suite("After a failed stream")

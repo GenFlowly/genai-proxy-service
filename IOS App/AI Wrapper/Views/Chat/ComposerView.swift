@@ -16,12 +16,14 @@ struct PendingAttachment: Identifiable {
 
 /// The web's docked prompt editor (Request.tsx below isNarrow): a small box glued to the
 /// bottom — `clamp(12rem, 32svh, 16rem)` of text plus a 64pt strip for the floating
-/// attach/generate buttons — holding a CodeMirror markdown editor.
+/// attach/generate buttons — holding a CodeMirror markdown editor. A follow-up editor nobody
+/// is using rests at two lines (`.idleFollowUp`).
 struct ComposerView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
     @EnvironmentObject var toasts: ToastCenter
     @Environment(\.windowHeight) private var windowHeight
+    @Environment(\.chatScreenHeight) private var chatScreenHeight
 
     let blockId: String
     /// Selection-asks always land in the trailing draft block.
@@ -38,6 +40,8 @@ struct ComposerView: View {
     @State private var showFilePicker = false
     @State private var showCamera = false
     @State private var saveTask: Task<Void, Never>?
+    /// The text's own height, which grows the editor.
+    @State private var textHeight: CGFloat = 0
 
     private var hasAnyValidApiKey: Bool { auth.aiVendorAPIKeyStatusList.contains { $0.isAPIKeyValid == true } }
 
@@ -46,7 +50,33 @@ struct ComposerView: View {
         min(max(192, windowHeight * 0.32), 256)
     }
 
-    private var totalHeight: CGFloat { Self.textAreaHeight(windowHeight: windowHeight) + 64 }
+    /// `.idleFollowUp`'s 3.75rem of text above the strip.
+    static let idleTextAreaHeight: CGFloat = 60
+
+    /// Every block after the first is a follow-up; the first is a new chat's editor.
+    private var isFollowUp: Bool { conversation.blocks.first?.conversationBlockId != blockId }
+
+    private var isIdle: Bool { isFollowUp && !isFocused && draft.isEmpty && pending.isEmpty }
+
+    private var totalHeight: CGFloat {
+        if isIdle { return Self.idleTextAreaHeight + Self.buttonStripHeight }
+        // `--editor-max-height`: from where it rests up to just under the header
+        let tallest = chatScreenHeight - mobileHeaderHeight - 8 - (pending.isEmpty ? 0 : Self.stripHeight)
+        return Self.grownHeight(
+            textHeight: textHeight,
+            resting: Self.textAreaHeight(windowHeight: windowHeight) + Self.buttonStripHeight,
+            tallest: tallest
+        )
+    }
+
+    /// `.cm-editor`'s min-height and max-height: its text grows the editor from its resting height
+    /// to the tallest it may be, and scrolls after that. A resting height above that limit still wins.
+    static func grownHeight(textHeight: CGFloat, resting: CGFloat, tallest: CGFloat) -> CGFloat {
+        max(resting, min(textHeight + textFrame, tallest))
+    }
+
+    /// Between the editor's edge and its text: the padding above and below the box, and the button strip.
+    private static let textFrame: CGFloat = 16 + 8 + buttonStripHeight
 
     /// The strip of floating buttons below the text, which a completion popup can hang into.
     private static let buttonStripHeight: CGFloat = 64
@@ -72,6 +102,16 @@ struct ComposerView: View {
         .background(AppTheme.background)
         .onAppear(perform: restoreDraft)
         .onChange(of: conversation.focusDraftRequest) { _, _ in takeDraftFocus() }
+        .onChange(of: isFocused) { _, focused in
+            if focused, isFollowUp { conversation.revealDraftRequest += 1 }
+        }
+        // Growing upward: the conversation stays at its end so the editor stays on the keyboard
+        .onChange(of: totalHeight) { _, _ in
+            if isFocused, isFollowUp { conversation.revealDraftRequest += 1 }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+            if isFocused, isFollowUp { conversation.revealDraftRequest += 1 }
+        }
         .onChange(of: conversation.pendingAsks) { _, asks in absorbAsks(asks) }
         .onChange(of: photoItems) { _, items in handlePhotos(items) }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, matching: .images)
@@ -91,9 +131,23 @@ struct ComposerView: View {
             focusRequest: focusRequest,
             focusEndRequest: focusEndRequest,
             editorInsets: UIEdgeInsets(top: 1, left: 1, bottom: 1 - Self.buttonStripHeight, right: 1),
+            showsActiveLine: false,
             onChange: handleChange,
-            onPasteImages: handlePastedImages
+            onPasteImages: handlePastedImages,
+            onContentHeightChange: { textHeight = $0 }
         )
+        .overlay(alignment: .topLeading) {
+            if draft.isEmpty {
+                // CodeMirror's placeholder: where the first line's text would start
+                Text(L(isFollowUp ? "conversation.request.placeholderFollowUp" : "conversation.request.placeholderNewChat"))
+                    .webText(mono: ComposerStyle.size, lineHeight: 33.6)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .padding(.leading, 6)
+                    .padding(.top, 4)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         .padding(.bottom, Self.buttonStripHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.composerEditorBackground)
@@ -105,7 +159,7 @@ struct ComposerView: View {
     }
 
     private var attachButton: some View {
-        WebIcon(name: "image-attachment-icon", size: 22, color: AppTheme.textPrimary)
+        WebIcon(name: "attachment", size: 22, color: AppTheme.textPrimary)
             .frame(width: 44, height: 44)
             .background(AppTheme.composerAttachButton)
             .clipShape(Circle())
@@ -389,8 +443,12 @@ struct ComposerTextView: UIViewRepresentable {
     var editorInsets = UIEdgeInsets.zero
     /// `.cm-editor`'s min-height, for a view that only spans its lines.
     var editorMinHeight: CGFloat = 0
+    /// The current line's tint; the chat composer draws none, as it read as an empty toolbar.
+    var showsActiveLine = true
     var onChange: (String) -> Void
     var onPasteImages: ([UIImage]) -> Void
+    /// The text's height, for a host that sizes the editor by it.
+    var onContentHeightChange: ((CGFloat) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -406,6 +464,7 @@ struct ComposerTextView: UIViewRepresentable {
         view.smartDashesType = .no
         view.typingAttributes = ComposerStyle.base
         view.onPasteImages = onPasteImages
+        view.onContentHeightChange = onContentHeightChange
         view.alwaysBounceVertical = false
         view.isScrollEnabled = !growsWithContent
         if growsWithContent { view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal) }
@@ -418,8 +477,10 @@ struct ComposerTextView: UIViewRepresentable {
         coordinator.parent = self
         view.isEditable = !readOnly
         view.onPasteImages = onPasteImages
+        view.onContentHeightChange = onContentHeightChange
         view.editorInsets = editorInsets
         view.editorMinHeight = editorMinHeight
+        view.showsActiveLine = showsActiveLine
         if view.text != text {
             view.text = text
             // A document loaded into an editor nobody is typing in has its caret at the start.
@@ -544,6 +605,7 @@ final class ComposerUITextView: UITextView {
     private static let selectionMatch = AppTheme.UI.dynamic(light: "#D8DEE4", dark: "#21262D")
 
     var onPasteImages: (([UIImage]) -> Void)?
+    var onContentHeightChange: ((CGFloat) -> Void)?
     let engineId = UUID().uuidString
     var isApplyingEngineEdit = false
     var pendingEdit: PendingEdit?
@@ -559,6 +621,9 @@ final class ComposerUITextView: UITextView {
     private var completionCaret: Int?
     var editorInsets = UIEdgeInsets.zero
     var editorMinHeight: CGFloat = 0
+    var showsActiveLine = true {
+        didSet { activeLine.isHidden = !showsActiveLine }
+    }
     private var bracketMarks: [ComposerLayoutManager.Mark] = []
 
     private var decorationLayout: ComposerLayoutManager? { layoutManager as? ComposerLayoutManager }
@@ -581,8 +646,22 @@ final class ComposerUITextView: UITextView {
         insertSubview(activeLine, at: 0)
     }
 
+    override var contentSize: CGSize {
+        didSet {
+            guard contentSize.height != oldValue.height, let report = onContentHeightChange else { return }
+            // Laid out mid-update; the host's state changes after it
+            let height = contentSize.height
+            DispatchQueue.main.async { report(height) }
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        // The line that outgrew the old height scrolled the text; once the host has grown the
+        // view to fit, its first line belongs back at the top
+        if isScrollEnabled, contentSize.height <= bounds.height, contentOffset.y != 0 {
+            contentOffset.y = 0
+        }
         updateActiveLine()
     }
 

@@ -15,6 +15,12 @@ struct MobileHeader<Subtitle: View>: View {
     let title: String
     var menuItems: [MobileHeaderMenuItem] = []
     var onSubtitleClick: (() -> Void)?
+    /// Makes the title tappable, with a chevron (e.g. to open the Outline).
+    var onTitleClick: (() -> Void)? = nil
+    /// The tappable title's accessibility label.
+    var titleActionLabel: String? = nil
+    /// What the title opens is showing: the chevron turns up.
+    var titleExpanded = false
     /// When set, the left circle goes back instead of opening the menu; this is its label.
     var backLabel: String? = nil
     let onMenuClick: () -> Void
@@ -64,9 +70,24 @@ struct MobileHeader<Subtitle: View>: View {
 
     private var centerPill: some View {
         VStack(spacing: 1.6) {
-            WebTruncatedLine(title)
-                .webText(15.2, 600)
-                .foregroundStyle(AppTheme.textPrimary)
+            if let onTitleClick {
+                Button(action: onTitleClick) {
+                    HStack(spacing: 4) {
+                        WebTruncatedLine(title)
+                            .webText(15.2, 600)
+                            .foregroundStyle(AppTheme.textPrimary)
+                        WebIcon(name: "alt-arrow-right", size: 12, color: AppTheme.textMuted)
+                            .rotationEffect(.degrees(titleExpanded ? 270 : 90))
+                    }
+                }
+                .buttonStyle(WebPressStyle())
+                .accessibilityLabel(titleActionLabel ?? title)
+                .accessibilityIdentifier("mobile-header-title")
+            } else {
+                WebTruncatedLine(title)
+                    .webText(15.2, 600)
+                    .foregroundStyle(AppTheme.textPrimary)
+            }
             if Subtitle.self != EmptyView.self {
                 Button { onSubtitleClick?() } label: {
                     HStack(spacing: 4.8) { subtitle }

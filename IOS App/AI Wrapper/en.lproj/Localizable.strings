@@ -207,6 +207,7 @@
 "common.textContainer.askSelection" = "Ask";
 "common.textContainer.copyCode" = "Copy Code";
 "common.textContainer.copyResponse" = "Copy Response";
+"common.textContainer.copyPrompt" = "Copy Prompt";
 "common.textContainer.loadingContentRenderer" = "Loading content renderer...";
 "common.themeToggle.darkTheme" = "Dark Theme";
 "common.themeToggle.lightTheme" = "Light Theme";
@@ -286,7 +287,7 @@
 "conversation.request.attachPhotoLibrary" = "Photo Library";
 "conversation.request.attachTakePhoto" = "Take Photo";
 "conversation.request.attachChooseFiles" = "Choose Files";
-"conversation.request.addAttachment" = "Add image or PDF attachment";
+"conversation.request.addAttachment" = "Add attachments";
 "conversation.request.attachmentPdfTooLarge" = "PDFs must be 10 MB or smaller";
 "conversation.request.attachmentPdfLimitReached" = "You can attach at most {{max}} PDFs per message";
 "conversation.response.deleteFact" = "Delete fact from memory: {{fact}}";
@@ -884,19 +885,9 @@
 "sidebar.aiVendorWidget.title" = "Models";
 "sidebar.aiVendorWidget.reasoning" = "Reasoning effort";
 "sidebar.aiVendorWidget.reasoningDefault" = "Default reasoning";
-"sidebar.conversationHistorySidebarWidget.history" = "History";
-"sidebar.conversationHistorySidebarWidget.toggleHistory" = "Toggle History";
-"sidebar.instructionSidebarWidget.instructions" = "Instructions";
-"sidebar.newChatWidget.newChat" = "New Chat";
-"sidebar.threadPromptItem.newPrompt" = "New prompt";
-"sidebar.threadResponseItem.responses_one" = "Response";
-"sidebar.threadResponseItem.responses_other" = "Responses";
-"sidebar.threadResponseItem.responses_zero" = "No Responses";
-"sidebar.threadWidget.noConversationYet" = "No conversation yet";
-"sidebar.threadWidget.title" = "Thread";
 "sidebar.tokenCounter.estimated" = "Estimated: {{tokenCount}}";
 "sidebar.tokenCounter.promptTokens" = "Prompt Tokens";
-"sidebar.agentPickerWidget.title" = "Agents";
+"sidebar.agentPickerWidget.title" = "Agent";
 "sidebar.agentPickerWidget.failedToLoad" = "Could not load agents";
 "sidebar.agentPickerWidget.noAgents" = "No agents available";
 "sidebar.agentPickerWidget.systemBadge" = "System";
@@ -1344,3 +1335,19 @@
 "common.shareModal.blockFailed" = "Couldn't block {{name}}. Please try again.";
 "common.shareModal.rulesNote" = "By sharing you agree to the <rules>content rules</rules>.";
 "moderation.postRefusedByFilter" = "This can't be posted because it contains language that breaks our content rules.";
+
+/* Chat page V3 (UI Update) */
+"conversation.conversationHistory.chats" = "Chats";
+"conversation.request.placeholderNewChat" = "Ask anything";
+"conversation.request.placeholderFollowUp" = "Follow up…";
+"conversation.outline.title" = "Outline";
+"conversation.outline.turns_one" = "{{count}} turn";
+"conversation.outline.turns_other" = "{{count}} turns";
+"conversation.outline.close" = "Close";
+"conversation.outline.responses_one" = "{{count}} response";
+"conversation.outline.responses_other" = "{{count}} responses";
+"conversation.outline.openFor" = "Outline: {{title}}";
+"sidebar.tokenCounter.title" = "Tokens";
+"sidebar.tokenCounter.promptEstimated" = "Prompt, estimated";
+"sidebar.tokenCounter.thisConversation" = "This conversation";
+"sidebar.tokenCounter.noUsageYet" = "No replies yet";

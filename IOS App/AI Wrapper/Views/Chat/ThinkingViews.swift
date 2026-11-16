@@ -40,13 +40,12 @@ struct ThinkingSection: View {
         if !displaySteps.isEmpty || isThinking {
             VStack(alignment: .leading, spacing: 4) {
                 Button { isExpanded.toggle() } label: {
-                    HStack(spacing: 6.4) {
+                    HStack(spacing: 6) {
                         if isThinking { PulseDot() }
-                        Text(label).webText(arial: 12.8)
-                        Text(isExpanded ? "▼" : "▶\u{FE0E}").webText(arial: 10.4)
+                        Text(label).webText(14, lineHeight: 19.6)
+                        Text(isExpanded ? "▼" : "▶\u{FE0E}").webText(9)
                     }
                     .foregroundStyle(AppTheme.textMuted)
-                    .opacity(0.75)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isExpanded ? .isSelected : [])
@@ -56,7 +55,7 @@ struct ThinkingSection: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 16)
+            .padding(.bottom, 14)
             .onChange(of: isThinking) { _, thinking in
                 if !thinking { isExpanded = false }
             }

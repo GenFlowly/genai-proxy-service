@@ -27,6 +27,9 @@ final class ConversationStore: ObservableObject {
     /// Last request a composer acted on. Following up creates the composer that must take focus,
     /// and a view created after the change never sees it through `onChange`.
     var handledFocusDraftRequest = 0
+    /// Bumped when the follow-up editor takes focus and again once the keyboard is up: it grows,
+    /// so the page scrolls to its end to keep it above the keyboard.
+    @Published var revealDraftRequest = 0
 
     private var streamTasks: [String: Task<Void, Error>] = [:]
     /// Client-minted generation ids per stream key, so Stop can cancel server-side work
@@ -113,6 +116,13 @@ final class ConversationStore: ObservableObject {
     var trailingDraft: ConversationBlock? {
         guard let last = blocks.last, last.status == .draft, last.responseMessages.isEmpty, !last.isLoading else { return nil }
         return last
+    }
+
+    /// An empty editor follows a finished last turn, so a follow-up is always one tap away
+    /// (ConversationWidget). A viewer who can only read gets none.
+    func ensureTrailingDraft() {
+        guard conversationRole != .view, let last = blocks.last, last.status == .resolved, !last.isLoading else { return }
+        addNewBlock()
     }
 
     // MARK: - Follow up (ConversationBlock.handleFollowUp + Response.handleFollowUp)

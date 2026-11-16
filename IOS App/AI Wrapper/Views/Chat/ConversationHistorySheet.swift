@@ -294,7 +294,7 @@ struct ConversationHistoryPanel: View {
                     }
                 } header: {
                     SectionHeader(
-                        title: L("conversation.conversationHistory.history"),
+                        title: L("conversation.conversationHistory.chats"),
                         isExpanded: history.isSectionExpanded("history"),
                         canExpand: true,
                         action: { EmptyView() },

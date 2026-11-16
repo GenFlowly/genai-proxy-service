@@ -392,9 +392,9 @@ extension Text {
 
     /// Every plain string wraps the way Chrome wraps it. The breaks are characters in the string,
     /// so anything that can be selected and copied uses `verbatim:`, as does each piece of a
-    /// concatenation but the last.
+    /// concatenation but the last. VoiceOver and UI tests get the string without them.
     init(_ content: String) {
-        self.init(verbatim: content.webBreakable)
+        self = Text(verbatim: content.webBreakable).accessibilityLabel(Text(verbatim: content))
     }
 }
 
