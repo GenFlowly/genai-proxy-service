@@ -26,13 +26,18 @@ OUTPUT_DIR = File.join(ROOT, "build")
 KEYCHAIN = "fastlane_tmp_keychain"
 
 platform :ios do
-  desc "Unit tests on a simulator. stage: the BuildSettings/Environments file the app reads (default development)."
+  desc "Unit tests on a simulator. stage: the BuildSettings/Environments file the app reads (default development). device: simulator name (default iPhone 18 Pro)."
   lane :unit_tests do |options|
     write_ci_xcconfig(options[:stage] || "development")
+    # Named with no OS version, so scan takes the device's newest runtime. Unnamed, scan takes the
+    # first simulator simctl lists, which sits on the runner image's oldest runtime, and that one
+    # no longer boots there.
     run_tests(
       project: PROJECT,
       scheme: SCHEME,
       configuration: "Debug",
+      device: options[:device] || "iPhone 18 Pro",
+      ensure_devices_found: true,
       only_testing: [UNIT_TEST_TARGET],
       xcconfig: CI_XCCONFIG,
       cloned_source_packages_path: PACKAGES_DIR,
