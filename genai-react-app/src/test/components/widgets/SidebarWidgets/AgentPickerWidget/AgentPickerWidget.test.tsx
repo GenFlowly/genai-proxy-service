@@ -15,20 +15,13 @@ jest.mock('../../../../../context/ToastContext');
 jest.mock('../../../../../services/agentsService');
 jest.mock('../../../../../services/saveAIConfigService');
 
-jest.mock('../../../../../components/common/SidebarWidgetContainer/SidebarWidgetContainer', () =>
-    ({ children, header, headerCollapsed, collapsedContent, 'data-testid': testId }: any) => (
-        <div data-testid={testId}>
-            <div data-testid="widget-header">{header}</div>
-            <div data-testid="widget-header-collapsed">{headerCollapsed}</div>
-            <div data-testid="widget-content">{children}</div>
-            <div data-testid="widget-collapsed">{collapsedContent}</div>
-        </div>
-    )
-);
-
 jest.mock('@genflowly/component-library', () => ({
-    Icon: ({ src }: any) => <span data-testid="icon" />,
-    Tooltip: ({ children }: any) => <>{children}</>,
+    SidebarCard: ({ title, children, 'data-testid': testId }: any) => (
+        <section data-testid={testId}>
+            <h2>{title}</h2>
+            {children}
+        </section>
+    ),
 }));
 
 const agent = (overrides: Record<string, any> = {}) => ({
@@ -237,22 +230,44 @@ describe('AgentPickerWidget', () => {
         await waitFor(() => expect(mockSetSelectedAgentId).toHaveBeenCalledWith(null));
     });
 
-    it('collapsed view shows only the agent icon, no per-agent circles', async () => {
+    it('renders as the Agent card', async () => {
         mockGetCustomerAgents.mockResolvedValue({
-            agents: [
-                agent({ graphId: 'GRP-SYS', name: 'Default Smart Agent', isSystem: true, isDefault: true }),
-                agent({ graphId: 'GRP-OWN', name: 'My Agent' }),
-            ],
+            agents: [agent({ graphId: 'GRP-SYS', name: 'Default Smart Agent', isSystem: true, isDefault: true })],
         });
 
         render(withQueryClient(<AgentPickerWidget />));
 
         await screen.findByTestId('agent-picker-select');
-        expect(screen.getByTestId('agent-collapsed-icon')).toBeInTheDocument();
-        // One circle with the current default agent's initials — no per-agent circles
-        expect(screen.getByTestId('agent-collapsed-initials')).toHaveTextContent(/^DS$/);
-        expect(screen.queryByTestId('agent-collapsed-GRP-SYS')).not.toBeInTheDocument();
-        expect(screen.queryByTestId('agent-collapsed-GRP-OWN')).not.toBeInTheDocument();
+        expect(screen.getByTestId('agent-picker-widget')).toContainElement(screen.getByRole('heading', { name: 'Agent' }));
+    });
+
+    it('says when there are no agents', async () => {
+        mockGetCustomerAgents.mockResolvedValue({ agents: [] });
+
+        render(withQueryClient(<AgentPickerWidget />));
+
+        expect(await screen.findByText('No agents available')).toBeInTheDocument();
+        expect(screen.queryByTestId('agent-picker-select')).not.toBeInTheDocument();
+    });
+
+    it('asks a signed-out user to log in instead of saying there are no agents', async () => {
+        mockUseSidebarWidget.mockReturnValue({
+            ai: { selectedAgentId: null, setSelectedAgentId: mockSetSelectedAgentId },
+            auth: { getAccessTokenSilently: mockGetAccessTokenSilently, customerId: null, isAuthenticated: false, isSignedOut: true },
+        });
+        mockUseAuth.mockReturnValue({
+            isAuthenticated: false,
+            isOnboarding: false,
+            customerId: null,
+            cacheVersions: null,
+            getAccessTokenSilently: mockGetAccessTokenSilently,
+        });
+
+        render(withQueryClient(<AgentPickerWidget />));
+
+        expect(await screen.findByText('Please log in first.')).toBeInTheDocument();
+        expect(screen.queryByText('No agents available')).not.toBeInTheDocument();
+        expect(mockGetCustomerAgents).not.toHaveBeenCalled();
     });
 
     it('shows an error message when loading fails with no cached copy', async () => {

@@ -391,6 +391,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
         // The /onboard sync runs in the background — consumers that care use
         // isOnboarding — so a slow backend never blocks first paint.
         isLoading: auth0Loading,
+        isSignedOut: !auth0Loading && !isAuthenticated,
         isOnboarding: isAuthenticated && isInternalLoading,
         isInstructionsLoaded,
         onboardingCompleted,

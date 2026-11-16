@@ -35,6 +35,8 @@ import historyIcon from '../assets/icons/history.svg'
 import sunIcon from '../assets/icons/sun.svg'
 import brainIcon from '../assets/icons/brain.svg'
 import imageAttachmentIcon from '../assets/icons/image-attachment-icon.svg'
+import attachmentIcon from '../assets/icons/attachment.svg'
+import searchIcon from '../assets/icons/search.svg'
 import stepsIcon from '../assets/icons/steps.svg'
 import linkIcon from '../assets/icons/link.svg'
 import gitForkIcon from '../assets/icons/git-fork.svg'
@@ -79,6 +81,8 @@ export const ICONS = {
     HISTORY: historyIcon,
     BRAIN: brainIcon,
     IMAGE_ATTACHMENT: imageAttachmentIcon,
+    ATTACHMENT: attachmentIcon,
+    SEARCH: searchIcon,
     STEPS: stepsIcon,
     LINK: linkIcon,
     GIT_FORK: gitForkIcon,

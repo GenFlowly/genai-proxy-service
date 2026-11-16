@@ -5,7 +5,7 @@ import styles from './AppFooter.module.scss'
 
 /** Pages size themselves to the window minus this. */
 export const FOOTER_HEIGHT_VARIABLE = '--app-footer-height'
-const FOOTER_HEIGHT = '32px'
+const FOOTER_HEIGHT = '24px'
 
 /**
  * The desktop footer under every page. It sets the height pages leave free
@@ -24,7 +24,6 @@ export default function AppFooter(): React.ReactElement {
 
     return (
         <footer className={styles.footer} data-testid="app-footer">
-            <span>{t('layout.footer.copyright', { year: new Date().getFullYear() })}</span>
             <Link to="/privacy-policy" className={styles.link} data-testid="app-footer-privacy-policy">
                 {t('layout.footer.privacyPolicy')}
             </Link>
@@ -34,6 +33,7 @@ export default function AppFooter(): React.ReactElement {
             <Link to="/support" className={styles.link} data-testid="app-footer-support">
                 {t('layout.footer.support')}
             </Link>
+            <span>{t('layout.footer.copyright', { year: new Date().getFullYear() })}</span>
         </footer>
     )
 }

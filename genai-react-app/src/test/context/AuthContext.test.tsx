@@ -92,7 +92,7 @@ describe('AuthContext Integration with Navbar', () => {
         expect(screen.queryByTestId('login-button')).not.toBeInTheDocument();
 
         // 2. Verify User Name in Title
-        expect(avatarBtn).toHaveAttribute('title', MOCK_USER.name);
+        expect(avatarBtn).toHaveAttribute('aria-label', MOCK_USER.name);
 
         // 4. Verify Token Fetch (AuthContext internal behavior)
         // This confirms AuthContext did its initialization
@@ -199,8 +199,8 @@ describe('AuthContext Integration with Navbar', () => {
 
         // 3. Verify Display Name is from Backend ("Bob"), NOT Auth0 ("Alice")
         const avatarBtn = await screen.findByTestId('user-avatar-button');
-        expect(avatarBtn).toHaveAttribute('title', 'Bob');
-        expect(avatarBtn).not.toHaveAttribute('title', 'Alice');
+        expect(avatarBtn).toHaveAttribute('aria-label', 'Bob');
+        expect(avatarBtn).not.toHaveAttribute('aria-label', 'Alice');
 
         // Verify Avatar image source (UserAvatarButton uses displayPicture)
         // UserAvatarButton renders an img if displayPicture is present.
@@ -305,6 +305,46 @@ test('entitlements.canShare is true once authenticated and onboarded', async () 
     await waitFor(() => {
         expect(screen.getByTestId('can-share')).toHaveTextContent('true');
     });
+});
+
+test('isSignedOut is true only once Auth0 has loaded without a session', async () => {
+    const auth0 = (isLoading: boolean, isAuthenticated: boolean) => ({
+        isLoading,
+        isAuthenticated,
+        user: isAuthenticated ? MOCK_USER : null,
+        getAccessTokenSilently: jest.fn().mockResolvedValue('token'),
+        logout: jest.fn(),
+    });
+    (onboardCustomer as jest.Mock).mockResolvedValue(mockOnboardResponse);
+
+    const TestSignedOut = () => {
+        const { isSignedOut } = useAuth();
+        return <div data-testid="signed-out">{String(isSignedOut)}</div>;
+    };
+    // A new element each time: rerendering the same one lets React skip the provider
+    const tree = () => (
+        <MemoryRouter>
+            <LayoutProvider>
+                <AuthProvider>
+                    <TestSignedOut />
+                </AuthProvider>
+            </LayoutProvider>
+        </MemoryRouter>
+    );
+
+    // A session may still be restoring while the SDK loads
+    mockUseAuth0.mockReturnValue(auth0(true, false));
+    const { rerender } = render(tree());
+    expect(screen.getByTestId('signed-out')).toHaveTextContent('false');
+
+    mockUseAuth0.mockReturnValue(auth0(false, false));
+    rerender(tree());
+    expect(screen.getByTestId('signed-out')).toHaveTextContent('true');
+
+    mockUseAuth0.mockReturnValue(auth0(false, true));
+    rerender(tree());
+    expect(screen.getByTestId('signed-out')).toHaveTextContent('false');
+    await act(async () => { });
 });
 
 test('refreshInstructions calls service and updates state', async () => {

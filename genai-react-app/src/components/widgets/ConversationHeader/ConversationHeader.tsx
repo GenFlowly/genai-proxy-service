@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth0 } from '@auth0/auth0-react'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
 import InstructionPickerModal from '../../common/InstructionPickerModal/InstructionPickerModal'
-import { PillButton } from '@genflowly/component-library'
-import { PageHeader, pageHeaderStyles } from '@genflowly/component-library'
+import { ConversationSubBar, IconButton, OutlineSheet } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
 import { useAI } from '../../../context/AIContext'
 import { useConversation } from '../../../context/ConversationContext'
@@ -24,24 +23,22 @@ import { SearchUserResponse } from '../../../models/user.models'
 import { ICONS } from '../../../constants/icons'
 import { MoreMenu } from '../../DetailPage/DetailParts'
 import { useSharedItemModeration } from '../../../hooks/useSharedItemModeration'
+import { useLoadedInstruction } from '../../../hooks/useLoadedInstruction'
+import { useConversationOutline } from '../../../hooks/useConversationOutline'
 import { ModerationError } from '../../../services/moderationService'
 
 export default function ConversationHeader(): React.ReactElement | null {
     const { t } = useTranslation()
     const { conversationId, conversationTitle, conversationRole, resetConversation } = useConversation()
     const { getAccessTokenSilently } = useAuth0()
-    const { entitlements, customerInstructions } = useAuth()
-    const { selectedInstructionId, setSelectedInstructionId, setSystemPrompt } = useAI()
+    const { entitlements } = useAuth()
+    const { setSelectedInstructionId, setSystemPrompt } = useAI()
     const { toggleRightSidebar, setLeftSidebarExpanded } = useLayout()
     const { isNarrow } = useResponsiveBreakpoints()
     const [isPickerOpen, setPickerOpen] = useState(false)
-
-    // Latest version of the instruction loaded into this conversation
-    const loadedInstruction = useMemo(() => {
-        if (!selectedInstructionId) return null
-        const matching = (customerInstructions ?? []).filter(i => i.id === selectedInstructionId)
-        return matching.sort((a, b) => b.version - a.version)[0] ?? null
-    }, [selectedInstructionId, customerInstructions])
+    const [isOutlineOpen, setOutlineOpen] = useState(false)
+    const loadedInstruction = useLoadedInstruction()
+    const outline = useConversationOutline()
     const { showToast } = useToast()
     const [isShareModalOpen, setShareModalOpen] = useState(false)
 
@@ -138,7 +135,7 @@ export default function ConversationHeader(): React.ReactElement | null {
                 'data-testid': 'conversation-share-button',
             }] : []),
             {
-                label: t('conversation.conversationHeader.aiConfig'),
+                label: t('layout.mobileFullPageModal.aiSettings'),
                 onClick: toggleRightSidebar,
                 'data-testid': 'mobile-ai-config-button',
             },
@@ -152,6 +149,9 @@ export default function ConversationHeader(): React.ReactElement | null {
         return (
             <MobileHeader
                 title={displayTitle}
+                onTitleClick={outline.items.length > 0 ? () => setOutlineOpen(true) : undefined}
+                titleActionLabel={t('conversation.outline.openFor', { title: displayTitle })}
+                titleExpanded={isOutlineOpen}
                 subtitle={loadedInstruction ? (
                     <>
                         {loadedInstruction.icon && (
@@ -184,67 +184,46 @@ export default function ConversationHeader(): React.ReactElement | null {
             >
                 {sharedByLabel && <div className={styles.sharedByFloating} data-testid="shared-by">{sharedByLabel}</div>}
                 {modals}
+                <OutlineSheet
+                    isOpen={isOutlineOpen}
+                    items={outline.items}
+                    currentId={outline.currentId}
+                    onSelect={outline.scrollToTurn}
+                    onClose={() => setOutlineOpen(false)}
+                    data-testid="outline-sheet"
+                />
             </MobileHeader>
         )
     }
 
+    // 🖥️ The bar above the conversation; the instruction picker lives on the
+    // editor's chip, and New Chat in the sidebar
     return (
-        <PageHeader
-            title={displayTitle}
-            center={
-                loadedInstruction ? (
-                    <button
-                        className={styles.instructionBadge}
-                        title={loadedInstruction.name}
-                        onClick={() => setPickerOpen(true)}
-                        data-testid="loaded-instruction"
-                    >
-                        {loadedInstruction.icon && (
-                            <span aria-hidden="true">{loadedInstruction.icon}</span>
+        <>
+            <ConversationSubBar
+                title={displayTitle}
+                items={outline.items}
+                currentId={outline.currentId}
+                onSelectItem={outline.scrollToTurn}
+                actions={(showShare || sharedByLabel || moderation.actions.length > 0) ? (
+                    <>
+                        {showShare && (
+                            <IconButton
+                                icon={ICONS.SHARE}
+                                label={t('conversation.conversationHeader.share')}
+                                onClick={() => setShareModalOpen(true)}
+                                data-testid="conversation-share-button"
+                            />
                         )}
-                        <span className={styles.instructionName}>
-                            {loadedInstruction.name}
-                        </span>
-                    </button>
-                ) : (
-                    <button
-                        className={`${styles.instructionBadge} ${styles.instructionBadgePlaceholder}`}
-                        title={t('conversation.conversationHeader.chooseInstruction')}
-                        onClick={() => setPickerOpen(true)}
-                        data-testid="choose-instruction"
-                    >
-                        <span className={styles.instructionName}>
-                            {t('conversation.conversationHeader.chooseInstruction')}
-                        </span>
-                    </button>
-                )
-            }
-            actions={(
-                <>
-                    <PillButton
-                        label={t('conversation.conversationHeader.newChat')}
-                        icon={ICONS.PLUS}
-                        className={pageHeaderStyles.actionButton}
-                        onClick={resetConversation}
-                        data-testid="new-chat-button"
-                    />
-                    {showShare && (
-                        <PillButton
-                            label={t('conversation.conversationHeader.share')}
-                            icon={ICONS.SHARE}
-                            className={pageHeaderStyles.actionButton}
-                            onClick={() => setShareModalOpen(true)}
-                            data-testid="conversation-share-button"
-                        />
-                    )}
-                    {sharedByLabel && <span className={styles.sharedBy} data-testid="shared-by">{sharedByLabel}</span>}
-                    {moderation.actions.length > 0 && (
-                        <MoreMenu label={t('moderation.more')} items={moderation.actions} />
-                    )}
-                </>
-            )}
-        >
+                        {sharedByLabel && <span className={styles.sharedBy} data-testid="shared-by">{sharedByLabel}</span>}
+                        {moderation.actions.length > 0 && (
+                            <MoreMenu label={t('moderation.more')} items={moderation.actions} />
+                        )}
+                    </>
+                ) : undefined}
+                data-testid="conversation-sub-bar"
+            />
             {modals}
-        </PageHeader>
+        </>
     )
 }

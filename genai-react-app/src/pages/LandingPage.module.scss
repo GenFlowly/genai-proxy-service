@@ -4,7 +4,7 @@
 .page {
   height: calc(100vh - var(--app-footer-height, 0px)); // Fixed height instead of min-height
   overflow: hidden; // Prevent page-level scroll
-  background-color: $background-gray;
+  background-color: $color-background;
   display: flex;
   flex-direction: column;
 
@@ -20,19 +20,18 @@
   }
 }
 
+// 🖥️ Sidebar, main panel and dock on the page canvas
 .layout {
   display: flex;
   flex: 1 1 0;      // Fill remaining height below the navbar
   min-height: 0;    // Allow flex child to shrink + scroll correctly
   width: 100%;
   overflow: hidden;
-  position: relative; // Context for absolute sidebars
-
-  // Page canvas behind the widget panels (matches PageHeader); shows through
-  // the panels' rounded corners and the 1px gaps between them
-  background-color: $color-page-background;
-  gap: $widget-gap;
-  padding: $widget-gap;
+  position: relative;
+  gap: 8px;
+  // The same canvas gap above the footer as between the panels
+  padding: 8px;
+  background-color: $color-background;
 
   @include respond-to-tablet {
     // Widgets are full-screen overlays/pages below isNarrow — no floating panels
@@ -40,4 +39,16 @@
     gap: 0;
     padding: 0;
   }
+}
+
+// The sub-bar over the conversation, one rounded panel
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid $color-border-light;
+  border-radius: $widget-radius;
+  background-color: $color-background;
 }

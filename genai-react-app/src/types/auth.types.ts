@@ -26,6 +26,9 @@ export interface AuthContextType {
     isSessionAuthenticated: boolean;
     entitlements: Entitlements;
     isLoading: boolean;
+    // No Auth0 session once the SDK has loaded: nothing account-specific can
+    // load, so UI asks the user to log in instead of reporting it empty.
+    isSignedOut: boolean;
     // True while the background /onboard sync is in flight for an
     // authenticated user; strict isAuthenticated stays false until it succeeds
     isOnboarding: boolean;

@@ -23,7 +23,7 @@ describe('AppFooter', () => {
 
     test('pages leave room for it while it is shown, and get the room back when it goes', () => {
         const { unmount } = renderFooter()
-        expect(document.documentElement.style.getPropertyValue(FOOTER_HEIGHT_VARIABLE)).toBe('32px')
+        expect(document.documentElement.style.getPropertyValue(FOOTER_HEIGHT_VARIABLE)).toBe('24px')
 
         unmount()
         expect(document.documentElement.style.getPropertyValue(FOOTER_HEIGHT_VARIABLE)).toBe('')

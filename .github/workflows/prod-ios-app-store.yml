@@ -6,7 +6,7 @@ name: Production iOS TestFlight
 # testers and selects it on the App Store version draft. Nothing is submitted for review:
 # that is done by hand in App Store Connect after testing the TestFlight build. Each run takes
 # the next patch version above what App Store Connect has seen. The recipe and the credential
-# names are in AI Wrapper/fastlane/Fastfile.
+# names are in IOS App/fastlane/Fastfile.
 on:
   workflow_dispatch:
 
@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 90
     defaults:
       run:
-        working-directory: AI Wrapper
+        working-directory: IOS App
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
       LANG: en_US.UTF-8
@@ -40,8 +40,8 @@ jobs:
       - name: Cache Swift packages
         uses: actions/cache@v4
         with:
-          path: AI Wrapper/SourcePackages
-          key: spm-${{ hashFiles('AI Wrapper/AI Wrapper.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          path: IOS App/SourcePackages
+          key: spm-${{ hashFiles('IOS App/AI Wrapper.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 
       - name: Toolchain
         run: |
@@ -69,6 +69,6 @@ jobs:
         with:
           name: ios-app-store-logs
           path: |
-            AI Wrapper/build/logs
-            AI Wrapper/build/tests
+            IOS App/build/logs
+            IOS App/build/tests
           if-no-files-found: ignore

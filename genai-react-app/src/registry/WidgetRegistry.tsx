@@ -1,14 +1,5 @@
 import React, { lazy } from 'react'
 
-import InstructionSidebarWidget from '../components/widgets/SidebarWidgets/InstructionSidebarWidget/InstructionSidebarWidget'
-import ConversationHistorySidebarWidget from '../components/widgets/SidebarWidgets/ConversationHistorySidebarWidget/ConversationHistorySidebarWidget'
-// @ts-ignore
-import ThreadWidget from '../components/widgets/SidebarWidgets/ThreadWidget/ThreadWidget'
-import NewChatWidget from '../components/widgets/SidebarWidgets/NewChatWidget/NewChatWidget'
-import AIVendorWidget from '../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget'
-import AgentPickerWidget from '../components/widgets/SidebarWidgets/AgentPickerWidget/AgentPickerWidget'
-import TokenCounter from '../components/widgets/SidebarWidgets/TokenCounter/TokenCounter'
-
 import ConversationListWidget from '../components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget'
 import ConfigureAIVendorSettingsWidget from '../components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget'
 import DatabaseConnectionsSettingsWidget from '../components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget'
@@ -29,36 +20,6 @@ export interface WidgetDefinition {
 }
 
 export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
-    'INSTRUCTION_SIDEBAR': {
-        id: 'INSTRUCTION_SIDEBAR',
-        component: InstructionSidebarWidget,
-    },
-    'CONVERSATION_HISTORY_SIDEBAR_WIDGET': {
-        id: 'CONVERSATION_HISTORY_SIDEBAR_WIDGET',
-        component: ConversationHistorySidebarWidget,
-    },
-    'THREAD_LIST': {
-        id: 'THREAD_LIST',
-        component: ThreadWidget,
-    },
-    'NEW_CHAT': {
-        id: 'NEW_CHAT',
-        component: NewChatWidget,
-    },
-    'AI_VENDOR': {
-        id: 'AI_VENDOR',
-        component: AIVendorWidget,
-    },
-    'AGENT_PICKER': {
-        id: 'AGENT_PICKER',
-        component: AgentPickerWidget,
-    },
-    'TOKEN_COUNTER': {
-        id: 'TOKEN_COUNTER',
-        component: TokenCounter,
-        // Example: Only visible if paid (commented out for now, to demonstrate compatibility)
-        // isVisible: (context) => !!context.isPaid 
-    },
     // Center Section Widgets
     'CONVERSATION_LIST': {
         id: 'CONVERSATION_LIST',

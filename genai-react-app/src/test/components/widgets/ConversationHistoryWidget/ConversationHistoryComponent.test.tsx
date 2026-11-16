@@ -88,11 +88,12 @@ describe('ConversationHistoryComponent', () => {
     describe('mobile menu', () => {
         const pinnedConversation = { conversationId: 'conv-pinned', title: 'Pinned Chat', createdAt: null, updatedAt: null }
 
-        test('one collapsible History header holds Pinned and Recents', async () => {
+        test('one collapsible Chats header holds Pinned and Recents', async () => {
             mockGetPinnedConversations.mockResolvedValue({ conversations: [pinnedConversation] })
             render(<ConversationHistoryComponent menu />)
 
             const heading = await screen.findByTestId('conv-history-history-heading')
+            expect(heading).toHaveTextContent('Chats')
             expect(screen.getByText('Pinned')).toBeInTheDocument()
             expect(screen.getByText('Recents')).toBeInTheDocument()
             expect(screen.queryByTestId('conv-history-pinned-heading')).not.toBeInTheDocument()
@@ -117,7 +118,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.queryByText('conv-raw-id')).not.toBeInTheDocument()
         })
 
-        test('desktop keeps separate Pinned and Recents headers and the raw id', async () => {
+        test('desktop: the same Chats card, with the raw id for untitled rows', async () => {
             mockGetPinnedConversations.mockResolvedValue({ conversations: [pinnedConversation] })
             mockGetCustomerConversations.mockResolvedValue({
                 conversations: [{ conversationId: 'conv-raw-id', title: '', createdAt: null, updatedAt: null }],
@@ -125,10 +126,11 @@ describe('ConversationHistoryComponent', () => {
             })
             render(<ConversationHistoryComponent />)
 
-            expect(await screen.findByTestId('conv-history-pinned-heading')).toBeInTheDocument()
-            expect(screen.getByTestId('conv-history-recents-heading')).toBeInTheDocument()
-            expect(screen.queryByTestId('conv-history-history-heading')).not.toBeInTheDocument()
+            expect(await screen.findByTestId('conv-history-history-heading')).toHaveTextContent('Chats')
+            expect(screen.getByText('Pinned')).toBeInTheDocument()
+            expect(screen.getByText('Recents')).toBeInTheDocument()
             expect(screen.getByText('conv-raw-id')).toBeInTheDocument()
+            expect(screen.getByText('Pinned Chat')).toBeInTheDocument()
         })
     })
 
@@ -364,7 +366,7 @@ describe('ConversationHistoryComponent', () => {
         }
     })
 
-    test('collapsing Recents stops auto-loading more pages: no live end sentinel, no extra fetch', async () => {
+    test('collapsing Chats stops auto-loading more pages: no live end sentinel, no extra fetch', async () => {
         mockGetCustomerConversations.mockResolvedValueOnce({ conversations: defaultConversations, lastEvaluatedKey: 'page2-key' })
 
         render(<ConversationHistoryComponent />)
@@ -373,7 +375,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('history-end-sentinel')).toBeInTheDocument()
         })
 
-        fireEvent.click(screen.getByTestId('conv-history-recents-heading'))
+        fireEvent.click(screen.getByTestId('conv-history-history-heading'))
 
         // Nothing visible to reach the end of anymore — the sentinel (and the
         // IntersectionObserver behind it) is gone entirely, not just inert
@@ -611,10 +613,9 @@ describe('ConversationHistoryComponent', () => {
             const item = screen.getByTestId('conv-history-item-conv-2')
             expect(pinnedHeader.compareDocumentPosition(item)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
 
-            // Pinned lives outside the scrollable list (it must not scroll
-            // away); only the Recents list scrolls
+            // Pinned and Recents scroll together inside the Chats card
             const scrollList = screen.getByTestId('history-scroll-list')
-            expect(within(scrollList).queryByTestId('conv-history-item-conv-1')).not.toBeInTheDocument()
+            expect(within(scrollList).getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
             expect(within(scrollList).getByTestId('conv-history-item-conv-2')).toBeInTheDocument()
         })
 

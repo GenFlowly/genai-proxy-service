@@ -1,13 +1,13 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import LandingPage from '../../pages/LandingPage';
 import { ConversationProvider } from '../../context/ConversationContext';
 
 // Mock child components
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar">Navbar</div>);
-jest.mock('../../components/sections/LeftSidebar/LeftSidebar', () => ({ widgetIds }: any) => <div data-testid="left-sidebar" data-widget-ids={JSON.stringify(widgetIds)}>LeftSidebar</div>);
-jest.mock('../../components/sections/RightSidebar/RightSidebar', () => ({ widgetIds }: any) => <div data-testid="right-sidebar" data-widget-ids={JSON.stringify(widgetIds)}>RightSidebar</div>);
+jest.mock('../../components/sections/ChatSidebar/ChatSidebar', () => () => <div data-testid="chat-sidebar">ChatSidebar</div>);
+jest.mock('../../components/sections/AiSettingsDock/AiSettingsDock', () => () => <div data-testid="ai-settings-dock">AiSettingsDock</div>);
 jest.mock('../../components/sections/CenterSection/CenterSection', () => ({ widgetIds }: any) => <div data-testid="center-section" data-widget-ids={JSON.stringify(widgetIds)}>CenterSection</div>);
 jest.mock('../../components/widgets/ConversationHeader/ConversationHeader', () => () => <div data-testid="conversation-header">ConversationHeader</div>);
 
@@ -17,21 +17,6 @@ jest.mock('../../config/PageWidgetConfig', () => ({
     getPageIdFromPath: jest.fn()
 }));
 const mockGetPageConfig = jest.requireMock('../../config/PageWidgetConfig').getPageConfig;
-
-// Mock LayoutContext
-const mockSetLeftSidebarExpanded = jest.fn();
-const mockSetRightSidebarExpanded = jest.fn();
-const mockSetLeftSidebarMinimized = jest.fn();
-const mockSetHistoryWidgetExpanded = jest.fn();
-
-jest.mock('../../context/LayoutContext', () => ({
-    useLayout: () => ({
-        setLeftSidebarExpanded: mockSetLeftSidebarExpanded,
-        setRightSidebarExpanded: mockSetRightSidebarExpanded,
-        setLeftSidebarMinimized: mockSetLeftSidebarMinimized,
-        setHistoryWidgetExpanded: mockSetHistoryWidgetExpanded,
-    })
-}));
 
 
 // Mock ConversationContext
@@ -105,28 +90,48 @@ describe('LandingPage Routing Logic', () => {
         (window as any).scrollY = 0;
     });
 
-    test('Renders all layout components with correct widget IDs', () => {
-        render(
-            <MemoryRouter initialEntries={['/chat']}>
-                <Routes>
-                    <Route path="/chat" element={<LandingPage />} />
-                </Routes>
-            </MemoryRouter>
-        );
+    const renderChat = (path = '/chat') => render(
+        <MemoryRouter initialEntries={[path]}>
+            <Routes>
+                <Route path="/chat" element={<LandingPage />} />
+                <Route path="/chat/:conversationId" element={<LandingPage />} />
+            </Routes>
+        </MemoryRouter>
+    );
+
+    const setWidth = (width: number) => {
+        act(() => {
+            Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: width });
+            window.dispatchEvent(new Event('resize'));
+        });
+    };
+
+    afterEach(() => setWidth(1280));
+
+    test('desktop: navbar, sidebar, the sub-bar inside the main panel, and the dock', () => {
+        renderChat();
 
         expect(screen.getByTestId('navbar')).toBeInTheDocument();
+        expect(screen.getByTestId('chat-sidebar')).toBeInTheDocument();
+        expect(screen.getByTestId('ai-settings-dock')).toBeInTheDocument();
 
-        const left = screen.getByTestId('left-sidebar');
-        expect(left).toBeInTheDocument();
-        expect(left).toHaveAttribute('data-widget-ids', '["LEFT"]');
+        const main = screen.getByRole('main');
+        expect(main).toContainElement(screen.getByTestId('conversation-header'));
+        expect(main).toContainElement(screen.getByTestId('center-section'));
+        expect(screen.getByTestId('center-section')).toHaveAttribute('data-widget-ids', '["CENTER"]');
+    });
 
-        const center = screen.getByTestId('center-section');
-        expect(center).toBeInTheDocument();
-        expect(center).toHaveAttribute('data-widget-ids', '["CENTER"]');
+    test('phone: no navbar or sidebar; the header overlays the conversation', () => {
+        renderChat();
+        setWidth(600);
 
-        const right = screen.getByTestId('right-sidebar');
-        expect(right).toBeInTheDocument();
-        expect(right).toHaveAttribute('data-widget-ids', '["RIGHT"]');
+        expect(screen.queryByTestId('navbar')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('chat-sidebar')).not.toBeInTheDocument();
+        expect(screen.queryByRole('main')).not.toBeInTheDocument();
+        expect(screen.getByTestId('conversation-header')).toBeInTheDocument();
+        expect(screen.getByTestId('center-section')).toBeInTheDocument();
+        // The AI Settings modal lives in the dock component on phones too
+        expect(screen.getByTestId('ai-settings-dock')).toBeInTheDocument();
     });
 
     test('Loads conversation when URL has ID and context is different', async () => {

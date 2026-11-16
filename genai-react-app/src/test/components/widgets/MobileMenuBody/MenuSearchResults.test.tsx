@@ -9,8 +9,9 @@ import { searchContent, SearchResultItem } from '../../../../services/searchServ
 import { SearchError } from '../../../../services/searchError'
 
 jest.mock('../../../../services/searchService')
+const mockAuth = { isSignedOut: false }
 jest.mock('../../../../context/AuthContext', () => ({
-    useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('token') }),
+    useAuth: () => ({ getAccessTokenSilently: jest.fn().mockResolvedValue('token'), isSignedOut: mockAuth.isSignedOut }),
 }))
 
 const mockSearch = searchContent as jest.Mock
@@ -42,7 +43,10 @@ const renderResults = (onSelect = jest.fn(), onLeave = jest.fn()) => {
 }
 
 describe('MenuSearchResults', () => {
-    beforeEach(() => mockSearch.mockReset())
+    beforeEach(() => {
+        mockSearch.mockReset()
+        mockAuth.isSignedOut = false
+    })
 
     test('sends the query and lists results with their snippets', async () => {
         mockSearch.mockResolvedValue([result])
@@ -66,6 +70,15 @@ describe('MenuSearchResults', () => {
         mockSearch.mockResolvedValue([])
         renderResults()
         expect(await screen.findByText('No results')).toBeInTheDocument()
+    })
+
+    test('asks a signed-out user to log in instead of searching', async () => {
+        mockAuth.isSignedOut = true
+        renderResults()
+
+        expect(await screen.findByText('Please log in first.')).toBeInTheDocument()
+        await new Promise(resolve => setTimeout(resolve, 400))
+        expect(mockSearch).not.toHaveBeenCalled()
     })
 
     test('says when the search failed', async () => {

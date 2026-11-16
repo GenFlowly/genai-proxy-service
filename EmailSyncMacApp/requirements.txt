@@ -1,6 +1,0 @@
-PyQt6==6.10.0
-py2app
-authlib
-requests
-tenacity
-python-dotenv

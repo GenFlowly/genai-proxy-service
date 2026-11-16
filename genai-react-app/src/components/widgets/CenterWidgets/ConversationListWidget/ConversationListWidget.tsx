@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
     ConversationWidget,
     ConversationWidgetProvider,
@@ -6,12 +6,15 @@ import {
 } from '@genflowly/component-library'
 import { useConversation, useConversationUI } from '../../../../context/ConversationContext'
 import { useAuth } from '../../../../context/AuthContext'
+import { useAI } from '../../../../context/AIContext'
 import { useLayout } from '../../../../context/LayoutContext'
 import { useToast } from '../../../../context/ToastContext'
 import { uploadAttachment, getAttachmentViewUrl } from '../../../../services/attachmentService'
 import { getLearnedFacts, deleteMemoryFact } from '../../../../services/learnedFactsService'
 import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
+import InstructionPickerModal from '../../../common/InstructionPickerModal/InstructionPickerModal'
 import { RunHitlBanner } from './RunHitlBanner'
+import InstructionChip from './InstructionChip'
 
 /**
  * Adapter between the app's contexts/services and the shared
@@ -31,9 +34,17 @@ export default function ConversationListWidget() {
         aiVendorAPIKeyStatusList,
         getAccessTokenSilently
     } = useAuth()
-    const { isLeftSidebarExpanded, isRightSidebarExpanded } = useLayout()
+    const { setSelectedInstructionId, setSystemPrompt } = useAI()
+    const { isChatSidebarExpanded, isAiDockExpanded } = useLayout()
     const { showToast } = useToast()
     const getVendorDisplayName = useVendorDisplayNames()
+    const [isPickerOpen, setPickerOpen] = useState(false)
+    const canCompose = conversation.conversationRole !== 'VIEW'
+
+    const composer = useMemo(() => ({
+        controls: <InstructionChip onClick={() => setPickerOpen(true)} />,
+        canCompose,
+    }), [canCompose])
 
     const value = useMemo<ConversationWidgetContextValue>(() => ({
         conversation,
@@ -54,8 +65,9 @@ export default function ConversationListWidget() {
             deleteMemoryFact,
             getVendorDisplayName
         },
-        layout: { isLeftSidebarExpanded, isRightSidebarExpanded },
-        showToast
+        layout: { isLeftSidebarExpanded: isChatSidebarExpanded, isRightSidebarExpanded: isAiDockExpanded },
+        showToast,
+        composer,
     }), [
         conversation,
         conversationUI,
@@ -67,15 +79,27 @@ export default function ConversationListWidget() {
         aiVendorAPIKeyStatusList,
         getAccessTokenSilently,
         getVendorDisplayName,
-        isLeftSidebarExpanded,
-        isRightSidebarExpanded,
-        showToast
+        isChatSidebarExpanded,
+        isAiDockExpanded,
+        showToast,
+        composer,
     ])
 
     return (
-        <ConversationWidgetProvider value={value}>
-            <ConversationWidget />
-            <RunHitlBanner />
-        </ConversationWidgetProvider>
+        <>
+            <ConversationWidgetProvider value={value}>
+                <ConversationWidget />
+                <RunHitlBanner />
+            </ConversationWidgetProvider>
+            <InstructionPickerModal
+                isOpen={isPickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onSelect={(instruction) => {
+                    setSelectedInstructionId(instruction.id)
+                    setSystemPrompt(instruction.instruction)
+                    setPickerOpen(false)
+                }}
+            />
+        </>
     )
 }

@@ -173,7 +173,8 @@ describe('InstructionDetailPage', () => {
             existingInstructionId: 'INS-1',
         })
         expect(mockRefresh).toHaveBeenCalled()
-        expect(screen.queryByTestId('text-editor')).not.toBeInTheDocument()
+        // The toast and the editor closing share a tick, but the close renders after it
+        await waitFor(() => expect(screen.queryByTestId('text-editor')).not.toBeInTheDocument())
     })
 
     test('a failed save says so and keeps the editor', async () => {

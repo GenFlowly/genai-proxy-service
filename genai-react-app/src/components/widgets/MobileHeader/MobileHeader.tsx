@@ -15,6 +15,12 @@ interface MobileHeaderProps {
     subtitle?: React.ReactNode
     /** Makes the subtitle tappable (e.g. to open the instruction picker). */
     onSubtitleClick?: () => void
+    /** Makes the title tappable, with a chevron (e.g. to open the Outline). */
+    onTitleClick?: () => void
+    /** Accessible name of the tappable title. */
+    titleActionLabel?: string
+    /** What the title opens is showing: its chevron turns up. */
+    titleExpanded?: boolean
     /** Entries of the kebab (3-dot) menu on the right; omit to hide the kebab. */
     menuItems?: MobileHeaderMenuItem[]
     /** Accessible name of the page-context menu view (e.g. "History", "Saved Notes"). */
@@ -41,6 +47,9 @@ export default function MobileHeader({
     title,
     subtitle,
     onSubtitleClick,
+    onTitleClick,
+    titleActionLabel,
+    titleExpanded,
     menuItems,
     menuTitle,
     menuAction,
@@ -63,6 +72,9 @@ export default function MobileHeader({
                 title={title}
                 subtitle={subtitle}
                 onSubtitleClick={onSubtitleClick}
+                onTitleClick={onTitleClick}
+                titleActionLabel={titleActionLabel}
+                titleExpanded={titleExpanded}
                 menuItems={menuItems}
                 onMenuClick={hasL2Menu ? toggleLeftSidebar : openAppMenu}
             />

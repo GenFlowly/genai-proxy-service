@@ -7,7 +7,7 @@ const SEARCH_DEBOUNCE_MS = 300
 
 /** Semantic search over the customer's data, sent once typing pauses. */
 export function useContentSearch(query: string, types: SearchDataType[]) {
-    const { getAccessTokenSilently } = useAuth()
+    const { getAccessTokenSilently, isSignedOut } = useAuth()
     const trimmed = query.trim()
     const [debounced, setDebounced] = useState(trimmed)
 
@@ -19,6 +19,6 @@ export function useContentSearch(query: string, types: SearchDataType[]) {
     return useQuery({
         queryKey: ['content-search', types, debounced],
         queryFn: async () => searchContent(await getAccessTokenSilently(), debounced, types),
-        enabled: debounced.length > 0,
+        enabled: debounced.length > 0 && !isSignedOut,
     })
 }

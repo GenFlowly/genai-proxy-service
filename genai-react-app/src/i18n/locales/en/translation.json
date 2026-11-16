@@ -224,6 +224,7 @@
             "askSelection": "Ask",
             "copyCode": "Copy Code",
             "copyResponse": "Copy Response",
+            "copyPrompt": "Copy Prompt",
             "loadingContentRenderer": "Loading content renderer..."
         },
         "themeToggle": {
@@ -255,6 +256,7 @@
             "loading": "Loading…",
             "noRecent": "No recently used instructions yet.",
             "noResults": "No instructions match your search.",
+            "pleaseLogInFirst": "Please log in first.",
             "recentlyUsed": "Recently used",
             "searchPlaceholder": "Search instructions — describe what you need",
             "searchResults": "Search results",
@@ -312,7 +314,8 @@
             "unpinnedToast": "Conversation unpinned",
             "deleteConversationTitle": "Delete this conversation?",
             "deleteConversationConfirm": "It's deleted for good: its messages, files and search index, and for anyone you shared it with. Facts learned from it stay in Settings > Defaults > Learned facts.",
-            "deleteFailed": "Couldn't delete the conversation. Please try again."
+            "deleteFailed": "Couldn't delete the conversation. Please try again.",
+            "chats": "Chats"
         },
         "request": {
             "generate": "Generate",
@@ -325,9 +328,11 @@
             "pastedFile": "The pasted file",
             "removeAttachment": "Remove attachment",
             "addImageAttachment": "Add image attachment",
-            "addAttachment": "Add image or PDF attachment",
+            "addAttachment": "Add attachments",
             "attachmentPdfTooLarge": "PDFs must be 10 MB or smaller",
-            "attachmentPdfLimitReached": "You can attach at most {{max}} PDFs per message"
+            "attachmentPdfLimitReached": "You can attach at most {{max}} PDFs per message",
+            "placeholderNewChat": "Ask anything",
+            "placeholderFollowUp": "Follow up…"
         },
         "response": {
             "deleteFact": "Delete fact from memory: {{fact}}",
@@ -360,7 +365,22 @@
             "conversationCostUsd": "Total {{vendor}} cost for this conversation so far (USD)",
             "totalInputTokens": "Input tokens in this conversation so far (this vendor)",
             "totalOutputTokens": "Output tokens in this conversation so far (this vendor)",
-            "totalTokens": "Total tokens in this conversation so far (this vendor)"
+            "totalTokens": "Total tokens in this conversation so far (this vendor)",
+            "regenerateHint": "Regenerate this response",
+            "followUpHint": "Ask a follow-up from this response"
+        },
+        "outline": {
+            "title": "Outline",
+            "turns_one": "{{count}} turn",
+            "turns_other": "{{count}} turns",
+            "close": "Close",
+            "responses_one": "{{count}} response",
+            "responses_other": "{{count}} responses",
+            "openFor": "Outline: {{title}}"
+        },
+        "subBar": {
+            "previousTurn": "Previous turn",
+            "nextTurn": "Next turn"
         }
     },
     "dbSettings": {
@@ -541,6 +561,7 @@
         "mobileMenu": {
             "clearSearch": "Clear search",
             "noSearchResults": "No results",
+            "pleaseLogInFirst": "Please log in first.",
             "searchAgents": "Search agents",
             "searchChats": "Search chats",
             "searchFailed": "Search failed. Try again.",
@@ -558,7 +579,9 @@
             "home": "Home",
             "login": "Login",
             "logoAlt": "Create a new prompt",
-            "signingIn": "Signing in…"
+            "signingIn": "Signing in…",
+            "theme": "Theme",
+            "settings": "Settings"
         },
         "rightSidebar": {
             "collapseSidebar": "Collapse Sidebar",
@@ -570,6 +593,14 @@
         },
         "mobileHeader": {
             "moreActions": "More actions"
+        },
+        "chatSidebar": {
+            "label": "Chats and projects",
+            "projects": "Projects",
+            "chats": "Chats"
+        },
+        "aiDock": {
+            "label": "AI settings"
         }
     },
     "memoryPage": {
@@ -1351,6 +1382,7 @@
             "failedToSavePreferences": "Failed to save preferences: {{message}}",
             "noApiKeysSet": "No API keys set",
             "noModelsAvailable": "No models available",
+            "pleaseLogInFirst": "Please log in first.",
             "preferencesSavedSuccessfully": "Preferences saved successfully!",
             "refreshModels": "Refresh Models",
             "setAsDefault": "Set as default",
@@ -1358,36 +1390,19 @@
             "reasoning": "Reasoning effort",
             "reasoningDefault": "Default reasoning"
         },
-        "conversationHistorySidebarWidget": {
-            "history": "History",
-            "toggleHistory": "Toggle History"
-        },
-        "instructionSidebarWidget": {
-            "instructions": "Instructions"
-        },
-        "newChatWidget": {
-            "newChat": "New Chat"
-        },
-        "threadPromptItem": {
-            "newPrompt": "New prompt"
-        },
-        "threadResponseItem": {
-            "responses_one": "Response",
-            "responses_other": "Responses",
-            "responses_zero": "No Responses"
-        },
-        "threadWidget": {
-            "noConversationYet": "No conversation yet",
-            "title": "Thread"
-        },
         "tokenCounter": {
             "estimated": "Estimated: {{tokenCount}}",
-            "promptTokens": "Prompt Tokens"
+            "promptTokens": "Prompt Tokens",
+            "title": "Tokens",
+            "promptEstimated": "Prompt, estimated",
+            "thisConversation": "This conversation",
+            "noUsageYet": "No replies yet"
         },
         "agentPickerWidget": {
-            "title": "Agents",
+            "title": "Agent",
             "failedToLoad": "Could not load agents",
             "noAgents": "No agents available",
+            "pleaseLogInFirst": "Please log in first.",
             "systemBadge": "System",
             "defaultBadge": "Default",
             "failedToSave": "Could not save agent preference"

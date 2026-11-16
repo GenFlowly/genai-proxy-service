@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import Navbar from '../../../components/navbar/Navbar';
@@ -96,6 +96,29 @@ describe('Navbar Component', () => {
         expect(screen.queryByTestId('login-button')).not.toBeInTheDocument();
         const avatarBtn = screen.getByTestId('user-avatar-button');
         expect(avatarBtn).toBeInTheDocument();
+    });
+
+    test('the logo and the avatar say what they do on hover', () => {
+        mockUseAuth.mockReturnValue({
+            ...defaultAuthValues,
+            isAuthenticated: true,
+            user: { name: 'Test User' },
+        });
+
+        render(
+            <MemoryRouter>
+                <LayoutProvider><Navbar /></LayoutProvider>
+            </MemoryRouter>
+        );
+
+        fireEvent.mouseEnter(screen.getByTestId('navbar-logo-link').parentElement!);
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Home');
+        fireEvent.mouseLeave(screen.getByTestId('navbar-logo-link').parentElement!);
+
+        const avatar = screen.getByTestId('user-avatar-button');
+        expect(avatar).not.toHaveAttribute('title');
+        fireEvent.mouseEnter(avatar.parentElement!);
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Settings');
     });
 
     test('navigates to settings on avatar click', async () => {

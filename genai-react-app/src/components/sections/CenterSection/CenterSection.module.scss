@@ -4,11 +4,10 @@
 .centerSection {
   flex: 1 1 auto;
   min-width: 0; // Allow shrinking below content size
+  min-height: 0;
   display: flex; // Single child (.scrollContainer) fills the panel
   background-color: $color-background;
-  border-radius: $widget-radius;
-  // Scrolling happens on .scrollContainer inside; clipping here keeps the
-  // scrollbar from painting square over the rounded right corners
+  // The page's main panel draws the rounded edge around the sub-bar and this
   overflow: hidden;
 }
 
@@ -35,6 +34,12 @@
   align-items: center;
   gap: 0;
   padding-bottom: 3rem; // Ensure content is accessible globally
+
+  // The sub-bar sits above this scroller, not over it, so a turn the
+  // Outline jumps to only needs a small gap above it
+  :global(.conversation-block-item) {
+    scroll-margin-top: 0.75rem;
+  }
 }
 
 .submitButton {
@@ -69,6 +74,12 @@
 
   .contentWrapper {
     gap: 0;
+
+    // The overlay header covers the top: keep the widget's own margin
+    :global(.conversation-block-item) {
+      scroll-margin-top: 5rem;
+    }
+
     // No bottom padding below isNarrow: on a touch device the page is sized
     // to the visual viewport (--vvh), which already excludes the browser's
     // bottom bar / keyboard; on a non-touch narrow window --vvh is simply

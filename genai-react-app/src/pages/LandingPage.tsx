@@ -1,49 +1,41 @@
 import React, { useEffect } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import Navbar from '../components/navbar/Navbar'
-import LeftSidebar from '../components/sections/LeftSidebar/LeftSidebar'
-import ConversationHistoryComponent from '../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
 import ConversationHeader from '../components/widgets/ConversationHeader/ConversationHeader'
-import RightSidebar from '../components/sections/RightSidebar/RightSidebar'
 import CenterSection from '../components/sections/CenterSection/CenterSection'
-import { ResizableSidebar } from '@genflowly/component-library'
+import ChatSidebar from '../components/sections/ChatSidebar/ChatSidebar'
+import AiSettingsDock from '../components/sections/AiSettingsDock/AiSettingsDock'
 import { useConversation } from '../context/ConversationContext'
 import styles from './LandingPage.module.scss'
-import { useLayout } from '../context/LayoutContext'
 
 import { getPageConfig } from '../config/PageWidgetConfig'
 import { usePageTitle } from '../hooks/usePageTitle'
 import { useResponsiveBreakpoints } from '../hooks/useResponsiveBreakpoints'
 
-// Persisted width is stored in rem so it stays relative to the root font size
-const HISTORY_WIDTH_STORAGE_KEY = 'conversation_history_width_rem'
-
 function LandingPageContent() {
-    // Current Chat Page uses the 'CHAT_PAGE' config
-    // In future, you could dynamically pick config based on 'useConversation' or 'routeId'
     usePageTitle()
     const config = getPageConfig('CHAT_PAGE')
-    const { isHistoryWidgetExpanded } = useLayout()
     const { isNarrow } = useResponsiveBreakpoints()
+
+    // 📱 Full-screen conversation under the overlay header; Chats and
+    // Projects live in the L2 Menu, AI settings in a modal
+    if (isNarrow) {
+        return (
+            <div className={styles.layout}>
+                <CenterSection widgetIds={config.centerSection} />
+                <AiSettingsDock />
+            </div>
+        )
+    }
 
     return (
         <div className={styles.layout}>
-            {/* Below isNarrow, history lives in the mobile header's menu overlay instead of a squeezed sidebar */}
-            {!isNarrow && isHistoryWidgetExpanded && config.pageId === 'CHAT_PAGE' && (
-                <ResizableSidebar
-                    storageKey={HISTORY_WIDTH_STORAGE_KEY}
-                    // The split's two stacked cards are the visible panels;
-                    // this column only owns the shared width
-                    variant="plain"
-                    data-testid="history-sidebar"
-                    handleTestId="history-resize-handle"
-                >
-                    <ConversationHistoryComponent />
-                </ResizableSidebar>
-            )}
-            <LeftSidebar widgetIds={config.leftSidebar} />
-            <CenterSection widgetIds={config.centerSection} />
-            <RightSidebar widgetIds={config.rightSidebar} />
+            <ChatSidebar />
+            <main className={styles.main}>
+                <ConversationHeader />
+                <CenterSection widgetIds={config.centerSection} />
+            </main>
+            <AiSettingsDock />
         </div>
     )
 }
@@ -51,32 +43,8 @@ function LandingPageContent() {
 export default function LandingPage() {
     const { conversationId: routeId } = useParams<{ conversationId: string }>()
     const { loadConversation, conversationId: contextId, resetConversation } = useConversation()
-    const { 
-        setLeftSidebarExpanded, 
-        setRightSidebarExpanded, 
-        setLeftSidebarMinimized, 
-        setHistoryWidgetExpanded 
-    } = useLayout()
     const location = useLocation()
     const { isNarrow } = useResponsiveBreakpoints()
-
-    // Orchestrate Sidebar and History states based on active conversation
-    useEffect(() => {
-        if (contextId) {
-            // Active conversation: both sidebars collapsed. History is left
-            // alone here — it auto-hides only when the text-generation API is
-            // called (see generateResponses/generateResponsesStream)
-            setRightSidebarExpanded(false)
-            setLeftSidebarMinimized(false)
-            setLeftSidebarExpanded(false)
-        } else {
-            // No conversation (New Chat): right expanded (desktop), left fully minimized/hidden, history expanded (desktop)
-            setRightSidebarExpanded(!isNarrow)
-            setLeftSidebarMinimized(true)
-            setLeftSidebarExpanded(false)
-            setHistoryWidgetExpanded(!isNarrow)
-        }
-    }, [contextId, setRightSidebarExpanded, setLeftSidebarExpanded, setLeftSidebarMinimized, setHistoryWidgetExpanded, isNarrow])
 
     // 📱 The app never scrolls the window (each page scrolls internally),
     // but iOS Safari force-scrolls the window when the keyboard opens, and
@@ -126,7 +94,7 @@ export default function LandingPage() {
             {/* Below isNarrow: no navbar — ConversationHeader renders a transparent
                 overlay (MobileHeader) over the full-screen content instead */}
             {!isNarrow && <Navbar />}
-            <ConversationHeader />
+            {isNarrow && <ConversationHeader />}
             <LandingPageContent />
         </div>
     )

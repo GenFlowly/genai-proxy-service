@@ -110,6 +110,20 @@ describe('MobileHeader', () => {
         expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(false)
     })
 
+    test('a tappable title fires onTitleClick under its own name', () => {
+        const onTitleClick = jest.fn()
+        render(<MobileHeader title="My Chat" onTitleClick={onTitleClick} titleActionLabel="Outline: My Chat" />)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Outline: My Chat' }))
+        expect(onTitleClick).toHaveBeenCalledTimes(1)
+    })
+
+    test('titleExpanded reaches the title while what it opens is showing', () => {
+        render(<MobileHeader title="My Chat" onTitleClick={jest.fn()} titleActionLabel="Outline: My Chat" titleExpanded />)
+
+        expect(screen.getByRole('button', { name: 'Outline: My Chat' })).toHaveAttribute('aria-expanded', 'true')
+    })
+
     test('renders a tappable subtitle that fires onSubtitleClick', () => {
         const onSubtitleClick = jest.fn()
         render(<MobileHeader title="My Chat" subtitle="Coding Buddy" onSubtitleClick={onSubtitleClick} />)
