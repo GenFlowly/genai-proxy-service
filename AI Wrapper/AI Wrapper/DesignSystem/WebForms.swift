@@ -134,7 +134,20 @@ struct WebDashedBorder: View {
 /// A browser blurs an input on a tap anywhere outside it, which takes a phone's keyboard away.
 /// UIKit keeps it up. The tap still reaches whatever it landed on.
 struct TapOutsideEndsEditing: UIViewRepresentable {
+    /// A long press or double tap that selects read-only text also ends as a tap, landing on the
+    /// text it just focused. Ending editing then would take that selection away.
+    static func keepsFocus(touched view: UIView?) -> Bool {
+        var view = view
+        while let current = view {
+            if let text = current as? UITextView, !text.isEditable, text.isFirstResponder { return true }
+            view = current.superview
+        }
+        return false
+    }
+
     final class InstallerView: UIView, UIGestureRecognizerDelegate {
+        private weak var touchedView: UIView?
+
         private lazy var recognizer: UITapGestureRecognizer = {
             let recognizer = UITapGestureRecognizer(target: self, action: #selector(tapped))
             recognizer.cancelsTouchesInView = false
@@ -149,6 +162,7 @@ struct TapOutsideEndsEditing: UIViewRepresentable {
         }
 
         @objc private func tapped() {
+            guard !TapOutsideEndsEditing.keepsFocus(touched: touchedView) else { return }
             window?.endEditing(true)
         }
 
@@ -160,6 +174,7 @@ struct TapOutsideEndsEditing: UIViewRepresentable {
                 }
                 view = current.superview
             }
+            touchedView = touch.view
             return true
         }
 
