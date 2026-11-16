@@ -27,13 +27,6 @@ data class AppConfig(
     val adminEmailDomain: String,
     /** Deployment environment from APP_ENV: "production" on the prod Fly app, "development" otherwise. */
     val environment: String,
-    /**
-     * Route agentic streaming chat through the retrieval-server's durable /runs
-     * path (DBOS workflow + Postgres checkpoint + reattachable stream) instead of
-     * the stateless /retrieve stream. Off by default; dark-shipped behind
-     * DURABLE_RUNS_ENABLED until the durable path is proven end-to-end.
-     */
-    val durableRunsEnabled: Boolean,
     /** Versioned bucket of batch-mode note documents (CUSTOMER_DOCUMENTS_BUCKET); null skips its purge. */
     val customerDocumentsBucket: String? = null,
     /** Auth0 Management API credentials for deleting a user's login; null unless all of AUTH0_MGMT_* are set. */
@@ -77,7 +70,6 @@ data class AppConfig(
                 ?.takeIf { it.isNotEmpty() } ?: "genflowly.com",
             environment = System.getenv("APP_ENV")?.trim()?.lowercase()
                 ?.takeIf { it.isNotEmpty() } ?: "development",
-            durableRunsEnabled = System.getenv("DURABLE_RUNS_ENABLED")?.trim()?.lowercase() == "true",
             customerDocumentsBucket = System.getenv("CUSTOMER_DOCUMENTS_BUCKET")?.trim()?.takeIf { it.isNotEmpty() },
             auth0Management = auth0ManagementFromEnv(),
             supportTopicArn = System.getenv("SUPPORT_TOPIC_ARN")?.trim()?.takeIf { it.isNotEmpty() }
