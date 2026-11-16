@@ -203,6 +203,52 @@ describe('EdgeSwipeProvider', () => {
         expect(screen.getByTestId('location')).toHaveTextContent('/chat/abc null')
     })
 
+    test('a swipe it owns is kept from Safari\'s own back swipe', () => {
+        renderApp(<Page />)
+
+        const isNotPrevented = fireEvent.touchStart(screen.getByTestId('page'), { touches: [{ clientX: 4, clientY: 300 }] })
+
+        expect(isNotPrevented).toBe(false)
+    })
+
+    test('an edge touch with nothing to open is left to the browser', () => {
+        renderApp(
+            <>
+                <Page />
+                <SlidePanel layer="l1" open>
+                    <div data-testid="open-l1-menu" />
+                </SlidePanel>
+            </>
+        )
+
+        const isNotPrevented = fireEvent.touchStart(screen.getByTestId('open-l1-menu'), { touches: [{ clientX: 4, clientY: 300 }] })
+
+        expect(isNotPrevented).toBe(true)
+    })
+
+    test('a tap on the edge still clicks and focuses what it lands on', () => {
+        const onClick = jest.fn()
+        renderApp(<Page><input data-testid="field" onClick={onClick} /></Page>)
+        const field = screen.getByTestId('field')
+
+        fireEvent.touchStart(field, { touches: [{ clientX: 4, clientY: 300 }] })
+        fireEvent.touchMove(field, { touches: [{ clientX: 8, clientY: 303 }] })
+        fireEvent.touchEnd(field, { touches: [], changedTouches: [{ clientX: 8, clientY: 303 }] })
+
+        expect(onClick).toHaveBeenCalledTimes(1)
+        expect(field).toHaveFocus()
+        expect(mockSetLeftSidebarExpanded).not.toHaveBeenCalled()
+    })
+
+    test('a swipe is not also a tap', () => {
+        const onClick = jest.fn()
+        renderApp(<Page><div data-testid="row" onClick={onClick} /></Page>)
+
+        swipe(screen.getByTestId('row'), [[4, 300], slowly(60), slowly(200)])
+
+        expect(onClick).not.toHaveBeenCalled()
+    })
+
     test('a touch that starts away from the edge is left alone', () => {
         renderApp(<Page />)
 
