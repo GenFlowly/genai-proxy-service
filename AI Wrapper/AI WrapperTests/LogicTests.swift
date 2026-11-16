@@ -1864,6 +1864,56 @@ struct WebInputFieldWidthTests {
     }
 }
 
+@Suite("Tap outside ends editing")
+@MainActor
+struct TapOutsideEndsEditingTests {
+    private func window(with views: UIView...) throws -> UIWindow {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = UIViewController()
+        views.forEach(window.rootViewController!.view.addSubview)
+        window.makeKeyAndVisible()
+        return window
+    }
+
+    private func readOnlyText() -> UITextView {
+        let text = UITextView(frame: CGRect(x: 0, y: 0, width: 300, height: 100))
+        text.isEditable = false
+        text.text = "Quicksort partitions in place while merge sort splits and merges."
+        return text
+    }
+
+    @Test func aSelectionInReadOnlyTextOutlastsTheTapThatMadeIt() throws {
+        let text = readOnlyText()
+        let inside = UIView()
+        text.addSubview(inside)
+        let window = try window(with: text)
+        defer { window.isHidden = true }
+
+        #expect(!TapOutsideEndsEditing.keepsFocus(touched: text))
+        #expect(text.becomeFirstResponder())
+        #expect(TapOutsideEndsEditing.keepsFocus(touched: text))
+        #expect(TapOutsideEndsEditing.keepsFocus(touched: inside))
+    }
+
+    @Test func aTapAnywhereElseStillEndsEditing() throws {
+        let text = readOnlyText()
+        let input = UITextView(frame: CGRect(x: 0, y: 120, width: 300, height: 40))
+        let elsewhere = UIView(frame: CGRect(x: 0, y: 200, width: 300, height: 40))
+        let window = try window(with: text, input, elsewhere)
+        defer { window.isHidden = true }
+
+        #expect(text.becomeFirstResponder())
+        #expect(!TapOutsideEndsEditing.keepsFocus(touched: elsewhere))
+        #expect(!TapOutsideEndsEditing.keepsFocus(touched: nil))
+
+        // Typing focus, as when the composer's keyboard is up and the tap lands on a response.
+        #expect(input.becomeFirstResponder())
+        #expect(!TapOutsideEndsEditing.keepsFocus(touched: text))
+        #expect(!TapOutsideEndsEditing.keepsFocus(touched: input))
+    }
+}
+
 
 // MARK: - L1 and L2 Menu flow
 
