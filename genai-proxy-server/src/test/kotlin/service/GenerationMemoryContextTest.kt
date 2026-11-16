@@ -7,12 +7,12 @@ import com.genflowly.models.Message
 import com.genflowly.models.retrieval.RetrievalResult
 import com.genflowly.providers.MemoryContext
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.providers.RunsClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -33,6 +33,7 @@ class GenerationMemoryContextTest {
     private val conversationService = mockk<ConversationService>(relaxed = true)
     private val credentialsService = mockk<CustomerCredentialsService>()
     private val retrievalService = mockk<RetrievalServerClient>()
+    private val runsClient = mockk<RunsClient>()
     private val memoryService = mockk<MemoryService>()
 
     private val orchestrator = GenerationOrchestrator(
@@ -46,8 +47,7 @@ class GenerationMemoryContextTest {
         mockk(relaxed = true),          // costCalculationService
         mockk(relaxed = true),          // graphRepository
         AppScope(),
-        mockk(relaxed = true),          // runsClient
-        mockk(relaxed = true),          // appConfig (durableRunsEnabled=false → stateless path)
+        runsClient,
         mockk(relaxed = true),          // conversationManagementService
         entitlementServiceWith()
     )
@@ -68,14 +68,18 @@ class GenerationMemoryContextTest {
                 entitlements = any()
             )
         } returns RetrievalResult("ok", 1, 2, 3, null)
-        every {
-            retrievalService.retrieveAndGenerateStream(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+        coEvery {
+            runsClient.startRun(
+                customerId = any(), client = any(), query = any(), llmProvider = any(), llmModel = any(),
+                llmMaxTokens = any(), conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), queryFiles = any(), tools = any(), toolChoice = any(),
+                toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
+                graphId = any(), thinkingLevel = any(), runId = any(),
                 memoryContext = capture(context),
                 entitlements = any()
             )
-        } returns flowOf()
+        } returns "run_1"
+        every { runsClient.streamRun("run_1", any()) } returns flowOf()
     }
 
     @Test
@@ -113,10 +117,13 @@ class GenerationMemoryContextTest {
                 entitlements = ALL_ENTITLEMENTS
             )
         }
-        verify {
-            retrievalService.retrieveAndGenerateStream(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+        coVerify {
+            runsClient.startRun(
+                customerId = any(), client = any(), query = any(), llmProvider = any(), llmModel = any(),
+                llmMaxTokens = any(), conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), queryFiles = any(), tools = any(), toolChoice = any(),
+                toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
+                graphId = any(), thinkingLevel = any(), runId = any(),
                 memoryContext = any(),
                 entitlements = ALL_ENTITLEMENTS
             )

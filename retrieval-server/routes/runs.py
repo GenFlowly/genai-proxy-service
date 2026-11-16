@@ -63,15 +63,15 @@ async def _status(run_id: str):
 
 @router.post("/runs")
 async def start_run(req: RunRequest):
-    """Enqueue a durable run and return its id immediately; the run executes in
+    """Start a durable run and return its id immediately; the run executes in
     the background (surviving crashes/redeploys) and is consumed via /stream."""
     _require_ready()
     run_id = req.run_id or f"run_{uuid.uuid4().hex}"
     run_input = req.model_dump(exclude={"run_id"})
     try:
-        await runs_module.enqueue_run(run_id, run_input)
+        await runs_module.start_run(run_id, run_input)
     except Exception as e:
-        logger.exception("Failed to enqueue run %s", run_id)
+        logger.exception("Failed to start run %s", run_id)
         raise HTTPException(status_code=500, detail=f"could not start run: {e}")
     logger.info("Started durable run %s (customer=%s graph_id=%s)", run_id, req.customer_id, req.graph_id)
     return {"run_id": run_id}

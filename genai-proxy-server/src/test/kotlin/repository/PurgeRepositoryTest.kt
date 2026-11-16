@@ -195,7 +195,7 @@ class PurgeRepositoryTest {
         assertEquals(mapOf("sub" to s("auth0|u1"), "client" to s("REACT_APP")), request.captured.key())
 
         every { ddb.deleteItem(any<DeleteItemRequest>()) } throws ConditionalCheckFailedException.builder().build()
-        assertFalse(repo.deleteUsername("neel-abc123", "CU1"))
+        assertFalse(repo.deleteUsername("alex-abc123", "CU1"))
     }
 
     @Test
