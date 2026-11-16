@@ -16,6 +16,7 @@ Self-contained: imports only stdlib plus httpx (imported lazily in run(), like
 the other tools import their renderers), so the package stays extractable.
 """
 import logging
+import time
 
 from graph_tools.base import GraphTool, Source, ToolContext, ToolResult
 
@@ -34,6 +35,20 @@ _DEFAULT_SEARCH_DEPTH = "basic"
 # Cost and Usage's Web Search page prices on these exact counts (see
 # record_web_search_usage).
 _CREDITS_PER_SEARCH_DEPTH = {"basic": 1, "advanced": 2}
+
+
+def _count_search(status: str, elapsed: float | None = None) -> None:
+    """web_search_total counts calls that reached (or tried to reach) the
+    search provider — never results served from a pool — so it is the number
+    to watch for spend. Imported lazily and best-effort to keep the package
+    extractable."""
+    try:
+        from encoding_library.observability import count, observe
+        count("web_search_total", status=status)
+        if elapsed is not None:
+            observe("web_search_duration_seconds", elapsed, status=status)
+    except Exception:
+        logger.debug("web_search: metrics unavailable", exc_info=True)
 
 
 def _clean_domains(value) -> list[str]:
@@ -73,6 +88,7 @@ class WebSearchTool(GraphTool):
     # Sort key under which the proxy stores this tool's credentials in
     # CustomerToolCredentials (see the table comment in the CDK).
     credential_ref = "WEB_SEARCH"
+    shareable = True
     description = (
         "Search the web for current, recent, or factual information. Call this "
         "whenever answering well depends on information that may have changed "
@@ -158,6 +174,7 @@ class WebSearchTool(GraphTool):
             logger.warning(
                 "web_search: customer=%s has no stored Tavily key", context.customer_id
             )
+            _count_search("missing_key")
             return ToolResult(
                 content=(
                     "Web search is unavailable right now (search is not configured). "
@@ -202,12 +219,15 @@ class WebSearchTool(GraphTool):
             "web_search: customer=%s topic=%s search_depth=%s max_results=%d query='%s'",
             context.customer_id, topic, search_depth, max_results, query[:100],
         )
+        started = time.perf_counter()
         try:
             data = await self._search(payload, api_key)
             # Tavily bills the call itself, not the result count — record usage
             # as soon as the request succeeds, even if 0 results come back.
             self._record_usage(context.customer_id, search_depth)
+            _count_search("ok", time.perf_counter() - started)
         except Exception as e:
+            _count_search("error", time.perf_counter() - started)
             logger.error("web_search: FAILED — %s", e, exc_info=True)
             # Tavily's auth/quota statuses are terminal for the whole turn —
             # retrying with a new query cannot succeed, so say that outright

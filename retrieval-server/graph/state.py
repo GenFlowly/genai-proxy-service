@@ -182,3 +182,8 @@ class RetrievalState(TypedDict):
     # Subagent nesting depth: 0 for a root run, incremented per spawn_agent
     # level. The spawn tool refuses beyond graph.subagent.MAX_DEPTH.
     agent_depth: int
+
+    # The user message this run answers (RetrieveRequest.turn_id), shared by
+    # the parallel per-model runs of one turn and inherited by their subagents.
+    # None disables cross-run lookup sharing (graph.lookup_pool).
+    turn_id: Optional[str]
