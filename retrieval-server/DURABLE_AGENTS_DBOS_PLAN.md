@@ -161,6 +161,8 @@ checkpointer, and stream reattach all need **session-level** Postgres features:
   confirms which knob. Worst case is a config flag, not a wall.
 - **Connection budget:** managed Postgres caps connections; size the psycopg pool small
   (e.g. 5–10) × instance count under the tier limit, and lean on the session pooler.
+  Built as DBOS 4 (`DBOS_POOL_SIZE`) + checkpointer 3 (`CHECKPOINTER_POOL_MAX`) per process, so
+  two machines fit the free tier's pool of 15; DBOS's own default of 20 alone exceeds it.
 
 **Fly.io:** no Postgres, no Redis, **no new always-on compute** on Fly — DBOS workers *are* the
 retrieval-server process; Postgres is Supabase. (Contrast Temporal, which needs a separate

@@ -5,8 +5,8 @@ Unit tests for durable-run cleanup (run_cleanup) and DBOS idle-polling tuning
 Covers: checkpoints dropped when a workflow ends but kept when its task is
 cancelled for recovery, the sweep deleting ended runs then orphans, unused
 queue deletion, the DBOS internals _quiet_idle_polling sets still existing
-on the pinned version, and startup giving up promptly on an unreachable
-database. Run with:
+on the pinned version, the connection caps fitting the Supabase pooler, and
+startup giving up promptly on an unreachable database. Run with:
     .venv/bin/python -m unittest tests.test_run_cleanup
 """
 import asyncio
@@ -200,6 +200,26 @@ class QuietIdlePollingTest(unittest.TestCase):
 
         self.assertEqual(self.commands._BACKGROUND_JOBS_INTERVAL_SEC, before)
         self.assertIs(self.system_db.list_queues, self.list_queues)
+
+
+class ConnectionBudgetTest(unittest.TestCase):
+    def test_dbos_pool_is_capped_and_two_machines_fit_the_pooler(self):
+        from dbos._dbos_config import process_config, translate_dbos_config_to_config_file
+
+        dbos_cls = MagicMock()
+        with patch.object(durable_runtime, "_dbos_constructed", False), \
+             patch.object(durable_runtime, "DATABASE_URL", "postgresql://user:pw@localhost:5432/postgres"), \
+             patch("dbos.DBOS", dbos_cls), \
+             patch.object(durable_runtime, "_quiet_idle_polling"):
+            durable_runtime._construct_dbos()
+
+        config = dbos_cls.call_args.kwargs["config"]
+        engine_kwargs = process_config(
+            data=translate_dbos_config_to_config_file(config))["database"]["sys_db_engine_kwargs"]
+        self.assertEqual(engine_kwargs["pool_size"], durable_runtime._DBOS_POOL_SIZE)
+        self.assertEqual(engine_kwargs["max_overflow"], 0)
+        per_machine = durable_runtime._DBOS_POOL_SIZE + durable_runtime._CHECKPOINTER_POOL_MAX
+        self.assertLessEqual(2 * per_machine, 15)
 
 
 
