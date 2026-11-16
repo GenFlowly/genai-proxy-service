@@ -324,8 +324,10 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `vector_retrieval_total` / `_duration_seconds` | status, source (`retrieve`\|`search`) | retrieval-server |
 | `embedding_failure_total` | source, model | retrieval-server |
 | `zilliz_credential_fallback_total` | — | encoding-library (both runtimes) |
-| `web_search_total` / `_duration_seconds` | status | retrieval-server |
-| `tool_execution_total` / `_duration_seconds` | tool, status | retrieval-server TOOL_EXECUTOR |
+| `web_search_total` / `_duration_seconds` | status (`ok`\|`error`\|`missing_key`) | retrieval-server `web_search` tool — calls that reached (or tried to reach) Tavily; calls served from the lookup pool are not counted, so this is the spend to watch |
+| `tool_execution_total` / `_duration_seconds` | tool, status (`ok`\|`error`\|`pooled`\|`budget_skipped`\|`budget_exhausted`) | retrieval-server TOOL_EXECUTOR — `pooled` = answered from the per-message lookup pool without running the tool |
+| `lookup_pool_total` | tool, status (`executed`\|`shared`\|`deduplicated`\|`fallback`\|`bypassed`) | retrieval-server `graph/lookup_pool.py` — one per call to a shareable tool: how the per-message pool served it (`shared` + `deduplicated` = provider calls avoided; `bypassed` = no turn id, i.e. regenerate / internal) |
+| `lookup_pool_wait_duration_seconds` | tool | retrieval-server — time a run waited on a sibling run's in-flight lookup |
 | `stream_zero_tokens_total`, `stream_error_total` | vendor | retrieval-server streaming |
 | `retry_attempt_total`, `retry_exhausted_total` | operation | encoding-library retry util (all services) |
 | `ingest_notes/ingest_email/trigger_ingestion/parse_and_chunk/create_collections/voyage_batch_accumulate/voyage_batch_poll` (`_total`/`_duration_seconds`) | status | remaining encoding lambdas (`@track` on each handler) |

@@ -1317,7 +1317,7 @@
           "refId": "A"
         }
       ],
-      "description": "Tavily web-search calls per interval, by status (ok / error / missing_key)."
+      "description": "Tavily calls the web_search tool actually made per interval, by status (ok / error / missing_key). Calls served from the per-message pool never reach Tavily and are not counted here \u2014 see 'Web search pool'."
     },
     {
       "type": "timeseries",
@@ -1636,6 +1636,152 @@
           "refId": "D"
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Web search pool",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 45,
+        "w": 8,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "always"
+          }
+        },
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum by (status) (increase(lookup_pool_total{tool=\"web_search\",app=~\".*-production\"}[$__rate_interval]))",
+          "legendFormat": "{{status}}",
+          "refId": "A"
+        }
+      ],
+      "description": "How each web_search call was served (one series per outcome): executed = a real Tavily call; shared = a sibling model's results for the same message were reused; deduplicated = an identical query was already fetched for this message; fallback = the sibling result was unusable so the run searched itself; bypassed = no turn id (regenerate / internal generation). shared + deduplicated are Tavily calls avoided."
+    },
+    {
+      "type": "stat",
+      "title": "Searches avoided 24h",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROM}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 45,
+        "w": 4,
+        "h": 7
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROM}"
+          },
+          "expr": "sum(increase(lookup_pool_total{tool=\"web_search\",status=~\"shared|deduplicated\",app=~\".*-production\"}[24h])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "description": "web_search calls served from the per-message pool (shared + deduplicated) over the last 24h \u2014 each one is a Tavily call not made."
     },
     {
       "type": "row",
@@ -2150,6 +2296,10 @@
         "y": 67,
         "w": 24,
         "h": 1
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
       }
     },
     {
@@ -2169,7 +2319,56 @@
         "defaults": {
           "unit": "bytes"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {},
       "targets": [
@@ -2195,7 +2394,56 @@
       },
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {},
       "targets": [
@@ -2221,7 +2469,56 @@
       },
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {},
       "targets": [
@@ -2247,7 +2544,56 @@
       },
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(ok|success|succeeded|2\\d{2}|2xx)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/\\b(retry|retries|throttle|throttles|fallback|skipped|debounced|disabled|empty|noop|stale|unpriced|zero-token|too_short|not_configured)\\b/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "__schemeRef": "status-color-scheme",
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/(\\b(error|errors|fail|failed|failure|failures|4\\d{2}|5\\d{2}|4xx|5xx|exhausted|dlq|writeback|timeout)\\b|timed out|validation_error|connect_failed|missing_key)/i"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {},
       "targets": [

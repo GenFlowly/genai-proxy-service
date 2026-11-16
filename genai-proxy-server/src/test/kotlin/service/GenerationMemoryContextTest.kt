@@ -76,7 +76,8 @@ class GenerationMemoryContextTest {
                 toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
                 graphId = any(), thinkingLevel = any(), runId = any(),
                 memoryContext = capture(context),
-                entitlements = any()
+                entitlements = any(),
+                turnId = any()
             )
         } returns "run_1"
         every { runsClient.streamRun("run_1", any()) } returns flowOf()
@@ -125,7 +126,8 @@ class GenerationMemoryContextTest {
                 toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
                 graphId = any(), thinkingLevel = any(), runId = any(),
                 memoryContext = any(),
-                entitlements = ALL_ENTITLEMENTS
+                entitlements = ALL_ENTITLEMENTS,
+                turnId = any()
             )
         }
     }

@@ -74,7 +74,8 @@ class GenerationOrchestratorSystemPromptTest {
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 memoryContext = any(),
-                entitlements = any()
+                entitlements = any(),
+                turnId = any()
             )
         } returns flowOf()
         coEvery {
@@ -85,7 +86,8 @@ class GenerationOrchestratorSystemPromptTest {
                 toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
                 graphId = any(), thinkingLevel = any(), runId = any(),
                 memoryContext = any(),
-                entitlements = any()
+                entitlements = any(),
+                turnId = any()
             )
         } returns "run_1"
         every { runsClient.streamRun("run_1", any()) } returns flowOf()
@@ -131,7 +133,8 @@ class GenerationOrchestratorSystemPromptTest {
                 toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
                 graphId = any(), thinkingLevel = any(), runId = any(),
                 memoryContext = any(),
-                entitlements = any()
+                entitlements = any(),
+                turnId = any()
             )
         }
         verify(exactly = 0) {
@@ -139,7 +142,8 @@ class GenerationOrchestratorSystemPromptTest {
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 memoryContext = any(),
-                entitlements = any()
+                entitlements = any(),
+                turnId = any()
             )
         }
     }
@@ -154,7 +158,8 @@ class GenerationOrchestratorSystemPromptTest {
                 toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
                 graphId = any(), thinkingLevel = any(), runId = any(),
                 memoryContext = any(),
-                entitlements = any()
+                entitlements = any(),
+                turnId = any()
             )
         } returns null
 
@@ -171,7 +176,8 @@ class GenerationOrchestratorSystemPromptTest {
                 queryImages = any(), tools = any(), toolChoice = any(), toolResults = any(),
                 responseSchema = any(), memoryEnabled = any(), requestSource = any(), graphId = any(),
                 memoryContext = any(),
-                entitlements = any()
+                entitlements = any(),
+                turnId = any()
             )
         }
     }

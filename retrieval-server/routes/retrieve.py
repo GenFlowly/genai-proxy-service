@@ -107,6 +107,7 @@ def _build_state(req: RetrieveRequest, node_configs: dict, builtin_tools: list[s
         generated_response=None,
         error=None,
         agent_depth=0,
+        turn_id=req.turn_id,
     )
 
 
@@ -437,6 +438,7 @@ def _build_agent_graph_state(
         generated_response=None,
         error=None,
         agent_depth=0,
+        turn_id=None,
     )
 
 

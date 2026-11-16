@@ -56,7 +56,9 @@ private data class RunStartPayload(
     val thinking_level: String? = null,
     /** Optional idempotency/rediscovery key; server generates one when null. */
     val run_id: String? = null,
-    val entitlements: EntitlementsPayload? = null
+    val entitlements: EntitlementsPayload? = null,
+    /** Same semantics as RetrievalAgentPayload.turn_id. */
+    val turn_id: String? = null
 )
 
 @Serializable
@@ -117,7 +119,8 @@ class RunsClient(
         thinkingLevel: String? = null,
         runId: String? = null,
         memoryContext: MemoryContext? = null,
-        entitlements: com.genflowly.models.CustomerEntitlements? = null
+        entitlements: com.genflowly.models.CustomerEntitlements? = null,
+        turnId: String? = null
     ): String? {
         val payload = json.encodeToString(
             RunStartPayload(
@@ -141,7 +144,8 @@ class RunsClient(
                 graph_id = graphId,
                 thinking_level = thinkingLevel,
                 run_id = runId,
-                entitlements = entitlements?.let(EntitlementsPayload::of)
+                entitlements = entitlements?.let(EntitlementsPayload::of),
+                turn_id = turnId
             )
         )
         return try {

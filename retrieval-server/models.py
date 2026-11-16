@@ -185,6 +185,12 @@ class RetrieveRequest(BaseModel):
     # None when the caller sent none (voice, older proxies): every tool is
     # bound and finds a missing setting out for itself.
     entitlements: Optional[Entitlements] = None
+    # Identifies the user message this generation answers. A multi-model turn
+    # sends one request per model, all carrying the same turn_id, which lets
+    # shareable tool lookups (graph.lookup_pool) be fetched once per message
+    # instead of once per model. None (regenerations, internal generations)
+    # disables the sharing for that request.
+    turn_id: Optional[str] = None
 
 
 class RunRequest(BaseModel):
@@ -217,6 +223,8 @@ class RunRequest(BaseModel):
     thinking_level: Optional[str] = None
     # Same semantics as RetrieveRequest.entitlements.
     entitlements: Optional[Entitlements] = None
+    # Same semantics as RetrieveRequest.turn_id.
+    turn_id: Optional[str] = None
     # Optional client-supplied run id for idempotency / rediscovery. When set it
     # becomes the DBOS workflow id (a duplicate re-attaches to the same run
     # instead of starting a new one). Server-generated when omitted.
