@@ -7,6 +7,7 @@ import com.genflowly.models.Message
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.retrieval.RetrievalResult
 import com.genflowly.providers.RetrievalServerClient
+import com.genflowly.providers.RunsClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -36,6 +37,7 @@ class GenerationOrchestratorSystemPromptTest {
     private val conversationService = mockk<ConversationService>(relaxed = true)
     private val credentialsService = mockk<CustomerCredentialsService>()
     private val retrievalService = mockk<RetrievalServerClient>()
+    private val runsClient = mockk<RunsClient>()
 
     private val orchestrator = GenerationOrchestrator(
         credentialsService,
@@ -48,8 +50,7 @@ class GenerationOrchestratorSystemPromptTest {
         mockk(relaxed = true),          // costCalculationService
         mockk(relaxed = true),          // graphRepository
         AppScope(),
-        mockk(relaxed = true),          // runsClient
-        mockk(relaxed = true),          // appConfig (durableRunsEnabled=false → stateless path)
+        runsClient,
         mockk(relaxed = true),          // conversationManagementService
         entitlementServiceWith()
     )
@@ -76,6 +77,18 @@ class GenerationOrchestratorSystemPromptTest {
                 entitlements = any()
             )
         } returns flowOf()
+        coEvery {
+            runsClient.startRun(
+                customerId = any(), client = any(), query = any(), llmProvider = any(), llmModel = any(),
+                llmMaxTokens = any(), conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), queryFiles = any(), tools = any(), toolChoice = any(),
+                toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
+                graphId = any(), thinkingLevel = any(), runId = any(),
+                memoryContext = any(),
+                entitlements = any()
+            )
+        } returns "run_1"
+        every { runsClient.streamRun("run_1", any()) } returns flowOf()
     }
 
     @Test
@@ -103,11 +116,51 @@ class GenerationOrchestratorSystemPromptTest {
     }
 
     @Test
-    fun `streamed UI turn sends the decorated system prompt`() = runTest {
+    fun `streamed UI turn starts a durable run with the decorated system prompt`() = runTest {
         val result = orchestrator.processTextGenerateStreamRequest(
             aiConfig, "i1", "1", "explain entropy", null, null, "REACT_APP", cust
         )
         // Drain the relay — completes once background generation finished.
+        result.flow.toList()
+
+        coVerify {
+            runsClient.startRun(
+                customerId = any(), client = any(), query = any(), llmProvider = any(), llmModel = any(),
+                llmMaxTokens = any(), conversationHistory = any(), systemPrompt = decorated, agentic = true,
+                queryImages = any(), queryFiles = any(), tools = any(), toolChoice = any(),
+                toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
+                graphId = any(), thinkingLevel = any(), runId = any(),
+                memoryContext = any(),
+                entitlements = any()
+            )
+        }
+        verify(exactly = 0) {
+            retrievalService.retrieveAndGenerateStream(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
+                memoryContext = any(),
+                entitlements = any()
+            )
+        }
+    }
+
+    @Test
+    fun `without durable runs the streamed turn falls back to the stateless stream`() = runTest {
+        coEvery {
+            runsClient.startRun(
+                customerId = any(), client = any(), query = any(), llmProvider = any(), llmModel = any(),
+                llmMaxTokens = any(), conversationHistory = any(), systemPrompt = any(), agentic = any(),
+                queryImages = any(), queryFiles = any(), tools = any(), toolChoice = any(),
+                toolResults = any(), responseSchema = any(), memoryEnabled = any(), requestSource = any(),
+                graphId = any(), thinkingLevel = any(), runId = any(),
+                memoryContext = any(),
+                entitlements = any()
+            )
+        } returns null
+
+        val result = orchestrator.processTextGenerateStreamRequest(
+            aiConfig, "i1", "1", "explain entropy", null, null, "REACT_APP", cust
+        )
         result.flow.toList()
 
         verify {

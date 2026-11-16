@@ -60,7 +60,6 @@ class GenerationOrchestrator(
     private val graphRepository: GraphRepository,
     private val appScope: AppScope,
     private val runsClient: RunsClient,
-    private val appConfig: AppConfig,
     private val conversationManagementService: ConversationManagementService,
     private val customerEntitlementService: CustomerEntitlementService
 ) {
@@ -613,14 +612,14 @@ class GenerationOrchestrator(
                     memoryContext = memoryContext,
                     entitlements = entitlements
                 )
-                // Durable /runs path (flagged): start a durable background run and
-                // reattach to its event stream. Credentials are NOT sent — the
-                // retrieval-server resolves them from DynamoDB by customer_id, so
-                // no secret is checkpointed (DURABLE_AGENTS_DBOS_PLAN §5.5). Only
-                // the agentic case is routed here; a start failure degrades to the
-                // stateless stream so a chat is never lost behind the flag.
+                // Durable /runs path: every agentic chat starts a durable background
+                // run and reattaches to its event stream. Credentials are NOT sent —
+                // the retrieval-server resolves them from DynamoDB by customer_id, so
+                // no secret is checkpointed (DURABLE_AGENTS_DBOS_PLAN §5.5). A start
+                // failure (including a retrieval-server without DATABASE_URL, which
+                // answers 503) degrades to the stateless stream so a chat is never lost.
                 val generationFlow: Flow<StreamChunk> =
-                    if (appConfig.durableRunsEnabled && agentic) {
+                    if (agentic) {
                         val startedRunId = runsClient.startRun(
                             customerId = customerId,
                             client = client,
