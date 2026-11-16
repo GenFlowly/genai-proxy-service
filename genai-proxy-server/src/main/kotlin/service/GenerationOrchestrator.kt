@@ -547,6 +547,11 @@ class GenerationOrchestrator(
         // Pre-calculate the deterministic response ID to send as a response header immediately
         val responseUniqueContent = "${deterministicId}-response-${config.aiVendor}"
         val responseMessageId = java.util.UUID.nameUUIDFromBytes(responseUniqueContent.toByteArray()).toString()
+        // The sibling per-model generations of this turn share the user message
+        // id, which lets the retrieval-server fetch shareable tool lookups once
+        // per message. A regenerate answers an old message on its own and must
+        // not inherit the original generation's results.
+        val turnId = deterministicId.takeIf { regenerateMessageId.isNullOrBlank() }
         val memoryContext = MemoryContext(
             project_id = memoryProjectId,
             conversation_id = activeConversationId,
@@ -610,7 +615,8 @@ class GenerationOrchestrator(
                     graphId = agentId,
                     thinkingLevel = config.thinkingLevel,
                     memoryContext = memoryContext,
-                    entitlements = entitlements
+                    entitlements = entitlements,
+                    turnId = turnId
                 )
                 // Durable /runs path: every agentic chat starts a durable background
                 // run and reattaches to its event stream. Credentials are NOT sent —
@@ -640,7 +646,8 @@ class GenerationOrchestrator(
                             graphId = agentId,
                             thinkingLevel = config.thinkingLevel,
                             memoryContext = memoryContext,
-                            entitlements = entitlements
+                            entitlements = entitlements,
+                            turnId = turnId
                         )
                         if (startedRunId != null) {
                             // Register for durable cancel FIRST — addPendingRun below

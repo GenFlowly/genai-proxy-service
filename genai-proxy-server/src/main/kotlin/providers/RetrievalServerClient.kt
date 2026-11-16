@@ -105,7 +105,14 @@ private data class RetrievalAgentPayload(
      * overrides the response generator's node-config thinking_level.
      */
     val thinking_level: String? = null,
-    val entitlements: EntitlementsPayload? = null
+    val entitlements: EntitlementsPayload? = null,
+    /**
+     * The user message this generation answers. The sibling per-model requests
+     * of one turn carry the same id, so the retrieval-server can fetch shareable
+     * tool lookups (web search) once per message. Null for regenerations and
+     * internal generations, which then share nothing.
+     */
+    val turn_id: String? = null
 )
 
 @Serializable
@@ -339,7 +346,8 @@ class RetrievalServerClient(
         graphId: String? = null,
         thinkingLevel: String? = null,
         memoryContext: MemoryContext? = null,
-        entitlements: com.genflowly.models.CustomerEntitlements? = null
+        entitlements: com.genflowly.models.CustomerEntitlements? = null,
+        turnId: String? = null
     ): String = json.encodeToString(
         RetrievalAgentPayload(
             customer_id = customerId,
@@ -363,7 +371,8 @@ class RetrievalServerClient(
             request_source = requestSource,
             graph_id = graphId,
             thinking_level = thinkingLevel,
-            entitlements = entitlements?.let(EntitlementsPayload::of)
+            entitlements = entitlements?.let(EntitlementsPayload::of),
+            turn_id = turnId
         )
     )
 
@@ -553,10 +562,11 @@ class RetrievalServerClient(
         graphId: String? = null,
         thinkingLevel: String? = null,
         memoryContext: MemoryContext? = null,
-        entitlements: com.genflowly.models.CustomerEntitlements? = null
+        entitlements: com.genflowly.models.CustomerEntitlements? = null,
+        turnId: String? = null
     ): Flow<StreamChunk> = channelFlow {
         logger.info { "Calling retrieval-server (streaming) for customer $customerId, provider $llmProvider, model $llmModel, maxTokens $llmMaxTokens, history=${conversationHistory.size}, agentic=$agentic, images=${queryImages.size}, tools=${tools.size}, toolResults=${toolResults.size}, hasSystemPrompt=${!systemPrompt.isNullOrBlank()}, structured=${responseSchema != null}, graphId=$graphId" }
-        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext, entitlements = entitlements)
+        val payload = buildPayload(customerId, client, query, llmCredentials, llmProvider, llmModel, llmMaxTokens, conversationHistory, systemPrompt, stream = true, agentic = agentic, queryImages = queryImages, queryFiles = queryFiles, tools = tools, toolChoice = toolChoice, toolResults = toolResults, responseSchema = responseSchema, memoryEnabled = memoryEnabled, requestSource = requestSource, graphId = graphId, thinkingLevel = thinkingLevel, memoryContext = memoryContext, entitlements = entitlements, turnId = turnId)
         try {
             httpClient.preparePost("$retrievalServerUrl/retrieve") {
                 contentType(ContentType.Application.Json)

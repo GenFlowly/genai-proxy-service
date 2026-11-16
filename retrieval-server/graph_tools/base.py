@@ -144,12 +144,18 @@ class GraphTool(ABC):
     resolves it per request and exposes the values through
     `context.secrets(credential_ref)`. None means the tool needs no caller
     credential. The spec the model sees never includes it.
+
+    `shareable` marks a pure lookup: the result depends on the arguments alone
+    and carries sources, so a host may hand one call's result to concurrent
+    calls that ask the same question (see graph.lookup_pool). Tools with side
+    effects or run-local state leave it False.
     """
 
     name: str
     description: str
     parameters: dict
     credential_ref: str | None = None
+    shareable: bool = False
 
     @property
     def spec(self) -> dict:

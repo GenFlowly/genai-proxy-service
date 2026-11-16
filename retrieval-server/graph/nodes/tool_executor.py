@@ -7,7 +7,9 @@ independent by construction, the model issued them together before seeing any
 result), records the exchange in loop_messages
 (replayed by the generator on the next iteration), and loops back to the
 generator. Caller-defined tool calls are never executed here — they exit the
-graph to the API caller as before.
+graph to the API caller as before. Shareable lookups (web_search) go through
+graph.lookup_pool, so the parallel per-model runs of one user message fetch a
+result once and the siblings reuse it.
 
 What may execute is decided by state["builtin_tools"] — the set enabled for
 THIS customer's request — not by whatever happens to be registered in the
@@ -29,6 +31,7 @@ import uuid
 
 from encoding_library.observability import count, observe
 from graph.fs_tools import SCRATCH_TAGS
+from graph.lookup_pool import OUTCOME_DEDUPLICATED, OUTCOME_SHARED, lookup_pool
 from graph.state import RetrievalState
 from graph.tool_credentials import resolve_tool_credentials_and_settings, secrets_accessor
 from graph.tools_runtime import credential_refs_for, make_tool_context, tools_for
@@ -73,6 +76,9 @@ _HARD_CAP_BOUNDS = (1, 20)
 # Keep in sync with the proxy's CustomerCredentialsService validation and the
 # react app's WebSearchToolSettings card.
 _MAX_SEARCHES_SETTING = "max_searches_per_turn"
+
+# Pool outcomes that answered a call without running the tool.
+_POOLED_OUTCOMES = (OUTCOME_SHARED, OUTCOME_DEDUPLICATED)
 
 
 def _hard_search_cap(config: dict, web_search_settings: dict | None) -> int:
@@ -277,6 +283,10 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     fs_namespace = scratch_state.get("fs_namespace") or uuid.uuid4().hex
     fs_prefix = _FS_PREFIX_TEMPLATE.format(customer_id=customer_id, namespace=fs_namespace)
     agent_depth = int(state.get("agent_depth") or 0)
+    # The user message this run answers; its sibling per-model runs carry the
+    # same id, which is what lets the lookup pool share results between them.
+    # The scratch namespace doubles as the run identity inside the pool.
+    turn_id = state.get("turn_id")
 
     # Resolve every credential this turn needs in one pass, off the event loop
     # (DynamoDB + KMS through boto3 are blocking, and this process serves every
@@ -401,9 +411,18 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             count("tool_execution_total", status="budget_skipped", tool=name)
             return ToolResult(content=_search_budget_skip_message(searches_after_round)), None
         start = time.perf_counter()
+        tool = by_name[name]
+        args = call.get("args") or {}
         try:
-            result = await by_name[name].run(call.get("args") or {}, context)
-            count("tool_execution_total", status="ok", tool=name)
+            if getattr(tool, "shareable", False):
+                result, outcome = await lookup_pool.execute(
+                    turn_id, name, fs_namespace, args, lambda: tool.run(args, context)
+                )
+                status = "pooled" if outcome in _POOLED_OUTCOMES else "ok"
+            else:
+                result = await tool.run(args, context)
+                status = "ok"
+            count("tool_execution_total", status=status, tool=name)
             if mode == "note":
                 result.content = (result.content or "") + _search_budget_note(searches_after_round)
             return result, None

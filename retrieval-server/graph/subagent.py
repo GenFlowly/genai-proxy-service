@@ -221,6 +221,7 @@ async def run_subagent(
         "tool_calls": None,
         "error": None,
         "agent_depth": depth,
+        "turn_id": parent_state.get("turn_id"),
     }
 
     recursion_limit = int(profile.get("max_iterations") or _DEFAULT_CHILD_MAX_ITERATIONS)
