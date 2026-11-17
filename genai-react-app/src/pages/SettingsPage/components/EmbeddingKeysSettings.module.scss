@@ -1,31 +1,12 @@
 @import '../../../styles/themes.scss';
-@import '../../../styles/mixins.scss';
-
-.container {
-    display: flex;
-    flex-direction: column;
-    gap: 2.5rem;
-}
-
-.form {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-}
 
 .vendorBrand {
-    height: 20px;
+    height: 16px;
     width: auto;
 }
 
 .keyProblem {
     font-size: 0.8125rem;
-    color: $color-text-muted;
-    margin: 0;
-}
-
-.note {
-    font-size: 0.875rem;
     color: $color-text-muted;
     margin: 0;
 }

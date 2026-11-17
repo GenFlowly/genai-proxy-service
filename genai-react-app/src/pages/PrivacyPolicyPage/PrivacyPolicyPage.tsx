@@ -46,7 +46,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
             breadcrumbs={[{ label: t('privacyPolicy.title') }]}
             narrow={isNarrow}
             // Phones open it from the Settings menu, which is where it goes back to
-            swipeBack={isSessionAuthenticated ? { to: '/settings/profile', state: OPEN_L2_MENU_STATE } : undefined}
+            swipeBack={isSessionAuthenticated ? { to: '/settings/profile/account', state: OPEN_L2_MENU_STATE } : undefined}
             data-testid="privacy-policy-page"
         >
             <article className={styles.document}>

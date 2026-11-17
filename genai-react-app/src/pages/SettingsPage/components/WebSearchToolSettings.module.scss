@@ -1,29 +1,54 @@
 @import '../../../styles/themes.scss';
 
-// Card shell, header, pills and message styles live in CredentialCard
-// (@genflowly/component-library) — this file only keeps the body layout.
-
-.description {
-    font-size: 0.9rem;
-    color: $color-text-muted;
-    margin: 0 0 0.75rem;
-}
-
-.keyRow {
+.row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    gap: 10px;
+
+    @container (max-width: 480px) {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
-.keyInput {
-    flex: 1 1 240px;
+.field {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-.limitBlock {
-    margin-top: 1rem;
+.limitField {
+    flex: 0 1 280px;
+    min-width: 0;
 }
 
-.limitInput {
-    flex: 1 1 240px;
+// Stacked, a flex basis would set the fields' height
+@container (max-width: 480px) {
+    .field,
+    .limitField {
+        flex: none;
+    }
+}
+
+.link {
+    color: $color-primary;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.dialogText {
+    margin: 0 0 12px;
+    color: $color-text-secondary;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.dialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }

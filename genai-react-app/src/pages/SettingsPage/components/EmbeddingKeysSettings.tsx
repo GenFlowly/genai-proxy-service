@@ -11,10 +11,14 @@ import {
     storeEmbeddingKey,
 } from '../../../services/embeddingKeysService'
 import {
+    StatusPill,
     VendorApiKeysManager,
     VendorApiKeyRowData,
 } from '@genflowly/component-library'
 import { VendorBrandName } from '../../../components/common/BrandName/BrandName'
+import { chosenEmbeddingModel, embeddingVendorFor } from '../../../utils/embeddingModel'
+import { SettingsFrame } from './SettingsFrame'
+import { useSettingsShell } from '../SettingsShellContext'
 import styles from './EmbeddingKeysSettings.module.scss'
 
 const keySet = (status?: EmbeddingKeyStatus): boolean =>
@@ -29,7 +33,7 @@ const keySet = (status?: EmbeddingKeyStatus): boolean =>
  * aware: a key the vendor rejects for embeddings (e.g. an OpenAI key without
  * embeddings permission) reports as not set, with the backend's detail
  * message shown below — even though the LLM page shows the same key as set.
- * The per-category default embedding models live on the Defaults page.
+ * The embedding model itself (one, chosen once) lives on Defaults › Embedding models.
  *
  * The optional Hugging Face token rides the same credential endpoints but is
  * rendered in its own manager: it is the only removable credential (the
@@ -43,7 +47,13 @@ export function EmbeddingKeysSettings(): React.ReactElement {
         isAuthenticated,
         getAccessTokenSilently,
         updateVendorApiKeyStatus,
+        aiConfigPreferences,
     } = useAuth()
+    const { narrow } = useSettingsShell()
+    const chosenVendor = embeddingVendorFor(chosenEmbeddingModel(aiConfigPreferences))
+    const usedPill = (vendor: EmbeddingVendor) => chosenVendor === vendor
+        ? <StatusPill>{t('settingsPage.embeddingKeys.usedPill')}</StatusPill>
+        : undefined
 
     const [statuses, setStatuses] = useState<EmbeddingKeyStatus[]>([])
 
@@ -65,24 +75,29 @@ export function EmbeddingKeysSettings(): React.ReactElement {
     const setStatus = (status: EmbeddingKeyStatus) =>
         setStatuses(prev => [...prev.filter(s => s.vendor !== status.vendor), status])
 
-    const rows: VendorApiKeyRowData[] = useMemo(() => ([
+    const rows: VendorApiKeyRowData[] = [
         {
             vendor: EmbeddingVendor.OPENAI,
             label: <VendorBrandName vendorId={EmbeddingVendor.OPENAI} className={styles.vendorBrand} />,
             keySet: keySet(statuses.find(s => s.vendor === EmbeddingVendor.OPENAI)),
+            pills: usedPill(EmbeddingVendor.OPENAI),
+            hint: t('settingsPage.embeddingKeys.sharedHint'),
         },
         {
             vendor: EmbeddingVendor.VOYAGE,
             label: t('settingsPage.embeddingKeysSettings.voyageLabel'),
             keySet: keySet(statuses.find(s => s.vendor === EmbeddingVendor.VOYAGE)),
+            pills: usedPill(EmbeddingVendor.VOYAGE),
+            keyPlaceholder: 'pa-…',
         },
-    ]), [statuses, t])
+    ]
 
     const hfRows: VendorApiKeyRowData[] = useMemo(() => ([
         {
             vendor: EmbeddingVendor.HUGGINGFACE,
             label: t('settingsPage.embeddingKeysSettings.huggingFaceLabel'),
             keySet: keySet(statuses.find(s => s.vendor === EmbeddingVendor.HUGGINGFACE)),
+            hint: t('settingsPage.embeddingKeys.optionalHint'),
         },
     ]), [statuses, t])
 
@@ -148,9 +163,20 @@ export function EmbeddingKeysSettings(): React.ReactElement {
 
     const problems = statuses.filter(s => s.detail)
 
+    const setCount = rows.filter(row => row.keySet).length
+    const statusText = t('settingsPage.llmKeys.setCount', { count: setCount })
+    const knowledge = [
+        { title: t('settingsPage.embeddingKeys.whatTitle'), text: t('settingsPage.embeddingKeys.whatText') },
+        { title: t('settingsPage.embeddingKeys.hfTitle'), text: t('settingsPage.embeddingKeys.hfText') },
+    ]
+
     return (
-        <div className={styles.container}>
-            <div className={styles.form}>
+        <SettingsFrame
+            page="embedding-keys"
+            knowledge={knowledge}
+            statusText={statusText}
+            status={<StatusPill kind={setCount > 0 ? 'ok' : 'unset'}>{statusText}</StatusPill>}
+        >
                 <VendorApiKeysManager
                     rows={rows}
                     onSaveKey={handleSaveKey}
@@ -158,15 +184,15 @@ export function EmbeddingKeysSettings(): React.ReactElement {
                         keySetPill: t('settingsPage.aiSettings.keySetPill'),
                         keyNotSetPill: t('settingsPage.aiSettings.keyNotSetPill'),
                         keyHint: t('settingsPage.aiSettings.apiKeyHint'),
-                        keyPlaceholder: 'sk-... / pa-...',
-                        keyReplacePlaceholder: t('settingsPage.aiSettings.overwriteApiKey'),
+                        keyPlaceholder: t('settingsPage.llmKeys.enterKey'),
+                        keyReplacePlaceholder: t('settingsPage.llmKeys.replaceKey'),
                         saveKey: t('settingsPage.aiSettings.save'),
                         saving: t('settingsPage.aiSettings.savingLabel'),
                         keyEmpty: t('settingsPage.aiSettings.enterValidApiKeyToast'),
                     }}
+                    narrow={narrow}
                     data-testid="embedding-keys"
                 />
-                <p className={styles.note}>{t('settingsPage.embeddingKeysSettings.huggingFaceNote')}</p>
                 <VendorApiKeysManager
                     rows={hfRows}
                     onSaveKey={handleSaveKey}
@@ -174,15 +200,16 @@ export function EmbeddingKeysSettings(): React.ReactElement {
                     strings={{
                         keySetPill: t('settingsPage.aiSettings.keySetPill'),
                         keyNotSetPill: t('settingsPage.aiSettings.keyNotSetPill'),
-                        keyHint: t('settingsPage.aiSettings.apiKeyHint'),
-                        keyPlaceholder: 'hf_...',
-                        keyReplacePlaceholder: t('settingsPage.aiSettings.overwriteApiKey'),
+                        keyPlaceholder: 'hf_…',
+                        keyHint: t('settingsPage.embeddingKeys.tokenHint'),
+                        keyReplacePlaceholder: t('settingsPage.llmKeys.replaceKey'),
                         saveKey: t('settingsPage.aiSettings.save'),
                         removeKey: t('settingsPage.embeddingKeysSettings.removeKey'),
                         keyRemoved: t('settingsPage.embeddingKeysSettings.keyRemoved'),
                         saving: t('settingsPage.aiSettings.savingLabel'),
                         keyEmpty: t('settingsPage.aiSettings.enterValidApiKeyToast'),
                     }}
+                    narrow={narrow}
                     data-testid="hf-token"
                 />
                 {problems.map(s => (
@@ -190,7 +217,6 @@ export function EmbeddingKeysSettings(): React.ReactElement {
                         {vendorLabel(s.vendor)}: {s.detail}
                     </p>
                 ))}
-            </div>
-        </div>
+        </SettingsFrame>
     )
 }

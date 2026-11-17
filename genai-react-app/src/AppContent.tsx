@@ -21,7 +21,6 @@ import InstructionEditPage from './pages/InstructionDetailPage/InstructionEditPa
 import InstructionHistoryPage from './pages/InstructionDetailPage/InstructionHistoryPage'
 import InstructionUsedInPage from './pages/InstructionDetailPage/InstructionUsedInPage'
 import ContentRulesPage from './pages/ContentRulesPage/ContentRulesPage'
-import BlockedUsersPage from './pages/BlockedUsersPage/BlockedUsersPage'
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage/PrivacyPolicyPage'
 import SupportPage from './pages/SupportPage/SupportPage'
 import ConversationHistoryPage from './components/widgets/ConversationHistoryWidget/ConversationHistoryPage'
@@ -123,7 +122,7 @@ export default function AppContent(): React.ReactElement | null {
                                 <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                                 <Route path="/support" element={<SupportPage />} />
                                 <Route path="/content-rules" element={<ContentRulesPage />} />
-                                <Route path="/blocked-users" element={<ProtectedRoute><BlockedUsersPage /></ProtectedRoute>} />
+                                <Route path="/blocked-users" element={<Navigate to="/settings/profile/blocked" replace />} />
                             </Routes>
                             <AppMenuOverlay />
                         </EdgeSwipeProvider>

@@ -1,5 +1,6 @@
 // src/constants/icons.ts
 import promptIcon from '../assets/icons/prompt-icon.svg'
+import infoIcon from '../assets/icons/info.svg'
 import responseIcon from '../assets/icons/response-icon.svg'
 import altArrowLeft from '../assets/icons/alt-arrow-left.svg'
 import altArrowRight from '../assets/icons/alt-arrow-right.svg'
@@ -47,6 +48,7 @@ import documentTextIcon from '../assets/icons/document-text.svg'
 
 export const ICONS = {
     EDIT: editIcon,
+    INFO: infoIcon,
     PROMPT_ICON: promptIcon,
     RESPONSE_ICON: responseIcon,
     ALT_ARROW_LEFT: altArrowLeft,

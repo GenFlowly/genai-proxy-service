@@ -1,8 +1,9 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { VectorDbUsageSettings } from './VectorDbUsageSettings'
 import { useAuth } from '../../../../context/AuthContext'
 import { getVectorDbUsage } from '../../../../services/getUsageService'
+import { renderSettingsPage } from '../../settingsTestUtils'
 
 jest.mock('../../../../context/AuthContext')
 jest.mock('../../../../services/getUsageService')
@@ -11,54 +12,37 @@ const mockUseAuth = useAuth as jest.Mock
 const mockGetVectorDbUsage = getVectorDbUsage as jest.Mock
 
 describe('VectorDbUsageSettings', () => {
-    const mockGetAccessTokenSilently = jest.fn()
+    const getAccessTokenSilently = jest.fn()
 
     beforeEach(() => {
         jest.clearAllMocks()
-        mockGetAccessTokenSilently.mockResolvedValue('test-token')
-        mockUseAuth.mockReturnValue({
-            isAuthenticated: true,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-        })
+        getAccessTokenSilently.mockResolvedValue('test-token')
+        mockUseAuth.mockReturnValue({ isAuthenticated: true, getAccessTokenSilently })
     })
 
-    test('renders the date picker and a "not tracked yet" state when the endpoint 404s', async () => {
+    test('shows "Not tracked yet" with a link to the connection when the route is not live', async () => {
         mockGetVectorDbUsage.mockResolvedValue(null)
+        renderSettingsPage(<VectorDbUsageSettings />)
 
-        render(<VectorDbUsageSettings />)
-
-        expect(screen.getByTestId('vector-db-usage-date-range')).toBeInTheDocument()
-        await waitFor(() =>
-            expect(screen.getByTestId('vector-db-usage-not-tracked-yet')).toBeInTheDocument()
-        )
+        const card = await screen.findByTestId('vector-db-usage-not-tracked-yet')
+        expect(within(card).getByRole('link', { name: 'Vector DB Connection' })).toHaveAttribute('href', '/settings/byok/vector-db')
+        expect(screen.getAllByText('Not tracked yet').length).toBeGreaterThan(1)
     })
 
-    test('also shows "not tracked yet" if the fetch throws, instead of an error state', async () => {
+    test('also shows "Not tracked yet" if the fetch throws', async () => {
         mockGetVectorDbUsage.mockRejectedValue(new Error('boom'))
+        renderSettingsPage(<VectorDbUsageSettings />)
 
-        render(<VectorDbUsageSettings />)
-
-        await waitFor(() =>
-            expect(screen.getByTestId('vector-db-usage-not-tracked-yet')).toBeInTheDocument()
-        )
+        expect(await screen.findByTestId('vector-db-usage-not-tracked-yet')).toBeInTheDocument()
     })
 
-    test('renders the operation breakdown and the no-cost note once the backend returns real usage, with no dollar figure anywhere', async () => {
-        mockGetVectorDbUsage.mockResolvedValue({
-            breakdown: [
-                { opType: 'search', count: 100 },
-                { opType: 'insert', count: 50 },
-            ],
-        })
+    test('lists operation counts, never a dollar figure', async () => {
+        mockGetVectorDbUsage.mockResolvedValue({ breakdown: [{ opType: 'search', count: 2_500_000 }, { opType: 'insert', count: 12 }] })
+        renderSettingsPage(<VectorDbUsageSettings />)
 
-        render(<VectorDbUsageSettings />)
-
-        await waitFor(() => expect(screen.getByTestId('vector-db-usage-no-cost-note')).toBeInTheDocument())
-        expect(screen.queryByTestId('vector-db-usage-not-tracked-yet')).not.toBeInTheDocument()
-        expect(screen.getByText('search')).toBeInTheDocument()
-        expect(screen.getByText('insert')).toBeInTheDocument()
-        expect(screen.getByText('100')).toBeInTheDocument()
-        expect(screen.getByText('50')).toBeInTheDocument()
+        const table = await screen.findByTestId('vector-db-usage-table')
+        expect(within(table).getByText('2.5M')).toBeInTheDocument()
+        expect(within(table).getByText('12')).toBeInTheDocument()
         expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
     })
 })

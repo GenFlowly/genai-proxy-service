@@ -1,10 +1,13 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LlmUsageSettings } from './LlmUsageSettings'
 import { defaultUsageRange, localToday, toUtcUsageRange } from './usageDateRange'
 import { useAuth } from '../../../../context/AuthContext'
 import { getLlmUsage } from '../../../../services/getUsageService'
+import { APIKeyStatus } from '../../../../models/storeCustomerVendorAPIKeys.models'
+import { withQueryClient } from '../../../../test/utils/queryWrapper'
+import { renderSettingsPage } from '../../settingsTestUtils'
 
 jest.mock('../../../../context/AuthContext')
 jest.mock('../../../../services/getUsageService')
@@ -12,80 +15,92 @@ jest.mock('../../../../services/getUsageService')
 const mockUseAuth = useAuth as jest.Mock
 const mockGetLlmUsage = getLlmUsage as jest.Mock
 
+const SUMMARY = {
+    totalCostUsd: 12.3456,
+    byVendor: [
+        { vendor: 'CLAUDE', costUsd: 10, totalTokens: 1_250_000, cacheReadTokens: 900_000, cacheWriteTokens: 200_000, requestCount: 5 },
+        { vendor: 'OPENAI', costUsd: 2.3456, totalTokens: 200, requestCount: 2 },
+    ],
+    byModel: [
+        { vendor: 'CLAUDE', model: 'claude-sonnet-5', costUsd: 10, totalTokens: 1_250_000, requestCount: 5 },
+        { vendor: 'OPENAI', model: 'gpt-5', costUsd: 2.3456, totalTokens: 200, requestCount: 2 },
+    ],
+    byDay: [{ date: localToday(), costUsd: 12.3456, requestCount: 7 }],
+}
+const EMPTY = { totalCostUsd: 0, byVendor: [], byModel: [], byDay: [] }
+
 describe('LlmUsageSettings', () => {
-    const mockGetAccessTokenSilently = jest.fn()
+    const getAccessTokenSilently = jest.fn()
+    const auth = (overrides: Record<string, unknown> = {}) => mockUseAuth.mockReturnValue({
+        isAuthenticated: true,
+        getAccessTokenSilently,
+        aiVendorAPIKeyStatusList: [],
+        ...overrides,
+    })
+    const renderPage = () => renderSettingsPage(withQueryClient(<LlmUsageSettings />))
 
     beforeEach(() => {
         jest.clearAllMocks()
-        mockGetAccessTokenSilently.mockResolvedValue('test-token')
-        mockUseAuth.mockReturnValue({
-            isAuthenticated: true,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-        })
+        getAccessTokenSilently.mockResolvedValue('test-token')
+        auth()
     })
 
-    test('loads and renders totals plus vendor/model breakdowns', async () => {
-        mockGetLlmUsage.mockResolvedValue({
-            totalCostUsd: 12.3456,
-            byVendor: [
-                { vendor: 'ANTHROPIC', costUsd: 10, totalTokens: 1000, requestCount: 5 },
-                { vendor: 'OPENAI', costUsd: 2.3456, totalTokens: 200, requestCount: 2 },
-            ],
-            byModel: [
-                { vendor: 'ANTHROPIC', model: 'claude-sonnet-5', costUsd: 10, totalTokens: 1000, requestCount: 5 },
-                { vendor: 'OPENAI', model: 'gpt-5', costUsd: 2.3456, totalTokens: 200, requestCount: 2 },
-            ],
-        })
+    test('shows the four tiles, with millions shortened, and the vendor and model tables', async () => {
+        mockGetLlmUsage.mockResolvedValue(SUMMARY)
+        renderPage()
 
-        render(<LlmUsageSettings />)
-
-        await waitFor(() => expect(mockGetLlmUsage).toHaveBeenCalled())
-
-        expect(screen.getByTestId('llm-usage-total-cost')).toHaveTextContent('$12.35')
-        expect(screen.getByTestId('llm-usage-total-requests')).toHaveTextContent('7')
-        // Appears once in the "by vendor" table and once in "by model"
-        expect(screen.getAllByText('ANTHROPIC')).toHaveLength(2)
-        expect(screen.getByText('claude-sonnet-5')).toBeInTheDocument()
+        expect(await screen.findByTestId('llm-usage-tile-cost')).toHaveTextContent('Total cost$12.35')
+        expect(screen.getByTestId('llm-usage-tile-requests')).toHaveTextContent('7')
+        expect(screen.getByTestId('llm-usage-tile-tokens')).toHaveTextContent('1.3M')
+        expect(screen.getByTestId('llm-usage-tile-cache')).toHaveTextContent('1.1M')
+        const byModel = screen.getByTestId('llm-usage-by-model')
+        expect(within(byModel).getByText('claude-sonnet-5')).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Cost per day' })).toBeInTheDocument()
+        expect(screen.getByText("From each model's prices.")).toBeInTheDocument()
     })
 
-    test('calls getLlmUsage with a trailing 30-day default range', async () => {
-        mockGetLlmUsage.mockResolvedValue({ totalCostUsd: 0, byVendor: [], byModel: [] })
+    test('own-key users see an estimate', async () => {
+        auth({ aiVendorAPIKeyStatusList: [{ aiVendor: 'OPENAI', isAPIKeyValid: true, status: APIKeyStatus.VALID }] })
+        mockGetLlmUsage.mockResolvedValue(SUMMARY)
+        renderPage()
 
-        render(<LlmUsageSettings />)
+        expect(await screen.findByTestId('llm-usage-tile-cost')).toHaveTextContent('Est. cost')
+        expect(screen.getByText('Based on your usage. Your BYOK provider bill may vary.')).toBeInTheDocument()
+    })
+
+    test('asks for the trailing 30 days first and labels the page with it', async () => {
+        mockGetLlmUsage.mockResolvedValue(EMPTY)
+        renderPage()
 
         await waitFor(() => expect(mockGetLlmUsage).toHaveBeenCalledTimes(1))
-        const [, range] = mockGetLlmUsage.mock.calls[0]
-        expect(range).toEqual(toUtcUsageRange(defaultUsageRange()))
+        expect(mockGetLlmUsage.mock.calls[0][1]).toEqual(toUtcUsageRange(defaultUsageRange()))
+        expect(screen.getAllByText('Last 30 days').length).toBeGreaterThan(1)
     })
 
-    test('renders the empty state when there is no usage for the range', async () => {
-        mockGetLlmUsage.mockResolvedValue({ totalCostUsd: 0, byVendor: [], byModel: [] })
+    test('an empty range shows empty tables', async () => {
+        mockGetLlmUsage.mockResolvedValue(EMPTY)
+        renderPage()
 
-        render(<LlmUsageSettings />)
-
-        await waitFor(() => expect(screen.getByTestId('llm-usage-empty')).toBeInTheDocument())
+        expect((await screen.findAllByText('No usage in this range.')).length).toBe(2)
     })
 
-    test('renders an error state when the fetch fails', async () => {
+    test('a failed fetch shows the error', async () => {
         mockGetLlmUsage.mockRejectedValue(new Error('boom'))
+        renderPage()
 
-        render(<LlmUsageSettings />)
-
-        await waitFor(() => expect(screen.getByTestId('llm-usage-error')).toBeInTheDocument())
+        expect(await screen.findByTestId('llm-usage-error')).toBeInTheDocument()
     })
 
-    test('selecting a different preset refetches with the new range', async () => {
-        mockGetLlmUsage.mockResolvedValue({ totalCostUsd: 0, byVendor: [], byModel: [] })
-
-        render(<LlmUsageSettings />)
+    test('picking another preset refetches with that range', async () => {
+        mockGetLlmUsage.mockResolvedValue(EMPTY)
+        renderPage()
         await waitFor(() => expect(mockGetLlmUsage).toHaveBeenCalledTimes(1))
 
-        await userEvent.click(screen.getByTestId('llm-usage-date-range-presets-option-7d'))
+        await userEvent.click(screen.getByTestId('llm-usage-date-range-preset-7d'))
 
         await waitFor(() => expect(mockGetLlmUsage).toHaveBeenCalledTimes(2))
-        const [, secondRange] = mockGetLlmUsage.mock.calls[1]
         const from = new Date(`${localToday()}T00:00:00Z`)
         from.setUTCDate(from.getUTCDate() - 6)
-        expect(secondRange).toEqual(toUtcUsageRange({ from: from.toISOString().slice(0, 10), to: localToday() }))
+        expect(mockGetLlmUsage.mock.calls[1][1]).toEqual(toUtcUsageRange({ from: from.toISOString().slice(0, 10), to: localToday() }))
     })
 })

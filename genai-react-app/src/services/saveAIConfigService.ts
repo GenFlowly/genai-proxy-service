@@ -25,6 +25,14 @@ export interface SaveAIConfigPreferencesRequest {
     otherPreferences?: Record<string, string>
 }
 
+/** A save refused because another embedding model is already chosen and locked (HTTP 409). */
+export class EmbeddingModelLockedError extends Error {
+    constructor(message: string, readonly lockedModel: string) {
+        super(message)
+        this.name = 'EmbeddingModelLockedError'
+    }
+}
+
 export async function saveAIConfigPreferences(
     token: string,
     payload: SaveAIConfigPreferencesRequest
@@ -42,11 +50,16 @@ export async function saveAIConfigPreferences(
         // Surface the server's validation message (e.g. an unsupported embedding
         // model) so the caller's toast explains what to fix, not just the status.
         let serverError: string | undefined
+        let lockedModel: string | undefined
         try {
             const body = await response.json()
             serverError = body?.error
+            lockedModel = body?.embeddingModel
         } catch {
             // No / invalid JSON body — fall back to the status line below.
+        }
+        if (response.status === 409 && lockedModel) {
+            throw new EmbeddingModelLockedError(serverError || 'The embedding model is locked.', lockedModel)
         }
         throw new Error(
             serverError || `Failed to save AI config preferences: ${response.statusText}`

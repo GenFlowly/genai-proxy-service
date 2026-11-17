@@ -1,8 +1,18 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { CredentialCard, CredentialStatusPill, InputTextWithHint, PillButton } from '@genflowly/component-library'
+import { Link } from 'react-router'
+import { InputTextWithHint, Modal, PillButton, SettingsCard, SettingsRow, StatusPill } from '@genflowly/component-library'
+import { useAuth } from '../../../context/AuthContext'
+import { useToast } from '../../../context/ToastContext'
 import { ICONS } from '../../../constants/icons'
-import { deleteToolCredentials, storeToolCredentials } from '../../../services/customerToolsService'
+import {
+    deleteToolCredentials,
+    getToolCredentialStatuses,
+    storeToolCredentials,
+    ToolCredentialStatus,
+} from '../../../services/customerToolsService'
+import { SettingsFrame } from './SettingsFrame'
+import { useSettingsShell } from '../SettingsShellContext'
 import styles from './WebSearchToolSettings.module.scss'
 
 /** SK in CustomerToolCredentials — must match WebSearchTool.credential_ref
@@ -20,201 +30,187 @@ const MAX_SEARCHES_DEFAULT = 5
 const MAX_SEARCHES_MIN = 1
 const MAX_SEARCHES_MAX = 20
 
-interface WebSearchToolSettingsProps {
-    /** Whether a key is currently stored for WEB_SEARCH. */
-    connected: boolean
-    /** Stored WEB_SEARCH settings, or null when the customer saved none. */
-    settings?: Record<string, string> | null
-    getAccessTokenSilently: () => Promise<string>
-    /** Called after a successful save/remove so the caller can refresh status. */
-    onChanged: () => void | Promise<void>
-}
-
 /**
- * Credential card for the built-in web_search tool (Tavily-backed). Unlike
- * customer-defined tools, this credential has nowhere else to be configured —
- * web_search is a reserved name a customer can never create a CustomerTools
- * row for — so it gets its own small section rather than living in the
- * generic tool-credential form.
+ * BYOK Settings › Web Search API Key: the Tavily key the built-in web_search
+ * tool runs on, and how many searches it may run per message.
  */
-export function WebSearchToolSettings({
-    connected,
-    settings,
-    getAccessTokenSilently,
-    onChanged,
-}: WebSearchToolSettingsProps): React.ReactElement {
+export function WebSearchToolSettings(): React.ReactElement {
     const { t } = useTranslation()
+    const { isAuthenticated, getAccessTokenSilently } = useAuth()
+    const { showToast } = useToast()
+    const { narrow } = useSettingsShell()
+    const [status, setStatus] = useState<ToolCredentialStatus | null>(null)
+    const [loaded, setLoaded] = useState(false)
     const [keyInput, setKeyInput] = useState('')
     const [busy, setBusy] = useState(false)
-    const [message, setMessage] = useState<string | null>(null)
-    const [messageKind, setMessageKind] = useState<'success' | 'error' | null>(null)
+    const [confirmRemove, setConfirmRemove] = useState(false)
 
-    const storedLimit = parseStoredLimit(settings)
+    const connected = !!status?.connected
+    const storedLimit = parseStoredLimit(status?.settings)
     const [limitInput, setLimitInput] = useState(String(storedLimit))
-    // Statuses load after mount — refresh the field whenever the stored value
-    // arrives or changes (a save calls onChanged, which reloads statuses).
     useEffect(() => { setLimitInput(String(storedLimit)) }, [storedLimit])
 
+    const load = useCallback(async () => {
+        if (!isAuthenticated) return
+        try {
+            const response = await getToolCredentialStatuses(await getAccessTokenSilently())
+            setStatus(response.toolCredentialStatuses.find(s => s.toolType === WEB_SEARCH_TOOL_TYPE) ?? null)
+        } catch (error: any) {
+            showToast(error?.message || t('settingsPage.toolsSettings.loadErrorToast'))
+        } finally {
+            setLoaded(true)
+        }
+    }, [isAuthenticated, getAccessTokenSilently, showToast, t])
+
+    useEffect(() => { void load() }, [load])
+
     const errorMessage = (error: unknown): string => (
-        error instanceof Error && error.message
-            ? error.message
-            : t('settingsPage.toolsSettings.builtInGenericError')
+        error instanceof Error && error.message ? error.message : t('settingsPage.toolsSettings.builtInGenericError')
     )
 
-    const handleSave = async () => {
-        const key = keyInput.trim()
-        if (!key) {
-            setMessage(t('settingsPage.toolsSettings.builtInKeyEmptyToast'))
-            setMessageKind('error')
-            return
-        }
+    const store = async (request: Parameters<typeof storeToolCredentials>[1], doneKey: string) => {
         setBusy(true)
-        setMessage(null)
-        setMessageKind(null)
         try {
-            const token = await getAccessTokenSilently()
-            await storeToolCredentials(token, {
-                toolType: WEB_SEARCH_TOOL_TYPE,
-                authType: AUTH_TYPE,
-                credentials: { api_key: key },
-            })
-            setKeyInput('')
-            setMessage(t('settingsPage.toolsSettings.builtInKeySavedToast'))
-            setMessageKind('success')
-            await onChanged()
+            await storeToolCredentials(await getAccessTokenSilently(), request)
+            showToast(t(doneKey))
+            await load()
+            return true
         } catch (error) {
-            setMessage(errorMessage(error))
-            setMessageKind('error')
+            showToast(errorMessage(error))
+            return false
         } finally {
             setBusy(false)
         }
+    }
+
+    const saveKey = async () => {
+        const key = keyInput.trim()
+        if (!key) {
+            showToast(t('settingsPage.toolsSettings.builtInKeyEmptyToast'))
+            return
+        }
+        const saved = await store(
+            { toolType: WEB_SEARCH_TOOL_TYPE, authType: AUTH_TYPE, credentials: { api_key: key } },
+            'settingsPage.toolsSettings.builtInKeySavedToast'
+        )
+        if (saved) setKeyInput('')
     }
 
     const limitValue = parseLimitInput(limitInput)
     const limitDirty = limitValue !== null && limitValue !== storedLimit
 
-    const handleSaveLimit = async () => {
+    const saveLimit = async () => {
         if (limitValue === null) {
-            setMessage(t('settingsPage.toolsSettings.builtInSearchLimitInvalidToast'))
-            setMessageKind('error')
+            showToast(t('settingsPage.toolsSettings.builtInSearchLimitInvalidToast'))
             return
         }
+        await store(
+            { toolType: WEB_SEARCH_TOOL_TYPE, authType: AUTH_TYPE, settings: { [MAX_SEARCHES_SETTING]: String(limitValue) } },
+            'settingsPage.toolsSettings.builtInSearchLimitSavedToast'
+        )
+    }
+
+    const removeKey = async () => {
         setBusy(true)
-        setMessage(null)
-        setMessageKind(null)
         try {
-            const token = await getAccessTokenSilently()
-            // Settings-only save: stored credentials are left untouched, and
-            // the limit works even for customers on the platform search key.
-            await storeToolCredentials(token, {
-                toolType: WEB_SEARCH_TOOL_TYPE,
-                authType: AUTH_TYPE,
-                settings: { [MAX_SEARCHES_SETTING]: String(limitValue) },
-            })
-            setMessage(t('settingsPage.toolsSettings.builtInSearchLimitSavedToast'))
-            setMessageKind('success')
-            await onChanged()
+            await deleteToolCredentials(await getAccessTokenSilently(), WEB_SEARCH_TOOL_TYPE)
+            showToast(t('settingsPage.toolsSettings.builtInKeyRemovedToast'))
+            setConfirmRemove(false)
+            await load()
         } catch (error) {
-            setMessage(errorMessage(error))
-            setMessageKind('error')
+            showToast(errorMessage(error))
         } finally {
             setBusy(false)
         }
     }
 
-    const handleRemove = async () => {
-        if (!window.confirm(t('settingsPage.toolsSettings.builtInRemoveConfirm'))) return
-        setBusy(true)
-        setMessage(null)
-        setMessageKind(null)
-        try {
-            const token = await getAccessTokenSilently()
-            await deleteToolCredentials(token, WEB_SEARCH_TOOL_TYPE)
-            setMessage(t('settingsPage.toolsSettings.builtInKeyRemovedToast'))
-            setMessageKind('success')
-            await onChanged()
-        } catch (error) {
-            setMessage(errorMessage(error))
-            setMessageKind('error')
-        } finally {
-            setBusy(false)
-        }
-    }
+    const knowledge = [
+        { title: t('settingsPage.webSearchKey.forTitle'), text: t('settingsPage.webSearchKey.forText') },
+        { title: t('settingsPage.webSearchKey.usageTitle'), text: t('settingsPage.webSearchKey.usageText') },
+        { title: t('settingsPage.webSearchKey.whereTitle'), text: t('settingsPage.webSearchKey.whereText') },
+    ]
+    const pillText = connected ? t('settingsPage.toolsSettings.builtInKeySetPill') : t('settingsPage.toolsSettings.builtInKeyNotSetPill')
+    const pill = (testId?: string) => loaded
+        ? <StatusPill kind={connected ? 'ok' : 'unset'} data-testid={testId}>{pillText}</StatusPill>
+        : undefined
+    const layout = narrow ? 'stacked' : 'inline'
+    const size = narrow ? 'lg' : 'md'
 
     return (
-        <CredentialCard
-            data-testid="web-search-credential"
-            label={t('settingsPage.toolsSettings.builtInWebSearchLabel')}
-            pills={
-                <CredentialStatusPill
-                    kind={connected ? 'ok' : 'unset'}
-                    data-testid="web-search-credential-status-pill"
-                >
-                    {connected
-                        ? t('settingsPage.toolsSettings.builtInKeySetPill')
-                        : t('settingsPage.toolsSettings.builtInKeyNotSetPill')}
-                </CredentialStatusPill>
-            }
-            message={message}
-            messageKind={messageKind}
-        >
-            <p className={styles.description}>{t('settingsPage.toolsSettings.builtInWebSearchDescription')}</p>
-            <div className={styles.keyRow}>
-                <InputTextWithHint
-                    hint={t('settingsPage.toolsSettings.builtInKeyHint')}
-                    type="password"
-                    placeholder={connected
-                        ? t('settingsPage.toolsSettings.builtInKeyReplacePlaceholder')
-                        : t('settingsPage.toolsSettings.builtInKeyPlaceholder')}
-                    value={keyInput}
-                    disabled={busy}
-                    onChange={e => setKeyInput(e.target.value)}
-                    className={styles.keyInput}
-                    data-testid="web-search-credential-key-input"
-                />
-                <PillButton
-                    label={busy ? t('settingsPage.toolsSettings.savingLabel') : t('settingsPage.toolsSettings.builtInSaveKey')}
-                    icon={ICONS.SAVE_ICON}
-                    disabled={busy || !keyInput.trim()}
-                    onClick={() => void handleSave()}
-                    data-testid="web-search-credential-save"
-                />
-                {connected && (
-                    <PillButton
-                        label={t('settingsPage.toolsSettings.builtInRemoveKey')}
-                        variant="danger"
+        <SettingsFrame page="byok-web-search" knowledge={knowledge} status={pill()} statusText={loaded ? pillText : undefined}>
+            <SettingsCard title={t('settingsPage.toolsSettings.builtInWebSearchLabel')} pills={pill('web-search-credential-status-pill')} data-testid="web-search-credential">
+                <div className={styles.row}>
+                    <InputTextWithHint
+                        hint={t('settingsPage.toolsSettings.builtInKeyHint')}
+                        type="password"
+                        placeholder={connected
+                            ? t('settingsPage.toolsSettings.builtInKeyReplacePlaceholder')
+                            : t('settingsPage.toolsSettings.builtInKeyPlaceholder')}
+                        value={keyInput}
                         disabled={busy}
-                        onClick={() => void handleRemove()}
-                        data-testid="web-search-credential-remove"
+                        onChange={e => setKeyInput(e.target.value)}
+                        layout={layout}
+                        className={styles.field}
+                        data-testid="web-search-credential-key-input"
                     />
-                )}
-            </div>
-            <div className={styles.limitBlock}>
-                <p className={styles.description}>
-                    {t('settingsPage.toolsSettings.builtInSearchLimitLabel')}
-                    {' — '}
-                    {t('settingsPage.toolsSettings.builtInSearchLimitDescription')}
-                </p>
-                <div className={styles.keyRow}>
+                    <PillButton
+                        label={busy ? t('settingsPage.toolsSettings.savingLabel') : t('settingsPage.toolsSettings.builtInSaveKey')}
+                        icon={ICONS.SAVE_ICON}
+                        disabled={busy || !keyInput.trim()}
+                        onClick={() => void saveKey()}
+                        size={size}
+                        data-testid="web-search-credential-save"
+                    />
+                    {connected && (
+                        <PillButton
+                            label={t('settingsPage.toolsSettings.builtInRemoveKey')}
+                            variant="secondary"
+                            disabled={busy}
+                            onClick={() => setConfirmRemove(true)}
+                            size={size}
+                            data-testid="web-search-credential-remove"
+                        />
+                    )}
+                </div>
+            </SettingsCard>
+            <SettingsCard title={t('settingsPage.toolsSettings.builtInSearchLimitHint')} hint={t('settingsPage.webSearchKey.limitRange')}>
+                <div className={styles.row}>
                     <InputTextWithHint
                         hint={t('settingsPage.toolsSettings.builtInSearchLimitHint')}
                         type="number"
                         value={limitInput}
                         disabled={busy}
                         onChange={e => setLimitInput(e.target.value)}
-                        className={styles.limitInput}
+                        layout={layout}
+                        className={styles.limitField}
                         data-testid="web-search-limit-input"
                     />
                     <PillButton
                         label={busy ? t('settingsPage.toolsSettings.savingLabel') : t('settingsPage.toolsSettings.builtInSearchLimitSave')}
                         icon={ICONS.SAVE_ICON}
                         disabled={busy || !limitDirty}
-                        onClick={() => void handleSaveLimit()}
+                        onClick={() => void saveLimit()}
+                        size={size}
                         data-testid="web-search-limit-save"
                     />
                 </div>
-            </div>
-        </CredentialCard>
+            </SettingsCard>
+            <SettingsCard title={t('settingsPage.webSearchKey.related')}>
+                <SettingsRow
+                    label={t('settingsPage.webSearchKey.usageLink')}
+                    stackOnNarrow={false}
+                    action={<Link to="/settings/usage/web-search" className={styles.link}>{t('settingsPage.nav.usage')}</Link>}
+                />
+            </SettingsCard>
+
+            <Modal isOpen={confirmRemove} onClose={() => !busy && setConfirmRemove(false)} title={t('settingsPage.webSearchKey.removeTitle')} maxWidth="28rem">
+                <p className={styles.dialogText}>{t('settingsPage.toolsSettings.builtInRemoveConfirm')}</p>
+                <div className={styles.dialogActions}>
+                    <PillButton label={t('settingsPage.profileSettings.deleteData.cancel')} variant="secondary" onClick={() => setConfirmRemove(false)} disabled={busy} />
+                    <PillButton label={t('settingsPage.toolsSettings.builtInRemoveKey')} variant="danger" onClick={() => void removeKey()} disabled={busy} data-testid="web-search-credential-remove-confirm" />
+                </div>
+            </Modal>
+        </SettingsFrame>
     )
 }
 

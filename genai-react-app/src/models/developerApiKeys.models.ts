@@ -13,7 +13,15 @@ export interface DeveloperApiKeyCreatedResponse {
     createdAt: string
 }
 
-export interface DeveloperApiKeySummary {
+/** Requests and cost for the last 30 UTC days and all time; null when usage couldn't be read. */
+export interface DeveloperApiKeyUsage {
+    requests30d?: number | null
+    costUsd30d?: number | null
+    requestsAllTime?: number | null
+    costUsdAllTime?: number | null
+}
+
+export interface DeveloperApiKeySummary extends DeveloperApiKeyUsage {
     keyId: string
     name: string
     prefix: string
@@ -23,4 +31,6 @@ export interface DeveloperApiKeySummary {
 
 export interface ListDeveloperApiKeysResponse {
     keys: DeveloperApiKeySummary[]
+    /** Sums over every key; absent from servers older than per-key usage. */
+    totals?: DeveloperApiKeyUsage
 }

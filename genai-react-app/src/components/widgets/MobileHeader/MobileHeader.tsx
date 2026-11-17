@@ -1,7 +1,7 @@
 import React from 'react'
 import { useLocation } from 'react-router'
 import { MobileHeader as BaseMobileHeader, MobileMenu } from '@genflowly/component-library'
-import type { MobileHeaderMenuItem, MobileMenuAction } from '@genflowly/component-library'
+import type { MobileHeaderMenuItem, MobileHeaderTrailingAction, MobileMenuAction } from '@genflowly/component-library'
 import { SwipeBack, useEdgeSwipePageAction } from '../../../context/EdgeSwipeContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { MenuLocationState, useOpenAppMenu } from '../../../hooks/useAppMenu'
@@ -23,6 +23,8 @@ interface MobileHeaderProps {
     titleExpanded?: boolean
     /** Entries of the kebab (3-dot) menu on the right; omit to hide the kebab. */
     menuItems?: MobileHeaderMenuItem[]
+    /** A round icon button on the right (e.g. a settings page's info button), shown when there are no menuItems. */
+    trailingAction?: MobileHeaderTrailingAction
     /** Accessible name of the page-context menu view (e.g. "History", "Saved Notes"). */
     menuTitle?: string
     /** The page's create action, centered in the page-context menu's top bar. */
@@ -51,6 +53,7 @@ export default function MobileHeader({
     titleActionLabel,
     titleExpanded,
     menuItems,
+    trailingAction,
     menuTitle,
     menuAction,
     menuContent,
@@ -76,6 +79,7 @@ export default function MobileHeader({
                 titleActionLabel={titleActionLabel}
                 titleExpanded={titleExpanded}
                 menuItems={menuItems}
+                trailingAction={trailingAction}
                 onMenuClick={hasL2Menu ? toggleLeftSidebar : openAppMenu}
             />
             {hasL2Menu && (

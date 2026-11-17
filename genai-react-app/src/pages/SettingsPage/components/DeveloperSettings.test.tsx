@@ -1,14 +1,12 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DeveloperSettings } from './DeveloperSettings'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
-import {
-    createDeveloperApiKey,
-    listDeveloperApiKeys,
-    revokeDeveloperApiKey,
-} from '../../../services/developerApiKeysService'
+import { createDeveloperApiKey, listDeveloperApiKeys, revokeDeveloperApiKey } from '../../../services/developerApiKeysService'
+import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
+import { renderSettingsPage } from '../settingsTestUtils'
 
 jest.mock('../../../context/AuthContext')
 jest.mock('../../../context/ToastContext')
@@ -26,7 +24,12 @@ const KEY_SUMMARY = {
     prefix: 'gfy_abcdefgh',
     createdAt: '2026-01-05T10:00:00Z',
     lastUsedAt: '2026-02-01T10:00:00Z',
+    requests30d: 1204,
+    costUsd30d: 0.58,
+    requestsAllTime: 2_400_000,
+    costUsdAllTime: 1.37,
 }
+const TOTALS = { requests30d: 1204, costUsd30d: 0.58, requestsAllTime: 2_400_000, costUsdAllTime: 1.37 }
 
 const CREATED_KEY = {
     keyId: 'key-2',
@@ -37,238 +40,176 @@ const CREATED_KEY = {
 }
 
 describe('DeveloperSettings', () => {
-    const mockShowToast = jest.fn()
-    const mockGetAccessTokenSilently = jest.fn()
+    const showToast = jest.fn()
+    const getAccessTokenSilently = jest.fn()
+    const auth = (overrides: Record<string, unknown> = {}) => mockUseAuth.mockReturnValue({
+        customerId: 'cust-123',
+        isAuthenticated: true,
+        getAccessTokenSilently,
+        aiVendorAPIKeyStatusList: [],
+        ...overrides,
+    })
+    const createKey = async () => {
+        await userEvent.type(screen.getByTestId('api-key-name-input'), 'New key')
+        await userEvent.click(screen.getByTestId('create-api-key'))
+        await screen.findByTestId('created-key-panel')
+    }
 
     beforeEach(() => {
         jest.clearAllMocks()
-        mockGetAccessTokenSilently.mockResolvedValue('test-token')
-        mockUseToast.mockReturnValue({ showToast: mockShowToast })
-        mockUseAuth.mockReturnValue({
-            customerId: 'cust-123',
-            isAuthenticated: true,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-        })
+        getAccessTokenSilently.mockResolvedValue('test-token')
+        mockUseToast.mockReturnValue({ showToast })
+        auth()
         mockList.mockResolvedValue({ keys: [] })
     })
 
-    test('renders empty state', async () => {
-        render(<DeveloperSettings />)
+    test('renders the empty state', async () => {
+        renderSettingsPage(<DeveloperSettings />)
 
-        await waitFor(() => {
-            expect(screen.getByText('No API keys yet.')).toBeInTheDocument()
-        })
+        expect(await screen.findByText('No API keys yet.')).toBeInTheDocument()
         expect(mockList).toHaveBeenCalledWith('test-token')
+        expect(screen.getByRole('heading', { level: 1, name: 'Developer' })).toBeInTheDocument()
     })
 
-    test('renders existing keys with prefix and dates', async () => {
-        mockList.mockResolvedValue({ keys: [KEY_SUMMARY] })
+    test('lists each key with its requests and costs, and an All keys row', async () => {
+        mockList.mockResolvedValue({ keys: [KEY_SUMMARY], totals: TOTALS })
+        renderSettingsPage(<DeveloperSettings />)
 
-        render(<DeveloperSettings />)
+        const row = await screen.findByRole('row', { name: /CI server/ })
+        expect(within(row).getByText('gfy_abcdefgh…')).toBeInTheDocument()
+        expect(within(row).getByText('1,204')).toBeInTheDocument()
+        expect(within(row).getByText('$0.58')).toBeInTheDocument()
+        expect(within(row).getByText('$1.37')).toBeInTheDocument()
+        const totals = screen.getByRole('row', { name: /All keys/ })
+        expect(within(totals).getByText('$1.37')).toBeInTheDocument()
+        expect(screen.getAllByText('1 API key').length).toBeGreaterThan(0)
+        expect(screen.getByText('$1.37 spent through keys')).toBeInTheDocument()
+        expect(screen.getByText('Cost, 30 days')).toBeInTheDocument()
+    })
 
-        await waitFor(() => {
-            expect(screen.getByText('CI server')).toBeInTheDocument()
+    test('own-key users see the costs as estimates', async () => {
+        auth({ aiVendorAPIKeyStatusList: [{ aiVendor: 'OPENAI', isAPIKeyValid: true, status: APIKeyStatus.VALID }] })
+        mockList.mockResolvedValue({ keys: [KEY_SUMMARY], totals: TOTALS })
+        renderSettingsPage(<DeveloperSettings />)
+
+        expect(await screen.findByText('Est. $1.37 through keys')).toBeInTheDocument()
+        expect(screen.getByText('Est. cost, 30 days')).toBeInTheDocument()
+    })
+
+    test('shows a dash where usage could not be read or a key was never used', async () => {
+        mockList.mockResolvedValue({
+            keys: [{ ...KEY_SUMMARY, lastUsedAt: undefined, requests30d: null, costUsd30d: null, costUsdAllTime: null }],
         })
-        expect(screen.getByText('gfy_abcdefgh…')).toBeInTheDocument()
-        expect(screen.getByText('Revoke')).toBeInTheDocument()
+        renderSettingsPage(<DeveloperSettings />)
+
+        const row = await screen.findByRole('row', { name: /CI server/ })
+        expect(within(row).getAllByText('—')).toHaveLength(4)
+        expect(screen.queryByText(/spent through keys/)).not.toBeInTheDocument()
     })
 
     test('shows a toast when loading keys fails', async () => {
         mockList.mockRejectedValue(new Error('load failed'))
+        renderSettingsPage(<DeveloperSettings />)
 
-        render(<DeveloperSettings />)
-
-        await waitFor(() => {
-            expect(mockShowToast).toHaveBeenCalledWith('load failed')
-        })
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('load failed'))
     })
 
-    test('does not load keys when unauthenticated', async () => {
-        mockUseAuth.mockReturnValue({
-            customerId: null,
-            isAuthenticated: false,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-        })
-
-        render(<DeveloperSettings />)
+    test('does not load keys when signed out', () => {
+        auth({ customerId: null, isAuthenticated: false })
+        renderSettingsPage(<DeveloperSettings />)
 
         expect(mockList).not.toHaveBeenCalled()
     })
 
-    test('shows toast when creating without a name', async () => {
-        render(<DeveloperSettings />)
+    test('asks for a name before creating', async () => {
+        renderSettingsPage(<DeveloperSettings />)
 
         await userEvent.click(screen.getByTestId('create-api-key'))
 
-        expect(mockShowToast).toHaveBeenCalledWith('Please enter a name for the key.')
-        expect(mockCreate).not.toHaveBeenCalled()
-    })
-
-    test('shows toast when creating while unauthenticated', async () => {
-        mockUseAuth.mockReturnValue({
-            customerId: null,
-            isAuthenticated: false,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-        })
-
-        render(<DeveloperSettings />)
-        await userEvent.click(screen.getByTestId('create-api-key'))
-
-        expect(mockShowToast).toHaveBeenCalledWith('Please log in first.')
+        expect(showToast).toHaveBeenCalledWith('Please enter a name for the key.')
         expect(mockCreate).not.toHaveBeenCalled()
     })
 
     test('creates a key and shows the full value once', async () => {
         mockCreate.mockResolvedValue(CREATED_KEY)
+        renderSettingsPage(<DeveloperSettings />)
 
-        render(<DeveloperSettings />)
-        await userEvent.type(screen.getByPlaceholderText('e.g. My CI server'), 'New key')
-        await userEvent.click(screen.getByTestId('create-api-key'))
+        await createKey()
 
-        await waitFor(() => {
-            expect(screen.getByTestId('created-key-panel')).toBeInTheDocument()
-        })
         expect(mockCreate).toHaveBeenCalledWith('test-token', { name: 'New key' })
-        expect(screen.getByText('gfy_fullsecretvalue1234')).toBeInTheDocument()
-        // List refreshed after creation: initial load + post-create
+        expect(screen.getByTestId('created-key-value')).toHaveTextContent('gfy_fullsecretvalue1234')
+        expect(screen.getByText('Key “New key” created')).toBeInTheDocument()
+        expect(screen.getByText('Copy it now')).toBeInTheDocument()
         expect(mockList).toHaveBeenCalledTimes(2)
     })
 
-    test('dismisses the created-key panel', async () => {
+    test('dismisses the created-key card', async () => {
         mockCreate.mockResolvedValue(CREATED_KEY)
+        renderSettingsPage(<DeveloperSettings />)
+        await createKey()
 
-        render(<DeveloperSettings />)
-        await userEvent.type(screen.getByPlaceholderText('e.g. My CI server'), 'New key')
-        await userEvent.click(screen.getByTestId('create-api-key'))
-        await waitFor(() => {
-            expect(screen.getByTestId('created-key-panel')).toBeInTheDocument()
-        })
-
-        await userEvent.click(screen.getByText("I've saved my key"))
+        await userEvent.click(screen.getByTestId('created-key-dismiss'))
 
         expect(screen.queryByTestId('created-key-panel')).not.toBeInTheDocument()
     })
 
     test('shows a toast when creation fails', async () => {
         mockCreate.mockRejectedValue(new Error('create failed'))
+        renderSettingsPage(<DeveloperSettings />)
 
-        render(<DeveloperSettings />)
-        await userEvent.type(screen.getByPlaceholderText('e.g. My CI server'), 'New key')
+        await userEvent.type(screen.getByTestId('api-key-name-input'), 'New key')
         await userEvent.click(screen.getByTestId('create-api-key'))
 
-        await waitFor(() => {
-            expect(mockShowToast).toHaveBeenCalledWith('create failed')
-        })
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('create failed'))
         expect(screen.queryByTestId('created-key-panel')).not.toBeInTheDocument()
     })
 
     test('copies the created key to the clipboard', async () => {
         mockCreate.mockResolvedValue(CREATED_KEY)
         const writeText = jest.fn().mockResolvedValue(undefined)
-        Object.defineProperty(navigator, 'clipboard', {
-            value: { writeText },
-            configurable: true,
-        })
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+        renderSettingsPage(<DeveloperSettings />)
+        await createKey()
 
-        render(<DeveloperSettings />)
-        await userEvent.type(screen.getByPlaceholderText('e.g. My CI server'), 'New key')
-        await userEvent.click(screen.getByTestId('create-api-key'))
-        await waitFor(() => {
-            expect(screen.getByTestId('created-key-panel')).toBeInTheDocument()
-        })
+        await userEvent.click(screen.getByRole('button', { name: 'Copy' }))
 
-        await userEvent.click(screen.getByText('Copy'))
-
-        await waitFor(() => {
-            expect(writeText).toHaveBeenCalledWith('gfy_fullsecretvalue1234')
-            expect(mockShowToast).toHaveBeenCalledWith('API key copied to clipboard.')
-        })
+        await waitFor(() => expect(writeText).toHaveBeenCalledWith('gfy_fullsecretvalue1234'))
+        expect(showToast).toHaveBeenCalledWith('API key copied to clipboard.')
     })
 
-    test('shows fallback toast when clipboard copy fails', async () => {
-        mockCreate.mockResolvedValue(CREATED_KEY)
-        Object.defineProperty(navigator, 'clipboard', {
-            value: { writeText: jest.fn().mockRejectedValue(new Error('denied')) },
-            configurable: true,
-        })
-
-        render(<DeveloperSettings />)
-        await userEvent.type(screen.getByPlaceholderText('e.g. My CI server'), 'New key')
-        await userEvent.click(screen.getByTestId('create-api-key'))
-        await waitFor(() => {
-            expect(screen.getByTestId('created-key-panel')).toBeInTheDocument()
-        })
-
-        await userEvent.click(screen.getByText('Copy'))
-
-        await waitFor(() => {
-            expect(mockShowToast).toHaveBeenCalledWith(
-                'Could not copy — please select and copy the key manually.'
-            )
-        })
-    })
-
-    test('revokes a key after confirmation', async () => {
-        mockList.mockResolvedValue({ keys: [KEY_SUMMARY] })
+    test('revokes a key only after confirming in the dialog', async () => {
+        mockList.mockResolvedValue({ keys: [KEY_SUMMARY], totals: TOTALS })
         mockRevoke.mockResolvedValue(undefined)
-        const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
+        renderSettingsPage(<DeveloperSettings />)
 
-        render(<DeveloperSettings />)
-        await waitFor(() => {
-            expect(screen.getByText('Revoke')).toBeInTheDocument()
-        })
+        await userEvent.click(await screen.findByTestId('revoke-key-key-1'))
+        expect(screen.getByRole('heading', { name: 'Revoke “CI server”?' })).toBeInTheDocument()
+        expect(mockRevoke).not.toHaveBeenCalled()
+        await userEvent.click(screen.getByTestId('revoke-key-confirm'))
 
-        await userEvent.click(screen.getByText('Revoke'))
-
-        await waitFor(() => {
-            expect(mockRevoke).toHaveBeenCalledWith('test-token', 'key-1')
-            expect(mockShowToast).toHaveBeenCalledWith('API key revoked.')
-        })
-        confirmSpy.mockRestore()
+        await waitFor(() => expect(mockRevoke).toHaveBeenCalledWith('test-token', 'key-1'))
+        expect(showToast).toHaveBeenCalledWith('API key revoked.')
     })
 
-    test('does not revoke when confirmation is declined', async () => {
+    test('cancelling the dialog keeps the key', async () => {
         mockList.mockResolvedValue({ keys: [KEY_SUMMARY] })
-        const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false)
+        renderSettingsPage(<DeveloperSettings />)
 
-        render(<DeveloperSettings />)
-        await waitFor(() => {
-            expect(screen.getByText('Revoke')).toBeInTheDocument()
-        })
-
-        await userEvent.click(screen.getByText('Revoke'))
+        await userEvent.click(await screen.findByTestId('revoke-key-key-1'))
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
         expect(mockRevoke).not.toHaveBeenCalled()
-        confirmSpy.mockRestore()
+        expect(screen.queryByTestId('revoke-key-confirm')).not.toBeInTheDocument()
     })
 
     test('shows a toast when revoking fails', async () => {
         mockList.mockResolvedValue({ keys: [KEY_SUMMARY] })
         mockRevoke.mockRejectedValue(new Error('revoke failed'))
-        const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
+        renderSettingsPage(<DeveloperSettings />)
 
-        render(<DeveloperSettings />)
-        await waitFor(() => {
-            expect(screen.getByText('Revoke')).toBeInTheDocument()
-        })
+        await userEvent.click(await screen.findByTestId('revoke-key-key-1'))
+        await userEvent.click(screen.getByTestId('revoke-key-confirm'))
 
-        await userEvent.click(screen.getByText('Revoke'))
-
-        await waitFor(() => {
-            expect(mockShowToast).toHaveBeenCalledWith('revoke failed')
-        })
-        confirmSpy.mockRestore()
-    })
-
-    test('shows em dash for missing last-used date', async () => {
-        mockList.mockResolvedValue({
-            keys: [{ ...KEY_SUMMARY, lastUsedAt: undefined }],
-        })
-
-        render(<DeveloperSettings />)
-
-        await waitFor(() => {
-            expect(screen.getByText('Last used —')).toBeInTheDocument()
-        })
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('revoke failed'))
     })
 })

@@ -1,119 +1,56 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { DateRangePicker, DateRange } from '@genflowly/component-library'
-import { useAuth } from '../../../../context/AuthContext'
-import { getWebSearchUsage, EstimatedUsageSummary } from '../../../../services/getUsageService'
-import { defaultUsageRange, localToday, toUtcUsageRange, usageDateRangePresets } from './usageDateRange'
-import { formatUsd, formatCount } from './usageFormat'
+import { DataTable, SettingsCard, StatusPill, formatCompactCount } from '@genflowly/component-library'
+import { EstimatedUsageBreakdownRow, getWebSearchUsage } from '../../../../services/getUsageService'
+import { SettingsFrame } from '../SettingsFrame'
+import { UsageRangePanel, useUsageRange } from './UsageRangePanel'
 import { UsageNotTrackedYet } from './UsageNotTrackedYet'
-import styles from './WebSearchUsageSettings.module.scss'
+import { useUsageSummary } from './useUsageSummary'
+import { formatUsd } from './usageFormat'
+import styles from './UsageCostView.module.scss'
 
 /**
- * Cost and Usage > Web Search. The response is always an ESTIMATE —
- * credit-count (basic=1, advanced=2 per Tavily call) × an admin-configurable
- * rate card, never a real bill from Tavily. The disclaimer banner must stay
- * visible whenever real data renders — explicit product requirement, not
- * optional copy.
+ * Cost and Usage › Web Search: each web search the assistant ran. Its cost
+ * is always an estimate (search credits at a set rate), so it is labelled
+ * that way. Until the route ships it shows "Not tracked yet".
  */
 export function WebSearchUsageSettings(): React.ReactElement {
     const { t } = useTranslation()
-    const { isAuthenticated, getAccessTokenSilently } = useAuth()
-
-    const [range, setRange] = useState<DateRange>(defaultUsageRange)
-    const [summary, setSummary] = useState<EstimatedUsageSummary | null>(null)
-    const [loading, setLoading] = useState(false)
-
-    const load = useCallback(async (nextRange: DateRange) => {
-        if (!isAuthenticated) return
-        setLoading(true)
-        try {
-            const token = await getAccessTokenSilently()
-            const result = await getWebSearchUsage(token, toUtcUsageRange(nextRange))
-            setSummary(result)
-        } catch (err) {
-            console.error('WebSearchUsageSettings: failed to fetch usage', err)
-            setSummary(null)
-        } finally {
-            setLoading(false)
-        }
-    }, [isAuthenticated, getAccessTokenSilently])
-
-    useEffect(() => {
-        void load(range)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [range, load])
-
-    const hasRows = !!summary && summary.breakdown.length > 0
+    const { range, setRange, label } = useUsageRange()
+    const { summary, loading } = useUsageSummary(getWebSearchUsage, range, 'WebSearchUsageSettings')
+    const statusText = !loading && !summary ? t('settingsPage.usageCommon.notTrackedYetTitle') : label
+    const knowledge = [
+        { title: t('settingsPage.webSearchUsageSettings.countedTitle'), text: t('settingsPage.webSearchUsageSettings.countedText') },
+        { title: t('settingsPage.webSearchUsageSettings.spendTitle'), text: t('settingsPage.webSearchUsageSettings.spendText') },
+    ]
 
     return (
-        <div className={styles.container}>
-            <DateRangePicker
-                value={range}
-                onChange={setRange}
-                presets={usageDateRangePresets(t)}
-                maxDate={localToday()}
-                fromLabel={t('settingsPage.usageCommon.dateRangeFrom')}
-                toLabel={t('settingsPage.usageCommon.dateRangeTo')}
-                presetsAriaLabel={t('settingsPage.usageCommon.dateRangePresetsLabel')}
-                data-testid="web-search-usage-date-range"
-            />
-
-            {loading && (
-                <p className={styles.statusText} data-testid="web-search-usage-loading">
-                    {t('settingsPage.usageCommon.loading')}
-                </p>
+        <SettingsFrame page="usage-web-search" knowledge={knowledge} statusText={statusText} status={<StatusPill>{statusText}</StatusPill>}>
+            <UsageRangePanel range={range} onChange={setRange} data-testid="web-search-usage-date-range" />
+            {loading && <p className={styles.statusText} data-testid="web-search-usage-loading">{t('settingsPage.usageCommon.loading')}</p>}
+            {!loading && !summary && (
+                <UsageNotTrackedYet
+                    link={{ to: '/settings/byok/web-search', label: t('settingsPage.webSearchUsageSettings.changeLimit') }}
+                    data-testid="web-search-usage-not-tracked-yet"
+                />
             )}
-
-            {!loading && !summary && <UsageNotTrackedYet data-testid="web-search-usage-not-tracked-yet" />}
-
             {!loading && summary && (
-                <>
-                    <p className={styles.estimateBanner} data-testid="web-search-usage-estimate-banner">
-                        {t('settingsPage.usageCommon.estimateDisclaimer')}
-                    </p>
-
-                    <div className={styles.statTiles}>
-                        <div className={styles.statTile} data-testid="web-search-usage-total-cost">
-                            <span className={styles.statLabel}>{t('settingsPage.usageCommon.totalCost')}</span>
-                            <span className={styles.statValue}>{formatUsd(summary.totalCostUsd)}</span>
-                        </div>
-                    </div>
-
-                    {hasRows ? (
-                        <div className={styles.breakdownBlock}>
-                            <h3 className={styles.breakdownTitle}>
-                                {t('settingsPage.webSearchUsageSettings.byDepth')}
-                            </h3>
-                            <div className={styles.tableScroll}>
-                            <table className={styles.table}>
-                                <thead>
-                                    <tr>
-                                        <th>{t('settingsPage.webSearchUsageSettings.searchDepth')}</th>
-                                        <th className={styles.numeric}>
-                                            {t('settingsPage.webSearchUsageSettings.credits')}
-                                        </th>
-                                        <th className={styles.numeric}>{t('settingsPage.usageCommon.totalCost')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {summary.breakdown.map(row => (
-                                        <tr key={row.key}>
-                                            <td>{row.key}</td>
-                                            <td className={styles.numeric}>{formatCount(row.count)}</td>
-                                            <td className={styles.numeric}>{formatUsd(row.costUsd)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            </div>
-                        </div>
-                    ) : (
-                        <p className={styles.statusText} data-testid="web-search-usage-empty">
-                            {t('settingsPage.webSearchUsageSettings.empty')}
-                        </p>
-                    )}
-                </>
+                <SettingsCard title={t('settingsPage.webSearchUsageSettings.byDepth')} flush>
+                    <DataTable<EstimatedUsageBreakdownRow>
+                        columns={[
+                            { key: 'depth', header: t('settingsPage.webSearchUsageSettings.searchDepth'), render: row => row.key },
+                            { key: 'credits', header: t('settingsPage.webSearchUsageSettings.credits'), numeric: true, render: row => formatCompactCount(row.count) },
+                            { key: 'cost', header: t('settingsPage.usageCommon.estCost'), numeric: true, render: row => formatUsd(row.costUsd) },
+                        ]}
+                        rows={summary.breakdown}
+                        rowKey={row => row.key}
+                        caption={t('settingsPage.webSearchUsageSettings.byDepth')}
+                        emptyText={t('settingsPage.usageCommon.noUsage')}
+                        footer={[t('settingsPage.usageCommon.total'), '', formatUsd(summary.totalCostUsd)]}
+                        data-testid="web-search-usage-table"
+                    />
+                </SettingsCard>
             )}
-        </div>
+        </SettingsFrame>
     )
 }

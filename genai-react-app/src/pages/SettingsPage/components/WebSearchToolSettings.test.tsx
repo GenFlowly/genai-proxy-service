@@ -1,243 +1,166 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { WebSearchToolSettings } from './WebSearchToolSettings'
-import { deleteToolCredentials, storeToolCredentials } from '../../../services/customerToolsService'
+import { useAuth } from '../../../context/AuthContext'
+import { useToast } from '../../../context/ToastContext'
+import { deleteToolCredentials, getToolCredentialStatuses, storeToolCredentials } from '../../../services/customerToolsService'
+import { renderSettingsPage } from '../settingsTestUtils'
 
+jest.mock('../../../context/AuthContext')
+jest.mock('../../../context/ToastContext')
 jest.mock('../../../services/customerToolsService', () => ({
+    getToolCredentialStatuses: jest.fn(),
     storeToolCredentials: jest.fn(),
     deleteToolCredentials: jest.fn(),
 }))
-// Render library inputs/buttons/cards as native elements so the form is inspectable
-jest.mock('@genflowly/component-library', () => ({
-    InputTextWithHint: ({ hint, value, onChange, placeholder, disabled, type: inputType, 'data-testid': testId }: any) => (
-        <label>
-            {hint}
-            <input value={value} onChange={onChange} placeholder={placeholder} disabled={disabled} type={inputType} data-testid={testId} />
-        </label>
-    ),
-    PillButton: ({ onClick, label, disabled, 'data-testid': testId }: any) => (
-        <button onClick={onClick} disabled={disabled} data-testid={testId}>
-            {label}
-        </button>
-    ),
-    CredentialCard: ({ label, pills, message, children, 'data-testid': testId }: any) => (
-        <div data-testid={testId}>
-            <span>{label}</span>
-            {pills}
-            {children}
-            {message && <span>{message}</span>}
-        </div>
-    ),
-    CredentialStatusPill: ({ children, 'data-testid': testId }: any) => (
-        <span data-testid={testId}>{children}</span>
-    ),
-}))
 
+const mockUseAuth = useAuth as jest.Mock
+const mockUseToast = useToast as jest.Mock
+const mockStatuses = getToolCredentialStatuses as jest.Mock
 const mockStore = storeToolCredentials as jest.Mock
 const mockDelete = deleteToolCredentials as jest.Mock
 
+const stored = (connected: boolean, settings?: Record<string, string>) => ({
+    toolCredentialStatuses: connected ? [{ toolType: 'WEB_SEARCH', authType: 'api_key', connected: true, settings }] : [],
+})
+
 describe('WebSearchToolSettings', () => {
-    const mockGetAccessTokenSilently = jest.fn()
-    const mockOnChanged = jest.fn()
+    const getAccessTokenSilently = jest.fn()
+    const showToast = jest.fn()
 
     beforeEach(() => {
         jest.clearAllMocks()
-        mockGetAccessTokenSilently.mockResolvedValue('test-token')
+        getAccessTokenSilently.mockResolvedValue('test-token')
+        mockUseAuth.mockReturnValue({ isAuthenticated: true, getAccessTokenSilently })
+        mockUseToast.mockReturnValue({ showToast })
+        mockStatuses.mockResolvedValue(stored(false))
+        mockStore.mockResolvedValue({})
+        mockDelete.mockResolvedValue(undefined)
     })
 
-    test('shows "Not set" and no remove button when no key is stored', () => {
-        render(
-            <WebSearchToolSettings
-                connected={false}
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('shows "Not set" and no remove button when no key is stored', async () => {
+        renderSettingsPage(<WebSearchToolSettings />)
 
-        expect(screen.getByText('Not set')).toBeInTheDocument()
+        expect(await screen.findByTestId('web-search-credential-status-pill')).toHaveTextContent('Not set')
+        expect(screen.getByRole('heading', { level: 1, name: 'Web Search API Key' })).toBeInTheDocument()
         expect(screen.queryByTestId('web-search-credential-remove')).not.toBeInTheDocument()
     })
 
-    test('shows "Key set" and a remove button when a key is stored', () => {
-        render(
-            <WebSearchToolSettings
-                connected
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('shows "Key set" and a remove button when a key is stored', async () => {
+        mockStatuses.mockResolvedValue(stored(true))
+        renderSettingsPage(<WebSearchToolSettings />)
 
-        expect(screen.getByText('Key set')).toBeInTheDocument()
-        expect(screen.getByTestId('web-search-credential-remove')).toBeInTheDocument()
+        expect(await screen.findByTestId('web-search-credential-remove')).toBeInTheDocument()
+        expect(screen.getByTestId('web-search-credential-status-pill')).toHaveTextContent('Key set')
     })
 
-    test('saves the key under toolType WEB_SEARCH with authType api_key', async () => {
-        mockStore.mockResolvedValue({ toolCredentialStatus: { toolType: 'WEB_SEARCH', authType: 'api_key', connected: true } })
-        render(
-            <WebSearchToolSettings
-                connected={false}
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('saves the key under toolType WEB_SEARCH with authType api_key, then reloads', async () => {
+        renderSettingsPage(<WebSearchToolSettings />)
+        await screen.findByTestId('web-search-credential-status-pill')
 
         await userEvent.type(screen.getByTestId('web-search-credential-key-input'), 'tvly-secret-key')
         await userEvent.click(screen.getByTestId('web-search-credential-save'))
 
-        await waitFor(() => {
-            expect(mockStore).toHaveBeenCalledWith('test-token', {
-                toolType: 'WEB_SEARCH',
-                authType: 'api_key',
-                credentials: { api_key: 'tvly-secret-key' },
-            })
-        })
-        expect(screen.getByText('Key saved.')).toBeInTheDocument()
-        expect(mockOnChanged).toHaveBeenCalled()
+        await waitFor(() => expect(mockStore).toHaveBeenCalledWith('test-token', {
+            toolType: 'WEB_SEARCH',
+            authType: 'api_key',
+            credentials: { api_key: 'tvly-secret-key' },
+        }))
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Key saved.'))
+        expect(mockStatuses).toHaveBeenCalledTimes(2)
+        expect(screen.getByTestId('web-search-credential-key-input')).toHaveValue('')
     })
 
-    test('does not save an empty key', () => {
-        render(
-            <WebSearchToolSettings
-                connected={false}
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('the save button stays disabled for an empty key', async () => {
+        renderSettingsPage(<WebSearchToolSettings />)
+        await screen.findByTestId('web-search-credential-status-pill')
 
-        // The save button stays disabled with no input, matching VendorApiKeysManager
         expect(screen.getByTestId('web-search-credential-save')).toBeDisabled()
-        expect(mockStore).not.toHaveBeenCalled()
     })
 
-    test('removes the key after confirmation', async () => {
-        mockDelete.mockResolvedValue(undefined)
-        const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true)
-        render(
-            <WebSearchToolSettings
-                connected
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('removes the key only after confirming in the dialog', async () => {
+        mockStatuses.mockResolvedValue(stored(true))
+        renderSettingsPage(<WebSearchToolSettings />)
 
-        await userEvent.click(screen.getByTestId('web-search-credential-remove'))
+        await userEvent.click(await screen.findByTestId('web-search-credential-remove'))
+        expect(mockDelete).not.toHaveBeenCalled()
+        await userEvent.click(screen.getByTestId('web-search-credential-remove-confirm'))
 
-        await waitFor(() => {
-            expect(mockDelete).toHaveBeenCalledWith('test-token', 'WEB_SEARCH')
-        })
-        expect(screen.getByText('Key removed.')).toBeInTheDocument()
-        expect(mockOnChanged).toHaveBeenCalled()
-        confirmSpy.mockRestore()
+        await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('test-token', 'WEB_SEARCH'))
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Key removed.'))
     })
 
-    test('does not remove when the confirmation is declined', async () => {
-        const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(false)
-        render(
-            <WebSearchToolSettings
-                connected
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('cancelling the dialog keeps the key', async () => {
+        mockStatuses.mockResolvedValue(stored(true))
+        renderSettingsPage(<WebSearchToolSettings />)
 
-        await userEvent.click(screen.getByTestId('web-search-credential-remove'))
+        await userEvent.click(await screen.findByTestId('web-search-credential-remove'))
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
         expect(mockDelete).not.toHaveBeenCalled()
-        confirmSpy.mockRestore()
+        expect(screen.queryByTestId('web-search-credential-remove-confirm')).not.toBeInTheDocument()
     })
 
     test('shows the server error message when saving fails', async () => {
-        mockStore.mockRejectedValue(new Error('KMS unavailable'))
-        render(
-            <WebSearchToolSettings
-                connected={false}
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+        mockStore.mockRejectedValue(new Error('Tavily rejected the key'))
+        renderSettingsPage(<WebSearchToolSettings />)
+        await screen.findByTestId('web-search-credential-status-pill')
 
-        await userEvent.type(screen.getByTestId('web-search-credential-key-input'), 'tvly-secret-key')
+        await userEvent.type(screen.getByTestId('web-search-credential-key-input'), 'bad')
         await userEvent.click(screen.getByTestId('web-search-credential-save'))
 
-        await waitFor(() => {
-            expect(screen.getByText('KMS unavailable')).toBeInTheDocument()
-        })
-        expect(mockOnChanged).not.toHaveBeenCalled()
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Tavily rejected the key'))
     })
 
-    test('shows the default limit of 5 with the save button disabled', () => {
-        render(
-            <WebSearchToolSettings
-                connected={false}
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('shows the default limit of 5 with its save button disabled', async () => {
+        renderSettingsPage(<WebSearchToolSettings />)
+        await screen.findByTestId('web-search-credential-status-pill')
 
         expect(screen.getByTestId('web-search-limit-input')).toHaveValue(5)
-        // Unchanged value → nothing to save.
         expect(screen.getByTestId('web-search-limit-save')).toBeDisabled()
     })
 
-    test('shows the stored limit from settings', () => {
-        render(
-            <WebSearchToolSettings
-                connected
-                settings={{ max_searches_per_turn: '3' }}
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('shows the stored limit', async () => {
+        mockStatuses.mockResolvedValue(stored(true, { max_searches_per_turn: '12' }))
+        renderSettingsPage(<WebSearchToolSettings />)
 
-        expect(screen.getByTestId('web-search-limit-input')).toHaveValue(3)
+        await waitFor(() => expect(screen.getByTestId('web-search-limit-input')).toHaveValue(12))
     })
 
     test('saves a changed limit as settings only, never touching credentials', async () => {
-        mockStore.mockResolvedValue({
-            toolCredentialStatus: {
-                toolType: 'WEB_SEARCH', authType: 'api_key', connected: true,
-                settings: { max_searches_per_turn: '8' },
-            },
-        })
-        render(
-            <WebSearchToolSettings
-                connected
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+        mockStatuses.mockResolvedValue(stored(true))
+        renderSettingsPage(<WebSearchToolSettings />)
+        await screen.findByTestId('web-search-credential-remove')
 
         const input = screen.getByTestId('web-search-limit-input')
         await userEvent.clear(input)
         await userEvent.type(input, '8')
         await userEvent.click(screen.getByTestId('web-search-limit-save'))
 
-        await waitFor(() => {
-            expect(mockStore).toHaveBeenCalledWith('test-token', {
-                toolType: 'WEB_SEARCH',
-                authType: 'api_key',
-                settings: { max_searches_per_turn: '8' },
-            })
-        })
-        expect(screen.getByText('Search limit saved.')).toBeInTheDocument()
-        expect(mockOnChanged).toHaveBeenCalled()
+        await waitFor(() => expect(mockStore).toHaveBeenCalledWith('test-token', {
+            toolType: 'WEB_SEARCH',
+            authType: 'api_key',
+            settings: { max_searches_per_turn: '8' },
+        }))
+        await waitFor(() => expect(showToast).toHaveBeenCalledWith('Search limit saved.'))
     })
 
-    test('keeps the save button disabled for an out-of-bounds limit', async () => {
-        render(
-            <WebSearchToolSettings
-                connected={false}
-                getAccessTokenSilently={mockGetAccessTokenSilently}
-                onChanged={mockOnChanged}
-            />
-        )
+    test('keeps the limit save button disabled out of bounds', async () => {
+        renderSettingsPage(<WebSearchToolSettings />)
+        await screen.findByTestId('web-search-credential-status-pill')
 
         const input = screen.getByTestId('web-search-limit-input')
         await userEvent.clear(input)
-        await userEvent.type(input, '50')
+        await userEvent.type(input, '21')
 
         expect(screen.getByTestId('web-search-limit-save')).toBeDisabled()
-        expect(mockStore).not.toHaveBeenCalled()
+    })
+
+    test('links to its usage page', async () => {
+        renderSettingsPage(<WebSearchToolSettings />)
+        await screen.findByTestId('web-search-credential-status-pill')
+
+        expect(screen.getByRole('link', { name: 'Cost and Usage' })).toHaveAttribute('href', '/settings/usage/web-search')
     })
 })

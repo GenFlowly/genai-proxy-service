@@ -18,4 +18,11 @@
 .cardFooter {
   display: flex;
   justify-content: flex-start;
+
+  // Phone width: the button spans the card, like every settings action
+  @container (max-width: 480px) {
+    > * {
+      flex: 1 1 auto;
+    }
+  }
 }

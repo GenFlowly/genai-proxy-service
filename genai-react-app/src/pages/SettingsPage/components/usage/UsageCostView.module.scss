@@ -1,0 +1,12 @@
+@import '../../../../styles/themes.scss';
+
+.statusText {
+    font-size: 0.875rem;
+    color: $color-text-muted;
+    margin: 0;
+}
+
+// The phone board spaces tiles 8px apart; doubled to outrank the grid's own gap.
+.tilesNarrow.tilesNarrow {
+    gap: 8px;
+}

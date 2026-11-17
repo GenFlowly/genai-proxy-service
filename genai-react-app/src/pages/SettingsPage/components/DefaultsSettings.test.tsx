@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DefaultsSettings } from './DefaultsSettings';
 import { useAuth } from '../../../context/AuthContext';
@@ -14,6 +14,7 @@ import { getRequestAgents } from '../../../services/requestAgentsService';
 import { getCustomerAgents } from '../../../services/agentsService';
 import { customerAgentsCache, requestAgentsCache } from '../../../services/defaultsCacheService';
 import { withQueryClient } from '../../../test/utils/queryWrapper';
+import { renderSettingsPage } from '../settingsTestUtils';
 
 jest.mock('../../../context/AuthContext');
 jest.mock('../../../context/AIContext');
@@ -21,38 +22,6 @@ jest.mock('../../../context/ToastContext');
 jest.mock('../../../services/saveAIConfigService');
 jest.mock('../../../services/requestAgentsService');
 jest.mock('../../../services/agentsService');
-// The sibling sections have their own test suites
-jest.mock('./EmbeddingModelDefaults', () => ({
-    EmbeddingModelDefaults: () => <div data-testid="embedding-defaults-section" />,
-}));
-jest.mock('./LearnedFactsSettings', () => ({
-    LearnedFactsSettings: () => <div data-testid="learned-facts-section" />,
-}));
-jest.mock('./ChatIndexingSettings', () => ({
-    ChatIndexingSettings: () => <div data-testid="chat-indexing-section" />,
-}));
-// Render library select/button as native elements so options are inspectable
-jest.mock('@genflowly/component-library', () => ({
-    InputSelectWithHint: ({ value, onChange, options, 'data-testid': testId }: any) => (
-        <select
-            data-testid={testId}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-        >
-            {options.map((option: any) => (
-                <option key={option.value} value={option.value}>
-                    {option.label}
-                </option>
-            ))}
-        </select>
-    ),
-    PillButton: ({ onClick, label, disabled }: any) => (
-        <button onClick={onClick} disabled={disabled}>
-            {label}
-        </button>
-    ),
-}));
-
 const mockUseAuth = useAuth as jest.Mock;
 const mockUseAI = useAI as jest.Mock;
 const mockUseToast = useToast as jest.Mock;
@@ -145,18 +114,20 @@ describe('DefaultsSettings', () => {
     });
 
     async function renderLoaded() {
-        render(withQueryClient(<DefaultsSettings />));
+        renderSettingsPage(withQueryClient(<DefaultsSettings />));
         await waitFor(() =>
             expect(screen.getByTestId('default-agent-TITLE')).toBeInTheDocument()
         );
     }
 
-    test('renders the agent rows in order, merging the two title flows into one Title Agent row', async () => {
+    test('renders the agent rows in order, merging the two title flows into one Title agent row', async () => {
         await renderLoaded();
-        expect(screen.getByText('Title Agent')).toBeInTheDocument();
-        expect(screen.getByText('Learn about Me Agent')).toBeInTheDocument();
-        expect(screen.getByText('Instruction Persona Agent')).toBeInTheDocument();
-        expect(screen.getByText('Conversation Agent')).toBeInTheDocument();
+        expect(screen.getByText('Title agent')).toBeInTheDocument();
+        expect(screen.getByText('Learn about me agent')).toBeInTheDocument();
+        expect(screen.getByText('Instruction persona agent')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Conversation agent' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Built-in jobs' })).toBeInTheDocument();
+        expect(screen.getByText('Writes the title of each chat.')).toBeInTheDocument();
 
         // The merged row replaces the two per-flow rows and server labels
         expect(screen.queryByText('Conversation Title Generation')).not.toBeInTheDocument();
@@ -166,26 +137,11 @@ describe('DefaultsSettings', () => {
 
         const selects = screen.getAllByRole('combobox');
         expect(selects.map(s => s.getAttribute('data-testid'))).toEqual([
+            'default-agent-CONVERSATION',
             'default-agent-TITLE',
             'default-agent-MEMORY_EXTRACTION',
             'default-agent-INSTRUCTION_PERSONA',
-            'default-agent-CONVERSATION',
         ]);
-    });
-
-    test('renders the embedding defaults section', async () => {
-        await renderLoaded();
-        expect(screen.getByTestId('embedding-defaults-section')).toBeInTheDocument();
-    });
-
-    test('renders the learned facts section', async () => {
-        await renderLoaded();
-        expect(screen.getByTestId('learned-facts-section')).toBeInTheDocument();
-    });
-
-    test('renders the search index section', async () => {
-        await renderLoaded();
-        expect(screen.getByTestId('chat-indexing-section')).toBeInTheDocument();
     });
 
     test('an unknown future action still renders, labeled by its server display name', async () => {
@@ -350,7 +306,7 @@ describe('DefaultsSettings', () => {
 
     test('shows an error toast when loading fails with no cache to fall back on', async () => {
         mockActionsFetch.mockRejectedValueOnce(new Error('boom'));
-        render(withQueryClient(<DefaultsSettings />));
+        renderSettingsPage(withQueryClient(<DefaultsSettings />));
         await waitFor(() => expect(mockShowToast).toHaveBeenCalledWith('boom'));
     });
 
@@ -360,7 +316,7 @@ describe('DefaultsSettings', () => {
         mockActionsFetch.mockReturnValue(new Promise(() => undefined));
         mockAgentsFetch.mockReturnValue(new Promise(() => undefined));
 
-        render(withQueryClient(<DefaultsSettings />));
+        renderSettingsPage(withQueryClient(<DefaultsSettings />));
 
         expect(await screen.findByTestId('default-agent-TITLE')).toBeInTheDocument();
         expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
@@ -374,7 +330,7 @@ describe('DefaultsSettings', () => {
         mockActionsFetch.mockReturnValue(new Promise(resolve => { resolveActions = resolve; }));
         mockAgentsFetch.mockResolvedValue(JSON.parse(JSON.stringify(agentsResponse)));
 
-        render(withQueryClient(<DefaultsSettings />));
+        renderSettingsPage(withQueryClient(<DefaultsSettings />));
         await userEvent.selectOptions(await screen.findByTestId('default-agent-TITLE'), 'GRP1');
 
         resolveActions(JSON.parse(JSON.stringify(actionsResponse)));
@@ -389,7 +345,7 @@ describe('DefaultsSettings', () => {
         mockActionsFetch.mockRejectedValue(new Error('offline'));
         mockAgentsFetch.mockRejectedValue(new Error('offline'));
 
-        render(withQueryClient(<DefaultsSettings />));
+        renderSettingsPage(withQueryClient(<DefaultsSettings />));
 
         expect(await screen.findByTestId('default-agent-TITLE')).toBeInTheDocument();
         await waitFor(() => expect(mockActionsFetch).toHaveBeenCalled());

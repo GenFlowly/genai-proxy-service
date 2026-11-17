@@ -1,164 +1,135 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { SettingsSidebar } from './SettingsSidebar';
 import { useAuth } from '../../../context/AuthContext';
-import { MemoryRouter } from 'react-router';
 
 jest.mock('../../../context/AuthContext');
 
 const mockUseAuth = useAuth as jest.Mock;
-
 const mockNavigate = jest.fn();
 jest.mock('react-router', () => ({
     ...jest.requireActual('react-router'),
-    useNavigate: () => mockNavigate
+    useNavigate: () => mockNavigate,
 }));
 
+const renderAt = (path: string, props: React.ComponentProps<typeof SettingsSidebar> = {}) =>
+    render(
+        <MemoryRouter initialEntries={[path]}>
+            <SettingsSidebar {...props} />
+        </MemoryRouter>
+    );
+
 describe('SettingsSidebar', () => {
-    const mockLogout = jest.fn();
+    const logout = jest.fn();
 
     beforeEach(() => {
         jest.clearAllMocks();
-        mockUseAuth.mockReturnValue({
-            logout: mockLogout
+        mockUseAuth.mockReturnValue({ logout });
+    });
+
+    describe('desktop', () => {
+        test('lists the five sections with search and only Logout in the footer', () => {
+            renderAt('/settings/profile/account');
+
+            for (const label of ['Profile', 'BYOK Settings', 'Defaults', 'Cost and Usage', 'Developer']) {
+                expect(screen.getByText(label)).toBeInTheDocument();
+            }
+            expect(screen.getByTestId('settings-sidebar-search')).toBeInTheDocument();
+            expect(screen.getByTestId('settings-sidebar-logout')).toBeInTheDocument();
+            expect(screen.queryByText('Support')).not.toBeInTheDocument();
+            expect(screen.queryByText('Privacy policy')).not.toBeInTheDocument();
+            expect(screen.queryByText('Tools')).not.toBeInTheDocument();
+            expect(screen.queryByText('Connectors')).not.toBeInTheDocument();
+        });
+
+        test('the current page is open and marked', () => {
+            renderAt('/settings/byok/vector-db');
+
+            expect(screen.getByTestId('settings-page-byok-vector-db')).toHaveAttribute('aria-current', 'page');
+            expect(screen.getByTestId('settings-section-byok')).toHaveAttribute('aria-expanded', 'true');
+        });
+
+        test('opening a section goes to its first page', async () => {
+            const onNavigate = jest.fn();
+            renderAt('/settings/profile/account', { onNavigate });
+
+            await userEvent.click(screen.getByTestId('settings-section-usage'));
+
+            expect(mockNavigate).toHaveBeenCalledWith('/settings/usage/llm-models');
+            expect(screen.getByText('Embedding Models')).toBeInTheDocument();
+        });
+
+        test('a page navigates and reports it', async () => {
+            const onNavigate = jest.fn();
+            renderAt('/settings/byok/llm-keys', { onNavigate });
+
+            await userEvent.click(screen.getByTestId('settings-page-byok-web-search'));
+
+            expect(mockNavigate).toHaveBeenCalledWith('/settings/byok/web-search');
+            expect(onNavigate).toHaveBeenCalled();
+        });
+
+        test('Developer has no sub-pages and goes straight there', async () => {
+            renderAt('/settings/profile/account');
+
+            await userEvent.click(screen.getByTestId('settings-page-developer'));
+
+            expect(mockNavigate).toHaveBeenCalledWith('/settings/developer');
+        });
+
+        test('search finds pages by their own or their section name', async () => {
+            renderAt('/settings/profile/account');
+
+            await userEvent.type(screen.getByTestId('settings-sidebar-search'), 'vector');
+
+            expect(screen.getByTestId('settings-search-hit-byok-vector-db')).toBeInTheDocument();
+            expect(screen.getByTestId('settings-search-hit-usage-vector-db')).toBeInTheDocument();
+            expect(screen.queryByTestId('settings-search-hit-support')).not.toBeInTheDocument();
+        });
+
+        test('logs out', async () => {
+            renderAt('/settings/profile/account');
+
+            await userEvent.click(screen.getByTestId('settings-sidebar-logout'));
+
+            expect(logout).toHaveBeenCalledWith({ returnTo: window.location.origin });
         });
     });
 
-    test('renders tabs and logout button', () => {
-        render(
-            <MemoryRouter initialEntries={['/settings/profile']}>
-                <SettingsSidebar />
-            </MemoryRouter>
-        );
-        
-        expect(screen.getByText('Profile')).toBeInTheDocument();
-        expect(screen.getByText('AI Settings')).toBeInTheDocument();
-        expect(screen.getByText('Defaults')).toBeInTheDocument();
-        expect(screen.getByText('Logout')).toBeInTheDocument();
-    });
-
-    test('calls navigate when clicking a tab', async () => {
-        render(
-            <MemoryRouter initialEntries={['/settings/ai']}>
-                <SettingsSidebar />
-            </MemoryRouter>
-        );
-        
-        const profileTab = screen.getByText('Profile');
-        await userEvent.click(profileTab);
-        
-        expect(mockNavigate).toHaveBeenCalledWith('/settings/profile');
-    });
-
-    test('calls logout when clicking logout button', async () => {
-        render(
-            <MemoryRouter initialEntries={['/settings/profile']}>
-                <SettingsSidebar />
-            </MemoryRouter>
-        );
-        
-        const logoutButton = screen.getByText('Logout');
-        await userEvent.click(logoutButton);
-        
-        expect(mockLogout).toHaveBeenCalledWith({ returnTo: window.location.origin });
-    });
-
-    test('defaults activeTab to profile when location pathname is /', () => {
-        render(
-            <MemoryRouter initialEntries={['/']}>
-                <SettingsSidebar />
-            </MemoryRouter>
-        );
-
-        const profileTab = screen.getByText('Profile').closest('button');
-        expect(profileTab).toHaveClass('active');
-    });
-
-    test('clicking a parent section expands it and navigates to its first child', async () => {
-        render(
-            <MemoryRouter initialEntries={['/settings/profile']}>
-                <SettingsSidebar />
-            </MemoryRouter>
-        );
-
-        // Collapsed to start: child links are not shown
-        expect(screen.queryByText('LLM API Keys')).not.toBeInTheDocument();
-
-        await userEvent.click(screen.getByText('AI Settings'));
-
-        expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/llm-keys');
-        // Submenu is now expanded in place (so a different child is one tap away)
-        expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
-        expect(screen.getByText('Embedding Model API Keys')).toBeInTheDocument();
-        expect(screen.getByText('Vector DB Connection')).toBeInTheDocument();
-    });
-
-    test('tapping a child navigates to its page and calls onNavigate', async () => {
-        const onNavigate = jest.fn();
-        render(
-            <MemoryRouter initialEntries={['/settings/ai']}>
-                <SettingsSidebar onNavigate={onNavigate} />
-            </MemoryRouter>
-        );
-
-        await userEvent.click(screen.getByText('Vector DB Connection'));
-
-        expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/vector-db');
-        expect(onNavigate).toHaveBeenCalled();
-    });
-
-    test('links to the support page above the logout button', async () => {
-        const onNavigate = jest.fn();
-        render(
-            <MemoryRouter initialEntries={['/settings/profile']}>
-                <SettingsSidebar onNavigate={onNavigate} />
-            </MemoryRouter>
-        );
-
-        await userEvent.click(screen.getByTestId('settings-sidebar-support'));
-
-        expect(mockNavigate).toHaveBeenCalledWith('/support');
-        expect(onNavigate).toHaveBeenCalled();
-    });
-
-    describe('mobile menu', () => {
-        const renderMenu = (onNavigate = jest.fn()) => {
-            render(
-                <MemoryRouter initialEntries={['/settings/profile']}>
-                    <SettingsSidebar menu onNavigate={onNavigate} />
-                </MemoryRouter>
-            );
+    describe('phone menu', () => {
+        const setupMenu = (onNavigate = jest.fn()) => {
+            renderAt('/settings/profile/account', { menu: true, onNavigate });
             return onNavigate;
         };
 
         test('a section opens in place without navigating or closing the menu', async () => {
-            const onNavigate = renderMenu();
+            const onNavigate = setupMenu();
 
-            await userEvent.click(screen.getByText('AI Settings'));
+            await userEvent.click(screen.getByTestId('settings-section-byok'));
 
             expect(screen.getByText('LLM API Keys')).toBeInTheDocument();
             expect(mockNavigate).not.toHaveBeenCalled();
             expect(onNavigate).not.toHaveBeenCalled();
         });
 
-        test('a sub-page navigates and closes the menu', async () => {
-            const onNavigate = renderMenu();
+        test('a page navigates and closes the menu', async () => {
+            const onNavigate = setupMenu();
 
-            await userEvent.click(screen.getByText('AI Settings'));
+            await userEvent.click(screen.getByTestId('settings-section-byok'));
             await userEvent.click(screen.getByText('LLM API Keys'));
 
-            expect(mockNavigate).toHaveBeenCalledWith('/settings/ai/llm-keys');
+            expect(mockNavigate).toHaveBeenCalledWith('/settings/byok/llm-keys');
             expect(onNavigate).toHaveBeenCalled();
         });
 
-        test('search lists matching sections and sub-pages, and says when nothing matches', async () => {
-            const onNavigate = renderMenu();
+        test('search lists matches, and says when nothing matches', async () => {
+            const onNavigate = setupMenu();
             const search = screen.getByTestId('mobile-menu-search');
 
             await userEvent.type(search, 'web search');
-            expect(screen.queryByText('Profile')).not.toBeInTheDocument();
-            await userEvent.click(screen.getByText('Web Search'));
+            await userEvent.click(screen.getByTestId('settings-search-hit-usage-web-search'));
             expect(mockNavigate).toHaveBeenCalledWith('/settings/usage/web-search');
             expect(onNavigate).toHaveBeenCalled();
 
@@ -167,38 +138,27 @@ describe('SettingsSidebar', () => {
             expect(screen.getByText('No results')).toBeInTheDocument();
         });
 
-        test('search matches sections without sub-pages', async () => {
-            renderMenu();
-            await userEvent.type(screen.getByTestId('mobile-menu-search'), 'tools');
-            expect(screen.getByTestId('settings-search-hit-tools')).toBeInTheDocument();
-        });
+        test('the footer card opens Support and the privacy policy, and hides while searching', async () => {
+            const onNavigate = setupMenu();
 
-        test('opens the privacy policy and closes the menu', async () => {
-            const onNavigate = renderMenu();
-            await userEvent.click(screen.getByTestId('settings-menu-privacy-policy'));
-            expect(mockNavigate).toHaveBeenCalledWith('/privacy-policy');
-            expect(onNavigate).toHaveBeenCalled();
-        });
-
-        test('opens the support page and closes the menu', async () => {
-            const onNavigate = renderMenu();
             await userEvent.click(screen.getByTestId('settings-menu-support'));
             expect(mockNavigate).toHaveBeenCalledWith('/support');
-            expect(onNavigate).toHaveBeenCalled();
-        });
+            await userEvent.click(screen.getByTestId('settings-menu-privacy-policy'));
+            expect(mockNavigate).toHaveBeenCalledWith('/privacy-policy');
+            expect(onNavigate).toHaveBeenCalledTimes(2);
 
-        test('search finds the support page', async () => {
-            const onNavigate = renderMenu();
             await userEvent.type(screen.getByTestId('mobile-menu-search'), 'supp');
+            expect(screen.queryByTestId('settings-menu-support')).not.toBeInTheDocument();
             await userEvent.click(screen.getByTestId('settings-search-hit-support'));
-            expect(mockNavigate).toHaveBeenCalledWith('/support');
-            expect(onNavigate).toHaveBeenCalled();
+            expect(mockNavigate).toHaveBeenLastCalledWith('/support');
         });
 
-        test('logs out from its own card', async () => {
-            renderMenu();
+        test('logs out from the footer card', async () => {
+            setupMenu();
+
             await userEvent.click(screen.getByTestId('settings-menu-logout'));
-            expect(mockLogout).toHaveBeenCalled();
+
+            expect(logout).toHaveBeenCalled();
         });
     });
 });

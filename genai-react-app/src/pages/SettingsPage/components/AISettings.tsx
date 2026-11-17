@@ -6,15 +6,19 @@ import { storeCustomerVendorApiKey, storeCustomerVendorConfig } from '../../../s
 import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
 import { useProviderCatalog } from '../../../hooks/queries/useProviderCatalog'
 import { useTextGenerationModels } from '../../../hooks/queries/useTextGenerationModels'
-import { InputSelectWithHint, VendorApiKeysManager, VendorApiKeyRowData } from '@genflowly/component-library'
+import { InputSelectWithHint, StatusPill, VendorApiKeysManager, VendorApiKeyRowData } from '@genflowly/component-library'
 import { VendorBrandName } from '../../../components/common/BrandName/BrandName'
 import { useVendorDisplayNames } from '../../../hooks/useVendorDisplayNames'
+import { SettingsFrame } from './SettingsFrame'
+import { useSettingsShell } from '../SettingsShellContext'
 import styles from './AISettings.module.scss'
 
 const ALL_VENDOR_IDS = Object.values(AIVendor) as string[]
 
+/** BYOK Settings › LLM API Keys: a key per AI provider, its model, reasoning effort and priority. */
 export function AISettings(): React.ReactElement {
     const { t } = useTranslation()
+    const { narrow } = useSettingsShell()
     const {
         customerId,
         getAccessTokenSilently,
@@ -138,12 +142,21 @@ export function AISettings(): React.ReactElement {
         }
     }
 
+    const setCount = visibleVendors.filter(isKeySet).length
+    const statusText = t('settingsPage.llmKeys.setCount', { count: setCount })
+    const knowledge = [
+        { title: t('settingsPage.llmKeys.whichTitle'), text: t('settingsPage.llmKeys.whichText') },
+        { title: t('settingsPage.llmKeys.priorityTitle'), text: t('settingsPage.llmKeys.priorityText') },
+        { title: t('settingsPage.llmKeys.whereTitle'), text: t('settingsPage.llmKeys.whereText') },
+    ]
+
     return (
-        <div className={styles.container}>
-            <div className={styles.form}>
-                <p className={styles.primaryNote} data-testid="ai-settings-primary-note">
-                    {t('settingsPage.aiSettings.primaryProviderNote')}
-                </p>
+        <SettingsFrame
+            page="llm-keys"
+            knowledge={knowledge}
+            statusText={statusText}
+            status={<StatusPill kind={setCount > 0 ? 'ok' : 'unset'}>{statusText}</StatusPill>}
+        >
                 <VendorApiKeysManager
                     rows={rows}
                     onSaveKey={handleSaveKey}
@@ -152,17 +165,21 @@ export function AISettings(): React.ReactElement {
                         keySetPill: t('settingsPage.aiSettings.keySetPill'),
                         keyNotSetPill: t('settingsPage.aiSettings.keyNotSetPill'),
                         keyHint: t('settingsPage.aiSettings.apiKeyHint'),
-                        keyPlaceholder: 'sk-...',
-                        keyReplacePlaceholder: t('settingsPage.aiSettings.overwriteApiKey'),
+                        keyPlaceholder: t('settingsPage.llmKeys.enterKey'),
+                        keyReplacePlaceholder: t('settingsPage.llmKeys.replaceKey'),
                         saveKey: t('settingsPage.aiSettings.save'),
                         saving: t('settingsPage.aiSettings.savingLabel'),
                         keyEmpty: t('settingsPage.aiSettings.enterValidApiKeyToast'),
                         modelHint: t('settingsPage.aiSettings.configModelHint'),
                         modelPlaceholder: t('settingsPage.aiSettings.configModelPlaceholder'),
-                        priorityHint: t('settingsPage.aiSettings.configPriorityHint'),
-                        saveConfig: t('settingsPage.aiSettings.configSave'),
+                        priorityHint: t('settingsPage.llmKeys.priorityHint'),
+                        saveConfig: t('settingsPage.llmKeys.savePreference'),
                         configSaved: () => t('settingsPage.aiSettings.configSavedToast'),
+                        priorityPill: (priority: number) => priority === 1
+                            ? t('settingsPage.llmKeys.priorityPrimary')
+                            : t('settingsPage.llmKeys.priorityPill', { priority }),
                     }}
+                    narrow={narrow}
                     data-testid="ai-settings-vendors"
                 />
 
@@ -178,11 +195,11 @@ export function AISettings(): React.ReactElement {
                             onChange={(val: string) =>
                                 setRevealedVendors(prev => [...prev, val])}
                             options={addableVendorOptions}
+                            layout={narrow ? 'stacked' : 'inline'}
                             data-testid="add-vendor-select"
                         />
                     </div>
                 )}
-            </div>
-        </div>
+        </SettingsFrame>
     )
 }
