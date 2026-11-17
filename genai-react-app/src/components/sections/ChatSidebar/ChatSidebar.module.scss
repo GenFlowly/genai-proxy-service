@@ -16,6 +16,14 @@
 
 .search {
     flex: none;
+    width: 100%;
+}
+
+// The tooltips wrap the pill and the field; the wrappers take their place in
+// the column
+.newChatTip,
+.searchTip {
+    flex: none;
 }
 
 .cards {

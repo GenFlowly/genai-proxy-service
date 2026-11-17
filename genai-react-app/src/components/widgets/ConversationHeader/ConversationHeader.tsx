@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth0 } from '@auth0/auth0-react'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
 import InstructionPickerModal from '../../common/InstructionPickerModal/InstructionPickerModal'
-import { ConversationSubBar, IconButton, OutlineSheet } from '@genflowly/component-library'
+import { ConversationSubBar, Icon, IconButton, OutlineSheet } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
 import { useAI } from '../../../context/AIContext'
 import { useConversation } from '../../../context/ConversationContext'
@@ -25,6 +25,7 @@ import { MoreMenu } from '../../DetailPage/DetailParts'
 import { useSharedItemModeration } from '../../../hooks/useSharedItemModeration'
 import { useLoadedInstruction } from '../../../hooks/useLoadedInstruction'
 import { useConversationOutline } from '../../../hooks/useConversationOutline'
+import { usePendingProjectName } from '../../../hooks/usePendingProjectName'
 import { ModerationError } from '../../../services/moderationService'
 
 export default function ConversationHeader(): React.ReactElement | null {
@@ -39,6 +40,7 @@ export default function ConversationHeader(): React.ReactElement | null {
     const [isOutlineOpen, setOutlineOpen] = useState(false)
     const loadedInstruction = useLoadedInstruction()
     const outline = useConversationOutline()
+    const pendingProjectName = usePendingProjectName()
     const { showToast } = useToast()
     const [isShareModalOpen, setShareModalOpen] = useState(false)
 
@@ -152,19 +154,34 @@ export default function ConversationHeader(): React.ReactElement | null {
                 onTitleClick={outline.items.length > 0 ? () => setOutlineOpen(true) : undefined}
                 titleActionLabel={t('conversation.outline.openFor', { title: displayTitle })}
                 titleExpanded={isOutlineOpen}
-                subtitle={loadedInstruction ? (
+                subtitle={(
                     <>
-                        {loadedInstruction.icon && (
-                            <span aria-hidden="true">{loadedInstruction.icon}</span>
+                        {pendingProjectName && (
+                            <>
+                                <span className={styles.projectContext} data-testid="mobile-header-project">
+                                    <Icon src={ICONS.FOLDER} size={12} aria-hidden={true} className={styles.projectIcon} />
+                                    <span className={styles.projectName}>
+                                        {t('conversation.conversationHeader.inProject', { name: pendingProjectName })}
+                                    </span>
+                                </span>
+                                <span aria-hidden="true">·</span>
+                            </>
                         )}
-                        <span className={styles.instructionName}>
-                            {loadedInstruction.name}
-                        </span>
+                        {loadedInstruction ? (
+                            <>
+                                {loadedInstruction.icon && (
+                                    <span aria-hidden="true">{loadedInstruction.icon}</span>
+                                )}
+                                <span className={styles.instructionName}>
+                                    {loadedInstruction.name}
+                                </span>
+                            </>
+                        ) : (
+                            <span className={styles.instructionName}>
+                                {t('conversation.conversationHeader.chooseInstruction')}
+                            </span>
+                        )}
                     </>
-                ) : (
-                    <span className={styles.instructionName}>
-                        {t('conversation.conversationHeader.chooseInstruction')}
-                    </span>
                 )}
                 onSubtitleClick={() => setPickerOpen(true)}
                 menuItems={menuItems}

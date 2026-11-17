@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { CollapseStrip, MenuSearchField, PillButton, ResizableSidebar, SidebarRail } from '@genflowly/component-library'
+import { CollapseStrip, MenuSearchField, PillButton, ResizableSidebar, SidebarRail, Tooltip } from '@genflowly/component-library'
 import { useLayout } from '../../../context/LayoutContext'
 import { useConversation } from '../../../context/ConversationContext'
 import { ICONS } from '../../../constants/icons'
@@ -74,28 +74,33 @@ export default function ChatSidebar(): React.ReactElement {
             handleTestId="chat-sidebar-resize-handle"
         >
             <aside className={styles.column} aria-label={t('layout.chatSidebar.label')}>
-                <PillButton
-                    label={t('conversation.conversationHeader.newChat')}
-                    icon={ICONS.COMPOSE}
-                    className={styles.newChat}
-                    onClick={resetConversation}
-                    data-testid="new-chat-button"
-                />
-                <div
-                    ref={searchRef}
-                    className={styles.search}
-                    onKeyDown={e => {
-                        if (e.key === 'Escape') clearSearch()
-                    }}
-                >
-                    <MenuSearchField
-                        value={query}
-                        onChange={setQuery}
-                        placeholder={t('layout.mobileMenu.searchChats')}
-                        clearLabel={t('layout.mobileMenu.clearSearch')}
-                        data-testid="chat-sidebar-search"
+                <Tooltip content={t('conversation.conversationHeader.newChat')} position="bottom" fullWidth className={styles.newChatTip}>
+                    <PillButton
+                        label={t('conversation.conversationHeader.newChat')}
+                        icon={ICONS.COMPOSE}
+                        className={styles.newChat}
+                        onClick={resetConversation}
+                        data-testid="new-chat-button"
                     />
-                </div>
+                </Tooltip>
+                <Tooltip content={t('layout.mobileMenu.searchChats')} position="right" showOnFocus={false} fullWidth className={styles.searchTip}>
+                    <div
+                        ref={searchRef}
+                        className={styles.search}
+                        onKeyDown={e => {
+                            if (e.key === 'Escape') clearSearch()
+                        }}
+                    >
+                        <MenuSearchField
+                            value={query}
+                            onChange={setQuery}
+                            placeholder={t('layout.mobileMenu.searchChats')}
+                            clearLabel={t('layout.mobileMenu.clearSearch')}
+                            variant="sidebar"
+                            data-testid="chat-sidebar-search"
+                        />
+                    </div>
+                </Tooltip>
                 <div className={styles.cards} hidden={searching} data-testid="chat-sidebar-cards">
                     <ConversationHistoryComponent />
                 </div>
@@ -104,6 +109,8 @@ export default function ChatSidebar(): React.ReactElement {
                         <MenuSearchResults
                             query={query}
                             types={SEARCH_TYPES}
+                            surface="card"
+                            variant="default"
                             untitledLabel={t('conversation.conversationHistory.untitledConversation')}
                             onSelect={result => {
                                 navigate(`/chat/${result.key}`)

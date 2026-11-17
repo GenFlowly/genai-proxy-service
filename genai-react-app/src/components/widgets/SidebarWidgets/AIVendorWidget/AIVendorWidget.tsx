@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { IconButton, SidebarCard, Switch } from '@genflowly/component-library'
+import { IconButton, SidebarWidget, Switch } from '@genflowly/component-library'
 import { useToast } from '../../../../context/ToastContext'
 import { useTextGenerationModels } from '../../../../hooks/queries/useTextGenerationModels'
 import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
@@ -105,7 +105,7 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
     }
 
     return (
-        <SidebarCard
+        <SidebarWidget
             title={t('sidebar.aiVendorWidget.title')}
             icon={ICONS.MODELS}
             actions={(
@@ -209,6 +209,6 @@ export default function AIVendorWidget({ 'data-testid': testId }: { 'data-testid
                     </div>
                 )
             })}
-        </SidebarCard>
+        </SidebarWidget>
     )
 }

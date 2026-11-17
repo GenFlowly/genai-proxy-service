@@ -1,0 +1,16 @@
+// Centred in the empty page, between the header and the docked editor; it
+// never takes a tap
+.hint {
+    position: fixed;
+    top: 50%;
+    left: 24px;
+    right: 24px;
+    z-index: 1;
+    margin: 0;
+    transform: translateY(-60%);
+    color: var(--color-text-muted);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    text-align: center;
+    pointer-events: none;
+}

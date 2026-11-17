@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, SidebarCard, SidebarListPanel } from '@genflowly/component-library'
+import { Icon, SidebarWidget, SidebarListPanel } from '@genflowly/component-library'
 import type { SidebarListGroup } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { Project } from '../../../models/conversationHistory.models'
@@ -83,7 +83,7 @@ export default function MemoryScopePanels({
 
     return (
         <>
-            <SidebarCard className={styles.profileCard}>
+            <SidebarWidget className={styles.profileCard}>
                 <SidebarListPanel
                     title={menu ? undefined : t('memoryPage.menu.profileMemories')}
                     variant={menu ? 'menu' : 'default'}
@@ -95,8 +95,8 @@ export default function MemoryScopePanels({
                     listAriaLabel={t('memoryPage.menu.profileMemories')}
                     data-testid={menu ? 'memory-profile-panel-mobile' : 'memory-profile-panel'}
                 />
-            </SidebarCard>
-            <SidebarCard className={styles.projectsCard}>
+            </SidebarWidget>
+            <SidebarWidget className={styles.projectsCard}>
                 <SidebarListPanel
                     title={menu ? undefined : t('memoryPage.menu.projects')}
                     variant={menu ? 'menu' : 'default'}
@@ -110,7 +110,7 @@ export default function MemoryScopePanels({
                     listAriaLabel={t('memoryPage.menu.projects')}
                     data-testid={menu ? 'memory-projects-panel-mobile' : 'memory-projects-panel'}
                 />
-            </SidebarCard>
+            </SidebarWidget>
         </>
     )
 }

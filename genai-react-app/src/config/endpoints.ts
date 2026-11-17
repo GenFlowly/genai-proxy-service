@@ -42,6 +42,8 @@ export const endpoints = {
     getProjects: `${BASE}${API_PREFIX}/projects`,
     getProjectConversations: `${BASE}${API_PREFIX}/projects/conversations`,
     createProject: `${BASE}${API_PREFIX}/project`,
+    renameProject: (projectId: string) => `${BASE}${API_PREFIX}/project/rename?projectId=${encodeURIComponent(projectId)}`,
+    deleteProject: (projectId: string) => `${BASE}${API_PREFIX}/project?projectId=${encodeURIComponent(projectId)}`,
     assignConversationProject: (conversationId: string, projectId: string) =>
         `${BASE}${API_PREFIX}/conversation/assign-project?conversationId=${encodeURIComponent(conversationId)}&projectId=${encodeURIComponent(projectId)}`,
     unassignConversationProject: (conversationId: string) =>

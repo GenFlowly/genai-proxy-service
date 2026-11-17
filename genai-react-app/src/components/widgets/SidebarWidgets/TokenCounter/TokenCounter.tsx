@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, SidebarCard, Tooltip, conversationUsageByVendor, formatUsd } from '@genflowly/component-library'
+import { Icon, SidebarWidget, Tooltip, conversationUsageByVendor, formatUsd } from '@genflowly/component-library'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
 import { ICONS } from '../../../../constants/icons'
@@ -37,7 +37,7 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
     const usage = useMemo(() => conversationUsageByVendor(conversationBlockList), [conversationBlockList])
 
     return (
-        <SidebarCard
+        <SidebarWidget
             title={t('sidebar.tokenCounter.title')}
             icon={ICONS.TOKENS}
             bodyClassName={styles.body}
@@ -89,6 +89,6 @@ export default function TokenCounter({ 'data-testid': testId }: { 'data-testid'?
                     </div>
                 </div>
             ))}
-        </SidebarCard>
+        </SidebarWidget>
     )
 }

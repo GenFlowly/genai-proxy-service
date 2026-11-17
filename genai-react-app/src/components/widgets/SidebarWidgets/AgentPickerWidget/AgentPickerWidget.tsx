@@ -5,7 +5,7 @@ import { saveAIConfigPreferences } from '../../../../services/saveAIConfigServic
 import { useToast } from '../../../../context/ToastContext'
 import { Agent, agentCategory, effectiveDefaultAgentId } from '../../../../models/agents.models'
 import styles from './AgentPickerWidget.module.scss'
-import { SidebarCard } from '@genflowly/component-library'
+import { SidebarWidget } from '@genflowly/component-library'
 import { ICONS } from '../../../../constants/icons'
 import { useSidebarWidget } from '../../../../hooks/useSidebarWidget'
 
@@ -80,7 +80,7 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
     }
 
     return (
-        <SidebarCard
+        <SidebarWidget
             title={t('sidebar.agentPickerWidget.title')}
             icon={ICONS.USER_ROLE}
             bodyClassName={styles.body}
@@ -110,6 +110,6 @@ export default function AgentPickerWidget({ 'data-testid': testId }: { 'data-tes
                     ))}
                 </select>
             )}
-        </SidebarCard>
+        </SidebarWidget>
     )
 }

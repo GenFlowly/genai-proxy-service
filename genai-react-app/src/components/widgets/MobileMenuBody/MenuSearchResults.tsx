@@ -1,7 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { SidebarCard, SidebarListLoadMore, SidebarListPanel, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
+import { SidebarWidget, SidebarListLoadMore, SidebarListPanel, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
 import { useContentSearch } from '../../../hooks/queries/useContentSearch'
 import { SearchDataType, SearchResultItem } from '../../../services/searchService'
@@ -14,6 +14,10 @@ interface MenuSearchResultsProps {
     onSelect: (result: SearchResultItem) => void
     // Called after leaving for Settings, so the menu can close.
     onLeave: () => void
+    // 'card': shows the card's material, as the chat page's widgets do
+    surface?: 'panel' | 'card'
+    // 'default': desktop row density, for a desktop sidebar
+    variant?: 'default' | 'menu'
 }
 
 /** Results of the unified search API, listed in a card in the L2 Menu. */
@@ -23,6 +27,8 @@ export default function MenuSearchResults({
     untitledLabel,
     onSelect,
     onLeave,
+    surface = 'panel',
+    variant = 'menu',
 }: MenuSearchResultsProps): React.ReactElement {
     const { t } = useTranslation()
     const navigate = useNavigate()
@@ -32,9 +38,10 @@ export default function MenuSearchResults({
     const notConfigured = isSearchNotConfigured(error) ? error : null
 
     return (
-        <SidebarCard data-testid="menu-search-results">
+        <SidebarWidget data-testid="menu-search-results">
             <SidebarListPanel
-                variant="menu"
+                variant={variant}
+                surface={surface}
                 groups={results.length > 0
                     ? [{
                         id: 'results',
@@ -66,6 +73,6 @@ export default function MenuSearchResults({
                     />
                 ) : undefined}
             />
-        </SidebarCard>
+        </SidebarWidget>
     )
 }

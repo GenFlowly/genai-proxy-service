@@ -4,6 +4,27 @@
     white-space: nowrap;
 }
 
+// 📱 "in Startup" before the instruction while a new chat waits to be born in
+// a project; the instruction's name gives way first
+.projectContext {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: 0 1 auto;
+    min-width: 2.5rem;
+    max-width: 60%;
+}
+
+.projectIcon {
+    color: var(--color-text-muted);
+}
+
+.projectName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 // "Shared by …" next to the sub-bar's actions
 .sharedBy {
     flex: none;

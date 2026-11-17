@@ -13,10 +13,13 @@ import {
     getProjects,
     getProjectConversations,
     createProject,
+    renameProject,
+    deleteProject,
     assignConversationToProject,
     unassignConversationFromProject,
 } from '../../../../services/conversationHistoryService'
 import { clearHistoryCache } from '../../../../components/widgets/ConversationHistoryWidget/historyCache'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 jest.mock('../../../../context/AuthContext')
 jest.mock('../../../../context/ConversationContext')
@@ -35,6 +38,7 @@ jest.mock('../../../../components/widgets/ConversationHistoryWidget/Conversation
 const mockNavigate = jest.fn()
 const mockShowToast = jest.fn()
 const mockStartConversationInProject = jest.fn()
+const mockClearPendingProject = jest.fn()
 const mockGetAccessTokenSilently = jest.fn().mockResolvedValue('mock-token')
 const mockGetCustomerConversations = getCustomerConversations as jest.Mock
 const mockGetPinnedConversations = getPinnedConversations as jest.Mock
@@ -43,6 +47,10 @@ const mockGetProjectConversations = getProjectConversations as jest.Mock
 const mockCreateProject = createProject as jest.Mock
 const mockAssignToProject = assignConversationToProject as jest.Mock
 const mockUnassignFromProject = unassignConversationFromProject as jest.Mock
+
+// A row's Move, Pin and Delete sit behind its More actions button
+const openRowMenu = (conversationId: string) =>
+    fireEvent.click(screen.getByTestId(`conv-history-item-${conversationId}-more`))
 
 const defaultConversations = [
     { conversationId: 'conv-1', title: 'First Chat', createdAt: null, updatedAt: null },
@@ -68,6 +76,7 @@ function setupMocks({
         conversationTitle,
         pendingProjectId,
         startConversationInProject: mockStartConversationInProject,
+        clearPendingProject: mockClearPendingProject,
     })
 }
 
@@ -88,23 +97,25 @@ describe('ConversationHistoryComponent', () => {
     describe('mobile menu', () => {
         const pinnedConversation = { conversationId: 'conv-pinned', title: 'Pinned Chat', createdAt: null, updatedAt: null }
 
-        test('one collapsible Chats header holds Pinned and Recents', async () => {
+        test('the Chats widget holds Pinned and Recents and collapses from its header', async () => {
             mockGetPinnedConversations.mockResolvedValue({ conversations: [pinnedConversation] })
             render(<ConversationHistoryComponent menu />)
 
-            const heading = await screen.findByTestId('conv-history-history-heading')
+            expect(await screen.findByText('Pinned Chat')).toBeVisible()
+            const heading = screen.getByTestId('conv-history-history-heading')
             expect(heading).toHaveTextContent('Chats')
+            expect(within(screen.getByRole('heading', { name: 'Chats' })).getByRole('button')).toBe(heading)
             expect(screen.getByText('Pinned')).toBeInTheDocument()
             expect(screen.getByText('Recents')).toBeInTheDocument()
-            expect(screen.queryByTestId('conv-history-pinned-heading')).not.toBeInTheDocument()
-            expect(screen.queryByTestId('conv-history-recents-heading')).not.toBeInTheDocument()
+            expect(screen.getByTestId('chats-widget').className).toMatch(/menu/)
 
             fireEvent.click(heading)
-            expect(screen.queryByText('Pinned Chat')).not.toBeInTheDocument()
+            expect(heading).toHaveAttribute('aria-expanded', 'false')
+            expect(screen.getByText('Pinned Chat')).not.toBeVisible()
             expect(screen.getByTestId('history-split-handle')).toHaveAttribute('aria-hidden', 'true')
 
             fireEvent.click(heading)
-            expect(screen.getByText('Pinned Chat')).toBeInTheDocument()
+            expect(screen.getByText('Pinned Chat')).toBeVisible()
         })
 
         test('labels a conversation without a title instead of showing its id', async () => {
@@ -126,7 +137,9 @@ describe('ConversationHistoryComponent', () => {
             })
             render(<ConversationHistoryComponent />)
 
-            expect(await screen.findByTestId('conv-history-history-heading')).toHaveTextContent('Chats')
+            expect(await screen.findByText('Pinned Chat')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-history-heading')).toHaveTextContent('Chats')
+            expect(screen.getByTestId('chats-widget').className).not.toMatch(/menu/)
             expect(screen.getByText('Pinned')).toBeInTheDocument()
             expect(screen.getByText('Recents')).toBeInTheDocument()
             expect(screen.getByText('conv-raw-id')).toBeInTheDocument()
@@ -225,7 +238,7 @@ describe('ConversationHistoryComponent', () => {
         // off against each other
         const divider = screen.getByTestId('history-split-handle')
         expect(divider).toHaveAttribute('role', 'separator')
-        expect(divider).toHaveAttribute('aria-label', 'Resize the Projects and History panels')
+        expect(divider).toHaveAttribute('aria-label', 'Resize panels')
         expect(
             projectsPane.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy()
@@ -494,6 +507,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
+        openRowMenu('conv-1')
         fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
         fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
@@ -517,6 +531,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
+        openRowMenu('conv-1')
         fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
         fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
@@ -539,6 +554,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
+        openRowMenu('conv-1')
         fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
         fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
@@ -560,6 +576,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
+        openRowMenu('conv-1')
         fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
         expect(screen.getByTestId('delete-conversation')).toHaveTextContent("It's deleted for good")
         expect(deleteConversation).not.toHaveBeenCalled()
@@ -580,6 +597,7 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
         })
 
+        openRowMenu('conv-1')
         fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
         fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
@@ -604,10 +622,14 @@ describe('ConversationHistoryComponent', () => {
                 expect(screen.getByText('Pinned')).toBeInTheDocument()
             })
 
-            // conv-1 appears exactly once (in the Pinned group), conv-2 stays in date groups
+            // conv-1 appears exactly once (in the Pinned group), conv-2 stays in Recents
             expect(screen.getAllByTestId('conv-history-item-conv-1')).toHaveLength(1)
-            expect(screen.getByTestId('conv-unpin-btn-conv-1')).toBeInTheDocument()
-            expect(screen.getByTestId('conv-pin-btn-conv-2')).toBeInTheDocument()
+            openRowMenu('conv-1')
+            expect(screen.getByTestId('conv-unpin-btn-conv-1')).toHaveTextContent('Unpin')
+            fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+            openRowMenu('conv-2')
+            expect(screen.getByTestId('conv-pin-btn-conv-2')).toHaveTextContent(/^Pin$/)
+            fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
             // Pinned group renders before the date groups
             const pinnedHeader = screen.getByText('Pinned')
             const item = screen.getByTestId('conv-history-item-conv-2')
@@ -625,9 +647,10 @@ describe('ConversationHistoryComponent', () => {
             render(<ConversationHistoryComponent />)
 
             await waitFor(() => {
-                expect(screen.getByTestId('conv-pin-btn-conv-1')).toBeInTheDocument()
+                expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
             })
 
+            openRowMenu('conv-1')
             fireEvent.click(screen.getByTestId('conv-pin-btn-conv-1'))
 
             await waitFor(() => {
@@ -638,7 +661,8 @@ describe('ConversationHistoryComponent', () => {
             })
 
             expect(screen.getByText('Pinned')).toBeInTheDocument()
-            // Now in the Pinned section: unpin button replaces the pin button
+            // Now in the Pinned section: its menu offers Unpin instead of Pin
+            openRowMenu('conv-1')
             expect(screen.getByTestId('conv-unpin-btn-conv-1')).toBeInTheDocument()
             expect(screen.queryByTestId('conv-pin-btn-conv-1')).not.toBeInTheDocument()
             expect(screen.getAllByTestId('conv-history-item-conv-1')).toHaveLength(1)
@@ -650,9 +674,10 @@ describe('ConversationHistoryComponent', () => {
             render(<ConversationHistoryComponent />)
 
             await waitFor(() => {
-                expect(screen.getByTestId('conv-pin-btn-conv-1')).toBeInTheDocument()
+                expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
             })
 
+            openRowMenu('conv-1')
             fireEvent.click(screen.getByTestId('conv-pin-btn-conv-1'))
 
             await waitFor(() => {
@@ -660,6 +685,7 @@ describe('ConversationHistoryComponent', () => {
             })
 
             expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
+            openRowMenu('conv-1')
             expect(screen.getByTestId('conv-pin-btn-conv-1')).toBeInTheDocument()
         })
 
@@ -674,9 +700,10 @@ describe('ConversationHistoryComponent', () => {
             render(<ConversationHistoryComponent />)
 
             await waitFor(() => {
-                expect(screen.getByTestId('conv-unpin-btn-conv-9')).toBeInTheDocument()
+                expect(screen.getByTestId('conv-history-item-conv-9')).toBeInTheDocument()
             })
 
+            openRowMenu('conv-9')
             fireEvent.click(screen.getByTestId('conv-unpin-btn-conv-9'))
 
             await waitFor(() => {
@@ -690,6 +717,7 @@ describe('ConversationHistoryComponent', () => {
             // inserted into the date-grouped list
             expect(screen.queryByText('Pinned')).not.toBeInTheDocument()
             expect(screen.getByTestId('conv-history-item-conv-9')).toBeInTheDocument()
+            openRowMenu('conv-9')
             expect(screen.getByTestId('conv-pin-btn-conv-9')).toBeInTheDocument()
         })
 
@@ -707,7 +735,8 @@ describe('ConversationHistoryComponent', () => {
                 expect(screen.getByText('Pinned')).toBeInTheDocument()
             })
 
-            fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
+            openRowMenu('conv-1')
+        fireEvent.click(screen.getByTestId('conv-delete-btn-conv-1'))
             fireEvent.click(screen.getByTestId('delete-conversation-confirm'))
 
             await waitFor(() => {
@@ -882,8 +911,10 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByText('Projects')).toBeInTheDocument()
             // The create control is a header icon button with a tooltip
             const createBtn = screen.getByTestId('conv-history-new-project')
-            expect(createBtn).toHaveAttribute('title', 'New project')
             expect(createBtn).toHaveAttribute('aria-label', 'New project')
+            fireEvent.mouseEnter(createBtn.parentElement!)
+            expect(screen.getByRole('tooltip')).toHaveTextContent('New project')
+            fireEvent.mouseLeave(createBtn.parentElement!)
         })
 
         test('an unloaded project is expandable; expanding an empty one settles chevron-less', async () => {
@@ -953,8 +984,9 @@ describe('ConversationHistoryComponent', () => {
             render(<ConversationHistoryComponent />)
 
             await waitFor(() => {
-                expect(screen.getByTestId('conv-move-btn-conv-1')).toBeInTheDocument()
+                expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
             })
+            openRowMenu('conv-1')
             fireEvent.click(screen.getByTestId('conv-move-btn-conv-1'))
             fireEvent.click(screen.getByTestId('move-to-project-proj-1'))
 
@@ -992,6 +1024,7 @@ describe('ConversationHistoryComponent', () => {
             await waitFor(() => {
                 expect(screen.getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
             })
+            openRowMenu('conv-p1')
             fireEvent.click(screen.getByTestId('conv-move-btn-conv-p1'))
 
             // Its current project is offered but disabled
@@ -1019,8 +1052,10 @@ describe('ConversationHistoryComponent', () => {
                 expect(screen.getByTestId('conv-history-project-new-conv-proj-1')).toBeInTheDocument()
             })
             const btn = screen.getByTestId('conv-history-project-new-conv-proj-1')
-            expect(btn).toHaveAttribute('title', 'New conversation')
-            expect(btn).toHaveAttribute('aria-label', 'New conversation')
+            expect(btn).toHaveAttribute('aria-label', 'New chat in project')
+            fireEvent.mouseEnter(btn.parentElement!)
+            expect(screen.getByRole('tooltip')).toHaveTextContent('New chat in project')
+            fireEvent.mouseLeave(btn.parentElement!)
             // Permanently visible — not a hover-revealed action
             expect(btn.className).not.toContain('hoverReveal')
 
@@ -1069,5 +1104,251 @@ describe('ConversationHistoryComponent', () => {
             expect(screen.getByTestId('conv-history-item-conv-new')).toBeInTheDocument()
             expect(screen.getAllByTestId('conv-history-item-conv-new')).toHaveLength(1)
         })
+    })
+
+    describe('project actions', () => {
+        const projectOne = { projectId: 'proj-1', name: 'Startup', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }
+        const member = { conversationId: 'conv-p1', title: 'Investor update', createdAt: null, updatedAt: null, projectId: 'proj-1', projectName: 'Startup' }
+
+        beforeEach(() => {
+            mockGetProjects.mockResolvedValue({ projects: [projectOne] })
+            mockGetCustomerConversations.mockResolvedValue({
+                conversations: [member, ...defaultConversations],
+                lastEvaluatedKey: null,
+            })
+            mockGetProjectConversations.mockResolvedValue({ conversations: [member], lastEvaluatedKey: null })
+        })
+
+        const openProjectMenu = async () => {
+            await screen.findByTestId('conv-history-project-proj-1')
+            fireEvent.click(screen.getByTestId('conv-history-project-proj-1-more'))
+        }
+
+        test('a project row has New chat in project in view and Rename and Delete behind More actions', async () => {
+            render(<ConversationHistoryComponent />)
+            await openProjectMenu()
+            expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+                'Rename project',
+                'Delete project',
+            ])
+            // No folder glyph next to the project's name
+            const row = screen.getByTestId('conv-history-project-proj-1')
+            expect(row).toHaveTextContent('Startup')
+            expect(row.querySelectorAll('[class*="groupIcon"]')).toHaveLength(0)
+        })
+
+        test('renames a project from its menu', async () => {
+            ;(renameProject as jest.Mock).mockResolvedValue(undefined)
+            render(<ConversationHistoryComponent />)
+            await openProjectMenu()
+            fireEvent.click(screen.getByTestId('conv-history-project-rename-proj-1'))
+
+            const input = screen.getByTestId('rename-project-name-input')
+            expect(input).toHaveValue('Startup')
+            const save = screen.getByTestId('rename-project-save-btn')
+            // Nothing to save until the name changes, and never a blank name
+            expect(save).toBeDisabled()
+            fireEvent.change(input, { target: { value: '   ' } })
+            expect(save).toBeDisabled()
+            fireEvent.change(input, { target: { value: '  Launch  ' } })
+            expect(save).toBeEnabled()
+            fireEvent.click(save)
+
+            await waitFor(() => {
+                expect(renameProject).toHaveBeenCalledWith('mock-token', 'proj-1', 'Launch')
+            })
+            await waitFor(() => {
+                expect(screen.getByTestId('conv-history-project-proj-1')).toHaveTextContent('Launch')
+            })
+            expect(mockShowToast).toHaveBeenCalledWith('Project renamed')
+            expect(screen.queryByTestId('rename-project-name-input')).not.toBeInTheDocument()
+        })
+
+        test('a failed rename keeps the dialog and the old name, and says so', async () => {
+            ;(renameProject as jest.Mock).mockRejectedValue(new Error('nope'))
+            render(<ConversationHistoryComponent />)
+            await openProjectMenu()
+            fireEvent.click(screen.getByTestId('conv-history-project-rename-proj-1'))
+            fireEvent.change(screen.getByTestId('rename-project-name-input'), { target: { value: 'Launch' } })
+            fireEvent.click(screen.getByTestId('rename-project-save-btn'))
+
+            await waitFor(() => {
+                expect(mockShowToast).toHaveBeenCalledWith('Failed to rename project')
+            })
+            expect(screen.getByTestId('rename-project-name-input')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-project-proj-1')).toHaveTextContent('Startup')
+        })
+
+        test('deletes a project after the user confirms; its chats return to Recents', async () => {
+            ;(deleteProject as jest.Mock).mockResolvedValue(undefined)
+            render(<ConversationHistoryComponent />)
+            await openProjectMenu()
+            // The member lives in its project, not in Recents
+            expect(screen.queryByTestId('conv-history-item-conv-p1')).not.toBeInTheDocument()
+            fireEvent.click(screen.getByTestId('conv-history-project-delete-proj-1'))
+
+            const dialog = screen.getByTestId('delete-project')
+            expect(dialog).toHaveTextContent('“Startup” is deleted')
+            expect(dialog).toHaveTextContent('Its chats stay and move back to Chats')
+            expect(dialog).toHaveTextContent('Memories that belong only to this project are deleted for good')
+            expect(deleteProject).not.toHaveBeenCalled()
+            fireEvent.click(screen.getByTestId('delete-project-confirm'))
+
+            await waitFor(() => {
+                expect(deleteProject).toHaveBeenCalledWith('mock-token', 'proj-1')
+            })
+            await waitFor(() => {
+                expect(screen.queryByTestId('conv-history-project-proj-1')).not.toBeInTheDocument()
+            })
+            expect(within(screen.getByTestId('history-pane')).getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+            expect(mockShowToast).toHaveBeenCalledWith('Project deleted')
+            expect(mockClearPendingProject).not.toHaveBeenCalled()
+        })
+
+        test('deleting the project a new chat waits in drops that project from the new chat', async () => {
+            setupMocks({ pendingProjectId: 'proj-1' })
+            ;(deleteProject as jest.Mock).mockResolvedValue(undefined)
+            render(<ConversationHistoryComponent />)
+            await openProjectMenu()
+            fireEvent.click(screen.getByTestId('conv-history-project-delete-proj-1'))
+            fireEvent.click(screen.getByTestId('delete-project-confirm'))
+            await waitFor(() => {
+                expect(mockClearPendingProject).toHaveBeenCalledTimes(1)
+            })
+        })
+
+        test('a failed project delete keeps the project and the dialog, and says so', async () => {
+            ;(deleteProject as jest.Mock).mockRejectedValue(new Error('boom'))
+            render(<ConversationHistoryComponent />)
+            await openProjectMenu()
+            fireEvent.click(screen.getByTestId('conv-history-project-delete-proj-1'))
+            fireEvent.click(screen.getByTestId('delete-project-confirm'))
+
+            await waitFor(() => {
+                expect(screen.getByRole('alert')).toHaveTextContent("Couldn't delete the project")
+            })
+            expect(screen.getByTestId('conv-history-project-proj-1')).toBeInTheDocument()
+
+            fireEvent.click(screen.getByTestId('delete-project-cancel'))
+            expect(screen.queryByTestId('delete-project')).not.toBeInTheDocument()
+        })
+
+        test('New chat in project closes the mobile menu', async () => {
+            const onSelect = jest.fn()
+            render(<ConversationHistoryComponent menu onSelect={onSelect} />)
+            fireEvent.click(await screen.findByTestId('conv-history-project-new-conv-proj-1'))
+            expect(mockStartConversationInProject).toHaveBeenCalledWith('proj-1')
+            expect(onSelect).toHaveBeenCalledTimes(1)
+        })
+
+        test('collapsing Projects hides its rows and frees the split', async () => {
+            render(<ConversationHistoryComponent />)
+            const row = await screen.findByTestId('conv-history-project-proj-1')
+            const toggle = screen.getByTestId('conv-history-projects-heading')
+            fireEvent.mouseEnter(toggle.parentElement!)
+            expect(screen.getByRole('tooltip')).toHaveTextContent('Collapse Projects')
+            fireEvent.mouseLeave(toggle.parentElement!)
+
+            fireEvent.click(toggle)
+            expect(row).not.toBeVisible()
+            expect(screen.getByTestId('history-split-handle')).toHaveAttribute('aria-hidden', 'true')
+            fireEvent.mouseEnter(toggle.parentElement!)
+            expect(screen.getByRole('tooltip')).toHaveTextContent('Expand Projects')
+        })
+    })
+
+    test('with no projects the Projects card says how to make one', async () => {
+        render(<ConversationHistoryComponent />)
+        const hint = await screen.findByText(/No projects yet/)
+        expect(screen.getByTestId('projects-pane')).toContainElement(hint)
+    })
+
+    describe('touch rows in the mobile menu', () => {
+        const originalMatchMedia = window.matchMedia
+
+        beforeEach(() => {
+            window.matchMedia = jest.fn().mockReturnValue({ matches: true }) as unknown as typeof window.matchMedia
+        })
+
+        afterEach(() => {
+            window.matchMedia = originalMatchMedia
+        })
+
+        test('rows have no More actions button; Pin sits in the right swipe tray, Move and Delete in the left', async () => {
+            ;(pinConversation as jest.Mock).mockResolvedValue(undefined)
+            render(<ConversationHistoryComponent menu />)
+            const row = await screen.findByTestId('conv-history-item-conv-1')
+            expect(screen.queryByTestId('conv-history-item-conv-1-more')).not.toBeInTheDocument()
+
+            const swipeRow = row.closest('[class*="swipeRow"]')!
+            const leading = swipeRow.querySelector('[data-swipe-tray="leading"]')!
+            const trailing = swipeRow.querySelector('[data-swipe-tray="trailing"]')!
+            expect(within(leading as HTMLElement).getByTestId('conv-pin-btn-conv-1')).toBeInTheDocument()
+            expect(within(trailing as HTMLElement).getByTestId('conv-move-btn-conv-1')).toBeInTheDocument()
+            expect(within(trailing as HTMLElement).getByTestId('conv-delete-btn-conv-1')).toBeInTheDocument()
+
+            fireEvent.click(screen.getByTestId('conv-pin-btn-conv-1'))
+            await waitFor(() => {
+                expect(pinConversation).toHaveBeenCalledWith('mock-token', 'conv-1')
+            })
+        })
+
+        test('a project row keeps its plus and swipes left for Rename and Delete project', async () => {
+            mockGetProjects.mockResolvedValue({
+                projects: [{ projectId: 'proj-1', name: 'Startup', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }],
+            })
+            render(<ConversationHistoryComponent menu />)
+            const header = await screen.findByTestId('conv-history-project-proj-1')
+            const trailing = header.closest('[class*="swipeRow"]')!.querySelector('[data-swipe-tray="trailing"]') as HTMLElement
+            expect(within(trailing).getByTestId('conv-history-project-rename-proj-1')).toBeInTheDocument()
+            expect(within(trailing).getByTestId('conv-history-project-delete-proj-1')).toBeInTheDocument()
+            expect(screen.getByTestId('conv-history-project-new-conv-proj-1')).toBeInTheDocument()
+        })
+    })
+
+    test('every icon-only control in the widgets is named and shows its name as a tooltip', async () => {
+        mockGetProjects.mockResolvedValue({
+            projects: [{ projectId: 'proj-1', name: 'Startup', createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }],
+        })
+        const { container } = render(<ConversationHistoryComponent />)
+        await screen.findByTestId('conv-history-item-conv-1')
+        await screen.findByTestId('conv-history-project-proj-1')
+        const iconOnly = Array.from(container.querySelectorAll<HTMLElement>('button'))
+            .filter(el => (el.textContent ?? '').trim() === '')
+        expect(iconOnly.length).toBeGreaterThanOrEqual(5)
+        iconOnly.forEach(control => {
+            const name = control.getAttribute('aria-label')
+            expect(name).toBeTruthy()
+            fireEvent.mouseEnter(control.parentElement!)
+            expect(within(document.body).getByRole('tooltip')).toHaveTextContent(name!)
+            fireEvent.mouseLeave(control.parentElement!)
+        })
+    })
+
+    test('a row shows its vendors and when it was updated; a fork nests under its parent', async () => {
+        const today = new Date()
+        today.setHours(9, 15, 0, 0)
+        mockGetCustomerConversations.mockResolvedValue({
+            conversations: [
+                { conversationId: 'conv-a', title: 'Parent chat', createdAt: null, updatedAt: today.toISOString(), vendors: ['OPENAI', 'ANTHROPIC'] },
+                { conversationId: 'conv-b', title: 'Forked chat', createdAt: null, updatedAt: '2026-11-07T08:01:00Z', parentConversationId: 'conv-a' },
+            ],
+            lastEvaluatedKey: null,
+        })
+        render(
+            <QueryClientProvider client={new QueryClient()}>
+                <ConversationHistoryComponent />
+            </QueryClientProvider>
+        )
+
+        const parent = await screen.findByTestId('conv-history-item-conv-a')
+        const fork = screen.getByTestId('conv-history-item-conv-b')
+        // The fork renders inside its parent's list item, under the parent row
+        expect(parent.closest('li')).toContainElement(fork)
+        // Today: time only; vendor letters before it
+        expect(parent).toHaveTextContent('·')
+        expect(parent.textContent).not.toMatch(/2026/)
+        // Another day: the date too
+        expect(fork.textContent).toMatch(/2026/)
     })
 })

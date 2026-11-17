@@ -271,12 +271,15 @@
             "shareSettingsUpdateFailed": "Failed to update share settings",
             "shareSettingsUpdated": "Share settings updated",
             "untitledConversation": "Untitled conversation",
-            "urlCopiedToClipboard": "URL copied to clipboard"
+            "urlCopiedToClipboard": "URL copied to clipboard",
+            "inProject": "in {{name}}",
+            "newChatInProjectHint": "Your first message starts a chat in the {{name}} project. It will show up under {{name}} in the menu."
         },
         "conversationHistory": {
             "history": "History",
             "untitledConversation": "Untitled conversation",
             "deleteConversation": "Delete conversation",
+            "delete": "Delete",
             "createProject": "Create",
             "createProjectFailed": "Failed to create project",
             "creatingProject": "Creating…",
@@ -291,13 +294,14 @@
             "moveToProjectFailed": "Failed to move conversation",
             "moveToProjectTitle": "Move to project",
             "movedToProject": "Moved to {{name}}",
-            "newConversationInProject": "New conversation",
-            "resizePanels": "Resize the Projects and History panels",
+            "newConversationInProject": "New chat in project",
+            "resizePanels": "Resize panels",
             "newProject": "New project",
             "newProjectTitle": "Create project",
             "noConversationsYet": "No conversations yet",
             "noProjectsYet": "No projects yet — create one with “New project” in the sidebar",
             "pinConversation": "Pin conversation",
+            "pin": "Pin",
             "pinFailed": "Failed to pin conversation",
             "pinned": "Pinned",
             "pinnedToast": "Conversation pinned",
@@ -310,12 +314,24 @@
             "removeFromProjectFailed": "Failed to remove from project",
             "removedFromProject": "Removed from project",
             "unpinConversation": "Unpin conversation",
+            "unpin": "Unpin",
             "unpinFailed": "Failed to unpin conversation",
             "unpinnedToast": "Conversation unpinned",
             "deleteConversationTitle": "Delete this conversation?",
             "deleteConversationConfirm": "It's deleted for good: its messages, files and search index, and for anyone you shared it with. Facts learned from it stay in Settings > Defaults > Learned facts.",
             "deleteFailed": "Couldn't delete the conversation. Please try again.",
-            "chats": "Chats"
+            "chats": "Chats",
+            "renameProject": "Rename project",
+            "renameProjectTitle": "Rename project",
+            "saveProjectName": "Save",
+            "savingProjectName": "Saving…",
+            "projectRenamed": "Project renamed",
+            "renameProjectFailed": "Failed to rename project",
+            "deleteProject": "Delete project",
+            "deleteProjectTitle": "Delete this project?",
+            "deleteProjectConfirm": "“{{name}}” is deleted. Its chats stay and move back to Chats. Memories that belong only to this project are deleted for good.",
+            "projectDeleted": "Project deleted",
+            "deleteProjectFailed": "Couldn't delete the project. Please try again."
         },
         "request": {
             "generate": "Generate",
@@ -597,7 +613,9 @@
         "chatSidebar": {
             "label": "Chats and projects",
             "projects": "Projects",
-            "chats": "Chats"
+            "chats": "Chats",
+            "collapseSection": "Collapse {{name}}",
+            "expandSection": "Expand {{name}}"
         },
         "aiDock": {
             "label": "AI settings"
