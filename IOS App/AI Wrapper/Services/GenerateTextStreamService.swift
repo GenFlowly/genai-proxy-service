@@ -94,6 +94,7 @@ enum GenerateTextStreamService {
         case "err":
             throw StreamGenerationError(message: (msg["v"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L("conversation.response.generationFailedDefault"))
         case "done":
+            if (msg["status"] as? String) == "cancelled" { cb.onStopReason(StopReasonNote.cancelled) }
             if (msg["status"] as? String) == "error" {
                 throw StreamGenerationError(message: (msg["m"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L("conversation.response.generationFailedDefault"))
             }
