@@ -1,7 +1,9 @@
 name: Production iOS TestFlight
 
-# Runs on every push to main (each merged PR), and by hand from the Actions tab (or
-# `gh workflow run`) with `main` selected; runs from any other branch are skipped.
+# Runs on pushes to main that change the app under IOS App/ (Markdown files and Xcode's
+# per-user xcuserdata don't count), and by hand from the Actions tab (or `gh workflow run`)
+# with `main` selected; runs from any other branch are skipped. A change to this workflow
+# alone starts nothing, so start a run by hand to try one.
 # Runs the unit tests, uploads a signed production-stage build to TestFlight for internal
 # testers and selects it on the App Store version draft. Nothing is submitted for review:
 # that is done by hand in App Store Connect after testing the TestFlight build. Each run takes
@@ -10,6 +12,10 @@ name: Production iOS TestFlight
 on:
   push:
     branches: [main]
+    paths:
+      - 'IOS App/**'
+      - '!IOS App/**/*.md'
+      - '!IOS App/**/xcuserdata/**'
   workflow_dispatch:
 
 # Versions and build numbers come from App Store Connect, so runs upload one at a time.
