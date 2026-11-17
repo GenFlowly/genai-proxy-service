@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { Breadcrumbs, Icon, ScrollArea, pageHeaderStyles } from '@genflowly/component-library'
 import Navbar from '../navbar/Navbar'
 import MobileHeader, { MobileHeaderMenuItem } from '../widgets/MobileHeader/MobileHeader'

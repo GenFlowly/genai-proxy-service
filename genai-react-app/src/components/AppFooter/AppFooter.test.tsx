@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import AppFooter, { FOOTER_HEIGHT_VARIABLE } from './AppFooter'
 
 function renderFooter() {

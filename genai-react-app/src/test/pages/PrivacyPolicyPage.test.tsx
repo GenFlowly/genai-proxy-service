@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import PrivacyPolicyPage, { PRIVACY_POLICY_URL } from '../../pages/PrivacyPolicyPage/PrivacyPolicyPage'
 
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar" />)

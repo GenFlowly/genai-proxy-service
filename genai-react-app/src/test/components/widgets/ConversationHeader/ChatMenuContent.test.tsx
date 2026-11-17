@@ -4,8 +4,8 @@ import '@testing-library/jest-dom'
 import ChatMenuContent from '../../../../components/widgets/ConversationHeader/ChatMenuContent'
 
 const mockNavigate = jest.fn()
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }))
 jest.mock('../../../../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent', () => ({

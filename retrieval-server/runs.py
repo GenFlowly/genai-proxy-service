@@ -146,6 +146,7 @@ def signal_cancel(run_id: str) -> bool:
 async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     """The workflow body (kept plain so it can be unit-tested without DBOS).
     Streams graph events into run_events and returns a summary."""
+    request_start = time.monotonic()
     checkpointer = durable_runtime.get_checkpointer()
     if checkpointer is None:
         raise RuntimeError("durable runs not ready — no checkpointer")
@@ -178,6 +179,7 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
                 node_name_map=node_name_map,
                 streaming_nodes=streaming_nodes,
                 recursion_limit=max_iterations,
+                request_start=request_start,
                 structured_output=bool(req.response_schema),
                 builtin_tool_names=set(builtin_tools),
                 thread_id=run_id,
@@ -217,6 +219,8 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
                 error = {"error": "timed out waiting for input", "error_type": "resume_timeout"}
                 break
             graph_input = Command(resume=value)
+            # Time spent waiting on the human is not thinking time.
+            request_start = time.monotonic()
 
         # Authoritative final state from the checkpoint (post-resume-safe).
         final: dict = {}

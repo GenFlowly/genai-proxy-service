@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import Navbar from '../../../components/navbar/Navbar';
 import { useAuth } from '../../../context/AuthContext';
 import { LayoutProvider } from '../../../context/LayoutContext';
@@ -11,8 +11,8 @@ import '@testing-library/jest-dom';
 jest.mock('../../../context/AuthContext');
 jest.mock('../../../components/common/ThemeToggle/ThemeToggle', () => () => <div data-testid="theme-toggle-mock" />);
 const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }));
 

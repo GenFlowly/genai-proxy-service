@@ -476,21 +476,60 @@ final class HistoryStore: ObservableObject {
 
     /// Patches the title when the active conversation gets a generated one (prepending a
     /// brand-new conversation; one started inside a project joins that project).
-    func didTitleConversation(id: String, title: String, pendingProjectId: String?) {
+    func didTitleConversation(id: String, title: String, vendors: [AIVendor], pendingProjectId: String?) {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let summary = ConversationSummary(
+            conversationId: id, title: title, createdAt: now, updatedAt: now,
+            vendors: Self.mergedVendors(nil, vendors), projectId: pendingProjectId,
+            projectName: pendingProjectId.flatMap { pid in projects.first { $0.projectId == pid }?.name }
+        )
         if let index = items.firstIndex(where: { $0.conversationId == id }) {
             items[index].title = title
         } else {
-            items.insert(ConversationSummary(
-                conversationId: id, title: title, projectId: pendingProjectId,
-                projectName: pendingProjectId.flatMap { pid in projects.first { $0.projectId == pid }?.name }
-            ), at: 0)
+            items.insert(summary, at: 0)
         }
         if let index = pinned.firstIndex(where: { $0.conversationId == id }) { pinned[index].title = title }
         patchProjectItems(id) { $0.title = title }
         if let pendingProjectId, !(projectItems[pendingProjectId] ?? []).contains(where: { $0.conversationId == id }) {
-            projectItems[pendingProjectId, default: []].insert(ConversationSummary(conversationId: id, title: title, projectId: pendingProjectId), at: 0)
+            projectItems[pendingProjectId, default: []].insert(summary, at: 0)
         }
         persist()
+    }
+
+    /// A reply was written: the server bumped updatedAt and added the vendors, and a project's
+    /// members aren't refetched this session, so its rows would otherwise never show them.
+    func didReply(id: String, vendors: [AIVendor]) {
+        let now = ISO8601DateFormatter().string(from: Date())
+        func touch(_ list: inout [ConversationSummary], moveToTop: Bool) {
+            guard let index = list.firstIndex(where: { $0.conversationId == id }) else { return }
+            var row = list[index]
+            row.updatedAt = now
+            row.vendors = Self.mergedVendors(row.vendors, vendors)
+            list[index] = row
+            // Recents and project members list by last activity
+            if moveToTop { list.insert(list.remove(at: index), at: 0) }
+        }
+        touch(&items, moveToTop: true)
+        touch(&pinned, moveToTop: false)
+        for key in Array(projectItems.keys) {
+            guard var list = projectItems[key] else { continue }
+            touch(&list, moveToTop: true)
+            projectItems[key] = list
+        }
+        for key in Array(optimisticMembers.keys) {
+            guard var list = optimisticMembers[key] else { continue }
+            touch(&list, moveToTop: false)
+            optimisticMembers[key] = list
+        }
+        persist()
+    }
+
+    /// The server keeps vendors as a set of upper-cased ids.
+    private static func mergedVendors(_ existing: [String]?, _ added: [AIVendor]) -> [String] {
+        var seen = Set<String>()
+        return ((existing ?? []) + added.map(\.rawValue))
+            .map { $0.uppercased() }
+            .filter { seen.insert($0).inserted }
     }
 
     /// A fork appears the moment it's created, nested under its parent.

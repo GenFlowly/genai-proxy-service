@@ -1,11 +1,11 @@
 import { renderHook } from '@testing-library/react';
 import { usePageTitle } from '../../hooks/usePageTitle';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router';
 import { useSidebarMenu } from '../../context/SidebarMenuContext';
 import { APP_NAME } from '../../constants/appName';
 
 // Mock dependencies
-jest.mock('react-router-dom', () => ({
+jest.mock('react-router', () => ({
     useLocation: jest.fn(),
     useParams: jest.fn(),
 }));

@@ -1,5 +1,5 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { PillButton } from '@genflowly/component-library'
 import { ConversationList, DetailShell, detailStyles as styles } from '../../components/DetailPage/DetailParts'

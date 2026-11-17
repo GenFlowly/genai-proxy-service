@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useAuth } from '../../../context/AuthContext';
 import { PillButton } from '@genflowly/component-library';
 import { updateUsername, updateDiscoverability } from '../../../services/userService';

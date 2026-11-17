@@ -1,5 +1,5 @@
 import React from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 import { MobileHeader as BaseMobileHeader, MobileMenu } from '@genflowly/component-library'
 import type { MobileHeaderMenuItem, MobileMenuAction } from '@genflowly/component-library'
 import { SwipeBack, useEdgeSwipePageAction } from '../../../context/EdgeSwipeContext'

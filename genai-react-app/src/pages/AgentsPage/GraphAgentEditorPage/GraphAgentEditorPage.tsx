@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_NODE_TYPE_INFOS, GraphEditor, Icon } from '@genflowly/component-library'
 import type { AgentGraph, ConditionOption, InstructionOption, NodeCatalogEntry } from '@genflowly/component-library'

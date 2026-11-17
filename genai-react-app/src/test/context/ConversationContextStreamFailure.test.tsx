@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { ConversationProvider, useConversation } from '../../context/ConversationContext';
 import {
     generateTextStream,

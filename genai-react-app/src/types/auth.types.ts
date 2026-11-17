@@ -69,10 +69,3 @@ export interface AuthContextType {
     // resolves (or when the server couldn't read them — no gating that session)
     cacheVersions: CacheVersions | null;
 }
-
-export interface AuthProviderProps {
-    children: React.ReactNode;
-    domain: string;
-    clientId: string;
-    audience: string;
-}

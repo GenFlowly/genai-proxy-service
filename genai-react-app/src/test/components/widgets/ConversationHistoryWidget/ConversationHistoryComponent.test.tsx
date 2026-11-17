@@ -29,7 +29,7 @@ jest.mock('../../../../context/ToastContext', () => ({
 jest.mock('../../../../services/conversationHistoryService')
 let mockParams = { conversationId: undefined as string | undefined }
 
-jest.mock('react-router-dom', () => ({
+jest.mock('react-router', () => ({
     useNavigate: () => mockNavigate,
     useParams: () => mockParams,
 }))

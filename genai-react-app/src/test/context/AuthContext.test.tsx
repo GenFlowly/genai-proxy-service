@@ -3,7 +3,7 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import { AuthProvider, useAuth } from '../../context/AuthContext';
 import { LayoutProvider } from '../../context/LayoutContext';
 import { MOCK_USER, AUTH0_TOKEN_RESPONSE } from '../fixtures/auth0';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import Navbar from '../../components/navbar/Navbar';
 import { mockOnboardResponse } from '../fixtures/customerProfile'; // Import here to be available in scope
 import { onboardCustomer } from '../../services/onboardUserService';

@@ -171,6 +171,11 @@ struct AI_WrapperApp: App {
                         conversation.conversationId = "mock"
                         conversation.blocks = DebugFixtures.conversation
                     }
+                    if CommandLine.arguments.contains("--mock-project-chat") {
+                        router.navigate(.chat)
+                        history.projects = [Project(projectId: "mock-project", name: "Startup")]
+                        conversation.startConversationInProject("mock-project")
+                    }
                     #endif
                 }
                 .onChange(of: auth.customerId) { _, newValue in

@@ -8,7 +8,7 @@ import { ConversationProvider } from '../../context/ConversationContext';
 import { AIVendor } from '../../constants/vendors';
 import AIVendorWidget from '../../components/widgets/SidebarWidgets/AIVendorWidget/AIVendorWidget';
 import { getTextGenerationModels } from '../../services/getTextGenerationModelsService';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createTestQueryClient } from '../utils/queryWrapper';
 import { APIKeyStatus } from '../../models/storeCustomerVendorAPIKeys.models';

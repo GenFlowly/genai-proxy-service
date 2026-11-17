@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router'
 import { Trans, useTranslation } from 'react-i18next'
 import { PillButton } from '@genflowly/component-library'
 import { DetailShell } from '../../components/DetailPage/DetailParts'

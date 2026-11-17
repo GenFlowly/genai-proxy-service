@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import BlockedUsersPage from '../../pages/BlockedUsersPage/BlockedUsersPage'
 
 jest.mock('../../components/widgets/MobileHeader/MobileHeader', () => ({

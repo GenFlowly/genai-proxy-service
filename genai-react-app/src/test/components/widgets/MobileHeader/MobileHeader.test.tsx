@@ -1,6 +1,6 @@
 import React from 'react'
 import { act, render as rtlRender, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router'
 import '@testing-library/jest-dom'
 import MobileHeader from '../../../../components/widgets/MobileHeader/MobileHeader'
 import { EdgeSwipeProvider } from '../../../../context/EdgeSwipeContext'

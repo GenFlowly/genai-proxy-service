@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import InstructionPickerModal from '../../../../components/common/InstructionPickerModal/InstructionPickerModal';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import * as instructionService from '../../../../services/instructionService';
 import { SearchError } from '../../../../services/searchError';
 import { loadRecentInstructionsCache, saveRecentInstructionsCache, clearRecentInstructionsCache } from '../../../../components/common/InstructionPickerModal/recentInstructionsCache';

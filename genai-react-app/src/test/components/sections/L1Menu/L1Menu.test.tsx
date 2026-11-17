@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router'
 import '@testing-library/jest-dom'
 import { L1Menu } from '../../../../components/sections/L1Menu/L1Menu'
 import { useAuth } from '../../../../context/AuthContext'

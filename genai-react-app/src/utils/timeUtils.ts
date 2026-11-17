@@ -5,7 +5,6 @@
  */
 export {
     parseServerDate,
-    formatServerTimestamp,
     formatServerDateTime,
     formatServerTime,
     formatServerDateOnly

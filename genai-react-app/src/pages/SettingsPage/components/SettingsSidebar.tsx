@@ -6,7 +6,7 @@ import MobileMenuBody from '../../../components/widgets/MobileMenuBody/MobileMen
 import { ICONS } from '../../../constants/icons'
 import styles from './SettingsSidebar.module.scss'
 
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router'
 
 export type SettingsTab = 'profile' | 'ai' | 'usage' | 'defaults' | 'tools' | 'connectors' | 'developer'
 

@@ -145,4 +145,35 @@ final class ChatScreenUITests: XCTestCase {
         closeSettings.tap()
         XCTAssertTrue(closeSettings.waitForNonExistence(timeout: 5))
     }
+
+    @MainActor
+    func testTheProjectHintStaysClearOfTheEditorWithTheKeyboardOpen() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--mock-project-chat", "--ui-testing"]
+        app.launch()
+        let header = app.buttons["mobile-header-project"]
+        let hint = app.staticTexts["new-chat-project-hint"]
+        XCTAssertTrue(hint.waitForExistence(timeout: 10))
+
+        let editor = element(app.textViews, labelled: "Generate")
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(hint.frame.maxY, editor.frame.minY)
+
+        editor.tap()
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        let deadline = Date().addingTimeInterval(3)
+        while editor.frame.maxY > keyboard.frame.minY, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        // A simulator with a hardware keyboard keeps the software one off screen, which tests nothing
+        XCTAssertLessThan(keyboard.frame.minY, app.windows.firstMatch.frame.maxY, "the software keyboard is hidden")
+        let withKeyboard = XCTAttachment(screenshot: app.screenshot())
+        withKeyboard.name = "project-hint-with-keyboard"
+        withKeyboard.lifetime = .keepAlways
+        add(withKeyboard)
+        XCTAssertTrue(hint.exists)
+        XCTAssertGreaterThanOrEqual(hint.frame.minY, header.frame.maxY)
+        XCTAssertLessThanOrEqual(hint.frame.maxY, editor.frame.minY)
+    }
 }

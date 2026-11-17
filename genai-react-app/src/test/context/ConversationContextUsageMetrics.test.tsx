@@ -42,7 +42,7 @@ jest.mock('../../context/ToastContext', () => ({
     })
 }));
 
-jest.mock('react-router-dom', () => ({
+jest.mock('react-router', () => ({
     useNavigate: () => jest.fn()
 }));
 

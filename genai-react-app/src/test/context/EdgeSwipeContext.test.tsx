@@ -1,7 +1,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigationType } from 'react-router'
 import { EdgeSwipeProvider, MenuLayer, useEdgeSwipePageAction } from '../../context/EdgeSwipeContext'
 import { SlidePanel } from '../../components/common/SlidePanel/SlidePanel'
 import { useLayout } from '../../context/LayoutContext'

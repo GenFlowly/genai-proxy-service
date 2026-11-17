@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router'
 import { useAuth } from './context/AuthContext'
 import { useDefaultsPrefetch } from './hooks/useDefaultsPrefetch'
 import { useTapOutsideEndsEditing } from './hooks/useTapOutsideEndsEditing'

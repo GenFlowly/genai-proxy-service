@@ -5,7 +5,6 @@
  */
 export {
     AIVendor,
-    LEGACY_BY_CATALOG_ID,
     storedVendorId,
     catalogIdFor,
     fallbackVendorDisplayName

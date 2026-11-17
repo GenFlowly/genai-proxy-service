@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { PillButton } from '@genflowly/component-library'
 import { DetailShell, DiffText, detailStyles as styles, focusAtEnd } from '../../components/DetailPage/DetailParts'

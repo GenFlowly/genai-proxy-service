@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 
 // variables prefixed with 'mock' are allowed in jest.mock
 const mockNavigate = jest.fn();
@@ -30,8 +30,8 @@ jest.mock('@auth0/auth0-react', () => {
     };
 });
 
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }));
 
