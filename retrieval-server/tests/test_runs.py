@@ -57,6 +57,20 @@ def _fake_resolve_boom(customer_id, graph_id, checkpointer):
     return _FakeGraph(boom=True), {"n": "RESPONSE_GENERATOR"}, {"n": "Gen"}, {"n": {}}, {"n"}, 10
 
 
+class _CancelledGraph(_FakeGraph):
+    """The preemptible LLM step aborted mid-call by POST /runs/{id}/cancel."""
+
+    async def astream_events(self, state, config=None, version=None):
+        from dbos._error import DBOSWorkflowCancelledError
+
+        yield {"event": "on_chain_start", "name": "n", "metadata": {"langgraph_node": "n"}}
+        raise DBOSWorkflowCancelledError("Workflow run_x is cancelled. Aborting preemptible step.")
+
+
+def _fake_resolve_cancelled(customer_id, graph_id, checkpointer):
+    return _CancelledGraph(), {"n": "RESPONSE_GENERATOR"}, {"n": "Gen"}, {"n": {}}, {"n"}, 10
+
+
 _RUN_INPUT = {
     "customer_id": "cust-1", "client": "test", "data_type": "conversation",
     "raw_data": {"query_data": "hi"}, "llm_provider": "anthropic", "agentic": True,
@@ -125,6 +139,69 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(terminals), 1)
         self.assertEqual(terminals[0]["status"], "error")
         self.assertTrue(summary["error"])
+
+
+    async def test_cancelled_run_publishes_no_terminal_and_counts_cancelled(self):
+        from dbos._error import DBOSWorkflowCancelledError
+
+        with patch.object(runs, "count") as counted:
+            with self.assertRaises(DBOSWorkflowCancelledError):
+                await self._run(_fake_resolve_cancelled)
+
+        counted.assert_any_call("agent_run_total", status="cancelled", source="conversation")
+
+
+    async def test_a_cancel_signalled_here_stops_publishing_at_the_next_event(self):
+        from dbos._error import DBOSWorkflowCancelledError
+
+        published = []
+
+        async def publish_then_cancel(run_id, event, terminal=False):
+            published.append(event)
+            self.assertTrue(runs.signal_cancel(run_id))
+            return len(published)
+
+        with patch.object(runs, "_resolve_durable_graph", _fake_resolve), \
+             patch.object(runs.durable_runtime, "get_checkpointer", lambda: object()), \
+             patch.object(run_events, "publish", publish_then_cancel):
+            with self.assertRaises(DBOSWorkflowCancelledError):
+                await runs._run_agent_graph("run_x", dict(_RUN_INPUT))
+
+        self.assertEqual(len(published), 1)
+        self.assertFalse(runs.signal_cancel("run_x"), "the run's stop signal outlives it")
+
+
+class CancelRouteTest(unittest.IsolatedAsyncioTestCase):
+    async def test_cancels_through_the_async_dbos_api(self):
+        from dbos import DBOS
+
+        import routes.runs as runs_route
+
+        cancelled = []
+
+        async def fake_cancel(run_id, **kwargs):
+            cancelled.append(run_id)
+
+        async def fake_status(run_id):
+            return object()
+
+        async def fake_delete(run_id):
+            return None
+
+        def sync_cancel_refused(*args, **kwargs):
+            raise AssertionError("sync cancel_workflow raises inside an event loop")
+
+        with patch.object(runs_route, "_require_ready", lambda: None), \
+             patch.object(runs_route, "_status", fake_status), \
+             patch.object(run_events, "delete_run", fake_delete), \
+             patch.object(DBOS, "cancel_workflow_async", fake_cancel, create=True), \
+             patch.object(DBOS, "cancel_workflow", sync_cancel_refused, create=True), \
+             patch.object(runs, "signal_cancel") as signalled:
+            body = await runs_route.cancel_run("run_x")
+
+        self.assertEqual(cancelled, ["run_x"])
+        signalled.assert_called_once_with("run_x")
+        self.assertEqual(body["status"], "cancelled")
 
 
 class StartRunTest(unittest.IsolatedAsyncioTestCase):

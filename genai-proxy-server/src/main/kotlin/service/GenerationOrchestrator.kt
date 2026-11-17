@@ -118,9 +118,13 @@ class GenerationOrchestrator(
         active.job.cancel(kotlinx.coroutines.CancellationException("Cancelled by user"))
         // Durable path: stop the background run on the retrieval-server too — the
         // job cancel only stops the proxy's relay, not the durable workflow.
+        // Launched, not awaited: the client's Stop must not wait on the
+        // retrieval-server (or its retries) for the generation to be stopped here.
         activeRunIds[active.responseMessageId]?.let { runId ->
-            runCatching { runsClient.cancelRun(runId) }
-                .onFailure { logger.warn("Failed to cancel durable run {}: {}", runId, it.message) }
+            appScope.launch {
+                runCatching { runsClient.cancelRun(runId) }
+                    .onFailure { logger.warn("Failed to cancel durable run {}: {}", runId, it.message) }
+            }
         }
         return true
     }
@@ -714,6 +718,7 @@ class GenerationOrchestrator(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Explicit user cancel (cancelGeneration) — keep the partial text.
                 cancelled = true
+                capturedStopReason = STOP_REASON_CANCELLED
                 logger.info("Generation {} cancelled — persisting {} streamed char(s)", responseMessageId, sb.length)
             } catch (e: Exception) {
                 logger.error("Error during streaming", e)
@@ -731,7 +736,10 @@ class GenerationOrchestrator(
                 // NonCancellable: after a user cancel this coroutine is dead —
                 // persistence of the partial text must still run.
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                if ((success || cancelled) && (responseText.isNotEmpty() || capturedToolCallsJson != null)) {
+                // A stopped reply is kept even with no text yet (stopped while
+                // thinking, or after a tool-call preamble was reset), so the
+                // vendor's card and its thinking steps survive a reload.
+                if (cancelled || (success && (responseText.isNotEmpty() || capturedToolCallsJson != null))) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
                         conversationId = message.conversationId,
@@ -848,6 +856,9 @@ class GenerationOrchestrator(
  * cycles) keeps every step but drops the bulky prompt/response excerpts.
  */
 private const val MAX_THINKING_STEPS_JSON_CHARS = 250_000
+
+/** Stop reason persisted on a reply the user stopped; the clients show a "you stopped" note. */
+private const val STOP_REASON_CANCELLED = "cancelled"
 
 /** Concatenate two JSON arrays (either may be null); malformed input keeps the newer one. */
 private fun mergeJsonArrays(existing: String?, incoming: String): String {

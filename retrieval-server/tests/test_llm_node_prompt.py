@@ -223,3 +223,37 @@ class TurnBudgetTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StoppedReplyHistoryTests(unittest.IsolatedAsyncioTestCase):
+    """A reply the user stopped before any text is kept on the conversation,
+    so it reaches the history empty. Vendors reject an empty assistant turn,
+    so it must not be replayed."""
+
+    async def _messages(self, history: list) -> list:
+        recorder = _RecorderLLM()
+        with patch.object(
+            llm_node_module, "_build_llm_and_structured", return_value=(recorder, None)
+        ), patch.object(llm_node_module, "credentials_for", return_value={}):
+            await make_llm_node("RESPONSE_GENERATOR")(_state(conversation_history=history))
+        return recorder.messages
+
+    async def test_an_empty_stopped_reply_is_not_replayed(self):
+        history = [
+            {"role": "user", "content": "write an essay"},
+            {"role": "assistant", "content": ""},
+            {"role": "user", "content": "shorter please"},
+        ]
+        messages = await self._messages(history)
+        self.assertFalse(any(isinstance(m, AIMessage) for m in messages))
+        self.assertTrue(all(m.content for m in messages))
+
+    async def test_a_partial_stopped_reply_is_still_replayed(self):
+        history = [
+            {"role": "user", "content": "write an essay"},
+            {"role": "assistant", "content": "The printing press began"},
+            {"role": "user", "content": "go on"},
+        ]
+        messages = await self._messages(history)
+        replies = [m for m in messages if isinstance(m, AIMessage)]
+        self.assertEqual([m.content for m in replies], ["The printing press began"])

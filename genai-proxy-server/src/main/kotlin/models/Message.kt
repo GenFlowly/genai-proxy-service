@@ -81,7 +81,8 @@ data class Message(
      * (end_turn / stop / max_tokens / refusal / content_filter / …), streamed
      * as the "sr" chunk and persisted so a reload can still explain why
      * generation ended — a refusal has empty text, so this is the only record
-     * of it. Null for user messages and records predating the feature.
+     * of it. "cancelled" when the user stopped it (the text may be empty).
+     * Null for user messages and records predating the feature.
      */
     val stopReason: String? = null,
     /**

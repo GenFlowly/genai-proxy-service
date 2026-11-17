@@ -25,9 +25,13 @@ Everything here is guarded: with durable runs unconfigured (no DATABASE_URL /
 DBOS not constructed) the module still imports, but agent_run is a stub and
 start_run raises — routes/runs.py surfaces that as 503.
 """
+import asyncio
+import contextlib
 import logging
 import os
 import time
+
+from dbos._error import DBOSWorkflowCancelledError
 
 import durable_runtime
 import run_cleanup
@@ -125,6 +129,20 @@ def _resolve_durable_graph(customer_id: str, graph_id, checkpointer):
     return graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations
 
 
+# Stop signals for the agent runs executing in this process, by run id.
+_local_runs: dict[str, asyncio.Event] = {}
+
+
+def signal_cancel(run_id: str) -> bool:
+    """Stop a cancelled run that executes in this process at its next event.
+    False when it runs elsewhere; DBOS's preemptible LLM step stops it there."""
+    stop = _local_runs.get(run_id)
+    if stop is None:
+        return False
+    stop.set()
+    return True
+
+
 async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     """The workflow body (kept plain so it can be unit-tested without DBOS).
     Streams graph events into run_events and returns a summary."""
@@ -149,74 +167,91 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     error: dict = {}
     cfg = {"configurable": {"thread_id": run_id}}
     graph_input = state  # dict on a fresh run; Command(resume=...) after an interrupt
-    resume_cycles = 0
-    while True:
-        async for payload in stream_events_dicts(
-            graph_input,
-            graph=graph,
-            node_type_map=node_type_map,
-            node_name_map=node_name_map,
-            streaming_nodes=streaming_nodes,
-            recursion_limit=max_iterations,
-            structured_output=bool(req.response_schema),
-            builtin_tool_names=set(builtin_tools),
-            thread_id=run_id,
-        ):
-            await run_events.publish(run_id, payload)
-            if "usage" in payload:
-                usage = payload["usage"]
-            if "error" in payload:
-                error = payload
-
-        if error:
-            break
-        # If the graph paused on interrupt() (a HUMAN_INPUT node), surface the
-        # request and durably wait for POST /runs/{id}/resume — survives
-        # crash/redeploy via DBOS.recv — then resume from the checkpoint.
-        pending = await _pending_interrupts(graph, cfg)
-        if not pending:
-            break
-        resume_cycles += 1
-        if resume_cycles > _MAX_RESUME_CYCLES:
-            error = {"error": "run exceeded the resume-cycle limit", "error_type": "runaway"}
-            break
-        _ai = pending[0]
-        _ai_payload = {**_ai, "run_id": run_id} if isinstance(_ai, dict) else {"value": _ai, "run_id": run_id}
-        await run_events.publish(run_id, {"awaiting_input": _ai_payload})
-        count("agent_run_awaiting_input_total")
-        from dbos import DBOS
-        from langgraph.types import Command
-
-        value = await DBOS.recv_async(topic=_RESUME_TOPIC, timeout_seconds=_RESUME_TIMEOUT_SEC)
-        if value is None:
-            error = {"error": "timed out waiting for input", "error_type": "resume_timeout"}
-            break
-        graph_input = Command(resume=value)
-
-    # Authoritative final state from the checkpoint (post-resume-safe).
-    final: dict = {}
+    stop = _local_runs[run_id] = asyncio.Event()
     try:
-        snap = await graph.aget_state({"configurable": {"thread_id": run_id}})
-        final = getattr(snap, "values", None) or {}
-    except Exception:
-        logger.exception("agent_run run_id=%s: could not read final checkpoint state", run_id)
+        resume_cycles = 0
+        while True:
+            async with contextlib.aclosing(stream_events_dicts(
+                graph_input,
+                graph=graph,
+                node_type_map=node_type_map,
+                node_name_map=node_name_map,
+                streaming_nodes=streaming_nodes,
+                recursion_limit=max_iterations,
+                structured_output=bool(req.response_schema),
+                builtin_tool_names=set(builtin_tools),
+                thread_id=run_id,
+            )) as events:
+                async for payload in events:
+                    # The model streams far ahead of the per-event inserts, so
+                    # a cancelled run must stop here rather than drain them.
+                    if stop.is_set():
+                        raise DBOSWorkflowCancelledError(f"Workflow {run_id} is cancelled.")
+                    await run_events.publish(run_id, payload)
+                    if "usage" in payload:
+                        usage = payload["usage"]
+                    if "error" in payload:
+                        error = payload
 
-    summary = {
-        "run_id": run_id,
-        "customer_id": req.customer_id,
-        "generated_response": final.get("generated_response"),
-        "tool_calls": final.get("tool_calls"),
-        "generated_artifacts": final.get("generated_artifacts", []),
-        "usage": usage or final.get("usage", {}),
-        "error": error.get("error") or final.get("error"),
-        "error_type": error.get("error_type"),
-    }
-    status = "error" if summary["error"] else "completed"
-    await run_events.publish(run_id, {"status": status, **summary}, terminal=True)
-    count("agent_run_total", status=status, source=req.request_source or "conversation")
-    observe("agent_run_duration_seconds", time.perf_counter() - run_start)
-    logger.info("agent_run END run_id=%s status=%s tokens=%s", run_id, status, summary["usage"].get("total_tokens"))
-    return summary
+            if error:
+                break
+            # If the graph paused on interrupt() (a HUMAN_INPUT node), surface the
+            # request and durably wait for POST /runs/{id}/resume — survives
+            # crash/redeploy via DBOS.recv — then resume from the checkpoint.
+            pending = await _pending_interrupts(graph, cfg)
+            if not pending:
+                break
+            resume_cycles += 1
+            if resume_cycles > _MAX_RESUME_CYCLES:
+                error = {"error": "run exceeded the resume-cycle limit", "error_type": "runaway"}
+                break
+            _ai = pending[0]
+            _ai_payload = {**_ai, "run_id": run_id} if isinstance(_ai, dict) else {"value": _ai, "run_id": run_id}
+            await run_events.publish(run_id, {"awaiting_input": _ai_payload})
+            count("agent_run_awaiting_input_total")
+            from dbos import DBOS
+            from langgraph.types import Command
+
+            value = await DBOS.recv_async(topic=_RESUME_TOPIC, timeout_seconds=_RESUME_TIMEOUT_SEC)
+            if value is None:
+                error = {"error": "timed out waiting for input", "error_type": "resume_timeout"}
+                break
+            graph_input = Command(resume=value)
+
+        # Authoritative final state from the checkpoint (post-resume-safe).
+        final: dict = {}
+        try:
+            snap = await graph.aget_state({"configurable": {"thread_id": run_id}})
+            final = getattr(snap, "values", None) or {}
+        except Exception:
+            logger.exception("agent_run run_id=%s: could not read final checkpoint state", run_id)
+
+        summary = {
+            "run_id": run_id,
+            "customer_id": req.customer_id,
+            "generated_response": final.get("generated_response"),
+            "tool_calls": final.get("tool_calls"),
+            "generated_artifacts": final.get("generated_artifacts", []),
+            "usage": usage or final.get("usage", {}),
+            "error": error.get("error") or final.get("error"),
+            "error_type": error.get("error_type"),
+        }
+        status = "error" if summary["error"] else "completed"
+        await run_events.publish(run_id, {"status": status, **summary}, terminal=True)
+        count("agent_run_total", status=status, source=req.request_source or "conversation")
+        observe("agent_run_duration_seconds", time.perf_counter() - run_start)
+        logger.info("agent_run END run_id=%s status=%s tokens=%s", run_id, status, summary["usage"].get("total_tokens"))
+        return summary
+    except DBOSWorkflowCancelledError:
+        # POST /runs/{id}/cancel: the preemptible LLM step was aborted mid-call,
+        # or the next step refused to start. Nothing more is published, because
+        # the cancel route already dropped this run's event channel.
+        count("agent_run_total", status="cancelled", source=req.request_source or "conversation")
+        observe("agent_run_duration_seconds", time.perf_counter() - run_start)
+        logger.info("agent_run CANCELLED run_id=%s", run_id)
+        raise
+    finally:
+        _local_runs.pop(run_id, None)
 
 
 async def _request_agent_run(run_id: str, run_input: dict) -> dict:
