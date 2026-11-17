@@ -6,7 +6,6 @@
 export type {
     WebSource,
     LearnedFact,
-    ThinkingStepKind,
     ThinkingStep,
     Message,
     MessageSender,

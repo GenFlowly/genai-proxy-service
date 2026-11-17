@@ -54,11 +54,3 @@ export interface GenerateTextResponse {
     inputTokens?: number | null
     outputTokens?: number | null
 }
-
-export interface BatchGenerateTextRequest {
-    requests: GenerateTextRequest[]
-}
-
-export interface BatchGenerateTextResponse {
-    results: GenerateTextResponse[]
-}
