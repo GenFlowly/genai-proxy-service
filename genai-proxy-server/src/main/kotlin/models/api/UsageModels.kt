@@ -19,18 +19,32 @@ data class UsageByDimResponse(
     val requestCount: Long
 )
 
+/**
+ * One UTC day of spend inside the requested window, for the Cost and Usage
+ * bar chart. Days with no usage are left out; the client fills the gaps and
+ * groups into weeks for long windows.
+ */
+@Serializable
+data class UsageDayResponse(
+    val date: String,
+    val costUsd: Double,
+    val requestCount: Long
+)
+
 @Serializable
 data class LlmUsageSummaryResponse(
     val totalCostUsd: Double,
     val byVendor: List<UsageByDimResponse>,
-    val byModel: List<UsageByDimResponse>
+    val byModel: List<UsageByDimResponse>,
+    val byDay: List<UsageDayResponse> = emptyList()
 )
 
 @Serializable
 data class EmbeddingUsageSummaryResponse(
     val totalCostUsd: Double,
     val byVendor: List<UsageByDimResponse>,
-    val byModel: List<UsageByDimResponse>
+    val byModel: List<UsageByDimResponse>,
+    val byDay: List<UsageDayResponse> = emptyList()
 )
 
 /** One estimate-breakdown row: opType (vector_db) or searchDepth (web_search). */

@@ -264,7 +264,7 @@ fun appModule(): Module = module {
     single { com.genflowly.service.VoiceSessionService(get(), get(), get(), get(), get(), get(), get()) }
     single { AIModelsService(get(), get()) }
     single { com.genflowly.service.NotesService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get()) }
+    single { com.genflowly.service.DeveloperApiKeyService(get(), get(), get(), get()) }
     single { com.genflowly.service.SystemApiKeyService(get(), get(), get()) }
     single { com.genflowly.service.ModelCatalogService(get(), get(), get()) }
     single { com.genflowly.service.CostCalculationService(get()) }

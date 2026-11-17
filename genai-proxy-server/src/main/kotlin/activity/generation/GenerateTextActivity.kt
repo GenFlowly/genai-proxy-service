@@ -3,6 +3,7 @@ package com.genflowly.activity.generation
 import com.genflowly.Routes
 import com.genflowly.models.api.ErrorResponse
 import com.genflowly.utils.bearerToken
+import com.genflowly.utils.developerApiKeyId
 import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.github.smiley4.ktoropenapi.post
@@ -124,7 +125,8 @@ fun Route.registerGenerateTextRoutes(
                         request.responseSchema,
                         request.useLearnedPreferences,
                         request.agentId,
-                        request.projectId
+                        request.projectId,
+                        developerKeyId = call.developerApiKeyId()
                     )
 
                 val generateTextResponseList =

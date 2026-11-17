@@ -205,6 +205,37 @@ class EmbeddingModelCatalogServiceTest {
     }
 
     @Test
+    fun `isModelUnusable is true only for a model the key's catalog doesn't offer, or an unknown name`() = runTest {
+        coEvery { credsRepo.getCustomerApiKey("VOYAGE", cid) } returns "enc"
+        coEvery { kms.decrypt("enc") } returns "key"
+        coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns ProbedModels(
+            models = listOf("voyage-4-large"),
+            lastProbedAt = Instant.now(),
+            keyFingerprint = service.fingerprint("key")
+        )
+
+        assertEquals(true, service.isModelUnusable(cid, "voyage-multimodal-3.5"))
+        assertEquals(false, service.isModelUnusable(cid, "voyage-4-large"))
+        assertEquals(true, service.isModelUnusable(cid, "gpt-4"))
+    }
+
+    @Test
+    fun `isModelUnusable keeps the lock when the problem is the key, not the model`() = runTest {
+        coEvery { credsRepo.getCustomerApiKey("OPENAI", cid) } returns null
+        coEvery { credsRepo.getCustomerApiKey("VOYAGE", cid) } returns "enc"
+        coEvery { kms.decrypt("enc") } returns "key"
+        coEvery { catalogRepo.getProbed(cid, "VOYAGE") } returns ProbedModels(
+            models = emptyList(),
+            lastProbedAt = Instant.now(),
+            keyFingerprint = service.fingerprint("key"),
+            authFailed = true
+        )
+
+        assertEquals(false, service.isModelUnusable(cid, "text-embedding-3-large")) // no key yet
+        assertEquals(false, service.isModelUnusable(cid, "voyage-4-large"))         // key can't embed
+    }
+
+    @Test
     fun `assertModelSupported throws when the key cannot embed at all`() = runTest {
         coEvery { credsRepo.getCustomerApiKey("VOYAGE", cid) } returns "enc"
         coEvery { kms.decrypt("enc") } returns "key"

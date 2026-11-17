@@ -43,6 +43,9 @@ suspend fun ApplicationCall.getAuthenticatedCustomerId(
 fun ApplicationCall.bearerToken(): String? =
     request.headers[HttpHeaders.Authorization]?.removePrefix("Bearer ")?.trim()
 
+/** The developer API key that authenticated this call, or null for a signed-in user. */
+fun ApplicationCall.developerApiKeyId(): String? = principal<ApiKeyPrincipal>()?.keyId
+
 /** The Auth0 sub claim of the authenticated JWT, or null for API-key auth. */
 fun ApplicationCall.authenticatedSub(): String? =
     principal<JWTPrincipal>()?.payload?.getClaim("sub")?.asString()

@@ -39,8 +39,6 @@ class CustomerProfileService(
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
         embeddingModel: String? = null,
-        embeddingModelConversations: String? = null,
-        embeddingModelNotes: String? = null,
         preferredAgentId: String? = null,
         memoryLearnFromChats: Boolean? = null,
         memoryLearnFromNotes: Boolean? = null,
@@ -53,8 +51,6 @@ class CustomerProfileService(
             otherPreferences,
             embeddingMode,
             embeddingModel,
-            embeddingModelConversations,
-            embeddingModelNotes,
             preferredAgentId,
             memoryLearnFromChats,
             memoryLearnFromNotes,
@@ -62,6 +58,9 @@ class CustomerProfileService(
             indexChats
         )
     }
+
+    suspend fun replaceUnusableEmbeddingModel(customerId: String, from: String, to: String) =
+        customerProfileRepository.replaceUnusableEmbeddingModel(customerId, from, to)
 
     suspend fun getAIConfigPreferences(customerId: String): AIConfigPreferences? {
         return customerProfileRepository.getAIConfigPreferences(customerId)

@@ -16,11 +16,16 @@ data class AIConfigPreferences(
     // "batch" (swept from CustomerNotes into a Voyage batch job). Defaults to
     // realtime when unset. embeddingModel names the batch model (e.g. voyage-4-large).
     val embeddingMode: String? = null,
+    // One embedding model for all of the customer's data, chosen once and then
+    // locked (a different model on a later save is refused with 409). Saving
+    // writes it to all three attributes; the per-category fields are still
+    // accepted from older clients as the same single choice.
     val embeddingModel: String? = null,
-    // Per-category default embedding models. Resolution order at each consumer:
-    // category-specific -> legacy embeddingModel -> platform default.
     val embeddingModelConversations: String? = null,
     val embeddingModelNotes: String? = null,
+    // Read-only: when the embedding model was first chosen (ISO-8601). Null
+    // for a model chosen before locking existed. Ignored on save.
+    val embeddingModelChosenAt: String? = null,
     // Preferred conversation agent (graphId). Empty string clears the
     // preference (revert to the server-side default agent); null leaves it
     // unchanged.

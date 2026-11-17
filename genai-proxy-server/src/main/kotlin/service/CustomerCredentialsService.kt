@@ -328,6 +328,10 @@ class CustomerCredentialsService(
     suspend fun assertEmbeddingModelSupported(customerId: String, modelName: String?) =
         embeddingModelCatalogService.assertModelSupported(customerId, modelName)
 
+    /** See [EmbeddingModelCatalogService.isModelUnusable]. */
+    suspend fun isEmbeddingModelUnusable(customerId: String, modelName: String): Boolean =
+        embeddingModelCatalogService.isModelUnusable(customerId, modelName)
+
     /** Key status per [com.genflowly.models.EmbeddingVendor], NOT_SET when absent. */
     suspend fun getEmbeddingKeyStatuses(customerId: String): List<com.genflowly.models.EmbeddingKeyStatus> {
         val itemsByVendor = customerCredentialsRepository.getCustomerVendorItems(customerId)
