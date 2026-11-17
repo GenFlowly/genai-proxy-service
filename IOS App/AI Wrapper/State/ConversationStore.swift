@@ -463,6 +463,7 @@ final class ConversationStore: ObservableObject {
             block.attachments = attachmentsToUse
         }
 
+        var repliedId: String?
         do {
             let token = try await auth.getAccessTokenSilently()
             let instruction = latestInstruction()
@@ -483,6 +484,7 @@ final class ConversationStore: ObservableObject {
             if !conversationId.isEmpty {
                 // Existing conversation: all vendors stream in parallel.
                 let currentId = conversationId
+                repliedId = currentId
                 try await withThrowingTaskGroup(of: Void.self) { group in
                     for index in prep.aiConfigs.indices {
                         group.addTask { try await run(index, explicitId: currentId, onIdResolved: nil) }
@@ -521,7 +523,9 @@ final class ConversationStore: ObservableObject {
                 }
 
                 if let newId = establishedId {
+                    repliedId = newId
                     let titlePrompt = prep.prompt
+                    let titleVendors = prep.aiConfigs.map(\.aiVendor)
                     let instructionName = instruction?.name
                     Task { [weak self] in
                         if let response = try? await CreateConversationTitleService.createConversationTitle(
@@ -529,7 +533,7 @@ final class ConversationStore: ObservableObject {
                             request: CreateConversationTitleRequest(conversationId: newId, prompt: titlePrompt, instructionName: instructionName)
                         ), let title = response.title {
                             self?.conversationTitle = title
-                            self?.history?.didTitleConversation(id: newId, title: title, pendingProjectId: self?.pendingProjectId)
+                            self?.history?.didTitleConversation(id: newId, title: title, vendors: titleVendors, pendingProjectId: self?.pendingProjectId)
                         }
                     }
 
@@ -577,6 +581,9 @@ final class ConversationStore: ObservableObject {
             }
         }
 
+        if let repliedId, auth.isAuthenticated {
+            history?.didReply(id: repliedId, vendors: prep.aiConfigs.map(\.aiVendor))
+        }
         for config in prep.aiConfigs {
             streamTasks.removeValue(forKey: "\(id)-\(config.aiVendor.rawValue)")
         }

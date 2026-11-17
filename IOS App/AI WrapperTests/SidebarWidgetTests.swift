@@ -46,6 +46,33 @@ struct HistoryProjectTests {
         #expect(history.globalRecent.map(\.conversationId) == ["c1", "c2"])
         #expect(history.globalPinned.map(\.conversationId) == ["c3"])
     }
+
+    @Test func aChatStartedInAProjectShowsItsVendorsAndTime() {
+        let history = store()
+        history.didTitleConversation(id: "c9", title: "Growth plan", vendors: [.openai, AIVendor("claude")], pendingProjectId: "PRJa")
+        let row = history.projectItems["PRJa"]?.first
+        #expect(row?.conversationId == "c9")
+        #expect(row?.vendors == ["OPENAI", "CLAUDE"])
+        #expect(ServerDate.parse(row?.updatedAt) != nil)
+        #expect(history.items[0].vendors == ["OPENAI", "CLAUDE"])
+    }
+
+    @Test func aReplyRefreshesTheRowEverywhereItShows() {
+        let history = store()
+        history.projectItems["PRJa"] = [
+            ConversationSummary(conversationId: "c4", title: "Older", updatedAt: "2026-11-02T00:00:00Z", projectId: "PRJa"),
+            ConversationSummary(conversationId: "c3", title: "Pinned in project", pinnedAt: "2026-11-01T00:00:00Z", vendors: ["OPENAI"], projectId: "PRJa"),
+            ConversationSummary(conversationId: "c1", title: "Investor update", projectId: "PRJa"),
+        ]
+        history.didReply(id: "c1", vendors: [.openai])
+        history.didReply(id: "c3", vendors: [AIVendor("openai"), .gemini])
+        #expect(history.projectItems["PRJa"]?.map(\.conversationId) == ["c3", "c1", "c4"])
+        #expect(history.projectItems["PRJa"]?[1].vendors == ["OPENAI"])
+        #expect(ServerDate.parse(history.projectItems["PRJa"]?[1].updatedAt) != nil)
+        #expect(history.projectItems["PRJa"]?[0].vendors == ["OPENAI", "GEMINI"])
+        #expect(history.items[0].conversationId == "c1" && history.items[0].vendors == ["OPENAI"])
+        #expect(history.pinned[0].vendors == ["OPENAI", "GEMINI"])
+    }
 }
 
 @Suite("Memories after a project change")
