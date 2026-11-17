@@ -3,10 +3,17 @@ import { STAGES } from "@genflowly/cdk-commons";
 import { Construct } from "constructs";
 import { CfnOutput, RemovalPolicy } from "aws-cdk-lib";
 import { IRepository, Repository } from "aws-cdk-lib/aws-ecr";
+import { ArnPrincipal } from "aws-cdk-lib/aws-iam";
 import { RESOURCE_NAMES } from "./constants";
 
 export interface EcrStackProps extends cdk.StackProps {
     stage: STAGES;
+    /**
+     * IAM user or role the deploy pipeline pushes images as, granted pull and
+     * push on every repository here. Docker 29 (containerd image store) checks
+     * the manifest with a HEAD before pushing it, which needs ecr:BatchGetImage.
+     */
+    deployPrincipalArn?: string;
 }
 
 export class EcrStack extends cdk.Stack {
@@ -58,6 +65,19 @@ export class EcrStack extends cdk.Stack {
             removalPolicy: removalPolicy,
             lifecycleRules: [{ maxImageCount: 1 }],
         });
+
+        if (props.deployPrincipalArn) {
+            const deployer = new ArnPrincipal(props.deployPrincipalArn);
+            for (const repo of [
+                this.ingestionRepo,
+                this.parseAndChunkRepo,
+                this.storeEmbeddingsRepo,
+                this.createAndStoreRepo,
+                this.createCollectionsRepo,
+            ]) {
+                repo.grantPullPush(deployer);
+            }
+        }
 
         // Outputs
         new CfnOutput(this, 'IngestionRepoUri', {

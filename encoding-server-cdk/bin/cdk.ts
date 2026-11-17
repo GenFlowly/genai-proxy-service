@@ -14,9 +14,15 @@ import { StepFunctionsV2Stack } from "../lib/stepfunctions-v2-stack";
 const stageEnv = process.env.STAGE;
 const stage: STAGES = stageEnv === 'production' ? STAGES.PROD : STAGES.BETA;
 
+// Set by the deploy workflow from `aws sts get-caller-identity`.
+const deployPrincipalArn = process.env.DEPLOY_PRINCIPAL_ARN || undefined;
+if (deployPrincipalArn && !/^arn:aws:iam::\d{12}:(user|role)\//.test(deployPrincipalArn)) {
+    throw new Error(`DEPLOY_PRINCIPAL_ARN must be an IAM user or role ARN, got: ${deployPrincipalArn}`);
+}
+
 const app = new cdk.App();
 
-const ecrStack = new EcrStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-EcrStack`, { stage });
+const ecrStack = new EcrStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-EcrStack`, { stage, deployPrincipalArn });
 const s3Stack = new S3Stack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-S3Stack`, { stage });
 const sqsStack = new SqsStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-SqsStack`, { stage });
 const lambdaStack = new LambdaStack(app, `${RESOURCE_NAMES.ENCODING_SERVICE}-LambdaStack`, {
