@@ -103,11 +103,12 @@ struct ComposerView: View {
         .onAppear(perform: restoreDraft)
         .onChange(of: conversation.focusDraftRequest) { _, _ in takeDraftFocus() }
         .onChange(of: isFocused) { _, focused in
-            if focused, isFollowUp { conversation.revealDraftRequest += 1 }
+            guard isFollowUp else { return }
+            conversation.isEditingFollowUp = focused
+            if focused { conversation.revealDraftRequest += 1 }
         }
-        // Growing upward: the conversation stays at its end so the editor stays on the keyboard
-        .onChange(of: totalHeight) { _, _ in
-            if isFocused, isFollowUp { conversation.revealDraftRequest += 1 }
+        .onDisappear {
+            if isFocused, isFollowUp { conversation.isEditingFollowUp = false }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
             if isFocused, isFollowUp { conversation.revealDraftRequest += 1 }
@@ -458,6 +459,9 @@ struct ComposerTextView: UIViewRepresentable {
         view.backgroundColor = .clear
         view.textContainerInset = UIEdgeInsets(top: 4, left: 6, bottom: 4, right: 2)
         view.textContainer.lineFragmentPadding = 0
+        // Laid out lazily, a restyle measures only the lines around the edit for one pass, and an
+        // editor sized by its text drops to that height and springs back.
+        view.layoutManager.allowsNonContiguousLayout = onContentHeightChange == nil
         view.tintColor = AppTheme.UI.composerText
         view.autocorrectionType = .no
         view.smartQuotesType = .no
