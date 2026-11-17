@@ -1,3 +1,9 @@
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "gitleaks is not installed: brew install gitleaks" >&2
+  exit 1
+fi
+gitleaks git --pre-commit --staged --redact --no-banner --verbose
+
 if git diff --cached --name-only | grep -q "^genai-react-app/"; then
   echo "Changes detected in genai-react-app. Running build and tests..."
   cd genai-react-app && CI=true npm run build && npm run test:diff

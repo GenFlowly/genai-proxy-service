@@ -1,0 +1,21 @@
+# Historical false positives on main/development. Format: commit:file:rule:line.
+# Add a fingerprint here only after confirming the value is not a credential.
+
+# Fake JWTs and tokens in test fixtures.
+75aff232396effe14699b0631111b4f80c734ae3:genai-react-app/src/test/fixtures/auth0.ts:jwt:15
+75aff232396effe14699b0631111b4f80c734ae3:genai-react-app/src/test/fixtures/auth0.ts:jwt:16
+88c489fc01a822089143c9f492b51bb7a56106f2:genai-react-app/src/test/fixtures/auth0.ts:generic-api-key:14
+88c489fc01a822089143c9f492b51bb7a56106f2:genai-react-app/src/test/setupTests.ts:generic-api-key:62
+136eb30f4533714326bb02c75b15939b9ab8bcc2:encoding-server/tests/test_purge_vectors_lambda.py:generic-api-key:83
+136eb30f4533714326bb02c75b15939b9ab8bcc2:encoding-server/tests/test_purge_vectors_lambda.py:generic-api-key:84
+
+# KMS key id in a comment (an identifier, not key material).
+96a795ae274110f369bd5d465a36dbb57891d32c:genai-proxy-server/docker-compose.yml:generic-api-key:26
+
+# S3 asset hashes in CDK synth output committed before cdk.out was gitignored.
+a9be362b55594ef47a4da3777d035f3e6413419d:encoding-server-cdk/cdk.out/encoding-service-S3Stack.assets.json:generic-api-key:13
+a9be362b55594ef47a4da3777d035f3e6413419d:encoding-server-cdk/cdk.out/encoding-service-S3Stack.template.json:generic-api-key:147
+821fad52f1d286aac120cb874980a9e454260f2f:genai-proxy-server-cdk/cdk.out/EC2Stack.assets.json:generic-api-key:13
+821fad52f1d286aac120cb874980a9e454260f2f:genai-proxy-server-cdk/cdk.out/EcsStack.assets.json:generic-api-key:13
+821fad52f1d286aac120cb874980a9e454260f2f:genai-proxy-server-cdk/cdk.out/EC2Stack.template.json:generic-api-key:300
+821fad52f1d286aac120cb874980a9e454260f2f:genai-proxy-server-cdk/cdk.out/EcsStack.template.json:generic-api-key:321

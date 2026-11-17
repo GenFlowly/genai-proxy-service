@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+# Auth0 client IDs ship inside every web and iOS build, so they are public by design.
+[[allowlists]]
+description = "Auth0 client IDs"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+regexes = ['''AUTH0_(?:SPA_)?CLIENT_ID\b''']
