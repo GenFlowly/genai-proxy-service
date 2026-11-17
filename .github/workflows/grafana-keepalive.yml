@@ -2,14 +2,16 @@ name: Grafana Keep-Alive
 
 # Free-tier Grafana Cloud instances hibernate after inactivity — the next
 # visitor gets a 503 "Click to continue loading your instance" — and, after
-# prolonged inactivity, the org can be deactivated. A daily authenticated ping
-# wakes the instance AND registers account activity so it is never deactivated.
+# prolonged inactivity, the org can be deactivated. An authenticated ping every
+# 6 hours wakes the instance AND registers account activity so it is never
+# deactivated. GitHub starts scheduled runs hours late, so a daily cron can
+# leave gaps over 24h.
 #
 # Reuses the production environment's existing GRAFANA_URL / GRAFANA_SA_TOKEN;
 # no new secrets required. Scheduled workflows run from the default branch only.
 on:
   schedule:
-    - cron: '0 6 * * *'   # 06:00 UTC daily
+    - cron: '0 */6 * * *'   # every 6 hours (00/06/12/18 UTC)
   workflow_dispatch:
 
 jobs:
