@@ -63,7 +63,7 @@ fsspec==2026.9.0
     # via
     #   huggingface-hub
     #   torch
-genflowly-encoding-library==0.1.39
+genflowly-encoding-library==0.1.40
     # via
     #   -r requirements-create-and-store.txt
     #   -r requirements.txt

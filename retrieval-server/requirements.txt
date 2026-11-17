@@ -3,7 +3,7 @@ uvicorn[standard]
 pydantic
 # No [ml] extra: embeddings are API-backed (Voyage/OpenAI) — local
 # sentence-transformers/torch would add ~1GB RSS and a multi-GB image.
-genflowly-encoding-library[prometheus]>=0.1.39
+genflowly-encoding-library[prometheus]>=0.1.40
 
 # Milvus client (previously came in via the encoding library's [ml] extra)
 pymilvus>=2.4.0

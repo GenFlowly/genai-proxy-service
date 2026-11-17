@@ -51,7 +51,7 @@ frozenlist==1.8.0
     #   aiosignal
 fsspec==2026.9.0
     # via huggingface-hub
-genflowly-encoding-library==0.1.39
+genflowly-encoding-library==0.1.40
     # via -r requirements.txt
 grpcio==1.85.0
     # via pymilvus
