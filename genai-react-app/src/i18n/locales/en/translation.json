@@ -1438,7 +1438,6 @@
         "intro": "Questions, problems or ideas: tell us here and we'll reply by email.",
         "signInIntro": "Sign in to send us a message, and we'll reply by email.",
         "signIn": "Sign in",
-        "cantSignIn": "Can't sign in? Email <mail>{{email}}</mail>.",
         "name": "Name (optional)",
         "email": "Email",
         "emailInvalid": "Enter an email address we can reply to.",

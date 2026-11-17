@@ -66,14 +66,14 @@ describe('SupportPage', () => {
         mockSend.mockResolvedValue('req-1')
     })
 
-    test('signed out, it asks to sign in instead of showing the form, and gives the address for sign-in problems', async () => {
+    test('signed out, it asks to sign in instead of showing the form, and never shows the support address', async () => {
         mockUseAuth.mockReturnValue(SIGNED_OUT)
         renderPage('/support?source=ios&appVersion=1.0%20(12)')
 
         expect(screen.queryByTestId('support-form')).not.toBeInTheDocument()
         expect(screen.getByTestId('support-sign-in')).toHaveTextContent('Sign in to send us a message')
-        expect(screen.getByTestId('support-sign-in')).toHaveTextContent(`Can't sign in? Email ${SUPPORT_EMAIL}.`)
-        expect(screen.getByRole('link', { name: SUPPORT_EMAIL })).toHaveAttribute('href', `mailto:${SUPPORT_EMAIL}`)
+        expect(screen.getByTestId('support-page')).not.toHaveTextContent(SUPPORT_EMAIL)
+        expect(screen.queryByRole('link', { name: SUPPORT_EMAIL })).not.toBeInTheDocument()
 
         await userEvent.click(screen.getByTestId('support-sign-in-button'))
 

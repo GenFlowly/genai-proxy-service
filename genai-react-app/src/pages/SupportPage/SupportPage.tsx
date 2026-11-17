@@ -103,13 +103,6 @@ export default function SupportPage(): React.ReactElement {
                             onClick={() => loginWithRedirect({ appState: { returnTo: `${location.pathname}${location.search}` } })}
                             data-testid="support-sign-in-button"
                         />
-                        <p className={styles.help}>
-                            <Trans
-                                i18nKey="supportPage.cantSignIn"
-                                values={{ email: SUPPORT_EMAIL }}
-                                components={{ mail: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a> }}
-                            />
-                        </p>
                     </section>
                 ) : state.status === 'sent' ? (
                     <section className={styles.sent} role="status" data-testid="support-sent">

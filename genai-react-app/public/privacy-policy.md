@@ -317,5 +317,3 @@ We'll post any change here and update the date above. If a change materially aff
 ### Contact
 
 Genflowly, Seattle, Washington, United States
-
-Email: privacy@genflowly.com
