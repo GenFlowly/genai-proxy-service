@@ -30,6 +30,7 @@ anyio==4.15.1
     #   httpx
     #   httpx2
     #   langsmith
+    #   litellm
     #   mcp
     #   openai
     #   perplexityai
@@ -105,7 +106,7 @@ fastavro==1.13.1
     # via cohere
 fastuuid==0.14.0
     # via litellm
-filelock==3.32.7
+filelock==4.2.11
     # via
     #   huggingface-hub
     #   litellm
@@ -307,7 +308,7 @@ langsmith==0.14.16
     #   langchain-community
     #   langchain-core
     #   langchain-together
-litellm==1.106.6
+litellm==1.109.1
     # via
     #   -r requirements.txt
     #   langchain-litellm

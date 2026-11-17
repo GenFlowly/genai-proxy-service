@@ -161,6 +161,9 @@ struct ChatView: View {
                 .coordinateSpace(.named(Self.contentSpace))
             }
             .contentMargins(.top, mobileHeaderHeight, for: .scrollContent)
+            // A line added to the follow-up editor grows the page at its end; scrolling after the
+            // fact would let the editor slip under the keyboard for a frame.
+            .defaultScrollAnchor(conversation.isEditingFollowUp ? .bottom : nil, for: .sizeChanges)
             .scrollDismissesKeyboard(.interactively)
             .background(alignment: .bottom) { homeIndicatorBand }
             .onScrollGeometryChange(for: Bool.self) { geometry in

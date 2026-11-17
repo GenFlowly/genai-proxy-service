@@ -30,6 +30,8 @@ final class ConversationStore: ObservableObject {
     /// Bumped when the follow-up editor takes focus and again once the keyboard is up: it grows,
     /// so the page scrolls to its end to keep it above the keyboard.
     @Published var revealDraftRequest = 0
+    /// The follow-up editor has the keyboard: the page keeps its end in place as the editor grows.
+    @Published var isEditingFollowUp = false
 
     private var streamTasks: [String: Task<Void, Error>] = [:]
     /// Client-minted generation ids per stream key, so Stop can cancel server-side work

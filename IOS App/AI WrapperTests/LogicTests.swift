@@ -1511,6 +1511,42 @@ struct StartupTests {
         // A resting height above the limit still wins, as min-height does over max-height
         #expect(ComposerView.grownHeight(textHeight: 1600, resting: 320, tallest: 250) == 320)
     }
+
+    /// The editor is as tall as the text it reports, so a height reported mid-restyle that counts
+    /// only the lines around the edit drops the editor for a frame.
+    @Test @MainActor func composerReportsOnlyGrowthWhileLinesAreAdded() async throws {
+        for _ in 0..<200 {
+            if ComposerEngine.shared.input(id: "ready", text: "", selection: NSRange(location: 0, length: 0), range: NSRange(location: 0, length: 0), insert: "(") != nil { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        var text = ""
+        var reported: [CGFloat] = []
+        let host = UIHostingController(rootView: ComposerTextView(
+            text: Binding(get: { text }, set: { text = $0 }),
+            isFocused: .constant(true),
+            focusRequest: 0,
+            focusEndRequest: 0,
+            onChange: { _ in },
+            onPasteImages: { _ in },
+            onContentHeightChange: { reported.append($0) }
+        ).frame(width: 414, height: 403))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 414, height: 403))
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        host.view.layoutIfNeeded()
+        func editor(in view: UIView) -> ComposerUITextView? {
+            view as? ComposerUITextView ?? view.subviews.lazy.compactMap(editor).first
+        }
+        let view = try #require(editor(in: host.view))
+        for typed in ["ggh", "\n", "\n", "hhhj", "\n", "\n", "\n", "ghhhhj", "\n", "\n"] {
+            view.selectedTextRange = view.textRange(from: view.endOfDocument, to: view.endOfDocument)
+            view.insertText(typed)
+            try await Task.sleep(nanoseconds: 300_000_000)
+        }
+        #expect(reported.count >= 7)
+        #expect(reported == reported.sorted(), "\(reported)")
+    }
 }
 
 @Suite("After a failed stream")
