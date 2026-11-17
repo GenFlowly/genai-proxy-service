@@ -37,6 +37,15 @@ final class ConversationStore: ObservableObject {
     /// Client-minted generation ids per stream key, so Stop can cancel server-side work
     /// even before the response headers arrive.
     private var generationIds: [String: String] = [:]
+    /// Streams Stop was pressed for, and streams whose response headers have arrived. A stream
+    /// stopped before its headers keeps its request open until they come: they carry the
+    /// conversation id a new chat's other vendors join, and without it the next vendor starts a
+    /// conversation of its own. A vendor stopped before it launched still sends its request, so
+    /// the server records it as stopped.
+    private var stopRequested: Set<String> = []
+    private var headersReceived: Set<String> = []
+    /// How long a reply stopped before its headers waits for them before giving up on them.
+    private static let stopHeadersTimeoutNanoseconds: UInt64 = 30_000_000_000
     private var askSourceMessageId: String?
 
     private weak var auth: AuthStore?
@@ -174,17 +183,39 @@ final class ConversationStore: ObservableObject {
 
     // MARK: - Stop
 
+    /// Freezes the stopped replies and cancels their server work. Without a block (leaving the
+    /// conversation) the requests are dropped at once: nothing waits on their ids any more.
     func stopGenerating(blockId: String? = nil, vendor: AIVendor? = nil) {
-        let targets = streamTasks.filter { key, _ in
+        let keys = generationIds.keys.filter { key in
+            guard !stopRequested.contains(key) else { return false }
             guard let blockId else { return true }
             if let vendor { return key == "\(blockId)-\(vendor.rawValue)" }
             return key.hasPrefix("\(blockId)-")
         }
+        guard !keys.isEmpty else { return }
         var idsToCancel: [String] = []
-        for (key, task) in targets {
-            task.cancel()
-            streamTasks.removeValue(forKey: key)
-            if let genId = generationIds.removeValue(forKey: key) { idsToCancel.append(genId) }
+        for key in keys {
+            stopRequested.insert(key)
+            guard let generationId = generationIds[key] else { continue }
+            idsToCancel.append(generationId)
+            if blockId == nil || headersReceived.contains(key) {
+                streamTasks[key]?.cancel()
+            } else {
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: Self.stopHeadersTimeoutNanoseconds)
+                    guard let self, self.generationIds[key] == generationId else { return }
+                    self.streamTasks[key]?.cancel()
+                }
+            }
+        }
+        if let blockId {
+            let vendors = Set(keys.map { String($0.dropFirst(blockId.count + 1)) })
+            updateBlock(blockId) { block in
+                for index in block.responseMessages.indices
+                where block.responseMessages[index].isLoading && vendors.contains(block.responseMessages[index].aiVendor.rawValue) {
+                    Self.markStopped(&block.responseMessages[index])
+                }
+            }
         }
         guard !idsToCancel.isEmpty else { return }
         // Cancelling the request only detaches this client — generation survives
@@ -432,10 +463,19 @@ final class ConversationStore: ObservableObject {
                 toasts?.showToast(L("toasts.ai.selectValidModelForVendor", ["vendor": vendor.rawValue]))
                 return
             }
+            // A stopped reply's request can stay open until its headers arrive;
+            // regenerating it before then would race that stream.
+            guard generationIds["\(id)-\(vendor.rawValue)"] == nil else { return }
         }
 
+        var turnGenerationIds: [String: String] = [:]
         for config in prep.aiConfigs {
-            generationIds["\(id)-\(config.aiVendor.rawValue)"] = UUID().uuidString
+            let key = "\(id)-\(config.aiVendor.rawValue)"
+            let generationId = UUID().uuidString
+            turnGenerationIds[key] = generationId
+            generationIds[key] = generationId
+            stopRequested.remove(key)
+            headersReceived.remove(key)
         }
 
         let timestamp = Int(Date().timeIntervalSince1970 * 1000)
@@ -519,7 +559,23 @@ final class ConversationStore: ObservableObject {
                         if let value, !value.isEmpty { establishedId = value }
                         break
                     }
-                    if establishedId == nil { starterIndex += 1 }
+                    if establishedId == nil {
+                        // Stopped before the server answered: the stopped request may already
+                        // have opened the conversation, so another starter would open a second one.
+                        if stopRequested.contains("\(id)-\(prep.aiConfigs[index].aiVendor.rawValue)") { break }
+                        starterIndex += 1
+                    }
+                }
+
+                if establishedId == nil, starterIndex + 1 < prep.aiConfigs.count {
+                    // Vendors that never launched: the turn was stopped.
+                    let unlaunched = Set(prep.aiConfigs[(starterIndex + 1)...].map(\.aiVendor.rawValue))
+                    updateBlock(id) { block in
+                        for index in block.responseMessages.indices
+                        where block.responseMessages[index].isLoading && unlaunched.contains(block.responseMessages[index].aiVendor.rawValue) {
+                            Self.markStopped(&block.responseMessages[index])
+                        }
+                    }
                 }
 
                 if let newId = establishedId {
@@ -584,8 +640,21 @@ final class ConversationStore: ObservableObject {
         if let repliedId, auth.isAuthenticated {
             history?.didReply(id: repliedId, vendors: prep.aiConfigs.map(\.aiVendor))
         }
-        for config in prep.aiConfigs {
-            streamTasks.removeValue(forKey: "\(id)-\(config.aiVendor.rawValue)")
+        // A regenerate that already took a key over keeps it.
+        for (key, generationId) in turnGenerationIds where generationIds[key] == nil || generationIds[key] == generationId {
+            streamTasks.removeValue(forKey: key)
+            generationIds.removeValue(forKey: key)
+        }
+    }
+
+    /// A reply frozen by Stop: no longer loading, marked stopped, no step left pulsing.
+    private static func markStopped(_ message: inout Message) {
+        message.isLoading = false
+        message.stopReason = StopReasonNote.cancelled
+        message.thinkingStepList = message.thinkingStepList.map { step in
+            var closed = step
+            if closed.status == "running" { closed.status = "done" }
+            return closed
         }
     }
 
@@ -715,6 +784,10 @@ final class ConversationStore: ObservableObject {
                     }
                     if let response = metadata.responseMessageId { currentMessageId = response }
                     if let sanitizedId, !sanitizedId.isEmpty { onIdResolved?(sanitizedId) }
+
+                    self.headersReceived.insert(key)
+                    // Stopped before the headers: the request stayed open only for the ids above.
+                    if self.stopRequested.contains(key) { self.streamTasks[key]?.cancel() }
                 },
                 callbacks: callbacks
             )

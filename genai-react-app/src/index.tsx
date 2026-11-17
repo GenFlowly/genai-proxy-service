@@ -14,7 +14,11 @@ const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement
 );
 root.render(
-    <BrowserRouter>
+    // Location changes apply in the same render as the state set beside them,
+    // as in react-router 6. With transitions, a new chat's conversation id
+    // landed one render before its /chat/:id URL, and the chat page took that
+    // for New Chat and reset the conversation.
+    <BrowserRouter useTransitions={false}>
         <LayoutProvider>
             <App />
         </LayoutProvider>

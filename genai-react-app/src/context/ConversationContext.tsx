@@ -36,6 +36,19 @@ const newGenerationId = (): string =>
     globalThis.crypto?.randomUUID?.() ??
     `gen-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
+// How long a reply stopped before its response headers keeps its request open
+// waiting for them, before giving up on the conversation id they carry.
+const STOP_HEADERS_TIMEOUT_MS = 30_000
+
+/** A reply frozen by Stop: no longer loading, marked stopped, no step left pulsing. */
+const markStopped = (m: Message): Message => ({
+    ...m,
+    isLoading: false,
+    stopReason: STOP_REASON_CANCELLED,
+    thinkingStepList: m.thinkingStepList?.map(s =>
+        s.status === 'running' ? { ...s, status: 'done' as const } : s),
+})
+
 /**
  * Human-in-the-loop state for durable runs paused on an in-graph interrupt().
  * Kept in a small app-owned context because the main conversation value is typed
@@ -108,27 +121,47 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     // moment — the server's responseMessageId only arrives in the response
     // headers, too late for a Stop pressed during the "thinking" phase.
     const generationIds = useRef<Map<string, string>>(new Map())
+    // Streams Stop was pressed for, and streams whose response headers have
+    // arrived. A stream stopped before its headers keeps its request open
+    // until they come: they carry the conversation id a new chat's other
+    // vendors join, and without it the next vendor starts a conversation of
+    // its own. A vendor stopped before it launched still sends its request,
+    // so the server records it as stopped.
+    const stopRequested = useRef<Set<string>>(new Set())
+    const headersReceived = useRef<Set<string>>(new Set())
 
     const stopGenerating = useCallback((blockId?: string, vendor?: string) => {
         const idToAbort = blockId || activeBlockId;
         if (!idToAbort) return;
 
-        const keysToStop = vendor
+        const keysToStop = (vendor
             ? [`${idToAbort}-${vendor}`]
             : Array.from(abortControllers.current.keys()).filter(
                 key => key.startsWith(`${idToAbort}-`) || key === idToAbort
             )
+        ).filter(key => abortControllers.current.has(key) && !stopRequested.current.has(key))
+        if (keysToStop.length === 0) return
 
         const idsToCancel: string[] = []
         keysToStop.forEach(key => {
-            abortControllers.current.get(key)?.abort()
-            abortControllers.current.delete(key)
-            const generationId = generationIds.current.get(key)
-            if (generationId) {
-                idsToCancel.push(generationId)
-                generationIds.current.delete(key)
+            stopRequested.current.add(key)
+            const controller = abortControllers.current.get(key)
+            if (headersReceived.current.has(key)) {
+                controller?.abort()
+            } else {
+                setTimeout(() => controller?.abort(), STOP_HEADERS_TIMEOUT_MS)
             }
+            const generationId = generationIds.current.get(key)
+            if (generationId) idsToCancel.push(generationId)
         })
+
+        const stoppedVendors = new Set(keysToStop.map(key => key.slice(idToAbort.length + 1)))
+        setConversationBlockList(prev => prev.map(block =>
+            block.conversationBlockId !== idToAbort ? block : {
+                ...block,
+                responseMessages: block.responseMessages.map(m =>
+                    m.isLoading && stoppedVendors.has(m.aiVendor) ? markStopped(m) : m),
+            }))
 
         if (idsToCancel.length === 0) return
         // Aborting the fetch only detaches this client — generation survives
@@ -741,13 +774,29 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                  showToast(i18n.t('toasts.ai.selectValidModelForVendor', { vendor: vendorToRegenerate }))
                  return
              }
+             // A stopped reply's request can stay open until its headers
+             // arrive; regenerating it before then would race that stream.
+             if (abortControllers.current.has(`${id}-${vendorToRegenerate}`)) return
         }
         
+        const turnControllers = new Map<string, AbortController>()
         aiConfigs.forEach(c => {
+             const key = `${id}-${c.aiVendor}`
              const controller = new AbortController()
-             abortControllers.current.set(`${id}-${c.aiVendor}`, controller)
-             generationIds.current.set(`${id}-${c.aiVendor}`, newGenerationId())
+             turnControllers.set(key, controller)
+             abortControllers.current.set(key, controller)
+             generationIds.current.set(key, newGenerationId())
+             stopRequested.current.delete(key)
+             headersReceived.current.delete(key)
         })
+        // Drops a vendor's stream once it is over, unless a newer turn (a
+        // regenerate) already took the key over. Its stop flags stay until
+        // the key's next turn: the launcher reads them after the stream ends.
+        const releaseStream = (key: string) => {
+            if (abortControllers.current.get(key) !== turnControllers.get(key)) return
+            abortControllers.current.delete(key)
+            generationIds.current.delete(key)
+        }
 
         const timestamp = Date.now()
         
@@ -796,6 +845,14 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             const currentConversationId = conversationIdRef.current
             // Helper to perform the fetch for a specific config
             const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string, index: number = 0) => {
+                try {
+                    await streamVendor(conf, msgId, onIdResolved, explicitConversationId, index)
+                } finally {
+                    releaseStream(`${id}-${conf.aiVendor}`)
+                }
+            }
+            const streamVendor = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string, index: number = 0) => {
+                const streamKey = `${id}-${conf.aiVendor}`
                 let accumulatedText = ""
                 // Track the active message ID (starts as placeholder, updates to real backend ID)
                 let currentMsgId = msgId
@@ -1015,10 +1072,15 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             }
 
                             if (onIdResolved && newConversationId) onIdResolved(newConversationId)
+
+                            headersReceived.current.add(streamKey)
+                            // Stopped before the headers: the request stayed
+                            // open only for the ids passed on above.
+                            if (stopRequested.current.has(streamKey)) turnControllers.get(streamKey)?.abort()
                         },
                         idToUse,
                         handleThinking,
-                        abortControllers.current.get(`${id}-${conf.aiVendor}`)?.signal,
+                        turnControllers.get(streamKey)?.signal,
                         handleThinkingDuration,
                         attachmentsToUse,
                         handleWebSources,
@@ -1028,7 +1090,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         handleContentReset,
                         handleStopReason,
                         regenerateMessageId,
-                        generationIds.current.get(`${id}-${conf.aiVendor}`)
+                        generationIds.current.get(streamKey)
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer
@@ -1186,11 +1248,27 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
 
                     if (result.type === 'id' && result.value) {
                         establishedId = result.value
+                    } else if (stopRequested.current.has(`${id}-${aiConfigs[starterIndex].aiVendor}`)) {
+                        // Stopped before the server answered: the stopped
+                        // request may already have opened the conversation, so
+                        // another starter would open a second one.
+                        break
                     } else {
                         // Stream ended without a conversation ID (it failed
                         // before streaming) — promote the next vendor to starter
                         starterIndex++
                     }
+                }
+
+                if (!establishedId) {
+                    // Vendors that never launched: the turn was stopped.
+                    const unlaunched = new Set(aiConfigs.slice(starterIndex + 1).map(c => c.aiVendor))
+                    setConversationBlockList(prev => prev.map(block =>
+                        block.conversationBlockId !== id ? block : {
+                            ...block,
+                            responseMessages: block.responseMessages.map(m =>
+                                m.isLoading && unlaunched.has(m.aiVendor) ? markStopped(m) : m),
+                        }))
                 }
 
                 if (establishedId) {
@@ -1272,9 +1350,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 }))
             }
         } finally {
-            aiConfigs.forEach(c => {
-                abortControllers.current.delete(`${id}-${c.aiVendor}`)
-            })
+            aiConfigs.forEach(c => releaseStream(`${id}-${c.aiVendor}`))
         }
     }
 
