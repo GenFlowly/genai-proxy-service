@@ -1,4 +1,4 @@
-import { generateTextStream, StreamGenerationError, StreamTruncatedError } from '../../services/generateTextStreamService';
+import { generateTextStream, StreamGenerationError, StreamTruncatedError, STOP_REASON_CANCELLED } from '../../services/generateTextStreamService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { endpoints } from '../../config/endpoints';
 import { HttpMethod } from '../../constants/http';
@@ -480,6 +480,30 @@ describe('generateTextStreamService', () => {
             onDelta
         )).rejects.toThrow(StreamGenerationError);
         expect(onDelta).toHaveBeenCalledWith('partial ');
+    });
+
+    test('generateTextStream reports a done:cancelled terminal frame as the cancelled stop reason', async () => {
+        const encoder = new TextEncoder();
+        const mockReader = {
+            read: jest.fn()
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"partial "}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"cancelled"}\n') })
+                .mockResolvedValueOnce({ done: true }),
+            releaseLock: jest.fn()
+        };
+        mockFetchWithRetry.mockResolvedValue({ ok: true, headers: new Map(), body: { getReader: () => mockReader } });
+
+        const onStopReason = jest.fn();
+        await generateTextStream(
+            mockToken,
+            mockGenerateTextStreamRequest as GenerateTextStreamRequest,
+            jest.fn(),
+            undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined,
+            onStopReason
+        );
+
+        expect(onStopReason).toHaveBeenCalledWith(STOP_REASON_CANCELLED);
     });
 
     test('generateTextStream throws StreamTruncatedError when the body closes with no done frame', async () => {
