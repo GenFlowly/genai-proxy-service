@@ -21,10 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.5.4",
-    "@typescript-eslint/eslint-plugin": "^8.5.0",
-    "@typescript-eslint/parser": "^8.5.0",
     "aws-cdk": "^2.1134.0",
-    "eslint": "^9.38.0",
     "husky": "^9.1.6",
     "prettier": "^3.3.3",
     "ts-node": "^10.9.2",
