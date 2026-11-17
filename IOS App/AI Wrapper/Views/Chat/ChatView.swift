@@ -52,16 +52,16 @@ struct ChatView: View {
         ZStack(alignment: .top) {
             if isFreshChat {
                 VStack(spacing: 0) {
-                    Spacer(minLength: 0)
+                    // Above the composer, never over it: the keyboard shrinks the page, not the composer
+                    if let projectName = conversation.pendingProjectName(in: history.projects) {
+                        NewChatProjectHint(name: projectName, pageHeight: screenHeight)
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                     ComposerView(blockId: conversation.blocks[0].conversationBlockId, isLastBlock: true)
                 }
             } else {
                 conversationScroll
-            }
-
-            if let projectName = conversation.pendingProjectName(in: history.projects),
-               !conversation.blocks.contains(where: { $0.status == .resolved || $0.isLoading }) {
-                NewChatProjectHint(name: projectName)
             }
 
             ChatHeader(
@@ -553,22 +553,56 @@ extension EnvironmentValues {
 }
 
 /// NewChatProjectHint.tsx: what happens to the first message of a chat opened from a project's
-/// plus, on the empty page a little above its middle.
+/// plus, in the room between the header and the composer. Too little room hides it.
 struct NewChatProjectHint: View {
     let name: String
+    /// The whole page's height, down to the keyboard while it is open.
+    let pageHeight: CGFloat
 
     var body: some View {
-        Text(L("conversation.conversationHeader.newChatInProjectHint", ["name": name]))
-            .webText(15, lineHeight: 22.5)
-            .foregroundStyle(AppTheme.textMuted)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 24)
-            .visualEffect { content, proxy in
-                content.offset(y: -proxy.size.height * 0.1)
+        NewChatHintLayout(pageHeight: pageHeight) {
+            ViewThatFits(in: .vertical) {
+                Text(L("conversation.conversationHeader.newChatInProjectHint", ["name": name]))
+                    .webText(15, lineHeight: 22.5)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .accessibilityIdentifier("new-chat-project-hint")
+                Color.clear.frame(width: 0, height: 0)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
-            .accessibilityIdentifier("new-chat-project-hint")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Fills the room above the composer, which starts at the top of the page. The hint sits where
+/// the web's `top: 50%; translateY(-60%)` puts it, a little above the page's middle; when that
+/// would reach under the header or into the composer, it centres in the room below the header.
+struct NewChatHintLayout: Layout {
+    var pageHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let hint = subviews.first else { return }
+        let room = ProposedViewSize(width: bounds.width, height: max(0, bounds.height - mobileHeaderHeight))
+        let height = hint.sizeThatFits(room).height
+        let midY = Self.midY(
+            pageMiddle: bounds.minY + pageHeight / 2,
+            top: bounds.minY + mobileHeaderHeight,
+            bottom: bounds.maxY,
+            hintHeight: height
+        )
+        hint.place(at: CGPoint(x: bounds.midX, y: midY), anchor: .center, proposal: room)
+    }
+
+    static func midY(pageMiddle: CGFloat, top: CGFloat, bottom: CGFloat, hintHeight: CGFloat) -> CGFloat {
+        let webMidY = pageMiddle - hintHeight * 0.1
+        if webMidY - hintHeight / 2 >= top, webMidY + hintHeight / 2 <= bottom { return webMidY }
+        return (top + bottom) / 2
     }
 }
 

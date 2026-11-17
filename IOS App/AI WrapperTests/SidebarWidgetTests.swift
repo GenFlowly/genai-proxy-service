@@ -144,6 +144,13 @@ struct PendingProjectTests {
         #expect(abs(long[0] - (200 - 4 - 9.6) * 0.6) < 0.001)
         #expect(long[2] <= 50)
     }
+
+    @Test func hintStaysAboveTheComposer() {
+        // Keyboard closed: a little above the page's middle, as on the web
+        #expect(NewChatHintLayout.midY(pageMiddle: 418, top: 56, bottom: 516, hintHeight: 45) == 418 - 4.5)
+        // Keyboard open: the page's middle is inside the composer, so it centres below the header
+        #expect(NewChatHintLayout.midY(pageMiddle: 275, top: 56, bottom: 230, hintHeight: 45) == 143)
+    }
 }
 
 // MARK: - Swipe rows (SwipeableRow.test.tsx)
