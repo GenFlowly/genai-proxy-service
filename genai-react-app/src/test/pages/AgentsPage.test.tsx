@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import '@testing-library/jest-dom';
 import AgentsPage from '../../pages/AgentsPage/AgentsPage';
 import { useAuth } from '../../context/AuthContext';
@@ -62,10 +62,10 @@ jest.mock('../../context/ToastContext', () => ({
     useToast: () => ({ showToast: mockShowToast }),
 }));
 
-// Mock react-router-dom navigate
+// Mock react-router navigate
 const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }));
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Auth0Provider } from '@auth0/auth0-react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@genflowly/component-library';

@@ -20,7 +20,7 @@ import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints'
 import { useLayout } from '../../context/LayoutContext'
 import { ResizableSidebar, ScrollArea } from '@genflowly/component-library'
 
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 
 const SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY = 'settings_sidebar_width_rem'

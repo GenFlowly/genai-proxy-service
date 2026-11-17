@@ -1,7 +1,7 @@
 import React from 'react'
 import { act, render, fireEvent, within } from '@testing-library/react'
 import '@testing-library/jest-dom'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import ChatSidebar from '../../../components/sections/ChatSidebar/ChatSidebar'
 import AiSettingsDock from '../../../components/sections/AiSettingsDock/AiSettingsDock'
 import ConversationHeader from '../../../components/widgets/ConversationHeader/ConversationHeader'

@@ -1,6 +1,6 @@
 import React from 'react'
 import { render } from '@testing-library/react'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClient } from '../../../queryClient'
 import { EdgeSwipeProvider } from '../../../context/EdgeSwipeContext'

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router'
 import { useSidebarMenu } from '../context/SidebarMenuContext'
 import { SIDEBAR_MENU_REGISTRY } from '../config/SidebarMenuConfig'
 import { APP_NAME } from '../constants/appName'

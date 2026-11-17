@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import { NavbarMenu, NAV_ITEMS } from '../../../../components/widgets/NavbarMenuWidget/NavbarMenu';
 import { LayoutProvider } from '../../../../context/LayoutContext';
 import '@testing-library/jest-dom';

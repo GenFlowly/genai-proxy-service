@@ -1,7 +1,7 @@
 import React from 'react'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Route } from 'react-router-dom'
+import { Route } from 'react-router'
 import MemoryDetailPage from '../../pages/MemoryPage/MemoryDetailPage'
 import NewMemoryPage from '../../pages/MemoryPage/NewMemoryPage'
 import MemoryEditPage from '../../pages/MemoryPage/MemoryEditPage'

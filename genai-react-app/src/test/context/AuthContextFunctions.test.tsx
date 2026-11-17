@@ -19,7 +19,7 @@ jest.mock('@auth0/auth0-react', () => ({
     }),
 }));
 
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { LayoutProvider } from '../../context/LayoutContext';
 
 import { onboardCustomer } from '../../services/onboardUserService';

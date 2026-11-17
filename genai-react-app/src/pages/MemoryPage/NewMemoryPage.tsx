@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { Breadcrumbs, PillButton, ScrollArea, pageHeaderStyles } from '@genflowly/component-library'
 import Navbar from '../../components/navbar/Navbar'

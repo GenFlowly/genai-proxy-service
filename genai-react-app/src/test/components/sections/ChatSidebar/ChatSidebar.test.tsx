@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import ChatSidebar from '../../../../components/sections/ChatSidebar/ChatSidebar'
 import { LayoutProvider, CHAT_SIDEBAR_STORAGE_KEY } from '../../../../context/LayoutContext'
 
@@ -11,8 +11,8 @@ jest.mock('../../../../context/ConversationContext', () => ({
 }))
 
 const mockNavigate = jest.fn()
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }))
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import '@testing-library/jest-dom';
 import GraphAgentEditorPage from '../../../pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage';
 import { useAuth } from '../../../context/AuthContext';
@@ -54,8 +54,8 @@ jest.mock('../../../hooks/useVendorDisplayNames', () => ({
 }));
 
 const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }));
 

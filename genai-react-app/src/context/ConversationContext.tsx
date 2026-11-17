@@ -1,6 +1,6 @@
 // src/context/ConversationContext.tsx
 import React, { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { AIVendor } from '../constants/vendors'
 import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'

@@ -1,5 +1,5 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router'
 import { useLayout } from './LayoutContext'
 import { MenuLocationState } from '../hooks/useAppMenu'
 import { useResponsiveBreakpoints } from '../hooks/useResponsiveBreakpoints'

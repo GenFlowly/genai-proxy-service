@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import InstructionsPage from '../../../pages/InstructionsPage/InstructionsPage';
 import { useAuth } from '../../../context/AuthContext';
 import userEvent from '@testing-library/user-event';
@@ -8,8 +8,8 @@ import '@testing-library/jest-dom';
 
 const mockNavigate = jest.fn();
 
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }));
 

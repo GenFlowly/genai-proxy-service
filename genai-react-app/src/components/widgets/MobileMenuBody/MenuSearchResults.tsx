@@ -1,5 +1,5 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { SidebarWidget, SidebarListLoadMore, SidebarListPanel, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'

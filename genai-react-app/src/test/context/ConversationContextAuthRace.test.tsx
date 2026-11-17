@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, act } from '@testing-library/react';
 import { ConversationProvider, useConversation } from '../../context/ConversationContext';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 
 // Mutable so each test can model a different point in the login lifecycle
 let mockAuthState: any;
@@ -32,8 +32,8 @@ jest.mock('../../context/ToastContext', () => ({
 }));
 
 const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useNavigate: () => mockNavigate,
 }));
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import LandingPage from '../../pages/LandingPage';
 import { ConversationProvider } from '../../context/ConversationContext';
 
@@ -32,14 +32,14 @@ jest.mock('../../context/ConversationContext', () => ({
     ConversationProvider: ({ children }: any) => <div>{children}</div>
 }));
 
-// Mock react-router-dom to spy on hooks
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom'),
+// Mock react-router to spy on hooks
+jest.mock('react-router', () => ({
+    ...jest.requireActual('react-router'),
     useLocation: jest.fn(),
     useParams: jest.fn()
 }));
-const mockUseLocation = jest.requireMock('react-router-dom').useLocation;
-const mockUseParams = jest.requireMock('react-router-dom').useParams;
+const mockUseLocation = jest.requireMock('react-router').useLocation;
+const mockUseParams = jest.requireMock('react-router').useParams;
 
 describe('LandingPage Routing Logic', () => {
     beforeEach(() => {
@@ -56,8 +56,8 @@ describe('LandingPage Routing Logic', () => {
         });
 
         // Default behavior: use actual implementation
-        mockUseLocation.mockImplementation(() => jest.requireActual('react-router-dom').useLocation());
-        mockUseParams.mockImplementation(() => jest.requireActual('react-router-dom').useParams());
+        mockUseLocation.mockImplementation(() => jest.requireActual('react-router').useLocation());
+        mockUseParams.mockImplementation(() => jest.requireActual('react-router').useParams());
     });
 
     test('pins residual window scroll to 0 on mount and on pageshow', () => {

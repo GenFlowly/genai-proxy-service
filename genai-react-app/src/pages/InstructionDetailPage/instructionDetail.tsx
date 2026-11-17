@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router'
 import i18n from '../../i18n'
 import { DiffText, TimelineEntry } from '../../components/DetailPage/DetailParts'
 import { useAuth } from '../../context/AuthContext'

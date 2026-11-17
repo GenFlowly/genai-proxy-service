@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import ContentRulesPage from '../../pages/ContentRulesPage/ContentRulesPage'
 
 jest.mock('../../components/navbar/Navbar', () => () => <div data-testid="navbar" />)

@@ -1,7 +1,7 @@
 import React from 'react'
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Route } from 'react-router-dom'
+import { Route } from 'react-router'
 import MemoryPage from '../../pages/MemoryPage/MemoryPage'
 import { queryClient } from '../../queryClient'
 import { memoriesCache } from '../../services/memoriesService'

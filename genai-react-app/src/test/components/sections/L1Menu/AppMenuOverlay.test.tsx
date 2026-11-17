@@ -1,6 +1,6 @@
 import React from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { Link, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 import '@testing-library/jest-dom'
 import { AppMenuOverlay } from '../../../../components/sections/L1Menu/AppMenuOverlay'
 import { useAuth } from '../../../../context/AuthContext'

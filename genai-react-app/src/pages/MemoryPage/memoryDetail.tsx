@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router'
 import i18n from '../../i18n'
 import { useMemoryDetail, useProjects } from '../../hooks/queries/useMemories'
 import { DiffText, TimelineEntry, ConversationItem, detailStyles } from '../../components/DetailPage/DetailParts'

@@ -11,7 +11,7 @@ import {
     PillButton,
     ScrollArea,
 } from '@genflowly/component-library';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import Navbar from '../../components/navbar/Navbar';
 import MobileHeader from '../../components/widgets/MobileHeader/MobileHeader';
 import { useResponsiveBreakpoints } from '../../hooks/useResponsiveBreakpoints';
