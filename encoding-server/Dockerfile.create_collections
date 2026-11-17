@@ -5,6 +5,8 @@ COPY handlers/create_collections_lambda.py ${LAMBDA_TASK_ROOT}/handlers/create_c
 # Same image backs POST /purge-vectors (its lambda overrides CMD with
 # handlers.purge_vectors_lambda.handler)
 COPY handlers/purge_vectors_lambda.py ${LAMBDA_TASK_ROOT}/handlers/purge_vectors_lambda.py
+# ...and the scheduled Zilliz heartbeat (handlers.zilliz_heartbeat_lambda.handler)
+COPY handlers/zilliz_heartbeat_lambda.py ${LAMBDA_TASK_ROOT}/handlers/zilliz_heartbeat_lambda.py
 COPY handlers/http_metrics.py ${LAMBDA_TASK_ROOT}/handlers/http_metrics.py
 COPY services/ ${LAMBDA_TASK_ROOT}/services/
 

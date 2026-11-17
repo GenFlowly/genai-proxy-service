@@ -76,3 +76,18 @@ def test_different_customers_different_clusters_not_shared():
     a = vector_db.get_milvus_client("CU1")
     b = vector_db.get_milvus_client("CU2")
     assert a._target is not b._target
+
+
+def test_billable_ops_recorded_by_default(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(vector_db, "_record_vector_db_op", lambda *args: recorded.append(args))
+    vector_db.get_milvus_client("CU1").search(collection_name="c")
+    assert recorded == [("CU1", "search", True)]
+
+
+def test_record_usage_false_keeps_calls_out_of_the_rollup(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(vector_db, "_record_vector_db_op", lambda *args: recorded.append(args))
+    client = vector_db.get_milvus_client("CU1", record_usage=False)
+    assert client.search(collection_name="c") == ["hit"]
+    assert recorded == []

@@ -202,6 +202,7 @@ handlers/
   ingest_email_lambda.py           # /encode-email → SQS
   create_collections_lambda.py     # /create-collections
   purge_vectors_lambda.py          # /purge-vectors (customer / conversation purge)
+  zilliz_heartbeat_lambda.py       # daily one-row read per customer cluster (free-tier idle suspend)
   trigger_lambda.py                # SQS → starts Step Function
   parse_and_chunk_lambda.py        # chunking step
   create_embeddings_lambda.py      # realtime embedding step
@@ -274,7 +275,7 @@ matching `Dockerfile.*`):
 | parse-and-chunk | `Dockerfile.parse_and_chunk` | parse_and_chunk, trigger lambda |
 | create-embeddings | `Dockerfile.create_embeddings` | realtime embed step |
 | store-embeddings | `Dockerfile.store_embeddings` | store step + batch accumulator + poller |
-| create-collections | `Dockerfile.create_collections` | /create-collections, /purge-vectors (CMD override) |
+| create-collections | `Dockerfile.create_collections` | /create-collections, /purge-vectors + Zilliz heartbeat (CMD overrides) |
 
 Infrastructure (lambdas, SQS, Step Function, API Gateway, EventBridge
 schedules, `VoyageBatchJobs` table) is defined in `../encoding-server-cdk`:
@@ -289,6 +290,12 @@ VOYAGE_API_KEY=... npx cdk deploy --all   # key is baked into lambda env at depl
 embedding (realtime `create_embeddings`, batch accumulator/poller). Batch-mode
 schedules (30-min accumulate, 10-min poll) are EventBridge rules in
 `lambda-stack.ts` if you need to tune cadence.
+
+The daily Zilliz heartbeat is an EventBridge rule there too. Zilliz suspends a
+free cluster after 7 days of inactivity, so the heartbeat runs a one-row query
+(scoped to the customer) against every cluster in `CustomerVectorDBConfig`,
+outside the Cost and Usage rollup. It can't resume a cluster that is already
+suspended: the customer does that from the Zilliz console.
 
 ## Key environment variables
 

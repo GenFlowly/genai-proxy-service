@@ -64,6 +64,7 @@ export class LambdaStack extends cdk.Stack {
     public readonly createAndStoreLambda: DockerImageFunction;
     public readonly createCollectionsLambda: DockerImageFunction;
     public readonly purgeVectorsLambda: DockerImageFunction;
+    public readonly zillizHeartbeatLambda: DockerImageFunction;
     public readonly pollVoyageBatchesLambda: DockerImageFunction;
     public readonly accumulateVoyageNotesLambda: DockerImageFunction;
     public readonly voyageBatchJobsTable: dynamodb.Table;
@@ -429,5 +430,39 @@ export class LambdaStack extends cdk.Stack {
             actions: ['kms:Decrypt'],
             resources: ['*'],
         }));
+
+        /**
+         * Zilliz Heartbeat Lambda
+         * One real read a day against every customer's connected cluster:
+         * Zilliz suspends a free cluster after 7 days of inactivity, so a
+         * customer away from the app would come back to a paused knowledge
+         * base. Same image as create-collections with its own handler.
+         */
+        this.zillizHeartbeatLambda = new DockerImageFunction(this, `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-zilliz-heartbeat-lambda`, {
+            functionName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-zilliz-heartbeat-lambda`,
+            code: DockerImageCode.fromEcr(props.createCollectionsRepo, {
+                tagOrDigest: props.createCollectionsImageTag || 'create-collections-latest',
+                cmd: ['handlers.zilliz_heartbeat_lambda.handler'],
+            }),
+            memorySize: 512,
+            timeout: cdk.Duration.seconds(900),
+            architecture: lambda.Architecture.X86_64,
+            environment: {
+                ...appEnv,
+                CUSTOMER_VECTOR_DB_CONFIG_TABLE: props.customerVectorDBConfigTableName,
+            },
+        });
+
+        customerVectorDBConfigTable.grantReadData(this.zillizHeartbeatLambda);
+        this.zillizHeartbeatLambda.addToRolePolicy(new iam.PolicyStatement({
+            actions: ['kms:Decrypt'],
+            resources: ['*'],
+        }));
+
+        new events.Rule(this, 'ZillizHeartbeatSchedule', {
+            ruleName: `${RESOURCE_NAMES.ENCODING_SERVICE}-${props.stage}-zilliz-heartbeat`,
+            schedule: events.Schedule.rate(cdk.Duration.days(1)),
+            targets: [new targets.LambdaFunction(this.zillizHeartbeatLambda)],
+        });
     }
 }
