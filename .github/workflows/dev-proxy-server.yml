@@ -46,19 +46,22 @@ jobs:
       # The same push that bumps the encoding-library pin also publishes it
       # (publish-encoding-library.yml) — pip here can race the PyPI upload
       # and its CDN propagation, which failed this very deploy twice on
-      # 2026-10-30. Wait for the pinned version to be servable first.
+      # 2026-10-30. Wait for the pinned version to be servable first, probing
+      # with pip itself: the JSON API lists a new version before the /simple/
+      # index pip reads, which the CDN caches for up to 10 minutes.
       - name: Wait for the pinned encoding-library on PyPI
         working-directory: retrieval-server
         run: |
           VERSION=$(sed -n 's/^genflowly-encoding-library==\(.*\)$/\1/p' requirements.lock.txt | head -1)
           if [ -z "$VERSION" ]; then echo "::error::no encoding-library pin found in requirements.lock.txt"; exit 1; fi
-          for i in $(seq 1 30); do
-            if curl -sf "https://pypi.org/pypi/genflowly-encoding-library/${VERSION}/json" > /dev/null; then
-              echo "genflowly-encoding-library ${VERSION} is on PyPI"; exit 0
+          for i in $(seq 1 60); do
+            if pip download -q --no-deps --no-cache-dir --only-binary :all: -d "$RUNNER_TEMP/encoding-library-probe" \
+                "genflowly-encoding-library==${VERSION}" > /dev/null 2>&1; then
+              echo "genflowly-encoding-library ${VERSION} is installable from PyPI"; exit 0
             fi
-            echo "waiting for genflowly-encoding-library ${VERSION} on PyPI (${i}/30)"; sleep 10
+            echo "waiting for genflowly-encoding-library ${VERSION} on PyPI (${i}/60)"; sleep 10
           done
-          echo "::error::genflowly-encoding-library ${VERSION} never appeared on PyPI"; exit 1
+          echo "::error::genflowly-encoding-library ${VERSION} never became installable from PyPI"; exit 1
 
       - name: Test Retrieval Server
         working-directory: retrieval-server
