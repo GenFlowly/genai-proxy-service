@@ -124,11 +124,15 @@ def _cached_milvus_client(endpoint: str, token: str):
     return client
 
 
-def get_milvus_client(customer_id: str):
+def get_milvus_client(customer_id: str, record_usage: bool = True):
     """
     Authenticated Milvus client for the given customer. Credentials are
     fetched per call via get_zilliz_credentials; the underlying connection is
     shared through _cached_milvus_client.
+
+    record_usage=False keeps the client's calls out of the customer's Cost
+    and Usage rollup: for platform-initiated traffic the customer never asked
+    for (the scheduled Zilliz heartbeat).
     """
     zilliz_endpoint, zilliz_token = get_zilliz_credentials(customer_id)
 
@@ -141,11 +145,11 @@ def get_milvus_client(customer_id: str):
         # Every Milvus call (search/insert/delete/...) retries with backoff
         # and fans search/query/insert/upsert/delete into the Cost and Usage
         # rollup (both on success and on failed-after-retries, by design).
-        return RetryingProxy(
-            client,
-            operation="milvus",
-            on_complete=lambda op_name, ok: _record_vector_db_op(customer_id, op_name, ok),
+        on_complete = (
+            (lambda op_name, ok: _record_vector_db_op(customer_id, op_name, ok))
+            if record_usage else None
         )
+        return RetryingProxy(client, operation="milvus", on_complete=on_complete)
     except Exception as e:
         logger.error(f"Failed to connect to Milvus for customer {customer_id}: {e}")
         raise
