@@ -38,6 +38,15 @@
   width: auto;
 }
 
+// Flex, not block: the avatar's tooltip wrapper is inline-flex, and on a text
+// line the line's descender made this taller than the strip, pushing the
+// avatar up past the navbar's top edge
+.auth,
+.accountMenu {
+  display: flex;
+  align-items: center;
+}
+
 .auth {
   position: relative;
 }
