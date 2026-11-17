@@ -235,6 +235,8 @@
 "conversation.conversationHeader.shareSettingsUpdated" = "Share settings updated";
 "conversation.conversationHeader.untitledConversation" = "Untitled conversation";
 "conversation.conversationHeader.urlCopiedToClipboard" = "URL copied to clipboard";
+"conversation.conversationHeader.inProject" = "in {{name}}";
+"conversation.conversationHeader.newChatInProjectHint" = "Your first message starts a chat in the {{name}} project. It will show up under {{name}} in the menu.";
 "conversation.conversationHistory.createProject" = "Create";
 "conversation.conversationHistory.createProjectFailed" = "Failed to create project";
 "conversation.conversationHistory.creatingProject" = "Creating…";
@@ -253,8 +255,8 @@
 "conversation.conversationHistory.moveToProjectFailed" = "Failed to move conversation";
 "conversation.conversationHistory.moveToProjectTitle" = "Move to project";
 "conversation.conversationHistory.movedToProject" = "Moved to {{name}}";
-"conversation.conversationHistory.newConversationInProject" = "New conversation";
-"conversation.conversationHistory.resizePanels" = "Resize the Projects and History panels";
+"conversation.conversationHistory.newConversationInProject" = "New chat in project";
+"conversation.conversationHistory.resizePanels" = "Resize panels";
 "conversation.conversationHistory.newProject" = "New project";
 "conversation.conversationHistory.newProjectTitle" = "Create project";
 "conversation.conversationHistory.noConversationsYet" = "No conversations yet";
@@ -1338,6 +1340,20 @@
 
 /* Chat page V3 (UI Update) */
 "conversation.conversationHistory.chats" = "Chats";
+"conversation.conversationHistory.pin" = "Pin";
+"conversation.conversationHistory.unpin" = "Unpin";
+"conversation.conversationHistory.delete" = "Delete";
+"conversation.conversationHistory.renameProject" = "Rename project";
+"conversation.conversationHistory.renameProjectTitle" = "Rename project";
+"conversation.conversationHistory.saveProjectName" = "Save";
+"conversation.conversationHistory.savingProjectName" = "Saving…";
+"conversation.conversationHistory.projectRenamed" = "Project renamed";
+"conversation.conversationHistory.renameProjectFailed" = "Failed to rename project";
+"conversation.conversationHistory.deleteProject" = "Delete project";
+"conversation.conversationHistory.deleteProjectTitle" = "Delete this project?";
+"conversation.conversationHistory.deleteProjectConfirm" = "“{{name}}” is deleted. Its chats stay and move back to Chats. Memories that belong only to this project are deleted for good.";
+"conversation.conversationHistory.projectDeleted" = "Project deleted";
+"conversation.conversationHistory.deleteProjectFailed" = "Couldn't delete the project. Please try again.";
 "conversation.request.placeholderNewChat" = "Ask anything";
 "conversation.request.placeholderFollowUp" = "Follow up…";
 "conversation.outline.title" = "Outline";
@@ -1351,3 +1367,6 @@
 "sidebar.tokenCounter.promptEstimated" = "Prompt, estimated";
 "sidebar.tokenCounter.thisConversation" = "This conversation";
 "sidebar.tokenCounter.noUsageYet" = "No replies yet";
+
+"layout.chatSidebar.collapseSection" = "Collapse {{name}}";
+"layout.chatSidebar.expandSection" = "Expand {{name}}";

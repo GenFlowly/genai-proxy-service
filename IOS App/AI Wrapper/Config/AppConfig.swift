@@ -132,6 +132,8 @@ enum Endpoints {
     static var getProjects: URL { URL(string: "\(base)/projects")! }
     static var getProjectConversations: URL { URL(string: "\(base)/projects/conversations")! }
     static var createProject: URL { URL(string: "\(base)/project")! }
+    static func renameProject(_ projectId: String) -> URL { URL(string: "\(base)/project/rename?projectId=\(enc(projectId))")! }
+    static func deleteProject(_ projectId: String) -> URL { URL(string: "\(base)/project?projectId=\(enc(projectId))")! }
     static func assignConversationProject(_ id: String, projectId: String) -> URL { URL(string: "\(base)/conversation/assign-project?conversationId=\(enc(id))&projectId=\(enc(projectId))")! }
     static func unassignConversationProject(_ id: String) -> URL { URL(string: "\(base)/conversation/unassign-project?conversationId=\(enc(id))")! }
     private static func enc(_ s: String) -> String { s.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? s }

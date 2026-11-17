@@ -112,6 +112,24 @@ final class MemoriesStore: ObservableObject {
         return updated
     }
 
+    /// A project renamed from the history menu.
+    func projectRenamed(_ projectId: String, to name: String) {
+        for index in projects.indices where projects[index].projectId == projectId {
+            projects[index].name = name
+        }
+    }
+
+    /// A project deleted from the history menu: the server took it off every memory and deleted
+    /// the memories it left in no project, so the cached list does the same.
+    func projectDeleted(_ projectId: String) {
+        projects.removeAll { $0.projectId == projectId }
+        for index in memories.indices {
+            memories[index].placements.removeAll { $0.projectId == projectId }
+        }
+        memories.removeAll { $0.placements.isEmpty }
+        persist()
+    }
+
     /// True when the memory is gone; false when it only left `projectId`.
     func delete(_ memoryId: String, projectId: String? = nil) async throws -> Bool {
         let deleted = try await MemoriesService.delete(token: try await token(), memoryId: memoryId, projectId: projectId)

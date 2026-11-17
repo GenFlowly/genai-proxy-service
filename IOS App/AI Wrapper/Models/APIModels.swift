@@ -187,6 +187,7 @@ struct ForkConversationResponse: Codable {
 }
 
 struct CreateProjectRequest: Codable { var name: String }
+struct RenameProjectRequest: Codable { var name: String }
 
 // MARK: - Conversation fetch (src/services/conversationService.ts)
 
