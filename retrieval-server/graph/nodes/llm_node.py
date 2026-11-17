@@ -129,6 +129,9 @@ def _is_transient_llm_error(e: BaseException) -> bool:
 # crash/redeploy the memoized response replays instead of re-billing the vendor.
 # retries_allowed + should_retry add bounded backoff on transient vendor failures
 # (P3); a successful (possibly retried) call is still memoized exactly once.
+# preemptible: a user Stop cancels the workflow, and DBOS then aborts the vendor
+# call mid-stream (polled ~1s, from whichever machine runs it) instead of letting
+# it bill to completion.
 if durable_runtime.dbos_constructed():
     from dbos import DBOS
 
@@ -139,6 +142,7 @@ if durable_runtime.dbos_constructed():
         interval_seconds=_LLM_STEP_INTERVAL_SEC,
         backoff_rate=_LLM_STEP_BACKOFF_RATE,
         should_retry=_is_transient_llm_error,
+        preemptible=True,
     )
     async def _durable_llm_invoke(
         provider, customer_id, effective_model, max_tokens, llm_betas,
@@ -1083,7 +1087,9 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                         turn_tool_calls = turn.get("tool_calls") or []
                         if turn_tool_calls:
                             messages.append(_history_ai_message(content, turn_tool_calls, cache_this))
-                        else:
+                        elif content:
+                            # A reply stopped before any text has nothing to
+                            # replay, and vendors reject an empty assistant turn.
                             messages.append(_make_ai(content, cache_this))
                 _append_current_turn()
             else:

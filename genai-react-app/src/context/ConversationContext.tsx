@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'
 import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
-import { generateTextStream, StreamMetadata, AwaitingInput, StreamGenerationError } from '../services/generateTextStreamService'
+import { generateTextStream, StreamMetadata, AwaitingInput, StreamGenerationError, STOP_REASON_CANCELLED } from '../services/generateTextStreamService'
 import { reattachRun } from '../services/reattachRunService'
 import { resumeRun as resumeRunApi } from '../services/resumeRunService'
 import { getAIUsageActivity } from '../services/getAIUsageService'
@@ -906,7 +906,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 // Finish THIS vendor's message only — on failure the streamed
                 // text is kept and the reason is attached; other vendors'
                 // streams are untouched
-                const finishVendorMessage = (errorReason: string | null) => {
+                const finishVendorMessage = (errorReason: string | null, stopReason?: string) => {
                     setAwaitingInputs(prev => {
                         if (!(currentMsgId in prev) && !(msgId in prev)) return prev
                         const next = { ...prev }
@@ -918,7 +918,15 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         if (block.conversationBlockId !== id) return block
                         const msgs = block.responseMessages.map(m => {
                             if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
-                            return { ...m, isLoading: false, ...(errorReason ? { error: errorReason } : {}) }
+                            return {
+                                ...m,
+                                isLoading: false,
+                                // A finished reply's interrupted step must not pulse on.
+                                thinkingStepList: m.thinkingStepList?.map(s =>
+                                    s.status === 'running' ? { ...s, status: 'done' as const } : s),
+                                ...(errorReason ? { error: errorReason } : {}),
+                                ...(stopReason ? { stopReason } : {}),
+                            }
                         })
                         return { ...block, responseMessages: msgs }
                     }))
@@ -1034,10 +1042,12 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                     }
                     if (err?.name === 'AbortError') {
                         // User stopped this vendor — keep whatever streamed, no
-                        // error. stopGenerating already issued the server-side
+                        // error. The stop reason keeps the card on screen even
+                        // when nothing streamed yet (stopped while thinking).
+                        // stopGenerating already issued the server-side
                         // cancel, keyed by the client-generated generationId so
                         // it works even before response headers arrive.
-                        finishVendorMessage(null)
+                        finishVendorMessage(null, STOP_REASON_CANCELLED)
                         return
                     }
                     console.error(`Stream failed for vendor ${conf.aiVendor}`, err)

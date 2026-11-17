@@ -18,6 +18,9 @@ export class StreamGenerationError extends Error {}
  */
 export class StreamTruncatedError extends Error {}
 
+/** Stop reason of a reply the user stopped; the response card shows a "you stopped" note. */
+export const STOP_REASON_CANCELLED = "cancelled";
+
 export interface StreamMetadata {
     conversationId: string | null;
     messageId: string | null;
@@ -143,9 +146,9 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
             }
             else if (msg.t === "done") {
                 // Terminal frame: the server's definitive word on how the
-                // stream ended. "ok"/"cancelled" need no action here — the
-                // loop below only cares that status was "error".
+                // stream ended.
                 doneFrameReceived = true;
+                if (msg.status === "cancelled") cb.onStopReason?.(STOP_REASON_CANCELLED);
                 if (msg.status === "error") {
                     throw new StreamGenerationError(
                         typeof msg.m === "string" && msg.m ? msg.m : "Generation failed"

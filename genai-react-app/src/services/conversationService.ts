@@ -131,8 +131,10 @@ export async function getConversation(
         responsesToProcess.forEach((resp, respIndex) => {
             // Map responses with text, plus an in-flight placeholder (empty text)
             // for a durable run still generating — the latter must survive so the
-            // client can render the loading card and reattach to its stream.
-            if (resp && (resp.text || resp.inFlight)) {
+            // client can render the loading card and reattach to its stream. A
+            // reply with only a stop reason (stopped before any text, or a
+            // refusal) is kept too: its note is all that explains the empty card.
+            if (resp && (resp.text || resp.inFlight || resp.stopReason)) {
                 // Map backend vendor string to frontend Enum if possible, default to something safe or keep string
                 const vendor = (resp.aiVendor as AIVendor) || AIVendor.OPENAI;
 

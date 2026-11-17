@@ -45,8 +45,10 @@ enum ConversationService {
             var responses: [Message] = []
             for (respIndex, resp) in item.responses.enumerated() {
                 // Responses with text, plus an in-flight placeholder (empty text) for a
-                // durable run still generating, so the client can reattach to it.
-                guard !(resp.text ?? "").isEmpty || resp.inFlight else { continue }
+                // durable run still generating, so the client can reattach to it. A reply
+                // with only a stop reason (stopped before any text, or a refusal) is kept:
+                // its note is all that explains the empty card.
+                guard !(resp.text ?? "").isEmpty || resp.inFlight || !(resp.stopReason ?? "").isEmpty else { continue }
                 let vendorRaw = resp.aiVendor ?? ""
                 responses.append(Message(
                     aiVendor: vendorRaw.isEmpty ? AIVendor.openai : AIVendor(rawValue: vendorRaw),

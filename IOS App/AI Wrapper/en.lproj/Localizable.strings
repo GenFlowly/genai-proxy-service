@@ -937,6 +937,7 @@
 "conversation.stopReason.refusal" = "The model declined to answer this request (finish reason: {{reason}}). Try rephrasing, or start a new conversation — an earlier turn in this thread may have triggered it.";
 "conversation.stopReason.truncated" = "The response was cut off because it reached the length limit (finish reason: {{reason}}).";
 "conversation.stopReason.finished" = "Finished · {{reason}}";
+"conversation.stopReason.cancelled" = "You stopped this response.";
 "conversation.response.generationFailedDefault" = "Generation failed";
 "conversation.response.askSourceSwitched" = "Follow-up now quotes {{vendor}}'s response";
 "common.attachmentCard.error" = "Download failed — tap to retry";

@@ -153,10 +153,12 @@ async def cancel_run(run_id: str):
     if st is None:
         raise HTTPException(status_code=404, detail="run not found")
     try:
-        DBOS.cancel_workflow(run_id)
+        # The sync cancel_workflow raises inside a running event loop.
+        await DBOS.cancel_workflow_async(run_id)
     except Exception as e:
         logger.exception("Failed to cancel run %s", run_id)
         raise HTTPException(status_code=500, detail=f"could not cancel run: {e}")
+    runs_module.signal_cancel(run_id)
     await run_events.delete_run(run_id)
     logger.info("Cancelled durable run %s", run_id)
     return {"run_id": run_id, "status": "cancelled"}

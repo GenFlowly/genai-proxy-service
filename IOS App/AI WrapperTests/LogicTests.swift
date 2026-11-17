@@ -59,6 +59,12 @@ struct StreamFrameTests {
         #expect(recorder.stopReasons == ["end_turn"])
     }
 
+    @Test func cancelledDoneFrameEndsTheStreamAsStopped() throws {
+        let recorder = Recorder()
+        #expect(try feed(#"{"t":"done","status":"cancelled"}"#, into: recorder) == true)
+        #expect(recorder.stopReasons == [StopReasonNote.cancelled])
+    }
+
     @Test func legacyAndStructuredThinkingBothArrive() throws {
         let recorder = Recorder()
         _ = try feed(#"{"t":"k","v":"Looking"}"#, into: recorder)
@@ -1226,6 +1232,10 @@ struct LocalizationCoverageTests {
 
     @Test func placeholdersAreFilled() {
         #expect(L("conversation.stopReason.finished", ["reason": "stop"]) == "Finished · stop")
+    }
+
+    @Test func stoppedNoteHasItsCopy() {
+        #expect(L("conversation.stopReason.cancelled") == "You stopped this response.")
     }
 
     /// A key typed in code but missing from the strings file shows as the raw key.

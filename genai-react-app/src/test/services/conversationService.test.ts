@@ -137,6 +137,24 @@ describe('conversationService', () => {
         expect(result?.blocks[0].responseMessages).toHaveLength(0); // Should be empty
     });
 
+    test('getConversation keeps a reply stopped before any text, with its stop reason', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: true,
+            json: jest.fn().mockResolvedValue({
+                promptAndResponseList: [{
+                    prompt: { instructionId: '', instructionVersion: '', prompt: 'Write an essay' },
+                    responses: [{ text: '', aiVendor: 'OPENAI', conversationId: 'c1', messageId: 'rm1', stopReason: 'cancelled' }],
+                }],
+            }),
+        });
+
+        const result = await getConversation(mockToken, mockConversationId);
+
+        expect(result?.blocks[0].responseMessages).toEqual([
+            expect.objectContaining({ messageId: 'rm1', text: '', stopReason: 'cancelled', isLoading: false }),
+        ]);
+    });
+
     test('getConversation throws error on non-ok response', async () => {
         // Arrange
         mockFetchWithRetry.mockResolvedValue({

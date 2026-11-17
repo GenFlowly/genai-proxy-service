@@ -638,13 +638,20 @@ final class ConversationStore: ObservableObject {
 
         /// Finish THIS vendor's message only — on failure the streamed text is kept and
         /// the reason attached; other vendors' streams are untouched.
-        func finish(error reason: String?) {
+        func finish(error reason: String?, stopReason: String? = nil) {
             awaitingInputs.removeValue(forKey: currentMessageId)
             awaitingInputs.removeValue(forKey: placeholderMessageId)
             flushText()
             update {
                 $0.isLoading = false
+                // A finished reply's interrupted step must not pulse on.
+                $0.thinkingStepList = $0.thinkingStepList.map { step in
+                    var closed = step
+                    if closed.status == "running" { closed.status = "done" }
+                    return closed
+                }
                 if let reason { $0.error = reason }
+                if let stopReason { $0.stopReason = stopReason }
             }
         }
 
@@ -709,11 +716,12 @@ final class ConversationStore: ObservableObject {
         do {
             try await task.value
         } catch is CancellationError {
-            // User stopped this vendor — keep whatever streamed, no error.
-            finish(error: nil)
+            // User stopped this vendor — keep whatever streamed, no error. The stop
+            // reason keeps the card on screen even when nothing streamed yet.
+            finish(error: nil, stopReason: StopReasonNote.cancelled)
             return
         } catch let error as URLError where error.code == .cancelled {
-            finish(error: nil)
+            finish(error: nil, stopReason: StopReasonNote.cancelled)
             return
         } catch Auth0Service.AuthError.loginRequired {
             throw Auth0Service.AuthError.loginRequired
