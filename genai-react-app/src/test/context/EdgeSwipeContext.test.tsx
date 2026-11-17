@@ -2,7 +2,7 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, useLocation, useNavigationType } from 'react-router'
-import { EdgeSwipeProvider, MenuLayer, useEdgeSwipePageAction } from '../../context/EdgeSwipeContext'
+import { EdgeSwipeProvider, MenuLayer, useEdgeSwipePageAction, useRightEdgeSwipe } from '../../context/EdgeSwipeContext'
 import { SlidePanel } from '../../components/common/SlidePanel/SlidePanel'
 import { useLayout } from '../../context/LayoutContext'
 import { MenuLocationState, OPEN_L2_MENU_STATE } from '../../hooks/useAppMenu'
@@ -75,6 +75,13 @@ function swipe(target: Element, points: Array<[number, number, number?]>, end: '
         fireEvent.touchMove(target, { touches: [{ clientX, clientY }] })
     })
     fireEvent[end](target, { touches: [] })
+}
+
+/** A page that opens something (its info drawer) on a swipe in from the right edge. */
+const InfoPage = ({ onInfo }: { onInfo?: () => void }) => {
+    useEdgeSwipePageAction('l2')
+    useRightEdgeSwipe(onInfo)
+    return <div data-testid="page" />
 }
 
 /** Slow enough that only the distance decides. */
@@ -352,5 +359,63 @@ describe('EdgeSwipeProvider', () => {
         swipe(screen.getByTestId('bare-page'), [[4, 300], slowly(60), slowly(200)])
 
         expect(screen.getByTestId('location')).toHaveTextContent('/chat/abc')
+    })
+
+    describe('right edge', () => {
+        test('a swipe in from the right edge runs the page action', () => {
+            const onInfo = jest.fn()
+            renderApp(<InfoPage onInfo={onInfo} />)
+
+            swipe(screen.getByTestId('page'), [[SCREEN_WIDTH - 4, 300], slowly(SCREEN_WIDTH - 60), slowly(SCREEN_WIDTH - 200)])
+
+            expect(onInfo).toHaveBeenCalledTimes(1)
+            expect(mockSetLeftSidebarExpanded).not.toHaveBeenCalled()
+        })
+
+        test('a quick flick runs it however short', () => {
+            const onInfo = jest.fn()
+            renderApp(<InfoPage onInfo={onInfo} />)
+
+            swipe(screen.getByTestId('page'), [[SCREEN_WIDTH - 4, 300], [SCREEN_WIDTH - 30, 300], [SCREEN_WIDTH - 70, 300, 20]])
+
+            expect(onInfo).toHaveBeenCalledTimes(1)
+        })
+
+        test('released early it does nothing', () => {
+            const onInfo = jest.fn()
+            renderApp(<InfoPage onInfo={onInfo} />)
+
+            swipe(screen.getByTestId('page'), [[SCREEN_WIDTH - 4, 300], slowly(SCREEN_WIDTH - 40), slowly(SCREEN_WIDTH - 80)])
+
+            expect(onInfo).not.toHaveBeenCalled()
+        })
+
+        test('a mostly vertical drag stays a scroll', () => {
+            const onInfo = jest.fn()
+            renderApp(<InfoPage onInfo={onInfo} />)
+
+            swipe(screen.getByTestId('page'), [[SCREEN_WIDTH - 4, 300], slowly(SCREEN_WIDTH - 20, 420), slowly(SCREEN_WIDTH - 40, 600)])
+
+            expect(onInfo).not.toHaveBeenCalled()
+        })
+
+        test('a page without a right-edge action leaves that edge to the browser', () => {
+            renderApp(<InfoPage />)
+            const page = screen.getByTestId('page')
+
+            const isNotPrevented = fireEvent.touchStart(page, { touches: [{ clientX: SCREEN_WIDTH - 4, clientY: 300 }] })
+
+            expect(isNotPrevented).toBe(true)
+        })
+
+        test('the left edge still goes to the menu on a page with a right-edge action', () => {
+            const onInfo = jest.fn()
+            renderApp(<InfoPage onInfo={onInfo} />)
+
+            swipe(screen.getByTestId('page'), [[4, 300], slowly(60), slowly(200)])
+
+            expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(true)
+            expect(onInfo).not.toHaveBeenCalled()
+        })
     })
 })

@@ -21,16 +21,26 @@ export interface UsageByDim {
     requestCount: number
 }
 
+/** One UTC day's totals; days with no usage are left out. */
+export interface UsageByDay {
+    date: string
+    costUsd: number
+    requestCount: number
+}
+
 export interface LlmUsageSummary {
     totalCostUsd: number
     byVendor: UsageByDim[]
     byModel: UsageByDim[]
+    /** Absent from servers older than the per-day series. */
+    byDay?: UsageByDay[]
 }
 
 export interface EmbeddingUsageSummary {
     totalCostUsd: number
     byVendor: UsageByDim[]
     byModel: UsageByDim[]
+    byDay?: UsageByDay[]
 }
 
 /** One estimate-breakdown row: opType (vector DB) or searchDepth (web search). */

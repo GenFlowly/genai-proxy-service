@@ -9,7 +9,17 @@ import { CustomerVectorDBConfigStatus } from '../../common/CustomerVectorDBConfi
 import { useToast } from '../../../context/ToastContext'
 import styles from './DatabaseConnectionsSettingsWidget.module.scss'
 
-export default function DatabaseConnectionsSettingsWidget(): React.ReactElement {
+interface DatabaseConnectionsSettingsWidgetProps {
+    /** Phone-width layout: labels above values and a full-width button. */
+    narrow?: boolean
+    /** Card title in place of "Milvus Cloud", e.g. "Replace the connection". */
+    title?: string
+    /** Hides the status pill when the page already shows it. */
+    hideStatus?: boolean
+}
+
+/** The customer's own Zilliz (Milvus Cloud) connection: its status and the form that saves or replaces it. */
+export default function DatabaseConnectionsSettingsWidget({ narrow = false, title, hideStatus = false }: DatabaseConnectionsSettingsWidgetProps = {}): React.ReactElement {
     const { t } = useTranslation()
     const { customerId, getAccessTokenSilently, isAuthenticated, updateVectorDBConfigStatus } = useAuth()
     const { showToast } = useToast()
@@ -70,8 +80,8 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
     return (
         <div className={styles.form}>
             <CredentialCard
-                label={t('dbSettings.databaseConnectionsSettingsWidget.milvusCloud')}
-                pills={<CustomerVectorDBConfigStatus vendor="Zilliz" />}
+                label={title ?? t('dbSettings.databaseConnectionsSettingsWidget.milvusCloud')}
+                pills={hideStatus ? undefined : <CustomerVectorDBConfigStatus vendor="Zilliz" />}
                 data-testid="vector-db-zilliz"
             >
                 <div className={styles.inputsGroup}>
@@ -80,12 +90,15 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
                         value={zillizEndpoint}
                         onChange={e => setZillizEndpoint(e.target.value)}
                         placeholder={t('dbSettings.databaseConnectionsSettingsWidget.zillizEndpointPlaceholder')}
+                        layout={narrow ? 'stacked' : 'inline'}
                     />
                     <InputTextWithHint
                         hint={t('dbSettings.databaseConnectionsSettingsWidget.tokenHint')}
                         value={zillizToken}
                         onChange={e => setZillizToken(e.target.value)}
                         placeholder={t('dbSettings.databaseConnectionsSettingsWidget.zillizTokenPlaceholder')}
+                        type="password"
+                        layout={narrow ? 'stacked' : 'inline'}
                     />
                 </div>
                 <div className={styles.cardFooter}>
@@ -94,6 +107,7 @@ export default function DatabaseConnectionsSettingsWidget(): React.ReactElement 
                         label={savingZilliz ? t('dbSettings.databaseConnectionsSettingsWidget.saving') : t('dbSettings.databaseConnectionsSettingsWidget.save')}
                         icon={ICONS.SAVE_ICON}
                         disabled={savingZilliz || !zillizEndpoint.trim() || !zillizToken.trim()}
+                        size={narrow ? 'lg' : 'md'}
                     />
                 </div>
             </CredentialCard>

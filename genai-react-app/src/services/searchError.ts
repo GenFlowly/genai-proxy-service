@@ -37,7 +37,7 @@ export function isSearchNotConfigured(error: unknown): error is SearchError {
 
 /** The Settings page where the missing setting is added. */
 export function searchSetupPath(reason?: SearchSetupReason): string {
-    return reason === 'EMBEDDING_KEY_MISSING' ? '/settings/ai/embedding-keys' : '/settings/ai/vector-db'
+    return reason === 'EMBEDDING_KEY_MISSING' ? '/settings/byok/embedding-keys' : '/settings/byok/vector-db'
 }
 
 /** Translation key for the "search isn't set up" message. */

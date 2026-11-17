@@ -9,7 +9,7 @@ struct PrivacyPolicyView: View {
         DetailScaffold(
             title: L("privacyPolicy.title"),
             backLabel: L("settingsPage.settingsSidebar.title"),
-            onLeading: { router.openWithL2Menu(.settings(.profile)) }
+            onLeading: { router.openWithL2Menu(.settings(.account)) }
         ) {
             PrivacyPolicyContent()
         }

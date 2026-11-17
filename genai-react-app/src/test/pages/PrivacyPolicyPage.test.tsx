@@ -84,7 +84,7 @@ describe('PrivacyPolicyPage', () => {
         renderPage()
 
         expect(screen.getByTestId('mobile-header')).toHaveAttribute(
-            'data-swipe-back', JSON.stringify({ to: '/settings/profile', state: { openMobileMenu: true } })
+            'data-swipe-back', JSON.stringify({ to: '/settings/profile/account', state: { openMobileMenu: true } })
         )
     })
 

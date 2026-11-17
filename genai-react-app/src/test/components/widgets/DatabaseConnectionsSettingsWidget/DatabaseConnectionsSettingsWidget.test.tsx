@@ -52,7 +52,7 @@ describe('DatabaseConnectionsSettingsWidget', () => {
         render(<DatabaseConnectionsSettingsWidget />);
         // Inputs must have values for button to be enabled in first place
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
-        const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+        const tokenInput = screen.getByPlaceholderText('Paste the cluster token');
 
         fireEvent.change(endpointInput, { target: { value: 'https://test.cloud.zilliz.com' } });
         fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
@@ -66,7 +66,7 @@ describe('DatabaseConnectionsSettingsWidget', () => {
     test('validates Zilliz endpoint format', async () => {
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
-        const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+        const tokenInput = screen.getByPlaceholderText('Paste the cluster token');
 
         fireEvent.change(endpointInput, { target: { value: 'invalid-endpoint' } });
         fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });
@@ -80,7 +80,7 @@ describe('DatabaseConnectionsSettingsWidget', () => {
     test('validates Zilliz token format', async () => {
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
-        const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+        const tokenInput = screen.getByPlaceholderText('Paste the cluster token');
 
         fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.us-west-2.cloud.zilliz.com' } });
         fireEvent.change(tokenInput, { target: { value: 'short-token' } });
@@ -98,7 +98,7 @@ describe('DatabaseConnectionsSettingsWidget', () => {
 
         render(<DatabaseConnectionsSettingsWidget />);
         const endpointInput = screen.getByPlaceholderText('https://in03-....zillizcloud.com');
-        const tokenInput = screen.getByPlaceholderText('Placeholder token...');
+        const tokenInput = screen.getByPlaceholderText('Paste the cluster token');
 
         fireEvent.change(endpointInput, { target: { value: 'https://in03-123.serverless.us-west-2.cloud.zilliz.com' } });
         fireEvent.change(tokenInput, { target: { value: 'a'.repeat(64) } });

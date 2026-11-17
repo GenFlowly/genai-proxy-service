@@ -15,7 +15,7 @@ export interface SwipeBack {
 /** What the page's top-left button does, which a swipe from the left edge stands in for. */
 export type PageSwipeAction = { kind: 'menu'; layer: MenuLayer } | ({ kind: 'back' } & SwipeBack)
 
-/** Where a swipe has to start: the strip along the left edge of the screen. */
+/** Where a swipe has to start: the strip along either edge of the screen. */
 export const EDGE_ZONE = 24
 /** Movement before a touch counts as a swipe rather than a tap or a scroll. */
 const LOCK_DISTANCE = 10
@@ -29,19 +29,22 @@ interface EdgeSwipeContextValue {
     /** A SlidePanel hands over its element so the finger can move it. */
     attachPanel: (layer: MenuLayer, element: HTMLElement | null) => void
     registerPageAction: (action: PageSwipeAction) => () => void
+    /** A page's action for a swipe in from the right edge (e.g. open its info drawer). */
+    registerRightEdgeAction: (action: () => void) => () => void
 }
 
 const EdgeSwipeContext = createContext<EdgeSwipeContextValue>({
     draggedLayer: null,
     attachPanel: () => {},
     registerPageAction: () => () => {},
+    registerRightEdgeAction: () => () => {},
 })
 
 interface Swipe {
     startX: number
     startY: number
     target: Element
-    action: { kind: 'drag'; layer: MenuLayer } | ({ kind: 'back' } & SwipeBack)
+    action: { kind: 'drag'; layer: MenuLayer } | ({ kind: 'back' } & SwipeBack) | { kind: 'right'; run: () => void }
     isClaimed: boolean
     dx: number
     lastX: number
@@ -93,7 +96,8 @@ function tap(target: Element, touch: Touch | undefined): void {
  * Below isNarrow, a swipe from the left edge opens the page's L2 Menu (or the
  * L1 Menu when it has none), or goes back on a page nested under another. On
  * the L2 Menu it opens the L1 Menu. Menus follow the finger; released early
- * they slide back.
+ * they slide back. A swipe in from the right edge runs the page's
+ * right-edge action, if it registered one (useRightEdgeSwipe).
  */
 export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.ReactElement {
     const { isNarrow } = useResponsiveBreakpoints()
@@ -104,6 +108,7 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
 
     const panels = useRef<Partial<Record<MenuLayer, HTMLElement>>>({})
     const pageAction = useRef<PageSwipeAction | null>(null)
+    const rightEdgeAction = useRef<(() => void) | null>(null)
     const swipe = useRef<Swipe | null>(null)
     const latest = useRef({ location, navigate, setLeftSidebarExpanded })
     latest.current = { location, navigate, setLeftSidebarExpanded }
@@ -131,21 +136,34 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
         }
     }, [])
 
+    const registerRightEdgeAction = useCallback((action: () => void) => {
+        rightEdgeAction.current = action
+        return () => {
+            if (rightEdgeAction.current === action) rightEdgeAction.current = null
+        }
+    }, [])
+
     useEffect(() => {
         if (!isNarrow) return
 
         const handleStart = (event: TouchEvent) => {
             swipe.current = null
             const touch = event.touches[0]
-            if (event.touches.length !== 1 || touch.clientX > EDGE_ZONE || !(event.target instanceof Element)) return
+            const fromLeft = touch?.clientX <= EDGE_ZONE
+            const fromRight = touch?.clientX >= window.innerWidth - EDGE_ZONE
+            if (event.touches.length !== 1 || !(fromLeft || fromRight) || !(event.target instanceof Element)) return
 
             const surface = touchedSurface(event.target)
             let action: Swipe['action'] | null = null
-            if (surface === 'l2') action = { kind: 'drag', layer: 'l1' }
-            if (surface === 'page' && pageAction.current) {
-                action = pageAction.current.kind === 'back'
-                    ? pageAction.current
-                    : { kind: 'drag', layer: pageAction.current.layer }
+            if (fromLeft) {
+                if (surface === 'l2') action = { kind: 'drag', layer: 'l1' }
+                if (surface === 'page' && pageAction.current) {
+                    action = pageAction.current.kind === 'back'
+                        ? pageAction.current
+                        : { kind: 'drag', layer: pageAction.current.layer }
+                }
+            } else if (surface === 'page' && rightEdgeAction.current) {
+                action = { kind: 'right', run: rightEdgeAction.current }
             }
             if (!action) return
 
@@ -171,9 +189,11 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
             const dx = touch.clientX - current.startX
             const dy = touch.clientY - current.startY
 
+            // A right-edge swipe travels leftwards; measure it the same way round
+            const travel = current.action.kind === 'right' ? -dx : dx
             if (!current.isClaimed) {
                 if (Math.abs(dx) < LOCK_DISTANCE && Math.abs(dy) < LOCK_DISTANCE) return
-                if (dx <= Math.abs(dy) || canScrollBack(current.target)) {
+                if (travel <= Math.abs(dy) || (current.action.kind !== 'right' && canScrollBack(current.target))) {
                     swipe.current = null
                     return
                 }
@@ -184,10 +204,11 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
             if (event.cancelable) event.preventDefault()
             const now = performance.now()
             const elapsed = now - current.lastTime
-            if (elapsed > 0) current.velocity = (touch.clientX - current.lastX) / elapsed
+            const direction = current.action.kind === 'right' ? -1 : 1
+            if (elapsed > 0) current.velocity = (direction * (touch.clientX - current.lastX)) / elapsed
             current.lastX = touch.clientX
             current.lastTime = now
-            current.dx = Math.max(0, dx)
+            current.dx = Math.max(0, travel)
 
             if (current.action.kind === 'drag') {
                 const element = panels.current[current.action.layer]
@@ -201,6 +222,10 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
             if (!current?.isClaimed) return
 
             const { location: here, navigate: go, setLeftSidebarExpanded: setL2Open } = latest.current
+            if (current.action.kind === 'right') {
+                if (commits) current.action.run()
+                return
+            }
             if (current.action.kind === 'back') {
                 if (commits) go(current.action.to, { state: current.action.state })
                 return
@@ -242,8 +267,8 @@ export function EdgeSwipeProvider({ children }: { children: ReactNode }): React.
     }, [isNarrow, placePanel])
 
     const value = useMemo(
-        () => ({ draggedLayer, attachPanel, registerPageAction }),
-        [draggedLayer, attachPanel, registerPageAction]
+        () => ({ draggedLayer, attachPanel, registerPageAction, registerRightEdgeAction }),
+        [draggedLayer, attachPanel, registerPageAction, registerRightEdgeAction]
     )
     return <EdgeSwipeContext.Provider value={value}>{children}</EdgeSwipeContext.Provider>
 }
@@ -264,4 +289,13 @@ export function useEdgeSwipePageAction(menuLayer: MenuLayer, back?: SwipeBack): 
         () => registerPageAction(backTo ? { kind: 'back', to: backTo, state: backState } : { kind: 'menu', layer: menuLayer }),
         [registerPageAction, menuLayer, backTo, backState]
     )
+}
+
+/**
+ * Runs `action` when a finger swipes in from the right edge of the page (below
+ * isNarrow). Pass nothing to leave the right edge alone.
+ */
+export function useRightEdgeSwipe(action?: () => void): void {
+    const { registerRightEdgeAction } = useEdgeSwipe()
+    useEffect(() => (action ? registerRightEdgeAction(action) : undefined), [registerRightEdgeAction, action])
 }

@@ -43,9 +43,9 @@ describe('searchErrorFrom', () => {
 
 describe('search setup', () => {
     test('points at the Settings page for the missing setting', () => {
-        expect(searchSetupPath('EMBEDDING_KEY_MISSING')).toBe('/settings/ai/embedding-keys')
-        expect(searchSetupPath('VECTOR_DB_NOT_CONFIGURED')).toBe('/settings/ai/vector-db')
-        expect(searchSetupPath(undefined)).toBe('/settings/ai/vector-db')
+        expect(searchSetupPath('EMBEDDING_KEY_MISSING')).toBe('/settings/byok/embedding-keys')
+        expect(searchSetupPath('VECTOR_DB_NOT_CONFIGURED')).toBe('/settings/byok/vector-db')
+        expect(searchSetupPath(undefined)).toBe('/settings/byok/vector-db')
     })
 
     test('picks the message for the missing setting', () => {

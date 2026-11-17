@@ -15,11 +15,20 @@ struct UsageByDim: Codable, Equatable, Identifiable {
     var id: String { vendor + "/" + (model ?? "") }
 }
 
+/// One UTC day's totals; days with no usage are left out.
+struct UsageByDay: Codable, Equatable {
+    var date: String
+    var costUsd: Double
+    var requestCount: Int
+}
+
 /// Totals for the LLM and embedding pages.
 struct LlmUsageSummary: Codable, Equatable {
     var totalCostUsd: Double
     var byVendor: [UsageByDim]
     var byModel: [UsageByDim]
+    /// Absent from servers older than the per-day series.
+    var byDay: [UsageByDay]?
 }
 
 /// Web Search totals: priced from an admin rate card, never a real vendor bill.

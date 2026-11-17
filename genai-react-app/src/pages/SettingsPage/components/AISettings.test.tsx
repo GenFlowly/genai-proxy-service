@@ -78,12 +78,25 @@ describe('AISettings', () => {
         mockUseAuth.mockReturnValue(authValue());
     });
 
-    test('says the priority 1 provider also runs titles and learned facts', () => {
+    test('explains priority in the knowledge cards, not in the page body', () => {
         render(withQueryClient(<AISettings />));
 
-        expect(screen.getByTestId('ai-settings-primary-note')).toHaveTextContent(
-            'Your priority 1 provider also writes chat titles and learns facts about you'
-        );
+        expect(screen.getByRole('heading', { level: 1, name: 'LLM API Keys' })).toBeInTheDocument();
+        expect(screen.getByText('What priority means')).toBeInTheDocument();
+        expect(screen.getByText(/Chat titles and memory use your main provider \(priority 1\)/)).toBeInTheDocument();
+        expect(screen.queryByTestId('ai-settings-primary-note')).not.toBeInTheDocument();
+    });
+
+    test('the header counts the keys that are set', () => {
+        mockUseAuth.mockReturnValue(authValue({
+            aiVendorAPIKeyStatusList: [
+                { aiVendor: AIVendor.OPENAI, isAPIKeyValid: true, status: APIKeyStatus.VALID },
+                { aiVendor: AIVendor.CLAUDE, isAPIKeyValid: true, status: APIKeyStatus.VALID },
+            ],
+        }));
+        render(withQueryClient(<AISettings />));
+
+        expect(screen.getByText('2 set')).toBeInTheDocument();
     });
 
     test('hides vendors without keys behind the add-vendor dropdown', async () => {

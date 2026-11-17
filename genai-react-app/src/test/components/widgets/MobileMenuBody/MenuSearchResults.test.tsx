@@ -34,7 +34,7 @@ const renderResults = (onSelect = jest.fn(), onLeave = jest.fn()) => {
                         path="/chat"
                         element={<MenuSearchResults query="tax" types={['conversation']} untitledLabel="Untitled" onSelect={onSelect} onLeave={onLeave} />}
                     />
-                    <Route path="/settings/ai/:section" element={<p>Settings page</p>} />
+                    <Route path="/settings/byok/:section" element={<p>Settings page</p>} />
                 </Routes>
             </MemoryRouter>
         </QueryClientProvider>

@@ -1,8 +1,9 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { WebSearchUsageSettings } from './WebSearchUsageSettings'
 import { useAuth } from '../../../../context/AuthContext'
 import { getWebSearchUsage } from '../../../../services/getUsageService'
+import { renderSettingsPage } from '../../settingsTestUtils'
 
 jest.mock('../../../../context/AuthContext')
 jest.mock('../../../../services/getUsageService')
@@ -11,55 +12,40 @@ const mockUseAuth = useAuth as jest.Mock
 const mockGetWebSearchUsage = getWebSearchUsage as jest.Mock
 
 describe('WebSearchUsageSettings', () => {
-    const mockGetAccessTokenSilently = jest.fn()
+    const getAccessTokenSilently = jest.fn()
 
     beforeEach(() => {
         jest.clearAllMocks()
-        mockGetAccessTokenSilently.mockResolvedValue('test-token')
-        mockUseAuth.mockReturnValue({
-            isAuthenticated: true,
-            getAccessTokenSilently: mockGetAccessTokenSilently,
-        })
+        getAccessTokenSilently.mockResolvedValue('test-token')
+        mockUseAuth.mockReturnValue({ isAuthenticated: true, getAccessTokenSilently })
     })
 
-    test('renders the date picker and a "not tracked yet" state when the endpoint 404s', async () => {
+    test('shows "Not tracked yet" with a link to the search limit when the route is not live', async () => {
         mockGetWebSearchUsage.mockResolvedValue(null)
+        renderSettingsPage(<WebSearchUsageSettings />)
 
-        render(<WebSearchUsageSettings />)
-
-        expect(screen.getByTestId('web-search-usage-date-range')).toBeInTheDocument()
-        await waitFor(() =>
-            expect(screen.getByTestId('web-search-usage-not-tracked-yet')).toBeInTheDocument()
-        )
+        const card = await screen.findByTestId('web-search-usage-not-tracked-yet')
+        expect(within(card).getByRole('link', { name: 'Change search limit' })).toHaveAttribute('href', '/settings/byok/web-search')
     })
 
-    test('also shows "not tracked yet" if the fetch throws, instead of an error state', async () => {
+    test('also shows "Not tracked yet" if the fetch throws', async () => {
         mockGetWebSearchUsage.mockRejectedValue(new Error('boom'))
+        renderSettingsPage(<WebSearchUsageSettings />)
 
-        render(<WebSearchUsageSettings />)
-
-        await waitFor(() =>
-            expect(screen.getByTestId('web-search-usage-not-tracked-yet')).toBeInTheDocument()
-        )
+        expect(await screen.findByTestId('web-search-usage-not-tracked-yet')).toBeInTheDocument()
     })
 
-    test('renders totals, the search-depth breakdown, and the estimate disclaimer once the backend returns real usage', async () => {
+    test('lists credits and the estimated cost per search depth, with a total', async () => {
         mockGetWebSearchUsage.mockResolvedValue({
-            totalCostUsd: 0.75,
+            totalCostUsd: 0.12,
             isEstimate: true,
-            breakdown: [
-                { key: 'basic', count: 50, costUsd: 0.5 },
-                { key: 'advanced', count: 5, costUsd: 0.25 },
-            ],
+            breakdown: [{ key: 'basic', count: 10, costUsd: 0.08 }, { key: 'advanced', count: 4, costUsd: 0.04 }],
         })
+        renderSettingsPage(<WebSearchUsageSettings />)
 
-        render(<WebSearchUsageSettings />)
-
-        await waitFor(() => expect(screen.getByTestId('web-search-usage-total-cost')).toBeInTheDocument())
-        expect(screen.queryByTestId('web-search-usage-not-tracked-yet')).not.toBeInTheDocument()
-        expect(screen.getByTestId('web-search-usage-estimate-banner')).toBeInTheDocument()
-        expect(screen.getByTestId('web-search-usage-total-cost')).toHaveTextContent('$0.7500')
-        expect(screen.getByText('basic')).toBeInTheDocument()
-        expect(screen.getByText('advanced')).toBeInTheDocument()
+        const table = await screen.findByTestId('web-search-usage-table')
+        expect(within(table).getByText('basic')).toBeInTheDocument()
+        expect(within(table).getByText('Est. cost')).toBeInTheDocument()
+        expect(within(table).getByText('$0.12')).toBeInTheDocument()
     })
 })

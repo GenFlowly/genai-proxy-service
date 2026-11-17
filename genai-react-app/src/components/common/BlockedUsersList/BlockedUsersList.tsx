@@ -17,7 +17,10 @@ function initials(user: BlockedUser): string {
     return source.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
 }
 
-/** Who the signed-in user has blocked, with Unblock. */
+/**
+ * Who the signed-in user has blocked, one row each with Unblock. Sits flush
+ * inside a settings card; what blocking means is explained by the page.
+ */
 export function BlockedUsersList(): React.ReactElement {
     const { t } = useTranslation()
     const { customerId, isAuthenticated, getAccessTokenSilently } = useAuth()
@@ -51,7 +54,6 @@ export function BlockedUsersList(): React.ReactElement {
 
     return (
         <div className={styles.container} data-testid="blocked-users">
-            <p className={styles.note}>{t('moderation.blockedUsers.intro')}</p>
             {isPending && isAuthenticated && <p className={styles.note}>{t('moderation.blockedUsers.loading')}</p>}
             {isError && (
                 <div className={styles.failed}>
@@ -83,7 +85,6 @@ export function BlockedUsersList(): React.ReactElement {
                 </ul>
             )}
             {message && <p className={message.failed ? styles.error : styles.note} role="status">{message.text}</p>}
-            {users && users.length > 0 && <p className={styles.note}>{t('moderation.blockedUsers.note')}</p>}
         </div>
     )
 }

@@ -12,6 +12,9 @@ struct InputTextWithHint: View {
     var disabled = false
     var keyboard: UIKeyboardType = .default
     var autofocus = false
+    /// The phone settings layout: the label above the value in a 10pt-cornered box.
+    var stacked = false
+    var readOnly = false
 
     @State private var focused = false
 
@@ -23,16 +26,41 @@ struct InputTextWithHint: View {
     #endif
 
     var body: some View {
-        HStack(spacing: 0) {
-            if let hint { HintPrefix(text: hint) }
+        Group {
+            if stacked {
+                VStack(spacing: 0) {
+                    if let hint { StackedHint(text: hint) }
+                    field.padding(.horizontal, 12).frame(height: 44)
+                }
+                .stackedFieldContainer(focused: focused, readOnly: readOnly)
+            } else {
+                HStack(spacing: 0) {
+                    if let hint { HintPrefix(text: hint) }
+                    field
+                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .inputWithHintContainer(focused: focused)
+            }
+        }
+        .onAppear { if autofocus, !Self.suppressAutofocus { focused = true } }
+    }
+
+    @ViewBuilder
+    private var field: some View {
+        if readOnly {
+            Text(text)
+                .modifier(WebFontModifier(uiFont: DSFont.uiArial(16)))
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(hint ?? placeholder)
+                .accessibilityValue(text)
+        } else {
             WebInputField(text: $text, isFocused: $focused, font: DSFont.uiArial(16), isSecure: isSecure, disabled: disabled, keyboard: keyboard)
                 .accessibilityLabel(hint ?? placeholder)
                 .inputPlaceholder(placeholder, isEmpty: text.isEmpty, font: DSFont.uiArial(16))
-                .padding(.horizontal, 16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .inputWithHintContainer(focused: focused)
-        .onAppear { if autofocus, !Self.suppressAutofocus { focused = true } }
     }
 }
 
@@ -227,7 +255,33 @@ private struct HintPrefix: View {
     }
 }
 
+/// mixins.scss `input-with-hint-stacked`: the label in a 12pt bar above the value.
+private struct StackedHint: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .webText(12, 500)
+            .foregroundStyle(AppTheme.textSecondary)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.backgroundTertiary)
+            .overlay(alignment: .bottom) { Rectangle().fill(AppTheme.borderLight).frame(height: 1) }
+            .padding(.bottom, 1)
+    }
+}
+
 private extension View {
+    /// `.readOnly`: the tertiary fill.
+    func stackedFieldContainer(focused: Bool, readOnly: Bool = false) -> some View {
+        padding(1)
+            .background(readOnly ? AppTheme.backgroundTertiary : AppTheme.backgroundSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(focused ? AppTheme.primary : AppTheme.borderLight, lineWidth: 1))
+    }
+
     func inputWithHintContainer(focused: Bool) -> some View {
         padding(1)
             .frame(height: 42)
@@ -250,6 +304,7 @@ struct InputSelectWithHint: View {
     var placeholder: String?
     let value: String
     let options: [Option]
+    var stacked = false
     let onChange: (String) -> Void
 
     /// An unset value shows the placeholder option. A value none of the options carry falls
@@ -261,8 +316,22 @@ struct InputSelectWithHint: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            HintPrefix(text: hint)
+        if stacked {
+            VStack(spacing: 0) {
+                StackedHint(text: hint)
+                menu(horizontalPadding: 12).frame(height: 44)
+            }
+            .stackedFieldContainer(focused: false)
+        } else {
+            HStack(spacing: 0) {
+                HintPrefix(text: hint)
+                menu(horizontalPadding: 16)
+            }
+            .inputWithHintContainer(focused: false)
+        }
+    }
+
+    private func menu(horizontalPadding: CGFloat) -> some View {
             Menu {
                 ForEach(options) { option in
                     Button {
@@ -276,13 +345,11 @@ struct InputSelectWithHint: View {
                     }
                 }
             } label: {
-                NativeSelectLabel(text: shown, font: DSFont.uiArial(16), horizontalPadding: 16)
+                NativeSelectLabel(text: shown, font: DSFont.uiArial(16), horizontalPadding: horizontalPadding)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
             }
             .accessibilityLabel(hint)
-        }
-        .inputWithHintContainer(focused: false)
     }
 }
 
@@ -590,84 +657,82 @@ struct WebRadio: View {
 
 enum CredentialPillKind { case ok, unset, neutral }
 
+/// CredentialStatusPill delegates to StatusPill, as in the library.
 struct CredentialStatusPill: View {
     let kind: CredentialPillKind
     let text: String
 
-    private var foreground: Color {
-        switch kind {
-        case .ok: return AppTheme.success
-        case .unset: return AppTheme.textMuted
-        case .neutral: return AppTheme.textPrimary
-        }
-    }
-
     var body: some View {
-        Text(text)
-            .webText(12, 600)
-            .foregroundStyle(foreground)
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.horizontal, 10.6)
-            .padding(.vertical, 4.2)
-            .overlay(Capsule().strokeBorder(kind == .ok ? AppTheme.success : AppTheme.borderLight, lineWidth: 1))
+        StatusPill(kind: kind == .ok ? .ok : kind == .unset ? .unset : .neutral, text: text)
     }
 }
 
 enum WebMessageKind { case success, error }
 
+/// CredentialCard.tsx: a SettingsCard with the credential's name and status pills in the
+/// header, then its form, then an optional success or error line.
 struct CredentialCard<Label: View, Pills: View, Content: View>: View {
     @ViewBuilder var label: Label
     @ViewBuilder var pills: Pills
+    var hint: String?
     var message: String?
     var messageKind: WebMessageKind?
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    label.fixedSize()
-                    Spacer(minLength: 0)
-                    HStack(spacing: 8) { pills }
-                }
-                VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                WrapRow(spacing: 8, lineSpacing: 4) {
                     label
-                    HStack(spacing: 8) { pills }
+                    WrapRow(spacing: 6, lineSpacing: 6) { pills }
+                }
+                if let hint {
+                    Text(hint)
+                        .webText(12, lineHeight: 16.8)
+                        .foregroundStyle(AppTheme.textMuted)
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 35, alignment: .leading)
+            .overlay(alignment: .bottom) { Rectangle().fill(AppTheme.sidebarHairline).frame(height: 1).offset(y: 1) }
+            .padding(.bottom, 1)
 
-            content
-
-            if let message, !message.isEmpty {
-                Text(message)
-                    .webText(13.6)
-                    .foregroundStyle(messageKind == .error ? AppTheme.error : AppTheme.success)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 10) {
+                content
+                if let message, !message.isEmpty {
+                    Text(message)
+                        .webText(13.6)
+                        .foregroundStyle(messageKind == .error ? AppTheme.error : AppTheme.success)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(21)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(AppTheme.borderLight, lineWidth: 1))
+        .sidebarWidgetCard()
     }
 }
 
 extension CredentialCard where Label == CredentialCardLabel {
-    init(title: String, weight: CGFloat = 600, message: String? = nil, messageKind: WebMessageKind? = nil, @ViewBuilder pills: () -> Pills, @ViewBuilder content: () -> Content) {
+    init(title: String, weight: CGFloat = 500, hint: String? = nil, message: String? = nil, messageKind: WebMessageKind? = nil, @ViewBuilder pills: () -> Pills, @ViewBuilder content: () -> Content) {
         self.label = CredentialCardLabel(text: title, weight: weight)
         self.pills = pills()
+        self.hint = hint
         self.message = message
         self.messageKind = messageKind
         self.content = content()
     }
 }
 
+/// The card title (SettingsCard `.title`): 13/500 in the secondary text color.
 struct CredentialCardLabel: View {
     let text: String
-    let weight: CGFloat
+    var weight: CGFloat = 500
 
     var body: some View {
-        Text(text).webText(18, weight).foregroundStyle(AppTheme.textPrimary)
+        Text(text).webText(13, 500, lineHeight: 16.9).foregroundStyle(AppTheme.textSecondary)
     }
 }
 

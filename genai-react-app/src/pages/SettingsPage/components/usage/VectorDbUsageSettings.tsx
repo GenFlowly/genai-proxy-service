@@ -1,110 +1,53 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { DateRangePicker, DateRange } from '@genflowly/component-library'
-import { useAuth } from '../../../../context/AuthContext'
-import { getVectorDbUsage, VectorDbUsageSummary } from '../../../../services/getUsageService'
-import { defaultUsageRange, localToday, toUtcUsageRange, usageDateRangePresets } from './usageDateRange'
-import { formatCount } from './usageFormat'
+import { DataTable, SettingsCard, StatusPill, formatCompactCount } from '@genflowly/component-library'
+import { getVectorDbUsage, VectorDbUsageBreakdownRow } from '../../../../services/getUsageService'
+import { SettingsFrame } from '../SettingsFrame'
+import { UsageRangePanel, useUsageRange } from './UsageRangePanel'
 import { UsageNotTrackedYet } from './UsageNotTrackedYet'
-import styles from './VectorDbUsageSettings.module.scss'
+import { useUsageSummary } from './useUsageSummary'
+import styles from './UsageCostView.module.scss'
 
 /**
- * Cost and Usage > Vector DB. No cost figure is ever shown here — Zilliz
- * bills by data size/compute units on the customer's own cluster, not per
- * operation call, so an op count can't be converted into a meaningful
- * dollar estimate. This page shows raw search/query/insert/upsert/delete
- * counts only.
+ * Cost and Usage › Vector DB: how often the customer's database saves,
+ * searches and deletes. Counts only, never a cost: the database is billed
+ * by size, not per call. Until the route ships it shows "Not tracked yet".
  */
 export function VectorDbUsageSettings(): React.ReactElement {
     const { t } = useTranslation()
-    const { isAuthenticated, getAccessTokenSilently } = useAuth()
-
-    const [range, setRange] = useState<DateRange>(defaultUsageRange)
-    const [summary, setSummary] = useState<VectorDbUsageSummary | null>(null)
-    const [loading, setLoading] = useState(false)
-
-    const load = useCallback(async (nextRange: DateRange) => {
-        if (!isAuthenticated) return
-        setLoading(true)
-        try {
-            const token = await getAccessTokenSilently()
-            const result = await getVectorDbUsage(token, toUtcUsageRange(nextRange))
-            setSummary(result)
-        } catch (err) {
-            console.error('VectorDbUsageSettings: failed to fetch usage', err)
-            setSummary(null)
-        } finally {
-            setLoading(false)
-        }
-    }, [isAuthenticated, getAccessTokenSilently])
-
-    useEffect(() => {
-        void load(range)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [range, load])
-
-    const hasRows = !!summary && summary.breakdown.length > 0
+    const { range, setRange, label } = useUsageRange()
+    const { summary, loading } = useUsageSummary(getVectorDbUsage, range, 'VectorDbUsageSettings')
+    const statusText = !loading && !summary ? t('settingsPage.usageCommon.notTrackedYetTitle') : label
+    const knowledge = [
+        { title: t('settingsPage.vectorDbUsageSettings.countedTitle'), text: t('settingsPage.vectorDbUsageSettings.countedText') },
+        { title: t('settingsPage.vectorDbUsageSettings.noCostTitle'), text: t('settingsPage.vectorDbUsageSettings.noCostText') },
+    ]
 
     return (
-        <div className={styles.container}>
-            <DateRangePicker
-                value={range}
-                onChange={setRange}
-                presets={usageDateRangePresets(t)}
-                maxDate={localToday()}
-                fromLabel={t('settingsPage.usageCommon.dateRangeFrom')}
-                toLabel={t('settingsPage.usageCommon.dateRangeTo')}
-                presetsAriaLabel={t('settingsPage.usageCommon.dateRangePresetsLabel')}
-                data-testid="vector-db-usage-date-range"
-            />
-
-            {loading && (
-                <p className={styles.statusText} data-testid="vector-db-usage-loading">
-                    {t('settingsPage.usageCommon.loading')}
-                </p>
+        <SettingsFrame page="usage-vector-db" knowledge={knowledge} statusText={statusText} status={<StatusPill>{statusText}</StatusPill>}>
+            <UsageRangePanel range={range} onChange={setRange} data-testid="vector-db-usage-date-range" />
+            {loading && <p className={styles.statusText} data-testid="vector-db-usage-loading">{t('settingsPage.usageCommon.loading')}</p>}
+            {!loading && !summary && (
+                <UsageNotTrackedYet
+                    link={{ to: '/settings/byok/vector-db', label: t('settingsPage.nav.vectorDb') }}
+                    data-testid="vector-db-usage-not-tracked-yet"
+                />
             )}
-
-            {!loading && !summary && <UsageNotTrackedYet data-testid="vector-db-usage-not-tracked-yet" />}
-
             {!loading && summary && (
-                <>
-                    <p className={styles.noCostNote} data-testid="vector-db-usage-no-cost-note">
-                        {t('settingsPage.vectorDbUsageSettings.noCostNote')}
-                    </p>
-
-                    {hasRows ? (
-                        <div className={styles.breakdownBlock}>
-                            <h3 className={styles.breakdownTitle}>
-                                {t('settingsPage.vectorDbUsageSettings.byOperation')}
-                            </h3>
-                            <div className={styles.tableScroll}>
-                            <table className={styles.table}>
-                                <thead>
-                                    <tr>
-                                        <th>{t('settingsPage.vectorDbUsageSettings.operation')}</th>
-                                        <th className={styles.numeric}>
-                                            {t('settingsPage.vectorDbUsageSettings.operationCount')}
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {summary.breakdown.map(row => (
-                                        <tr key={row.opType}>
-                                            <td>{row.opType}</td>
-                                            <td className={styles.numeric}>{formatCount(row.count)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            </div>
-                        </div>
-                    ) : (
-                        <p className={styles.statusText} data-testid="vector-db-usage-empty">
-                            {t('settingsPage.vectorDbUsageSettings.empty')}
-                        </p>
-                    )}
-                </>
+                <SettingsCard title={t('settingsPage.vectorDbUsageSettings.byOperation')} flush>
+                    <DataTable<VectorDbUsageBreakdownRow>
+                        columns={[
+                            { key: 'op', header: t('settingsPage.vectorDbUsageSettings.operation'), render: row => row.opType },
+                            { key: 'count', header: t('settingsPage.vectorDbUsageSettings.operationCount'), numeric: true, render: row => formatCompactCount(row.count) },
+                        ]}
+                        rows={summary.breakdown}
+                        rowKey={row => row.opType}
+                        caption={t('settingsPage.vectorDbUsageSettings.byOperation')}
+                        emptyText={t('settingsPage.usageCommon.noUsage')}
+                        data-testid="vector-db-usage-table"
+                    />
+                </SettingsCard>
             )}
-        </div>
+        </SettingsFrame>
     )
 }

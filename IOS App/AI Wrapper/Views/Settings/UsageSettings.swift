@@ -1,29 +1,6 @@
 import SwiftUI
 
-// MARK: - Formatting (usageFormat.ts)
-
-enum UsageFormat {
-    /// Costs are tracked to fractions of a cent: 4 decimals under $1, 2 from $1 up.
-    static func usd(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        let digits = abs(value) < 1 ? 4 : 2
-        formatter.minimumFractionDigits = digits
-        formatter.maximumFractionDigits = digits
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(value)"
-    }
-
-    static func count(_ value: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US")
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: value)) ?? String(value)
-    }
-}
-
-// MARK: - DateRangePicker (component library)
+// MARK: - Date range (usageDateRange.ts)
 
 /// Local days on the device, as `yyyy-MM-dd`. Usage is requested with `utcDays`.
 struct UsageDateRange: Equatable {
@@ -78,43 +55,63 @@ struct UsageDateRange: Equatable {
     }
 }
 
-struct DateRangePicker: View {
+
+
+extension UsageDateRange {
+    static let presets: [(id: String, labelKey: String, days: Int)] = [
+        ("7d", "settingsPage.usageCommon.dateRangeLast7Days", 7),
+        ("30d", "settingsPage.usageCommon.dateRangeLast30Days", 30),
+        ("90d", "settingsPage.usageCommon.dateRangeLast90Days", 90)
+    ]
+
+    /// usageRangeLabel: "Last 30 days" for a preset ending today, else the two local dates.
+    var label: String {
+        if let preset = Self.presets.first(where: { Self.trailing(days: $0.days) == self }) { return L(preset.labelKey) }
+        let shown = { (iso: String) in Self.date(iso).map { $0.formatted(date: .numeric, time: .omitted) } ?? iso }
+        return "\(shown(from)) – \(shown(to))"
+    }
+}
+
+// MARK: - DateRangePicker variant="toolbar" at phone width (UsageRangePanel.tsx)
+
+/// The date range every usage page starts with, in a headerless card: a segmented control of
+/// presets, then the From and To fields, each with its label in a bar above the date.
+struct UsageRangePanel: View {
     @Binding var range: UsageDateRange
 
-    private var presets: [(id: String, label: String, days: Int)] {
-        [
-            ("7d", L("settingsPage.usageCommon.dateRangeLast7Days"), 7),
-            ("30d", L("settingsPage.usageCommon.dateRangeLast30Days"), 30),
-            ("90d", L("settingsPage.usageCommon.dateRangeLast90Days"), 90)
-        ]
-    }
-
-    /// A preset is active only while the value is exactly the range it computes today.
-    private var activePreset: String? {
-        presets.first { UsageDateRange.trailing(days: $0.days) == range }?.id
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            DateRangePresets(
-                options: presets.map { .init(id: $0.id, label: $0.label) },
-                selected: activePreset,
-                onSelect: { id in
-                    if let preset = presets.first(where: { $0.id == id }) {
-                        range = .trailing(days: preset.days)
+        SettingsCard {
+            VStack(spacing: 10) {
+                HStack(spacing: 2) {
+                    ForEach(UsageDateRange.presets, id: \.id) { preset in
+                        let isOn = UsageDateRange.trailing(days: preset.days) == range
+                        Button { range = .trailing(days: preset.days) } label: {
+                            Text(L(preset.labelKey))
+                                .webText(12.5, 500)
+                                .foregroundStyle(isOn ? AppTheme.textPrimary : AppTheme.textMuted)
+                                .lineLimit(1)
+                                .padding(.horizontal, 6)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 28)
+                                .background(isOn ? AppTheme.backgroundSecondary : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+                                .shadow(color: isOn ? .black.opacity(0.08) : .clear, radius: 1, y: 1)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(isOn ? .isSelected : [])
+                        .accessibilityIdentifier("usage-date-range-preset-\(preset.id)")
                     }
                 }
-            )
-            HStack(alignment: .bottom, spacing: 8) {
-                WebDateInput(label: L("settingsPage.usageCommon.dateRangeFrom"), value: range.from, upperBound: range.to) { next in
-                    // Keep the range coherent: "from" can never land after "to".
+                .padding(3)
+                .background(AppTheme.backgroundTertiary, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(AppTheme.sidebarHairline, lineWidth: 1))
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(L("settingsPage.usageCommon.dateRangePresetsLabel"))
+
+                UsageDateField(label: L("settingsPage.usageCommon.dateRangeFrom"), value: range.from, upperBound: range.to) { next in
                     range = UsageDateRange(from: next, to: next > range.to ? next : range.to)
                 }
-                Text("–")
-                    .webText(16)
-                    .foregroundStyle(AppTheme.textMuted)
-                    .padding(.bottom, 9.6)
-                WebDateInput(label: L("settingsPage.usageCommon.dateRangeTo"), value: range.to, lowerBound: range.from, upperBound: UsageDateRange.iso(Date())) { next in
+                UsageDateField(label: L("settingsPage.usageCommon.dateRangeTo"), value: range.to, lowerBound: range.from, upperBound: UsageDateRange.iso(Date())) { next in
                     range = UsageDateRange(from: next < range.from ? next : range.from, to: next)
                 }
             }
@@ -122,47 +119,9 @@ struct DateRangePicker: View {
     }
 }
 
-/// `.presets` in DateRangePicker.module.scss: one row of equal pills at any phone width. Wrapped,
-/// the last pill gets a row of its own, where corners meant for a single row look broken.
-private struct DateRangePresets: View {
-    let options: [RadioButtonGroup.Option]
-    let selected: String?
-    let onSelect: (String) -> Void
-
-    @Environment(\.windowWidth) private var windowWidth
-
-    /// `clamp(0.8125rem, 4.4vw, 1rem)`
-    private var fontSize: CGFloat { min(max(13, windowWidth * 0.044), 16) }
-
-    var body: some View {
-        HStack(spacing: -1) {
-            ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
-                let isActive = selected == option.id
-                let shape = RadioButtonGroup.shape(index: index, count: options.count)
-                Button { onSelect(option.id) } label: {
-                    Text(option.label)
-                        .webText(arial: fontSize, lineHeight: fontSize * 1.5)
-                        .foregroundStyle(isActive ? Color.white : AppTheme.textPrimary)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 9)
-                        .frame(maxWidth: .infinity)
-                        .background(isActive ? AppTheme.primaryPressed : Color.clear)
-                        .clipShape(shape)
-                        .overlay(shape.strokeBorder(isActive ? AppTheme.primary : AppTheme.border, lineWidth: 1))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .zIndex(isActive ? 2 : 0)
-                .accessibilityAddTraits(isActive ? .isSelected : [])
-            }
-        }
-    }
-}
-
-/// `<input type="date">`: the value + calendar glyph, opening the system calendar.
-private struct WebDateInput: View {
+/// `.prefixedField` stacked: the label in a 28pt bar, the date (as `<input type="date">` draws
+/// it, "MM/DD/YYYY" with the calendar glyph) in a 44pt row; tapping opens the system calendar.
+private struct UsageDateField: View {
     let label: String
     let value: String
     var lowerBound: String?
@@ -179,17 +138,8 @@ private struct WebDateInput: View {
         return formatter
     }()
 
-    /// `MM/dd/yyyy` split into numbers and separators.
-    private var segments: [String] {
-        let shown = UsageDateRange.date(value).map { Self.display.string(from: $0) } ?? value
-        return shown.split(separator: "/").map(String.init).flatMap { ["/", $0] }.dropFirst().map { $0 }
-    }
-
     private var selection: Binding<Date> {
-        Binding(
-            get: { UsageDateRange.date(value) ?? Date() },
-            set: { onChange(UsageDateRange.iso($0)) }
-        )
+        Binding(get: { UsageDateRange.date(value) ?? Date() }, set: { onChange(UsageDateRange.iso($0)) })
     }
 
     private var bounds: ClosedRange<Date> {
@@ -199,45 +149,359 @@ private struct WebDateInput: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .webText(12.8)
-                .foregroundStyle(AppTheme.textMuted)
-            Button { isPickerOpen = true } label: {
-                // Chrome's date fields carry 1pt of padding each side of every number.
-                HStack(spacing: 1) {
-                    ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                        Text(segment)
-                            .webText(mono: 14.4)
-                            .foregroundStyle(AppTheme.textPrimary)
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
+        Button { isPickerOpen = true } label: {
+            VStack(spacing: 0) {
+                Text(label)
+                    .webText(12, 500)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, minHeight: 27, alignment: .leading)
+                    .background(AppTheme.backgroundTertiary)
+                    .overlay(alignment: .bottom) { Rectangle().fill(AppTheme.border).frame(height: 1).offset(y: 1) }
+                    .padding(.bottom, 1)
+                HStack(spacing: 0) {
+                    Text(UsageDateRange.date(value).map { Self.display.string(from: $0) } ?? value)
+                        .webText(15)
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    CalendarPickerIndicator()
+                        .fill(AppTheme.textPrimary, style: FillStyle(eoFill: true))
+                        .frame(width: 15, height: 15)
                 }
-                    .padding(.leading, 14)
-                    .frame(width: 137.4, height: 36.4, alignment: .leading)
-                    .overlay(alignment: .trailing) {
-                        CalendarPickerIndicator()
-                            .fill(AppTheme.textPrimary, style: FillStyle(eoFill: true))
-                            .frame(width: 14.4, height: 14.4)
-                            .padding(.trailing, 14.8)
-                    }
-                    .background(AppTheme.backgroundSecondary)
-                    .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
-                    .overlay(RoundedRectangle(cornerRadius: DSRadius.md).strokeBorder(AppTheme.border, lineWidth: 1))
-                    .contentShape(Rectangle())
+                .padding(.horizontal, 12)
+                .frame(height: 44)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(label)
-            .accessibilityValue(value)
-            .popover(isPresented: $isPickerOpen) {
-                DatePicker("", selection: selection, in: bounds, displayedComponents: .date)
-                    .labelsHidden()
-                    .datePickerStyle(.graphical)
-                    .frame(width: 320)
-                    .padding(8)
-                    .presentationCompactAdaptation(.popover)
+            .padding(1)
+            .background(AppTheme.backgroundSecondary)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(AppTheme.border, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
+        .popover(isPresented: $isPickerOpen) {
+            DatePicker("", selection: selection, in: bounds, displayedComponents: .date)
+                .labelsHidden()
+                .datePickerStyle(.graphical)
+                .frame(width: 320)
+                .padding(8)
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+// MARK: - Shared pieces
+
+/// Loads one usage summary for the picked local range (sent as the UTC days it touches) and
+/// again whenever the range changes. A nil summary means the category isn't tracked yet.
+private struct UsageLoadState<Summary> {
+    var summary: Summary?
+    var loading = true
+    var failed = false
+}
+
+private struct UsageStatusLine: View {
+    let text: String
+    var isError = false
+
+    var body: some View {
+        Text(text)
+            .webText(14)
+            .foregroundStyle(AppTheme.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// UsageNotTrackedYet.tsx: a card saying this isn't tracked yet, with a related page.
+private struct UsageNotTrackedYet: View {
+    var link: (label: String, action: () -> Void)?
+
+    var body: some View {
+        SettingsCard {
+            VStack(spacing: 6) {
+                Text(L("settingsPage.usageCommon.notTrackedYetTitle"))
+                    .webText(15, 600)
+                    .foregroundStyle(AppTheme.textPrimary)
+                Text(L("settingsPage.usageCommon.notTrackedYetBody"))
+                    .webText(13)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .multilineTextAlignment(.center)
+                if let link {
+                    SettingsLink(text: link.label, action: link.action)
+                        .padding(.top, 6)
+                }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 24)
+            .frame(maxWidth: .infinity)
+        }
+        .accessibilityIdentifier("usage-not-tracked-yet")
+    }
+}
+
+private enum UsageChart {
+    private static let utc = TimeZone(identifier: "UTC") ?? .gmt
+
+    private static func date(_ iso: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = utc
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: iso)
+    }
+
+    private static func format(_ iso: String, _ pattern: String) -> String {
+        guard let day = date(iso) else { return iso }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.timeZone = utc
+        formatter.setLocalizedDateFormatFromTemplate(pattern)
+        return formatter.string(from: day)
+    }
+
+    /// Days outside the picked range (a local range touches one more UTC day) fold into the
+    /// nearest bar so the chart adds up to the tiles.
+    static func points(_ byDay: [UsageByDay], range: UsageDateRange) -> (title: String, points: [BarChartPoint]) {
+        let clamped = byDay.map { day -> (date: String, value: Double, count: Int) in
+            let date = day.date < range.from ? range.from : day.date > range.to ? range.to : day.date
+            return (date, day.costUsd, day.requestCount)
+        }
+        let series = DailySeries.bucket(clamped, from: range.from, to: range.to)
+        let points = series.buckets.map { bucket in
+            BarChartPoint(
+                key: bucket.start,
+                value: bucket.value,
+                axisLabel: format(bucket.start, "MMMd"),
+                tooltipTitle: series.isWeekly ? "\(format(bucket.start, "MMMd")) – \(format(bucket.end, "MMMd"))" : format(bucket.start, "EEEMMMd"),
+                tooltipDetail: L("settingsPage.usageCommon.requestsCount", ["count": bucket.count, "formatted": SettingsFormat.compactCount(bucket.count)])
+            )
+        }
+        return (series.isWeekly ? L("settingsPage.usageCommon.costPerWeek") : L("settingsPage.usageCommon.costPerDay"), points)
+    }
+}
+
+// MARK: - LLM and Embedding usage (UsageCostView.tsx)
+
+/// Date range, headline tiles, cost per day (per week past 60 days), and by-vendor and by-model
+/// tables. Own-key customers see the cost as an estimate.
+private struct UsageCostView: View {
+    @EnvironmentObject var auth: AuthStore
+    @ObservedObject private var catalog = ProviderCatalog.shared
+    let knowledge: [KnowledgeItem]
+    let showCacheTokens: Bool
+    let identifier: String
+    let load: (String, UsageDateRange) async throws -> LlmUsageSummary?
+    var vendorName: ((String) -> String)?
+
+    @State private var range = UsageDateRange.trailing(days: 30)
+    @State private var state = UsageLoadState<LlmUsageSummary>()
+
+    var body: some View {
+        let costLabel = auth.hasOwnKeys ? L("settingsPage.usageCommon.estCost") : L("settingsPage.usageCommon.totalCost")
+        let notTracked = !state.loading && !state.failed && state.summary == nil
+        VStack(alignment: .leading, spacing: 12) {
+            UsageRangePanel(range: $range)
+            if state.loading {
+                UsageStatusLine(text: L("settingsPage.usageCommon.loading"))
+            } else if state.failed {
+                UsageStatusLine(text: L("settingsPage.usageCommon.error"), isError: true)
+                    .accessibilityIdentifier("\(identifier)-error")
+            } else if let summary = state.summary {
+                content(summary, costLabel: costLabel)
+            } else {
+                UsageNotTrackedYet()
+            }
+        }
+        .settingsPage(status: notTracked ? L("settingsPage.usageCommon.notTrackedYetTitle") : range.label, knowledge: knowledge)
+        .task(id: range.from + range.to) {
+            state.loading = true
+            state.failed = false
+            defer { state.loading = false }
+            do {
+                let token = try await auth.getAccessTokenSilently()
+                state.summary = try await load(token, range.utcDays())
+            } catch {
+                state.failed = !(error is CancellationError)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ summary: LlmUsageSummary, costLabel: String) -> some View {
+        let byVendor = summary.byVendor
+        let requests = byVendor.reduce(0) { $0 + $1.requestCount }
+        let tokens = byVendor.reduce(0) { $0 + ($1.totalTokens ?? 0) }
+        let cache = byVendor.reduce(0) { $0 + ($1.cacheReadTokens ?? 0) + ($1.cacheWriteTokens ?? 0) }
+        let chart = UsageChart.points(summary.byDay ?? [], range: range)
+        StatTileGrid(tiles: [
+            (costLabel, SettingsFormat.usd(summary.totalCostUsd), "\(identifier)-tile-cost"),
+            (L("settingsPage.usageCommon.requests"), SettingsFormat.compactCount(requests), "\(identifier)-tile-requests"),
+            (L("settingsPage.usageCommon.tokens"), SettingsFormat.compactCount(tokens), "\(identifier)-tile-tokens")
+        ] + (showCacheTokens ? [(L("settingsPage.usageCommon.cacheTokens"), SettingsFormat.compactCount(cache), "\(identifier)-tile-cache")] : []))
+        SettingsCard(title: chart.title) {
+            UsageBarChart(points: chart.points, formatValue: SettingsFormat.chartUsd, accessibilityTitle: chart.title)
+        }
+        SettingsCard(title: L("settingsPage.usageCommon.byVendor"), flush: true) {
+            table(byVendor, showModel: false, costLabel: costLabel)
+                .accessibilityIdentifier("\(identifier)-by-vendor")
+        }
+        SettingsCard(title: L("settingsPage.usageCommon.byModel"), flush: true) {
+            table(summary.byModel, showModel: true, costLabel: costLabel)
+                .accessibilityIdentifier("\(identifier)-by-model")
+        }
+    }
+
+    private func table(_ rows: [UsageByDim], showModel: Bool, costLabel: String) -> some View {
+        let name = vendorName ?? { catalog.displayName(for: $0) }
+        var columns = [SettingsTable.Column(title: L("settingsPage.usageCommon.vendor"))]
+        if showModel { columns.append(.init(title: L("settingsPage.usageCommon.model"))) }
+        columns += [
+            .init(title: costLabel, numeric: true),
+            .init(title: L("settingsPage.usageCommon.tokens"), numeric: true),
+            .init(title: L("settingsPage.usageCommon.requests"), numeric: true)
+        ]
+        return SettingsTable(
+            columns: columns,
+            rows: rows.map { row in
+                [name(row.vendor)] + (showModel ? [row.model ?? ""] : [])
+                    + [SettingsFormat.usd(row.costUsd), SettingsFormat.compactCount(row.totalTokens ?? 0), SettingsFormat.compactCount(row.requestCount)]
+            },
+            emptyText: L("settingsPage.usageCommon.noUsage")
+        )
+    }
+}
+
+// MARK: - Pages
+
+/// Cost and Usage › LLM Models.
+struct LlmUsageSettingsView: View {
+    @EnvironmentObject var auth: AuthStore
+
+    var body: some View {
+        UsageCostView(
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.usageCommon.countedTitle"), text: L("settingsPage.llmUsageSettings.countedText")),
+                KnowledgeItem(title: L("settingsPage.usageCommon.costTitle"), text: auth.hasOwnKeys ? L("settingsPage.usageCommon.costOwnKeys") : L("settingsPage.usageCommon.costAppKeys"))
+            ],
+            showCacheTokens: true,
+            identifier: "llm-usage",
+            load: { token, range in try await UsageService.getLlmUsage(token: token, from: range.from, to: range.to) }
+        )
+    }
+}
+
+/// Cost and Usage › Embedding Models.
+struct EmbeddingUsageSettingsView: View {
+    @EnvironmentObject var auth: AuthStore
+
+    var body: some View {
+        UsageCostView(
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.usageCommon.countedTitle"), text: L("settingsPage.embeddingUsageSettings.countedText")),
+                KnowledgeItem(title: L("settingsPage.usageCommon.costTitle"), text: auth.hasOwnKeys ? L("settingsPage.usageCommon.costOwnKeys") : L("settingsPage.usageCommon.costAppKeys")),
+                KnowledgeItem(title: L("settingsPage.embeddingUsageSettings.zeroTitle"), text: L("settingsPage.embeddingUsageSettings.zeroText"))
+            ],
+            showCacheTokens: false,
+            identifier: "embedding-usage",
+            load: { token, range in try await UsageService.getEmbeddingUsage(token: token, from: range.from, to: range.to) },
+            vendorName: { $0.uppercased() == EmbeddingVendor.voyage ? EmbeddingModelChoice.vendorLabel(EmbeddingVendor.voyage) : ProviderCatalog.shared.displayName(for: $0) }
+        )
+    }
+}
+
+/// Cost and Usage › Vector DB: how often the database saves, searches and deletes. Counts only,
+/// never a cost. Any failure reads as "not tracked yet".
+struct VectorDbUsageSettingsView: View {
+    @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var router: AppRouter
+    @State private var range = UsageDateRange.trailing(days: 30)
+    @State private var state = UsageLoadState<VectorDbUsageSummary>()
+
+    var body: some View {
+        let notTracked = !state.loading && state.summary == nil
+        VStack(alignment: .leading, spacing: 12) {
+            UsageRangePanel(range: $range)
+            if state.loading {
+                UsageStatusLine(text: L("settingsPage.usageCommon.loading"))
+            } else if let summary = state.summary {
+                SettingsCard(title: L("settingsPage.vectorDbUsageSettings.byOperation"), flush: true) {
+                    SettingsTable(
+                        columns: [
+                            .init(title: L("settingsPage.vectorDbUsageSettings.operation")),
+                            .init(title: L("settingsPage.vectorDbUsageSettings.operationCount"), numeric: true)
+                        ],
+                        rows: summary.breakdown.map { [$0.opType, SettingsFormat.compactCount($0.count)] },
+                        emptyText: L("settingsPage.usageCommon.noUsage")
+                    )
+                    .accessibilityIdentifier("vector-db-usage-table")
+                }
+            } else {
+                UsageNotTrackedYet(link: (L("settingsPage.nav.vectorDb"), { router.navigate(.settings(.vectorDb)) }))
+            }
+        }
+        .settingsPage(
+            status: notTracked ? L("settingsPage.usageCommon.notTrackedYetTitle") : range.label,
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.vectorDbUsageSettings.countedTitle"), text: L("settingsPage.vectorDbUsageSettings.countedText")),
+                KnowledgeItem(title: L("settingsPage.vectorDbUsageSettings.noCostTitle"), text: L("settingsPage.vectorDbUsageSettings.noCostText"))
+            ]
+        )
+        .task(id: range.from + range.to) {
+            state.loading = true
+            defer { state.loading = false }
+            let token = try? await auth.getAccessTokenSilently()
+            let days = range.utcDays()
+            state.summary = try? await UsageService.getVectorDbUsage(token: token ?? "", from: days.from, to: days.to)
+        }
+    }
+}
+
+/// Cost and Usage › Web Search: each search the assistant ran; its cost is always an estimate.
+struct WebSearchUsageSettingsView: View {
+    @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var router: AppRouter
+    @State private var range = UsageDateRange.trailing(days: 30)
+    @State private var state = UsageLoadState<EstimatedUsageSummary>()
+
+    var body: some View {
+        let notTracked = !state.loading && state.summary == nil
+        VStack(alignment: .leading, spacing: 12) {
+            UsageRangePanel(range: $range)
+            if state.loading {
+                UsageStatusLine(text: L("settingsPage.usageCommon.loading"))
+            } else if let summary = state.summary {
+                SettingsCard(title: L("settingsPage.webSearchUsageSettings.byDepth"), flush: true) {
+                    SettingsTable(
+                        columns: [
+                            .init(title: L("settingsPage.webSearchUsageSettings.searchDepth")),
+                            .init(title: L("settingsPage.webSearchUsageSettings.credits"), numeric: true),
+                            .init(title: L("settingsPage.usageCommon.estCost"), numeric: true)
+                        ],
+                        rows: summary.breakdown.map { [$0.key, SettingsFormat.compactCount($0.count), SettingsFormat.usd($0.costUsd)] },
+                        footer: [L("settingsPage.usageCommon.total"), "", SettingsFormat.usd(summary.totalCostUsd)],
+                        emptyText: L("settingsPage.usageCommon.noUsage")
+                    )
+                    .accessibilityIdentifier("web-search-usage-table")
+                }
+            } else {
+                UsageNotTrackedYet(link: (L("settingsPage.webSearchUsageSettings.changeLimit"), { router.navigate(.settings(.webSearchKey)) }))
+            }
+        }
+        .settingsPage(
+            status: notTracked ? L("settingsPage.usageCommon.notTrackedYetTitle") : range.label,
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.webSearchUsageSettings.countedTitle"), text: L("settingsPage.webSearchUsageSettings.countedText")),
+                KnowledgeItem(title: L("settingsPage.webSearchUsageSettings.spendTitle"), text: L("settingsPage.webSearchUsageSettings.spendText"))
+            ]
+        )
+        .task(id: range.from + range.to) {
+            state.loading = true
+            defer { state.loading = false }
+            let token = try? await auth.getAccessTokenSilently()
+            let days = range.utcDays()
+            state.summary = try? await UsageService.getWebSearchUsage(token: token ?? "", from: days.from, to: days.to)
         }
     }
 }
@@ -274,284 +538,3 @@ private struct CalendarPickerIndicator: Shape {
     }
 }
 
-// MARK: - Page chrome shared by the four usage pages
-
-private struct UsageStatusText: View {
-    let text: String
-    var isError = false
-
-    var body: some View {
-        Text(text)
-            .webText(14.4)
-            .foregroundStyle(isError ? AppTheme.error : AppTheme.textMuted)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct UsageStatTile: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5.6) {
-            Text(label)
-                .webText(12.8)
-                .foregroundStyle(AppTheme.textMuted)
-            Text(value)
-                .webText(28, 600)
-                .kerning(-0.28)
-                .foregroundStyle(AppTheme.textPrimary)
-        }
-        .padding(.horizontal, 25)
-        .padding(.vertical, 21)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.backgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: DSRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: DSRadius.lg).strokeBorder(AppTheme.border, lineWidth: 1))
-        .shadow(color: AppTheme.shadowSmall, radius: 1, y: 1)
-    }
-}
-
-private struct UsageBreakdown<Content: View>: View {
-    let title: String
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .webText(16, 600)
-                .foregroundStyle(AppTheme.textPrimary)
-            content
-        }
-    }
-}
-
-/// Banner above real data (`.noCostNote` / `.estimateBanner`).
-private struct UsageNote: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .webText(13.6)
-            .foregroundStyle(AppTheme.textMuted)
-            .padding(.horizontal, 15.4)
-            .padding(.vertical, 10.6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.backgroundSecondary)
-            .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
-            .overlay(RoundedRectangle(cornerRadius: DSRadius.md).strokeBorder(AppTheme.border, lineWidth: 1))
-    }
-}
-
-/// Shared empty state for a category whose instrumentation hasn't shipped.
-private struct UsageNotTrackedYet: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            Text(L("settingsPage.usageCommon.notTrackedYetTitle"))
-                .webText(16.8, 600)
-                .foregroundStyle(AppTheme.textPrimary)
-            Text(L("settingsPage.usageCommon.notTrackedYetBody"))
-                .webText(14.4)
-                .foregroundStyle(AppTheme.textMuted)
-                .multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, 33)
-        .padding(.vertical, 49)
-        .frame(maxWidth: .infinity)
-        .background(AppTheme.backgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: DSRadius.lg))
-        .overlay(RoundedRectangle(cornerRadius: DSRadius.lg).strokeBorder(AppTheme.border, lineWidth: 1))
-        .shadow(color: AppTheme.shadowSmall, radius: 1, y: 1)
-    }
-}
-
-/// Totals + by-vendor / by-model tables, used by the LLM and embedding pages.
-private struct LlmUsageBody: View {
-    let summary: LlmUsageSummary
-    let emptyText: String
-
-    private var totalRequests: Int { summary.byVendor.reduce(0) { $0 + $1.requestCount } }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            VStack(spacing: 16) {
-                UsageStatTile(label: L("settingsPage.usageCommon.totalCost"), value: UsageFormat.usd(summary.totalCostUsd))
-                UsageStatTile(label: L("settingsPage.usageCommon.requests"), value: UsageFormat.count(totalRequests))
-            }
-            if summary.byVendor.isEmpty {
-                UsageStatusText(text: emptyText)
-            } else {
-                UsageBreakdown(title: L("settingsPage.usageCommon.byVendor")) {
-                    table(summary.byVendor, showModel: false)
-                }
-                UsageBreakdown(title: L("settingsPage.usageCommon.byModel")) {
-                    table(summary.byModel, showModel: true)
-                }
-            }
-        }
-    }
-
-    private func table(_ rows: [UsageByDim], showModel: Bool) -> some View {
-        var columns = [WebDataTable.Column(title: L("settingsPage.usageCommon.vendor"))]
-        if showModel { columns.append(.init(title: L("settingsPage.usageCommon.model"))) }
-        columns += [
-            .init(title: L("settingsPage.usageCommon.totalCost"), numeric: true),
-            .init(title: L("settingsPage.usageCommon.tokens"), numeric: true),
-            .init(title: L("settingsPage.usageCommon.requests"), numeric: true)
-        ]
-        return WebDataTable(columns: columns, rows: rows.map { row in
-            var cells = [row.vendor]
-            if showModel { cells.append(row.model ?? "") }
-            cells += [UsageFormat.usd(row.costUsd), UsageFormat.count(row.totalTokens ?? 0), UsageFormat.count(row.requestCount)]
-            return cells
-        })
-    }
-}
-
-// MARK: - Pages
-
-/// Cost and Usage > LLM Models: the one category that treats a failure as an error.
-struct LlmUsageSettingsView: View {
-    @EnvironmentObject var auth: AuthStore
-    @State private var range = UsageDateRange.trailing(days: 30)
-    @State private var summary: LlmUsageSummary?
-    @State private var isLoading = true
-    @State private var failed = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            DateRangePicker(range: $range)
-            if isLoading {
-                UsageStatusText(text: L("settingsPage.usageCommon.loading"))
-            } else if failed {
-                UsageStatusText(text: L("settingsPage.usageCommon.error"), isError: true)
-            } else if let summary {
-                LlmUsageBody(summary: summary, emptyText: L("settingsPage.llmUsageSettings.empty"))
-                Text(L("settingsPage.llmUsageSettings.trackedSinceNote"))
-                    .webText(12.8)
-                    .foregroundStyle(AppTheme.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .task(id: range.from + range.to) {
-            isLoading = true
-            failed = false
-            defer { isLoading = false }
-            do {
-                let token = try await auth.getAccessTokenSilently()
-                summary = try await UsageService.getLlmUsage(token: token, from: range.utcDays().from, to: range.utcDays().to)
-            } catch {
-                failed = !(error is CancellationError)
-            }
-        }
-    }
-}
-
-/// Any failure reads the same as "not tracked yet".
-struct EmbeddingUsageSettingsView: View {
-    @EnvironmentObject var auth: AuthStore
-    @State private var range = UsageDateRange.trailing(days: 30)
-    @State private var summary: LlmUsageSummary?
-    @State private var isLoading = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            DateRangePicker(range: $range)
-            if isLoading {
-                UsageStatusText(text: L("settingsPage.usageCommon.loading"))
-            } else if let summary {
-                LlmUsageBody(summary: summary, emptyText: L("settingsPage.embeddingUsageSettings.empty"))
-            } else {
-                UsageNotTrackedYet()
-            }
-        }
-        .task(id: range.from + range.to) {
-            isLoading = true
-            defer { isLoading = false }
-            let token = try? await auth.getAccessTokenSilently()
-            summary = try? await UsageService.getEmbeddingUsage(token: token ?? "", from: range.utcDays().from, to: range.utcDays().to)
-        }
-    }
-}
-
-/// Raw operation counts only: an op count can't become a meaningful dollar estimate.
-struct VectorDbUsageSettingsView: View {
-    @EnvironmentObject var auth: AuthStore
-    @State private var range = UsageDateRange.trailing(days: 30)
-    @State private var summary: VectorDbUsageSummary?
-    @State private var isLoading = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            DateRangePicker(range: $range)
-            if isLoading {
-                UsageStatusText(text: L("settingsPage.usageCommon.loading"))
-            } else if let summary {
-                UsageNote(text: L("settingsPage.vectorDbUsageSettings.noCostNote"))
-                if summary.breakdown.isEmpty {
-                    UsageStatusText(text: L("settingsPage.vectorDbUsageSettings.empty"))
-                } else {
-                    UsageBreakdown(title: L("settingsPage.vectorDbUsageSettings.byOperation")) {
-                        WebDataTable(
-                            columns: [
-                                .init(title: L("settingsPage.vectorDbUsageSettings.operation")),
-                                .init(title: L("settingsPage.vectorDbUsageSettings.operationCount"), numeric: true)
-                            ],
-                            rows: summary.breakdown.map { [$0.opType, UsageFormat.count($0.count)] }
-                        )
-                    }
-                }
-            } else {
-                UsageNotTrackedYet()
-            }
-        }
-        .task(id: range.from + range.to) {
-            isLoading = true
-            defer { isLoading = false }
-            let token = try? await auth.getAccessTokenSilently()
-            summary = try? await UsageService.getVectorDbUsage(token: token ?? "", from: range.utcDays().from, to: range.utcDays().to)
-        }
-    }
-}
-
-/// Always an estimate; the disclaimer stays visible whenever real data renders.
-struct WebSearchUsageSettingsView: View {
-    @EnvironmentObject var auth: AuthStore
-    @State private var range = UsageDateRange.trailing(days: 30)
-    @State private var summary: EstimatedUsageSummary?
-    @State private var isLoading = true
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            DateRangePicker(range: $range)
-            if isLoading {
-                UsageStatusText(text: L("settingsPage.usageCommon.loading"))
-            } else if let summary {
-                UsageNote(text: L("settingsPage.usageCommon.estimateDisclaimer"))
-                UsageStatTile(label: L("settingsPage.usageCommon.totalCost"), value: UsageFormat.usd(summary.totalCostUsd))
-                if summary.breakdown.isEmpty {
-                    UsageStatusText(text: L("settingsPage.webSearchUsageSettings.empty"))
-                } else {
-                    UsageBreakdown(title: L("settingsPage.webSearchUsageSettings.byDepth")) {
-                        WebDataTable(
-                            columns: [
-                                .init(title: L("settingsPage.webSearchUsageSettings.searchDepth")),
-                                .init(title: L("settingsPage.webSearchUsageSettings.credits"), numeric: true),
-                                .init(title: L("settingsPage.usageCommon.totalCost"), numeric: true)
-                            ],
-                            rows: summary.breakdown.map { [$0.key, UsageFormat.count($0.count), UsageFormat.usd($0.costUsd)] }
-                        )
-                    }
-                }
-            } else {
-                UsageNotTrackedYet()
-            }
-        }
-        .task(id: range.from + range.to) {
-            isLoading = true
-            defer { isLoading = false }
-            let token = try? await auth.getAccessTokenSilently()
-            summary = try? await UsageService.getWebSearchUsage(token: token ?? "", from: range.utcDays().from, to: range.utcDays().to)
-        }
-    }
-}

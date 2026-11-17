@@ -96,7 +96,7 @@ struct SupportView: View {
         DetailScaffold(
             title: L("supportPage.title"),
             backLabel: L("settingsPage.settingsSidebar.title"),
-            onLeading: { router.openWithL2Menu(.settings(.profile)) },
+            onLeading: { router.openWithL2Menu(.settings(.account)) },
             actions: actions,
             keyboardScrollTarget: messageFocused ? Self.topicFieldId : nil
         ) {

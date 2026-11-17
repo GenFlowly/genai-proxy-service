@@ -50,15 +50,9 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-  // Padding lives here, not on the scroller: a scroll container's bottom
-  // padding is lost once content overflows (the stretched flex child spills
-  // past the padded box), so the inner wrapper — which grows with the
-  // content — carries the app-global settings-page padding for every page
-  padding: $settings-page-padding-y 2.5rem;
+  // Each page's frame (SettingsPageLayout) brings its own padding
 
   @include respond-to-tablet {
-    padding: $settings-page-padding-y 1.25rem;
     // Rest below the fixed MobileHeader overlay, same convention as
     // CenterSection/AgentsPage .main
     padding-top: $mobile-header-height;

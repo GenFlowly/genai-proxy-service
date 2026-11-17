@@ -30,10 +30,20 @@ enum PillStyle {
     case primary, secondary, danger
 }
 
+/// PillButton `size`: 'sm' 26pt for table rows, 'md' 38pt, 'lg' 44pt finger targets on phones.
+enum PillSize {
+    case sm, md, lg
+
+    var height: CGFloat { self == .sm ? 26 : self == .lg ? 44 : 38 }
+    var fontSize: CGFloat { self == .sm ? 12 : self == .lg ? 15 : 14.4 }
+    var padding: CGFloat { self == .sm ? 10 : self == .lg ? 18 : 16 }
+}
+
 struct PillButton<Label: View>: View {
     static var horizontalPadding: CGFloat { 16 }
 
     var style: PillStyle = .primary
+    var size: PillSize = .md
     var disabled = false
     var fullWidth = false
     /// `min-width: min(120px, 100%)` — 120 in block contexts; a cramped flex row
@@ -42,8 +52,9 @@ struct PillButton<Label: View>: View {
     var action: () -> Void
     @ViewBuilder var label: Label
 
-    init(style: PillStyle = .primary, disabled: Bool = false, fullWidth: Bool = false, minWidth: CGFloat? = 120, action: @escaping () -> Void, @ViewBuilder label: () -> Label) {
+    init(style: PillStyle = .primary, size: PillSize = .md, disabled: Bool = false, fullWidth: Bool = false, minWidth: CGFloat? = 120, action: @escaping () -> Void, @ViewBuilder label: () -> Label) {
         self.style = style
+        self.size = size
         self.disabled = disabled
         self.fullWidth = fullWidth
         self.minWidth = minWidth
@@ -56,11 +67,11 @@ struct PillButton<Label: View>: View {
             HStack(spacing: 8) {
                 label
             }
-            .webText(14.4, 500)
+            .webText(size.fontSize, 500)
             // `.secondary` and `.danger` add a 1pt border to the box (danger's is its own red, so only
             // its width shows); `.primary` has none.
-            .padding(.horizontal, Self.horizontalPadding + (style == .primary ? 0 : 1))
-            .frame(minWidth: minWidth, minHeight: 38)
+            .padding(.horizontal, size.padding + (style == .primary ? 0 : 1))
+            .frame(minWidth: size == .sm ? nil : minWidth, minHeight: size.height)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .background(background)
             .foregroundStyle(foreground)
@@ -94,8 +105,8 @@ struct PillButton<Label: View>: View {
 }
 
 extension PillButton where Label == PillButtonLabel {
-    init(label: String, icon: String? = nil, style: PillStyle = .primary, disabled: Bool = false, fullWidth: Bool = false, minWidth: CGFloat? = 120, action: @escaping () -> Void) {
-        self.init(style: style, disabled: disabled, fullWidth: fullWidth, minWidth: minWidth, action: action) {
+    init(label: String, icon: String? = nil, style: PillStyle = .primary, size: PillSize = .md, disabled: Bool = false, fullWidth: Bool = false, minWidth: CGFloat? = 120, action: @escaping () -> Void) {
+        self.init(style: style, size: size, disabled: disabled, fullWidth: fullWidth, minWidth: minWidth, action: action) {
             PillButtonLabel(text: label, icon: icon, iconColor: style == .secondary ? AppTheme.textPrimary : .white)
         }
     }

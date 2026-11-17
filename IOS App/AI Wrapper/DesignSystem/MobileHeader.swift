@@ -1,5 +1,13 @@
 import SwiftUI
 
+/// A circle button on the right when the header has no kebab menu (the settings ⓘ).
+struct MobileHeaderTrailingAction {
+    let icon: String
+    let label: String
+    var identifier = "mobile-header-trailing"
+    let action: () -> Void
+}
+
 struct MobileHeaderMenuItem: Identifiable {
     let id = UUID()
     let label: String
@@ -23,6 +31,8 @@ struct MobileHeader<Subtitle: View>: View {
     var titleExpanded = false
     /// When set, the left circle goes back instead of opening the menu; this is its label.
     var backLabel: String? = nil
+    /// Shown on the right when there is no kebab menu.
+    var trailingAction: MobileHeaderTrailingAction? = nil
     let onMenuClick: () -> Void
     @ViewBuilder var subtitle: Subtitle
 
@@ -35,7 +45,10 @@ struct MobileHeader<Subtitle: View>: View {
             centerPill
                 .frame(maxWidth: .infinity)
 
-            if menuItems.isEmpty {
+            if menuItems.isEmpty, let trailingAction {
+                circleButton(icon: trailingAction.icon, label: trailingAction.label, action: trailingAction.action)
+                    .accessibilityIdentifier(trailingAction.identifier)
+            } else if menuItems.isEmpty {
                 Color.clear.frame(width: 40, height: 40).allowsHitTesting(false)
             } else {
                 circleButton(icon: "more-vertical", label: L("layout.mobileHeader.moreActions")) { isMenuOpen.toggle() }

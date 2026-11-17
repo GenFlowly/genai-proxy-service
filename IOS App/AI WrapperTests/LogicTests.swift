@@ -298,14 +298,58 @@ struct OrderedJSONTests {
 // MARK: - Formatting and rules
 
 struct UsageFormatTests {
-    @Test func usdKeepsFourDecimalsUnderADollar() {
-        #expect(UsageFormat.usd(0.0421) == "$0.0421")
-        #expect(UsageFormat.usd(1.5) == "$1.50")
-        #expect(UsageFormat.usd(0) == "$0.0000")
+    @Test func usdKeepsUpToFourDecimalsUnderADollar() {
+        #expect(SettingsFormat.usd(0.0421) == "$0.0421")
+        #expect(SettingsFormat.usd(0.21) == "$0.21")
+        #expect(SettingsFormat.usd(1.5) == "$1.50")
+        #expect(SettingsFormat.usd(0) == "$0.00")
     }
 
-    @Test func countsUseGrouping() {
-        #expect(UsageFormat.count(1234567) == "1,234,567")
+    @Test func countsUseGroupingAndMillionsShorten() {
+        #expect(SettingsFormat.count(1234567) == "1,234,567")
+        #expect(SettingsFormat.compactCount(486_400) == "486,400")
+        #expect(SettingsFormat.compactCount(1_700_000) == "1.7M")
+        #expect(SettingsFormat.compactCount(17_149_000) == "17.1M")
+        #expect(SettingsFormat.compactCount(2_000_000) == "2M")
+        #expect(SettingsFormat.compactCount(1_999_960_000) == "2B")
+    }
+
+    @Test func chartLabelsKeepTinyCostsReadable() {
+        #expect(SettingsFormat.chartUsd(0) == "$0")
+        #expect(SettingsFormat.chartUsd(0.000052) == "$0.000052")
+        #expect(SettingsFormat.chartUsd(0.4378) == "$0.4378")
+        #expect(SettingsFormat.chartUsd(12.5) == "$12.50")
+    }
+
+    @Test func longRangesBecomeWeeks() {
+        let days = [(date: "2026-11-01", value: 1.0, count: 2), (date: "2026-11-03", value: 0.5, count: 1)]
+        let month = DailySeries.bucket(days, from: "2026-11-01", to: "2026-11-30")
+        #expect(!month.isWeekly)
+        #expect(month.buckets.count == 30)
+        #expect(month.buckets[2].value == 0.5)
+        let quarter = DailySeries.bucket(days, from: "2026-08-20", to: "2026-11-17")
+        #expect(quarter.isWeekly)
+        #expect(quarter.buckets.count == 13)
+        #expect(quarter.buckets.reduce(0) { $0 + $1.count } == 3)
+    }
+
+    @Test func gridlinesRoundUpToANiceTop() {
+        #expect(UsageBarChart.niceMax(0) == 1)
+        #expect(UsageBarChart.niceMax(0.4378) == 0.5)
+        #expect(UsageBarChart.niceMax(7) == 10)
+    }
+
+    @Test func embeddingModelChoiceFollowsTheServerRules() {
+        var prefs = AIConfigPreferences()
+        #expect(EmbeddingModelChoice.chosen(prefs) == nil)
+        prefs.embeddingModelConversations = " "
+        prefs.embeddingModel = "voyage-4-large"
+        #expect(EmbeddingModelChoice.chosen(prefs) == "voyage-4-large")
+        let listed = [EmbeddingVendorModels(vendor: EmbeddingVendor.openAI, models: ["text-embedding-3-large"])]
+        #expect(!EmbeddingModelChoice.isUnusable("text-embedding-3-large", vendorModels: listed))
+        #expect(EmbeddingModelChoice.isUnusable("text-embedding-ada-002", vendorModels: listed))
+        #expect(!EmbeddingModelChoice.isUnusable("voyage-multimodal-3.5", vendorModels: listed))
+        #expect(EmbeddingModelChoice.isUnusable("mystery", vendorModels: listed))
     }
 
     @Test func trailingWindowIsInclusive() throws {
@@ -2014,7 +2058,7 @@ struct MenuFlowTests {
         #expect(!router.isMobileMenuOpen)
     }
 
-    @Test(arguments: [AppRouter.Route.chat, .memory, .agents, .settings(.profile)])
+    @Test(arguments: [AppRouter.Route.chat, .memory, .agents, .settings(.account)])
     func hamburgerOpensTheL2MenuWherePagesHaveOne(route: AppRouter.Route) {
         let router = AppRouter()
         router.navigate(route)
@@ -2034,7 +2078,7 @@ struct MenuFlowTests {
 
     @Test func signingOutReturnsToTheLandingPage() {
         let router = AppRouter()
-        router.openWithL2Menu(.settings(.profile))
+        router.openWithL2Menu(.settings(.account))
 
         router.showLanding()
 
@@ -2065,7 +2109,7 @@ struct MenuFlowTests {
         let router = AppRouter()
         router.navigate(.privacyPolicy)
 
-        router.openWithL2Menu(.settings(.profile))
+        router.openWithL2Menu(.settings(.account))
 
         #expect(router.isMobileMenuOpen)
         #expect(!router.l2MenuAppearsInPlace)
@@ -2168,33 +2212,24 @@ struct DeleteDataTests {
         #expect(L("settingsPage.profileSettings.deleteData.accountConfirmPrompt", ["word": DeleteAccountRequest.confirmationWord]) == "Type DELETE to confirm")
     }
 
-    /// The text's 16rem basis, the 1.5rem gap and the button must fit for one line.
-    @Test func theButtonDropsBelowTheTextWhenBothDontFit() {
-        #expect(DeleteDataRow.fitsOneLine(width: 400, buttonWidth: 120))
-        #expect(!DeleteDataRow.fitsOneLine(width: 399, buttonWidth: 120))
-        #expect(!DeleteDataRow.fitsOneLine(width: 334, buttonWidth: 160))
+    @MainActor
+    @Test func eachDeleteOpensItsOwnDialog() {
+        let dialogs = SettingsDialogCenter()
+        for dialog in [SettingsDialog.deleteFacts, .deleteIndex, .deleteKeys, .deleteAccount] {
+            dialogs.open(dialog)
+            #expect(dialogs.active == dialog)
+        }
     }
 
-    @MainActor
-    @Test func openingAKeysOrAccountDialogClearsTheLastNotice() {
-        let dialogs = SettingsDialogCenter()
-        dialogs.deleteDataNotice = "Deleted 2 keys."
-        dialogs.open(.deleteLearnedFacts)
-        #expect(dialogs.deleteDataNotice == "Deleted 2 keys.")
-
-        dialogs.open(.deleteKeys)
-        #expect(dialogs.active == .deleteKeys)
-        #expect(dialogs.deleteDataNotice == nil)
-
-        dialogs.deleteDataNotice = "There were no keys to delete."
-        dialogs.open(.deleteAccount)
-        #expect(dialogs.deleteDataNotice == nil)
+    @Test func keysAndOwnDatabaseLinesOnlyForOwnKeys() {
+        #expect(AccountDeletion.items(ownKeys: false).count == 2)
+        #expect(AccountDeletion.items(ownKeys: true).count == 4)
     }
 }
 
 @Suite("Learned facts")
 struct LearnedFactsTests {
-    private typealias Section = LearnedFactsSettingsView
+    private typealias Section = MemorySettingsView
 
     @Test func everySwitchIsOnWhenTheUserNeverChangedOne() {
         for key in Section.Switch.allCases {

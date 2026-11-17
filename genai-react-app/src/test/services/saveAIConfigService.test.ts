@@ -1,4 +1,4 @@
-import { saveAIConfigPreferences, SaveAIConfigPreferencesRequest } from '../../services/saveAIConfigService';
+import { EmbeddingModelLockedError, saveAIConfigPreferences, SaveAIConfigPreferencesRequest } from '../../services/saveAIConfigService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { endpoints } from '../../config/endpoints';
 import { HttpMethod } from '../../constants/http';
@@ -75,6 +75,26 @@ describe('saveAIConfigService', () => {
         // Act & Assert
         await expect(saveAIConfigPreferences(mockToken, mockRequest))
             .rejects.toThrow("Unsupported embedding model(s): embeddingModelConversations='voyage-multimodal-3.5'.");
+    });
+
+    test('a 409 names the embedding model that is already locked', async () => {
+        mockFetchWithRetry.mockResolvedValue({
+            ok: false,
+            status: 409,
+            statusText: 'Conflict',
+            json: jest.fn().mockResolvedValue({
+                error: "The embedding model is locked and can't be changed.",
+                embeddingModel: 'voyage-4-large',
+            }),
+        });
+
+        const error = await saveAIConfigPreferences(mockToken, {
+            aiConfigPreferences: { embeddingModelConversations: 'text-embedding-3-large' },
+        }).catch(e => e);
+
+        expect(error).toBeInstanceOf(EmbeddingModelLockedError);
+        expect(error.lockedModel).toBe('voyage-4-large');
+        expect(error.message).toBe("The embedding model is locked and can't be changed.");
     });
 });
 

@@ -144,7 +144,7 @@ describe('InstructionPickerModal', () => {
         expect(notice).toHaveTextContent("Search isn't set up. Connect a vector DB to search.");
         expect(screen.queryByText('Failed to load instructions. Please try again.')).not.toBeInTheDocument();
         const link = screen.getByRole('link', { name: 'Open Settings' });
-        expect(link).toHaveAttribute('href', '/settings/ai/vector-db');
+        expect(link).toHaveAttribute('href', '/settings/byok/vector-db');
         await userEvent.click(link);
         expect(onClose).toHaveBeenCalled();
     });

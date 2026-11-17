@@ -246,7 +246,9 @@ final class AuthStore: ObservableObject {
         embeddingModelConversations: String? = nil,
         embeddingModelNotes: String? = nil,
         memoryLearnFromChats: Bool? = nil,
-        memoryUseInReplies: Bool? = nil
+        memoryUseInReplies: Bool? = nil,
+        indexChats: Bool? = nil,
+        embeddingModel: String? = nil
     ) {
         var prefs = aiConfigPreferences ?? AIConfigPreferences()
         if let preferredModels { prefs.preferredModels = preferredModels }
@@ -255,6 +257,8 @@ final class AuthStore: ObservableObject {
         if let embeddingModelNotes { prefs.embeddingModelNotes = embeddingModelNotes }
         if let memoryLearnFromChats { prefs.memoryLearnFromChats = memoryLearnFromChats }
         if let memoryUseInReplies { prefs.memoryUseInReplies = memoryUseInReplies }
+        if let indexChats { prefs.indexChats = indexChats }
+        if let embeddingModel { prefs.embeddingModel = embeddingModel }
         aiConfigPreferences = prefs
         writeCache(prefs, key: preferencesCacheKey)
     }

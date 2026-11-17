@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { InputSelectWithHint, PillButton } from '@genflowly/component-library'
+import { InputSelectWithHint, PillButton, SettingsCard, StatusPill } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
 import { useAI } from '../../../context/AIContext'
 import { useToast } from '../../../context/ToastContext'
@@ -20,9 +20,8 @@ import {
     effectiveDefaultAgentId,
 } from '../../../models/agents.models'
 import { ICONS } from '../../../constants/icons'
-import { EmbeddingModelDefaults } from './EmbeddingModelDefaults'
-import { LearnedFactsSettings } from './LearnedFactsSettings'
-import { ChatIndexingSettings } from './ChatIndexingSettings'
+import { SettingsFrame } from './SettingsFrame'
+import { useSettingsShell } from '../SettingsShellContext'
 import styles from './DefaultsSettings.module.scss'
 
 /**
@@ -37,6 +36,13 @@ const TITLE_REQUEST_TYPES = ['CONVERSATION_TITLE', 'NOTE_TITLE']
 const TITLE_ROW = 'TITLE'
 
 /** Labels for the known rows; unknown (future) actions fall back to the server's displayName. */
+/** One line under each known row's select: what that job does. */
+const ROW_HINT_KEYS: Record<string, string> = {
+    [TITLE_ROW]: 'settingsPage.agentsDefaults.titleHint',
+    MEMORY_EXTRACTION: 'settingsPage.agentsDefaults.memoryHint',
+    INSTRUCTION_PERSONA: 'settingsPage.agentsDefaults.personaHint',
+}
+
 const ROW_LABEL_KEYS: Record<string, string> = {
     [TITLE_ROW]: 'settingsPage.defaultAgents.titleAgent',
     MEMORY_EXTRACTION: 'settingsPage.defaultAgents.learnAboutMeAgent',
@@ -90,6 +96,7 @@ export function DefaultsSettings(): React.ReactElement {
     const { customerId, isAuthenticated, getAccessTokenSilently } = useAuth()
     const { selectedAgentId, setSelectedAgentId } = useAI()
     const { showToast } = useToast()
+    const { narrow } = useSettingsShell()
 
     const [actions, setActions] = useState<CustomerRequestAgentStatus[]>([])
     const [agents, setAgents] = useState<Agent[]>([])
@@ -246,60 +253,71 @@ export function DefaultsSettings(): React.ReactElement {
         }
     }
 
+    const layout = narrow ? 'stacked' : 'inline'
+    const conversationAgent = conversationAgents.find(agent => agent.graphId === conversationAgentId)
+    const knowledge = [
+        { title: t('settingsPage.agentsDefaults.whatTitle'), text: t('settingsPage.agentsDefaults.whatText') },
+        { title: t('settingsPage.agentsDefaults.ownTitle'), text: t('settingsPage.agentsDefaults.ownText') },
+        { title: t('settingsPage.agentsDefaults.conversationTitle'), text: t('settingsPage.agentsDefaults.conversationText') },
+    ]
+
     return (
-        <div className={styles.container}>
+        <SettingsFrame page="agents" knowledge={knowledge}>
             {loading ? (
                 <p className={styles.emptyHint}>{t('settingsPage.defaultAgents.loading')}</p>
             ) : (
-                <div className={styles.form}>
-                    {rows.map(row => (
-                        <div className={styles.field} key={row.key}>
-                            <label className={styles.fieldLabel}>{rowLabel(row)}</label>
-                            <InputSelectWithHint
-                                hint={t('settingsPage.defaultAgents.agentHint')}
-                                value={selected[row.key] ?? PLATFORM_DEFAULT}
-                                onChange={(val: string) =>
-                                    setSelected(prev => ({ ...prev, [row.key]: val }))
-                                }
-                                options={optionsFor(row)}
-                                data-testid={`default-agent-${row.key}`}
-                            />
-                        </div>
-                    ))}
-                    <div className={styles.field}>
-                        <label className={styles.fieldLabel}>
-                            {t('settingsPage.defaultAgents.conversationAgent')}
-                        </label>
+                <>
+                    <SettingsCard
+                        title={t('settingsPage.defaultAgents.conversationAgent')}
+                        pills={conversationAgent?.isSystem ? <StatusPill>{t('settingsPage.defaultAgents.systemBadge')}</StatusPill> : undefined}
+                    >
                         <InputSelectWithHint
                             hint={t('settingsPage.defaultAgents.agentHint')}
                             placeholder={t('settingsPage.defaultAgents.conversationPlaceholder')}
                             value={conversationAgentId}
                             onChange={(val: string) => setConversationAgentId(val)}
                             options={conversationOptions}
+                            layout={layout}
                             data-testid="default-agent-CONVERSATION"
                         />
-                    </div>
-                    {agents.length === 0 && (
-                        <p className={styles.emptyHint}>{t('settingsPage.defaultAgents.noAgents')}</p>
-                    )}
-                    <div className={styles.footer}>
-                        <PillButton
-                            onClick={handleSave}
-                            label={
-                                saving
-                                    ? t('settingsPage.defaultAgents.saving')
-                                    : t('settingsPage.defaultAgents.save')
-                            }
-                            icon={ICONS.SAVE_ICON}
-                            disabled={saving}
-                        />
-                    </div>
-                </div>
+                    </SettingsCard>
+                    <SettingsCard title={t('settingsPage.agentsDefaults.builtInJobs')}>
+                        {rows.map(row => (
+                            <div className={styles.field} key={row.key}>
+                                <label className={styles.fieldLabel}>{rowLabel(row)}</label>
+                                <InputSelectWithHint
+                                    hint={t('settingsPage.defaultAgents.agentHint')}
+                                    value={selected[row.key] ?? PLATFORM_DEFAULT}
+                                    onChange={(val: string) =>
+                                        setSelected(prev => ({ ...prev, [row.key]: val }))
+                                    }
+                                    options={optionsFor(row)}
+                                    layout={layout}
+                                    data-testid={`default-agent-${row.key}`}
+                                />
+                                {ROW_HINT_KEYS[row.key] && <span className={styles.fieldHint}>{t(ROW_HINT_KEYS[row.key])}</span>}
+                            </div>
+                        ))}
+                        {agents.length === 0 && (
+                            <p className={styles.emptyHint}>{t('settingsPage.defaultAgents.noAgents')}</p>
+                        )}
+                        <div className={styles.footer}>
+                            <PillButton
+                                onClick={handleSave}
+                                label={
+                                    saving
+                                        ? t('settingsPage.defaultAgents.saving')
+                                        : t('settingsPage.defaultAgents.save')
+                                }
+                                icon={ICONS.SAVE_ICON}
+                                disabled={saving}
+                                size={narrow ? 'lg' : 'md'}
+                                data-testid="default-agents-save"
+                            />
+                        </div>
+                    </SettingsCard>
+                </>
             )}
-
-            <LearnedFactsSettings />
-            <ChatIndexingSettings />
-            <EmbeddingModelDefaults />
-        </div>
+        </SettingsFrame>
     )
 }

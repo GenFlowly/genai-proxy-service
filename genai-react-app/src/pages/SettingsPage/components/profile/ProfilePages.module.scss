@@ -1,0 +1,85 @@
+@import '../../../../styles/themes.scss';
+
+.note {
+    margin: 0;
+    color: $color-text-muted;
+    font-size: 0.875rem;
+}
+
+.person {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avatar {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: $color-background-tertiary;
+    color: $color-text-secondary;
+    font-weight: 500;
+}
+
+.personText {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    strong {
+        font-weight: 500;
+        color: $color-text-primary;
+    }
+
+    span {
+        font-size: 0.8125rem;
+        color: $color-text-muted;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+// A field and its button on one line; stacked inside narrow cards
+.fieldRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    @container (max-width: 480px) {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.field {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.link {
+    color: $color-primary;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+    }
+}
+
+.list {
+    margin: 4px 0 0;
+    padding-left: 18px;
+}

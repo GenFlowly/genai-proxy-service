@@ -1,170 +1,126 @@
-import React, { useState, useSyncExternalStore } from 'react'
+import React, { useEffect, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Modal, PillButton } from '@genflowly/component-library'
+import { Link } from 'react-router'
+import { SettingsCard, SettingsRow, StatusPill, ToggleRow } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
 import { saveAIConfigPreferences } from '../../../services/saveAIConfigService'
-import { deleteIndexedChats } from '../../../services/chatIndexingService'
+import { EmbeddingKeyStatus, EmbeddingVendor, getEmbeddingKeys } from '../../../services/embeddingKeysService'
+import { APIKeyStatus } from '../../../models/storeCustomerVendorAPIKeys.models'
+import { VectorDBConfigStatusValue } from '../../../models/storeCustomerVectorDBConfig.models'
 import { getAiPreferences, subscribeAiPreferences } from '../../../stores/aiPreferencesStore'
+import { useHasOwnKeys } from '../../../hooks/useHasOwnKeys'
+import { PLATFORM_EMBEDDING_MODEL, chosenEmbeddingModel } from '../../../utils/embeddingModel'
+import { SettingsFrame } from './SettingsFrame'
 import styles from './ChatIndexingSettings.module.scss'
 
-type Dialog = 'turnOff' | 'delete'
+const keyReady = (status?: EmbeddingKeyStatus) => status?.status === APIKeyStatus.VALID || !!status?.isAPIKeyValid
 
 /**
- * Settings > Defaults > Search index: whether new chats are indexed for
- * search, and "Delete indexed chats". Indexing stays off until the user turns
- * it on (an unset preference means off, matching the backend). Turning it off
- * asks whether to delete what is already indexed.
+ * Defaults › Search index: whether new chats are saved for search. Indexing
+ * stays off until the user turns it on (an unset preference means off,
+ * matching the backend). For own-key customers it shows what indexing needs;
+ * deleting what is indexed lives on Profile › Delete your data.
  */
 export function ChatIndexingSettings(): React.ReactElement {
     const { t } = useTranslation()
-    const { isAuthenticated, getAccessTokenSilently } = useAuth()
+    const { isAuthenticated, getAccessTokenSilently, vectorDBConfigStatusList } = useAuth()
     const { showToast } = useToast()
+    const hasOwnKeys = useHasOwnKeys()
     const preferences = useSyncExternalStore(subscribeAiPreferences, getAiPreferences)
     const [saving, setSaving] = useState<boolean | null>(null)
-    const [dialog, setDialog] = useState<Dialog | null>(null)
-    const [working, setWorking] = useState(false)
+    const [keyStatuses, setKeyStatuses] = useState<EmbeddingKeyStatus[] | null>(null)
+
+    useEffect(() => {
+        if (!isAuthenticated || !hasOwnKeys) return
+        let active = true
+        getAccessTokenSilently()
+            .then(token => getEmbeddingKeys(token))
+            .then(response => { if (active) setKeyStatuses(response.statuses) })
+            .catch(error => console.error('Failed to load embedding key statuses', error))
+        return () => { active = false }
+    }, [isAuthenticated, hasOwnKeys, getAccessTokenSilently])
 
     const isOn = saving ?? preferences?.indexChats === true
 
-    const save = async (indexChats: boolean): Promise<boolean> => {
-        setSaving(indexChats)
+    const handleToggle = async (checked: boolean) => {
+        if (!isAuthenticated) {
+            showToast(t('settingsPage.chatIndexing.loginFirstToast'))
+            return
+        }
+        setSaving(checked)
         try {
             const token = await getAccessTokenSilently()
-            await saveAIConfigPreferences(token, { aiConfigPreferences: { indexChats } })
-            return true
+            await saveAIConfigPreferences(token, { aiConfigPreferences: { indexChats: checked } })
         } catch (error: any) {
             console.error('Failed to save the chat indexing setting:', error)
             showToast(error?.message || t('settingsPage.chatIndexing.saveErrorToast'))
-            return false
         } finally {
             setSaving(null)
         }
     }
 
-    const deleteIndexed = async (): Promise<boolean> => {
-        try {
-            const token = await getAccessTokenSilently()
-            await deleteIndexedChats(token)
-            showToast(t('settingsPage.chatIndexing.deletedToast'))
-            return true
-        } catch (error) {
-            console.error('Failed to delete indexed chats:', error)
-            showToast(t('settingsPage.chatIndexing.deleteErrorToast'))
-            return false
-        }
-    }
-
-    const handleToggle = (checked: boolean) => {
-        if (!isAuthenticated) {
-            showToast(t('settingsPage.chatIndexing.loginFirstToast'))
-            return
-        }
-        if (checked) {
-            void save(true)
-        } else {
-            setDialog('turnOff')
-        }
-    }
-
-    const handleStop = async (alsoDelete: boolean) => {
-        setWorking(true)
-        try {
-            if (!(await save(false))) return
-            if (alsoDelete && !(await deleteIndexed())) return
-            setDialog(null)
-        } finally {
-            setWorking(false)
-        }
-    }
-
-    const handleDelete = async () => {
-        setWorking(true)
-        try {
-            if (await deleteIndexed()) setDialog(null)
-        } finally {
-            setWorking(false)
-        }
-    }
+    const databaseReady = vectorDBConfigStatusList.some(status => status.status === VectorDBConfigStatusValue.PRESENT)
+    const searchKeyReady = keyStatuses == null
+        ? null
+        : [EmbeddingVendor.OPENAI, EmbeddingVendor.VOYAGE].some(vendor => keyReady(keyStatuses.find(s => s.vendor === vendor)))
+    const model = chosenEmbeddingModel(preferences)
+    const statusText = isOn ? t('settingsPage.searchIndex.on') : t('settingsPage.searchIndex.off')
+    const knowledge = [
+        { title: t('settingsPage.searchIndex.doesTitle'), text: t('settingsPage.searchIndex.doesText') },
+        ...(hasOwnKeys ? [{ title: t('settingsPage.searchIndex.needsTitle'), text: t('settingsPage.searchIndex.needsText') }] : []),
+    ]
+    const setupPath = !databaseReady ? '/settings/byok/vector-db' : '/settings/byok/embedding-keys'
 
     return (
-        <div className={styles.container}>
-            <div className={styles.headerBlock}>
-                <h2 className={styles.title}>{t('settingsPage.chatIndexing.title')}</h2>
-                <p className={styles.subtitle}>{t('settingsPage.chatIndexing.subtitle')}</p>
-            </div>
-            <div className={styles.form}>
-                <label className={styles.toggleGroup}>
-                    <span className={styles.toggleLabel}>
-                        <strong>{t('settingsPage.chatIndexing.indexChats')}</strong>
-                        <span>{t('settingsPage.chatIndexing.indexChatsDescription')}</span>
-                    </span>
-                    <input
-                        type="checkbox"
-                        checked={isOn}
-                        onChange={(e) => handleToggle(e.target.checked)}
-                        disabled={saving !== null}
-                        data-testid="chat-indexing-switch"
-                    />
-                </label>
-                <div className={styles.footer}>
-                    <PillButton
-                        variant="danger"
-                        label={t('settingsPage.chatIndexing.deleteIndexed')}
-                        onClick={() => setDialog('delete')}
-                    />
-                </div>
-            </div>
-            <Modal
-                isOpen={dialog === 'turnOff'}
-                onClose={() => setDialog(null)}
-                title={t('settingsPage.chatIndexing.turnOffTitle')}
-                maxWidth="28rem"
-            >
-                <p className={styles.confirmText}>{t('settingsPage.chatIndexing.turnOffConfirm')}</p>
-                <div className={styles.confirmActions}>
-                    <PillButton
-                        variant="secondary"
-                        label={t('settingsPage.chatIndexing.cancel')}
-                        onClick={() => setDialog(null)}
-                        disabled={working}
-                    />
-                    <PillButton
-                        variant="secondary"
-                        label={t('settingsPage.chatIndexing.stopIndexing')}
-                        onClick={() => handleStop(false)}
-                        disabled={working}
-                    />
-                    <PillButton
-                        variant="danger"
-                        label={working ? t('settingsPage.chatIndexing.working') : t('settingsPage.chatIndexing.stopAndDelete')}
-                        onClick={() => handleStop(true)}
-                        disabled={working}
-                    />
-                </div>
-            </Modal>
-            <Modal
-                isOpen={dialog === 'delete'}
-                onClose={() => setDialog(null)}
-                title={t('settingsPage.chatIndexing.deleteTitle')}
-                maxWidth="26rem"
-            >
-                <p className={styles.confirmText}>{t('settingsPage.chatIndexing.deleteConfirm')}</p>
-                <div className={styles.confirmActions}>
-                    <PillButton
-                        variant="secondary"
-                        label={t('settingsPage.chatIndexing.cancel')}
-                        onClick={() => setDialog(null)}
-                        disabled={working}
-                    />
-                    <PillButton
-                        variant="danger"
-                        label={working ? t('settingsPage.chatIndexing.working') : t('settingsPage.chatIndexing.deleteConfirmButton')}
-                        onClick={handleDelete}
-                        disabled={working}
-                    />
-                </div>
-            </Modal>
-        </div>
+        <SettingsFrame
+            page="search-index"
+            knowledge={knowledge}
+            statusText={statusText}
+            status={<StatusPill kind={isOn ? 'ok' : 'unset'}>{statusText}</StatusPill>}
+        >
+            <SettingsCard title={t('settingsPage.searchIndex.card')}>
+                <ToggleRow
+                    label={t('settingsPage.chatIndexing.indexChats')}
+                    checked={isOn}
+                    onChange={checked => void handleToggle(checked)}
+                    disabled={saving !== null}
+                    data-testid="chat-indexing-switch"
+                />
+                {hasOwnKeys && (
+                    <SettingsRow
+                        label={t('settingsPage.searchIndex.needsTitle')}
+                        stackOnNarrow={false}
+                        data-testid="search-index-requirements"
+                        action={
+                            (!databaseReady || searchKeyReady === false) && (
+                                <Link to={setupPath} className={styles.link}>{t('settingsPage.searchIndex.setUp')}</Link>
+                            )
+                        }
+                    >
+                        <span className={styles.pills}>
+                            <StatusPill kind={databaseReady ? 'ok' : 'unset'}>
+                                {databaseReady ? t('settingsPage.searchIndex.databaseReady') : t('settingsPage.searchIndex.databaseNotSet')}
+                            </StatusPill>
+                            {searchKeyReady != null && (
+                                <StatusPill kind={searchKeyReady ? 'ok' : 'unset'}>
+                                    {searchKeyReady ? t('settingsPage.searchIndex.keyReady') : t('settingsPage.searchIndex.keyNotSet')}
+                                </StatusPill>
+                            )}
+                        </span>
+                    </SettingsRow>
+                )}
+                <SettingsRow
+                    label={t('settingsPage.searchIndex.modelRow')}
+                    description={model ?? t('settingsPage.searchIndex.platformDefault', { model: PLATFORM_EMBEDDING_MODEL })}
+                    stackOnNarrow={false}
+                    action={
+                        <Link to="/settings/defaults/embedding-models" className={styles.link}>
+                            {model ? t('settingsPage.searchIndex.modelDetails') : t('settingsPage.searchIndex.modelChange')}
+                        </Link>
+                    }
+                />
+            </SettingsCard>
+        </SettingsFrame>
     )
 }

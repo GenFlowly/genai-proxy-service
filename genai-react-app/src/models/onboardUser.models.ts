@@ -15,6 +15,8 @@ export interface OnboardCustomerResponse {
         embeddingModelConversations?: string
         /** Default embedding model for notes; falls back to embeddingModel */
         embeddingModelNotes?: string
+        /** When the one embedding model was chosen and locked (ISO-8601); absent for models chosen before locking existed */
+        embeddingModelChosenAt?: string | null
         /** Memory switches (Settings > Defaults > Learned facts); absent/null = on */
         memoryLearnFromChats?: boolean | null
         memoryLearnFromNotes?: boolean | null

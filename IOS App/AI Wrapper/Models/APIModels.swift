@@ -23,6 +23,10 @@ struct AIConfigPreferences: Codable {
     var memoryLearnFromChats: Bool?
     var memoryLearnFromNotes: Bool?
     var memoryUseInReplies: Bool?
+    /// Whether new chats are saved for search (Settings › Defaults › Search index). Unset means off.
+    var indexChats: Bool?
+    /// When the one embedding model was chosen and locked (ISO-8601); nil for models chosen before locking existed.
+    var embeddingModelChosenAt: String?
 }
 
 struct AIVendorAPIKeyStatus: Codable, Equatable {
@@ -462,18 +466,32 @@ struct DeveloperApiKeyCreatedResponse: Codable {
     var createdAt: String
 }
 
+/// Requests and cost for the last 30 UTC days and all time; nil when usage couldn't be read.
+struct DeveloperApiKeyUsage: Codable, Equatable {
+    var requests30d: Int?
+    var costUsd30d: Double?
+    var requestsAllTime: Int?
+    var costUsdAllTime: Double?
+}
+
 struct DeveloperApiKeySummary: Codable, Identifiable, Equatable {
     var keyId: String
     var name: String
     var prefix: String
     var createdAt: String?
     var lastUsedAt: String?
+    var requests30d: Int?
+    var costUsd30d: Double?
+    var requestsAllTime: Int?
+    var costUsdAllTime: Double?
 
     var id: String { keyId }
 }
 
 struct ListDeveloperApiKeysResponse: Codable {
     var keys: [DeveloperApiKeySummary]
+    /// Sums over every key; absent from servers older than per-key usage.
+    var totals: DeveloperApiKeyUsage?
 }
 
 // MARK: - AI config preferences (src/models/*.ts save config)
@@ -490,6 +508,7 @@ struct SaveAIConfigPreferencesRequest: Codable {
         var memoryLearnFromChats: Bool?
         var memoryLearnFromNotes: Bool?
         var memoryUseInReplies: Bool?
+        var indexChats: Bool?
     }
 }
 
