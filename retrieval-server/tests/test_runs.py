@@ -130,6 +130,17 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(summary["error"])
         self.assertNotIn("llm_credentials", summary)
 
+    async def test_thinking_duration_precedes_the_first_content_chunk(self):
+        # Clients only show "Thought for Ns" when this event arrives.
+        _, published = await self._run(_fake_resolve)
+
+        kinds = [next(iter(ev)) for _, ev, term in published if not term]
+        self.assertIn("thinking_duration_ms", kinds)
+        self.assertLess(kinds.index("thinking_duration_ms"), kinds.index("content"))
+        durations = [ev["thinking_duration_ms"] for _, ev, _ in published if "thinking_duration_ms" in ev]
+        self.assertEqual(len(durations), 1)
+        self.assertGreaterEqual(durations[0], 0)
+
     async def test_graph_error_becomes_error_status(self):
         summary, published = await self._run(_fake_resolve_boom)
 
