@@ -256,6 +256,21 @@ class EmbeddingModelCatalogService(
     }
 
     /**
+     * True only when [modelName] can never work for this customer as things
+     * stand: an unknown name, or a name the key's probed catalog doesn't
+     * offer. A missing key, a key that can't embed, or an undetermined
+     * catalog are fixable on the customer's side, so they return false.
+     */
+    suspend fun isModelUnusable(customerId: String, modelName: String): Boolean {
+        val vendor = vendorForModel(modelName) ?: return true
+        val key = decryptedKeyFor(customerId, vendor) ?: return false
+        return when (val catalog = getCatalog(customerId, vendor, key)) {
+            is EmbeddingCatalog.Models -> modelName !in catalog.models
+            EmbeddingCatalog.KeyCannotEmbed, EmbeddingCatalog.Undetermined -> false
+        }
+    }
+
+    /**
      * Re-probe every customer/vendor that has an embedding key. Lease-guarded so
      * only one proxy instance sweeps, and rate-limited to ~weekly via the lease
      * cooldown. Best-effort per row — one failure never aborts the rest.

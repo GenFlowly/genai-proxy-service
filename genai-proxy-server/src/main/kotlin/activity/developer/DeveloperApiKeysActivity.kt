@@ -3,6 +3,7 @@ package com.genflowly.activity.developer
 import com.genflowly.Routes
 import com.genflowly.models.api.CreateDeveloperApiKeyRequest
 import com.genflowly.models.api.ErrorResponse
+import com.genflowly.models.api.DeveloperApiKeyUsageTotals
 import com.genflowly.models.api.ListDeveloperApiKeysResponse
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.service.DeveloperApiKeyService
@@ -63,7 +64,7 @@ fun Route.registerDeveloperApiKeysRoutes(
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
                 val keys = developerApiKeyService.listKeys(customerId)
-                call.respond(ListDeveloperApiKeysResponse(keys = keys))
+                call.respond(ListDeveloperApiKeysResponse(keys = keys, totals = DeveloperApiKeyUsageTotals.of(keys)))
             } catch (e: Exception) {
                 logger.error("Failed to list developer API keys", e)
                 call.respond(

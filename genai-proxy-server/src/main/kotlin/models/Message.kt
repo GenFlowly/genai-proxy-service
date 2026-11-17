@@ -86,6 +86,12 @@ data class Message(
      */
     val stopReason: String? = null,
     /**
+     * The developer API key whose request produced this turn (user and
+     * assistant message alike); null for turns from the apps. The usage
+     * rollup attributes the turn's cost to this key.
+     */
+    val developerKeyId: String? = null,
+    /**
      * ISO-8601 instant stamped by the repository's withTimestamps on write.
      * Read-only: populated when loading from DDB, ignored on create (the
      * provider always stamps its own value).

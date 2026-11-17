@@ -8,6 +8,7 @@ import com.genflowly.DynamoDBConstants.CUSTOMER_PREFERENCES_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_PROFILE_TABLE
 import com.genflowly.DynamoDBConstants.SUB_PARTITION_KEY
 import com.genflowly.models.CustomerEntitlements
+import com.genflowly.models.EmbeddingModelLockedException
 import com.genflowly.models.api.AIConfigPreferences
 import java.time.Instant
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
+import software.amazon.awssdk.services.dynamodb.model.ReturnValuesOnConditionCheckFailure
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 
 /**
@@ -374,8 +376,6 @@ class CustomerProfileRepository(
         otherPreferences: Map<String, String>?,
         embeddingMode: String? = null,
         embeddingModel: String? = null,
-        embeddingModelConversations: String? = null,
-        embeddingModelNotes: String? = null,
         preferredAgentId: String? = null,
         memoryLearnFromChats: Boolean? = null,
         memoryLearnFromNotes: Boolean? = null,
@@ -418,23 +418,13 @@ class CustomerProfileRepository(
                 attrValues[":embeddingMode"] = AttributeValue.builder().s(embeddingMode).build()
             }
 
-            if (embeddingModel != null) {
-                updateParts.add("#embeddingModel = :embeddingModel")
-                attrNames["#embeddingModel"] = "embeddingModel"
-                attrValues[":embeddingModel"] = AttributeValue.builder().s(embeddingModel).build()
-            }
-
-            if (embeddingModelConversations != null) {
-                updateParts.add("#embeddingModelConversations = :embeddingModelConversations")
-                attrNames["#embeddingModelConversations"] = "embeddingModelConversations"
-                attrValues[":embeddingModelConversations"] =
-                    AttributeValue.builder().s(embeddingModelConversations).build()
-            }
-
-            if (embeddingModelNotes != null) {
-                updateParts.add("#embeddingModelNotes = :embeddingModelNotes")
-                attrNames["#embeddingModelNotes"] = "embeddingModelNotes"
-                attrValues[":embeddingModelNotes"] = AttributeValue.builder().s(embeddingModelNotes).build()
+            val lockedModel = embeddingModel?.takeIf { it.isNotBlank() }
+            if (lockedModel != null) {
+                EMBEDDING_MODEL_ATTRIBUTES.forEach { attribute ->
+                    updateParts.add("#$attribute = :embeddingModel")
+                    attrNames["#$attribute"] = attribute
+                }
+                attrValues[":embeddingModel"] = AttributeValue.builder().s(lockedModel).build()
             }
 
             listOf(
@@ -462,24 +452,94 @@ class CustomerProfileRepository(
                 }
             }
 
-            val updateReq = UpdateItemRequest.builder()
-                .tableName(CUSTOMER_PREFERENCES_TABLE)
-                .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
-                .updateExpression(
-                    "SET " + updateParts.joinToString(", ") +
-                        (if (removeParts.isNotEmpty()) " REMOVE " + removeParts.joinToString(", ") else "")
-                )
-                .expressionAttributeNames(attrNames)
-                .expressionAttributeValues(attrValues)
-                .build()
+            fun update(extraSet: List<String>, condition: String?): UpdateItemRequest =
+                UpdateItemRequest.builder()
+                    .tableName(CUSTOMER_PREFERENCES_TABLE)
+                    .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
+                    .updateExpression(
+                        "SET " + (updateParts + extraSet).joinToString(", ") +
+                            (if (removeParts.isNotEmpty()) " REMOVE " + removeParts.joinToString(", ") else "")
+                    )
+                    .apply {
+                        if (condition != null) {
+                            conditionExpression(condition)
+                            returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
+                        }
+                    }
+                    .expressionAttributeNames(
+                        attrNames + if (extraSet.isNotEmpty()) mapOf("#embeddingModelChosenAt" to "embeddingModelChosenAt") else emptyMap()
+                    )
+                    .expressionAttributeValues(
+                        attrValues +
+                            (if (extraSet.isNotEmpty()) mapOf(":chosenAt" to AttributeValue.builder().s(now).build()) else emptyMap()) +
+                            (if (condition != null) mapOf(":empty" to AttributeValue.builder().s("").build()) else emptyMap())
+                    )
+                    .build()
 
-            dynamoDbClient.updateItem(updateReq)
+            if (lockedModel == null) {
+                dynamoDbClient.updateItem(update(emptyList(), null))
+            } else {
+                // First choice: nothing chosen yet, so this save picks the model
+                // and stamps when. Otherwise only the model already chosen may
+                // be saved again; anything else is refused.
+                try {
+                    dynamoDbClient.updateItem(
+                        update(listOf("#embeddingModelChosenAt = :chosenAt"), NOTHING_CHOSEN_CONDITION)
+                    )
+                } catch (e: ConditionalCheckFailedException) {
+                    try {
+                        dynamoDbClient.updateItem(update(emptyList(), SAME_MODEL_CONDITION))
+                    } catch (locked: ConditionalCheckFailedException) {
+                        throw EmbeddingModelLockedException(chosenEmbeddingModel(locked.item().orEmpty()))
+                    }
+                }
+            }
             logger.info("Saved preferences for customer $customerId to DynamoDB (Upsert)")
+        } catch (e: EmbeddingModelLockedException) {
+            logger.info("Refused embedding model change for customer $customerId: locked to ${e.lockedModel}")
+            throw e
         } catch (e: Exception) {
             logger.error("Failed to save Customer Preferences to DynamoDB", e)
             throw e
         }
     }
+
+    /**
+     * Replaces a chosen embedding model that can no longer be used with [to],
+     * in one conditional write: only if [from] is still the chosen model, so a
+     * concurrent change is never overwritten. Stamps the new choice.
+     */
+    suspend fun replaceUnusableEmbeddingModel(customerId: String, from: String, to: String) =
+        withContext(Dispatchers.IO) {
+            val now = Instant.now().toString()
+            try {
+                dynamoDbClient.updateItem(
+                    UpdateItemRequest.builder()
+                        .tableName(CUSTOMER_PREFERENCES_TABLE)
+                        .key(mapOf(CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build()))
+                        .updateExpression(
+                            "SET " + (EMBEDDING_MODEL_ATTRIBUTES.map { "#$it = :to" } +
+                                "#embeddingModelChosenAt = :chosenAt" + "#updatedAt = :chosenAt").joinToString(", ")
+                        )
+                        .conditionExpression(SAME_MODEL_CONDITION)
+                        .returnValuesOnConditionCheckFailure(ReturnValuesOnConditionCheckFailure.ALL_OLD)
+                        .expressionAttributeNames(
+                            EMBEDDING_MODEL_ATTRIBUTES.associateBy { "#$it" } +
+                                mapOf("#embeddingModelChosenAt" to "embeddingModelChosenAt", "#updatedAt" to "updatedAt")
+                        )
+                        .expressionAttributeValues(mapOf(
+                            ":embeddingModel" to AttributeValue.builder().s(from).build(),
+                            ":to" to AttributeValue.builder().s(to).build(),
+                            ":chosenAt" to AttributeValue.builder().s(now).build(),
+                            ":empty" to AttributeValue.builder().s("").build()
+                        ))
+                        .build()
+                )
+                logger.info("Replaced unusable embedding model $from with $to for customer $customerId")
+            } catch (e: ConditionalCheckFailedException) {
+                throw EmbeddingModelLockedException(chosenEmbeddingModel(e.item().orEmpty()))
+            }
+        }
 
     suspend fun getAIConfigPreferences(customerId: String): AIConfigPreferences? =
         withContext(Dispatchers.IO) {
@@ -507,6 +567,7 @@ class CustomerProfileRepository(
                 embeddingModel = item["embeddingModel"]?.s(),
                 embeddingModelConversations = item["embeddingModelConversations"]?.s(),
                 embeddingModelNotes = item["embeddingModelNotes"]?.s(),
+                embeddingModelChosenAt = item["embeddingModelChosenAt"]?.s(),
                 preferredAgentId = item["preferredAgentId"]?.s(),
                 memoryLearnFromChats = item[MEMORY_LEARN_FROM_CHATS]?.bool(),
                 memoryLearnFromNotes = item[MEMORY_LEARN_FROM_NOTES]?.bool(),
@@ -651,6 +712,29 @@ class CustomerProfileRepository(
         }
 
     companion object {
+        /** All three are written with the one chosen model, so every consumer agrees. */
+        private val EMBEDDING_MODEL_ATTRIBUTES = listOf("embeddingModel", "embeddingModelConversations", "embeddingModelNotes")
+
+        /** Absent or blank counts as unset, for rows saved by older clients. */
+        private fun unset(attribute: String) = "(attribute_not_exists(#$attribute) OR #$attribute = :empty)"
+
+        private val NOTHING_CHOSEN_CONDITION =
+            EMBEDDING_MODEL_ATTRIBUTES.joinToString(" AND ") { unset(it) }
+
+        /**
+         * The model already chosen is the one the apps have always shown:
+         * the conversations field, else the single field, else the notes field.
+         * Saving that same model again is allowed.
+         */
+        private val SAME_MODEL_CONDITION =
+            "#embeddingModelConversations = :embeddingModel" +
+                " OR (${unset("embeddingModelConversations")} AND #embeddingModel = :embeddingModel)" +
+                " OR (${unset("embeddingModelConversations")} AND ${unset("embeddingModel")} AND #embeddingModelNotes = :embeddingModel)"
+
+        internal fun chosenEmbeddingModel(item: Map<String, AttributeValue>): String? =
+            listOf("embeddingModelConversations", "embeddingModel", "embeddingModelNotes")
+                .firstNotNullOfOrNull { item[it]?.s()?.takeIf { value -> value.isNotBlank() } }
+
         private const val MAX_SEARCH_RESULTS = 5
         // Read past the limit so hits dropped as blocked or undiscoverable don't empty the results.
         private const val SEARCH_SCAN_LIMIT = 10

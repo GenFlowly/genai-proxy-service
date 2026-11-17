@@ -1094,6 +1094,9 @@ class ConversationRepository(
                     message.stopReason?.let {
                         map["stopReason"] = AttributeValue.builder().s(it).build()
                     }
+                    message.developerKeyId?.let {
+                        map["developerKeyId"] = AttributeValue.builder().s(it).build()
+                    }
                     message.learnedFactsJson?.let {
                         map["learnedFactsJson"] = AttributeValue.builder().s(it).build()
                     }
@@ -1185,6 +1188,7 @@ class ConversationRepository(
             thinkingDurationMs = item["thinkingDurationMs"]?.n()?.toLongOrNull(),
             thinkingStepsJson = item["thinkingStepsJson"]?.s()?.takeIf { it.isNotBlank() },
             stopReason = item["stopReason"]?.s()?.takeIf { it.isNotBlank() },
+            developerKeyId = item["developerKeyId"]?.s(),
             createdAt = item["createdAt"]?.s()
         )
     }

@@ -35,7 +35,7 @@ fun Route.registerUsageRoutes(
         get(Routes.USAGE_LLM, {
             tags("Usage")
             summary = "Per-customer LLM cost/usage summary"
-            description = "Totals + per-vendor + per-model breakdown for a date range. Web-app only."
+            description = "Totals + per-vendor + per-model breakdown + per-day series (byDay, UTC dates with usage) for a date range. Web-app only."
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
@@ -54,7 +54,7 @@ fun Route.registerUsageRoutes(
         get(Routes.USAGE_EMBEDDING, {
             tags("Usage")
             summary = "Per-customer embedding cost/usage summary"
-            description = "Totals + per-vendor + per-model breakdown for a date range. Web-app only."
+            description = "Totals + per-vendor + per-model breakdown + per-day series (byDay, UTC dates with usage) for a date range. Web-app only."
         }) {
             try {
                 val customerId = call.requireAuthenticatedCustomerId(customerProfileService)

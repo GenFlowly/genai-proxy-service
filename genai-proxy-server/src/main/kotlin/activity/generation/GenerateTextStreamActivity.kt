@@ -4,6 +4,7 @@ import com.genflowly.ResponseHeaders
 import com.genflowly.Routes
 import com.genflowly.service.CustomerProfileService
 import com.genflowly.utils.bearerToken
+import com.genflowly.utils.developerApiKeyId
 import com.genflowly.utils.ensureAiDataConsent
 import com.genflowly.utils.requireAuthenticatedCustomerId
 import io.ktor.http.ContentType
@@ -119,7 +120,8 @@ fun Route.registerGenerateTextStreamRoutes(
                     request.agentId,
                     request.projectId,
                     request.regenerateMessageId,
-                    request.generationId
+                    request.generationId,
+                    developerKeyId = call.developerApiKeyId()
                 )
 
                 call.response.header(ResponseHeaders.CONVERSATION_ID, streamResult.conversationId)

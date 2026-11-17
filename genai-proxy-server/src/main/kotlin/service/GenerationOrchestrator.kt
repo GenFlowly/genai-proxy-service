@@ -191,8 +191,8 @@ class GenerationOrchestrator(
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         useLearnedPreferences: Boolean = true,
         agentId: String? = null,
-        projectId: String? = null
-
+        projectId: String? = null,
+        developerKeyId: String? = null
     ): List<Message> {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -237,7 +237,8 @@ class GenerationOrchestrator(
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
             instructionId = effectiveInstructionId.takeIf { it.isNotBlank() },
-            instructionVersion = effectiveInstructionVersion.takeIf { it.isNotBlank() }
+            instructionVersion = effectiveInstructionVersion.takeIf { it.isNotBlank() },
+            developerKeyId = developerKeyId
         )
 
         // Step 4 - Add message request to conversation
@@ -345,6 +346,7 @@ class GenerationOrchestrator(
             conversationId = message.conversationId,
             customerId = message.customerId,
             client = message.client,
+            developerKeyId = message.developerKeyId,
             role = "assistant",
             // A pure tool-call response has no text — don't fake an error message
             text = result.text ?: if (result.toolCallsJson != null) "" else
@@ -414,7 +416,8 @@ class GenerationOrchestrator(
         agentId: String? = null,
         projectId: String? = null,
         regenerateMessageId: String? = null,
-        clientGenerationId: String? = null
+        clientGenerationId: String? = null,
+        developerKeyId: String? = null
     ): StreamExecutionResult {
 
         requestValidator.validateAttachments(attachments, customerId)
@@ -508,7 +511,8 @@ class GenerationOrchestrator(
             aiConfig = aiConfig,
             systemPrompt = systemPrompt,
             instructionId = effectiveInstructionId.takeIf { it.isNotBlank() },
-            instructionVersion = effectiveInstructionVersion.takeIf { it.isNotBlank() }
+            instructionVersion = effectiveInstructionVersion.takeIf { it.isNotBlank() },
+            developerKeyId = developerKeyId
         )
 
         // Step 3 - Add message request to conversation (skip when a parallel
@@ -745,6 +749,7 @@ class GenerationOrchestrator(
                         conversationId = message.conversationId,
                         customerId = message.customerId,
                         client = message.client,
+                        developerKeyId = message.developerKeyId,
                         role = "assistant",
                         text = responseText,
                         toolCallsJson = capturedToolCallsJson,

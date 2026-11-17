@@ -2,6 +2,7 @@ package com.genflowly.repository
 
 import com.genflowly.DynamoDBConstants
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
+import com.genflowly.models.DeveloperKeyUsage
 import com.genflowly.models.Message
 import com.genflowly.models.UsageCategory
 import com.genflowly.models.UsageRollupRow
@@ -65,11 +66,53 @@ class UsageRollupRepository(
         }
 
     /**
+     * All-time totals per developer API key (keyId -> totals), from the
+     * undated "total#developer#apikey#<keyId>" rows: one prefix query on the
+     * customer's partition. Those sort keys start with a letter, so they sort
+     * after every date and never show up in [queryRange].
+     */
+    suspend fun queryDeveloperKeyTotals(customerId: String): Map<String, DeveloperKeyUsage> =
+        withContext(Dispatchers.IO) {
+            val totals = mutableMapOf<String, DeveloperKeyUsage>()
+            var exclusiveStartKey: Map<String, AttributeValue>? = null
+            do {
+                val queryBuilder = QueryRequest.builder()
+                    .tableName(DynamoDBConstants.CUSTOMER_USAGE_TABLE)
+                    .keyConditionExpression("#cid = :cid AND begins_with(#ud, :prefix)")
+                    .expressionAttributeNames(mapOf(
+                        "#cid" to CUSTOMER_ID_KEY,
+                        "#ud" to DynamoDBConstants.USAGE_DATE_SORT_KEY
+                    ))
+                    .expressionAttributeValues(mapOf(
+                        ":cid" to AttributeValue.builder().s(customerId).build(),
+                        ":prefix" to AttributeValue.builder().s(DEVELOPER_TOTAL_PREFIX).build()
+                    ))
+                if (!exclusiveStartKey.isNullOrEmpty()) {
+                    queryBuilder.exclusiveStartKey(exclusiveStartKey)
+                }
+                val response = dynamoDbClient.query(queryBuilder.build())
+                response.items().forEach { item ->
+                    val keyId = item[DynamoDBConstants.USAGE_DATE_SORT_KEY]?.s()?.removePrefix(DEVELOPER_TOTAL_PREFIX)
+                    if (!keyId.isNullOrBlank()) {
+                        totals[keyId] = DeveloperKeyUsage(
+                            requestCount = item["requestCount"]?.n()?.toDoubleOrNull()?.toLong() ?: 0L,
+                            costUsd = item["costUsd"]?.n()?.toDoubleOrNull() ?: 0.0
+                        )
+                    }
+                }
+                exclusiveStartKey = if (response.hasLastEvaluatedKey()) response.lastEvaluatedKey() else null
+            } while (!exclusiveStartKey.isNullOrEmpty())
+            totals
+        }
+
+    /**
      * Fans a message's token/cost usage into the LLM rollup bucket for the
      * day it was created. Best-effort: callers must catch and swallow —
      * never let a rollup failure fail the message save. Call only for
      * freshly-generated messages (never for [Message.createdAt]-preserving
      * copies, e.g. conversation forks, which would double-count history).
+     * A turn requested with a developer API key is also added to that key's
+     * dated DEVELOPER row and its undated all-time row.
      */
     suspend fun incrementLlmUsage(message: Message) = withContext(Dispatchers.IO) {
         val config = message.aiConfig.firstOrNull() ?: return@withContext
@@ -124,6 +167,55 @@ class UsageRollupRepository(
                 .expressionAttributeValues(values)
                 .build()
         )
+
+        val keyId = message.developerKeyId?.takeIf { it.isNotBlank() } ?: return@withContext
+        val developerCategory = UsageCategory.DEVELOPER.storageKey
+        listOf(
+            "$date#$developerCategory#$DEVELOPER_VENDOR#$keyId",
+            "$DEVELOPER_TOTAL_PREFIX$keyId"
+        ).forEach { sortKey ->
+            addDeveloperKeyUsage(message.customerId, sortKey, keyId, message.costUsd, message.totalTokens)
+        }
+    }
+
+    private fun addDeveloperKeyUsage(
+        customerId: String,
+        sortKey: String,
+        keyId: String,
+        costUsd: Double?,
+        totalTokens: Int?
+    ) {
+        val addParts = mutableListOf("requestCount :one")
+        val values = mutableMapOf(
+            ":cat" to AttributeValue.builder().s(UsageCategory.DEVELOPER.storageKey).build(),
+            ":ven" to AttributeValue.builder().s(DEVELOPER_VENDOR).build(),
+            ":d3" to AttributeValue.builder().s(keyId).build(),
+            ":one" to AttributeValue.builder().n("1").build()
+        )
+        costUsd?.let {
+            addParts.add("costUsd :cost")
+            values[":cost"] = AttributeValue.builder().n(it.toString()).build()
+        }
+        totalTokens?.let {
+            addParts.add("totalTokens :tokens")
+            values[":tokens"] = AttributeValue.builder().n(it.toString()).build()
+        }
+        dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_USAGE_TABLE)
+                .key(mapOf(
+                    CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                    DynamoDBConstants.USAGE_DATE_SORT_KEY to AttributeValue.builder().s(sortKey).build()
+                ))
+                .updateExpression("SET #cat = :cat, #ven = :ven, #d3 = :d3 ADD ${addParts.joinToString(", ")}")
+                .expressionAttributeNames(mapOf(
+                    "#cat" to DynamoDBConstants.USAGE_CATEGORY_KEY,
+                    "#ven" to DynamoDBConstants.USAGE_VENDOR_KEY,
+                    "#d3" to DynamoDBConstants.USAGE_DIM3_KEY
+                ))
+                .expressionAttributeValues(values)
+                .build()
+        )
     }
 
     private fun toRow(item: Map<String, AttributeValue>): UsageRollupRow? {
@@ -144,6 +236,8 @@ class UsageRollupRepository(
     }
 
     companion object {
+        private const val DEVELOPER_VENDOR = "apikey"
+        private const val DEVELOPER_TOTAL_PREFIX = "total#developer#$DEVELOPER_VENDOR#"
         private val RESERVED_KEYS = setOf(
             CUSTOMER_ID_KEY,
             DynamoDBConstants.USAGE_DATE_SORT_KEY,
