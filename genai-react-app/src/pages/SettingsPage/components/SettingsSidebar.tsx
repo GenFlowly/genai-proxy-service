@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../../../context/AuthContext'
-import { Icon, PillButton, ScrollArea, SidebarCard } from '@genflowly/component-library'
+import { Icon, PillButton, ScrollArea, SidebarWidget } from '@genflowly/component-library'
 import MobileMenuBody from '../../../components/widgets/MobileMenuBody/MobileMenuBody'
 import { ICONS } from '../../../constants/icons'
 import styles from './SettingsSidebar.module.scss'
@@ -231,7 +231,7 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                 onSearchChange={setQuery}
                 searchPlaceholder={t('layout.mobileMenu.searchSettings')}
             >
-                <SidebarCard className={styles.menuCard}>
+                <SidebarWidget className={styles.menuCard}>
                     <h2 className={styles.menuHeader}>{t('settingsPage.settingsSidebar.title')}</h2>
                     <ScrollArea className={styles.menuScroll}>
                         {normalizedQuery ? (
@@ -254,8 +254,8 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                             )
                         ) : nav}
                     </ScrollArea>
-                </SidebarCard>
-                <SidebarCard className={styles.menuLinkCard}>
+                </SidebarWidget>
+                <SidebarWidget className={styles.menuLinkCard}>
                     <button
                         className={styles.menuLink}
                         onClick={() => { navigate(supportLink.path); onNavigate?.() }}
@@ -272,8 +272,8 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                         <Icon src={ICONS.DOCUMENT_TEXT} size={iconSize} className={styles.icon} />
                         <span>{t('settingsPage.settingsSidebar.privacyPolicy')}</span>
                     </button>
-                </SidebarCard>
-                <SidebarCard className={styles.menuLogoutCard}>
+                </SidebarWidget>
+                <SidebarWidget className={styles.menuLogoutCard}>
                     <button
                         className={styles.menuLogout}
                         onClick={() => logout({ returnTo: window.location.origin })}
@@ -282,7 +282,7 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                         <Icon src={ICONS.LOGOUT} size={iconSize} />
                         <span>{t('settingsPage.settingsSidebar.logout')}</span>
                     </button>
-                </SidebarCard>
+                </SidebarWidget>
             </MobileMenuBody>
         )
     }

@@ -127,4 +127,21 @@ describe('ChatSidebar', () => {
 
         expect(screen.getByTestId('chat-sidebar-search')).not.toHaveFocus()
     })
+
+    test('New Chat and the search field show tooltips; typing in the field shows none', () => {
+        renderSidebar()
+        const newChat = screen.getByTestId('new-chat-button')
+        fireEvent.mouseEnter(newChat.parentElement!)
+        expect(screen.getByRole('tooltip')).toHaveTextContent('New Chat')
+        fireEvent.mouseLeave(newChat.parentElement!)
+
+        const search = screen.getByTestId('chat-sidebar-search')
+        const searchTip = search.closest('[class*="tooltipContainer"]') as HTMLElement
+        fireEvent.mouseEnter(searchTip)
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Search chats')
+        fireEvent.mouseLeave(searchTip)
+
+        fireEvent.focus(search)
+        expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+    })
 })

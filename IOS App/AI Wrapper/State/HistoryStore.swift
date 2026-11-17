@@ -336,6 +336,73 @@ final class HistoryStore: ObservableObject {
         }
     }
 
+    /// Renames the project everywhere the menu shows its name. False when the rename failed.
+    func renameProject(_ project: Project, to name: String) async -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let token = try? await auth?.getAccessTokenSilently() else { return false }
+        do {
+            try await ConversationHistoryService.renameProject(token: token, projectId: project.projectId, name: trimmed)
+        } catch {
+            AppObservability.capture(error, context: ["where": "renameProject"])
+            toasts?.showToast(L("conversation.conversationHistory.renameProjectFailed"))
+            return false
+        }
+        applyProjectRename(project.projectId, name: trimmed)
+        toasts?.showToast(L("conversation.conversationHistory.projectRenamed"))
+        return true
+    }
+
+    func applyProjectRename(_ projectId: String, name: String) {
+        for index in projects.indices where projects[index].projectId == projectId {
+            projects[index].name = name
+        }
+        func rename(_ list: inout [ConversationSummary]) {
+            for index in list.indices where list[index].projectId == projectId {
+                list[index].projectName = name
+            }
+        }
+        rename(&items)
+        rename(&pinned)
+        for key in Array(projectItems.keys) {
+            guard var list = projectItems[key] else { continue }
+            rename(&list)
+            projectItems[key] = list
+        }
+        persist()
+    }
+
+    /// Deletes the project; its conversations stay and return to Pinned and Recents. Throws
+    /// when the delete failed, and the menu keeps the project.
+    func deleteProject(_ project: Project) async throws {
+        guard let token = try await auth?.getAccessTokenSilently() else { return }
+        do {
+            try await ConversationHistoryService.deleteProject(token: token, projectId: project.projectId)
+        } catch {
+            AppObservability.capture(error, context: ["where": "deleteProject"])
+            throw error
+        }
+        applyProjectDeletion(project.projectId)
+        toasts?.showToast(L("conversation.conversationHistory.projectDeleted"))
+    }
+
+    func applyProjectDeletion(_ projectId: String) {
+        projects.removeAll { $0.projectId == projectId }
+        func unassign(_ list: inout [ConversationSummary]) {
+            for index in list.indices where list[index].projectId == projectId {
+                list[index].projectId = nil
+                list[index].projectName = nil
+            }
+        }
+        unassign(&items)
+        unassign(&pinned)
+        projectItems[projectId] = nil
+        projectCursors[projectId] = nil
+        expandedProjects[projectId] = nil
+        optimisticMembers[projectId] = nil
+        loadedProjects.remove(projectId)
+        persist()
+    }
+
     func move(_ conversation: ConversationSummary, to project: Project) async {
         let previous = (conversation.projectId, conversation.projectName)
         applyProjectLocally(conversation, projectId: project.projectId, projectName: project.name)

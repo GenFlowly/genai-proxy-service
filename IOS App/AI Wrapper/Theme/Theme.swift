@@ -63,6 +63,13 @@ enum AppTheme {
             ? UIColor(red: 38 / 255, green: 38 / 255, blue: 42 / 255, alpha: 0.72)
             : UIColor(red: 243 / 255, green: 243 / 255, blue: 246 / 255, alpha: 0.78)
     })
+    /// `--sidebar-surface`: the card over the page background as one opaque colour, for headings
+    /// that stay put while the card's rows scroll beneath them.
+    static let sidebarSurface = Color(uiColor: UIColor {
+        $0.userInterfaceStyle == .dark
+            ? UIColor(red: (0.72 * 38 + 0.28 * 28) / 255, green: (0.72 * 38 + 0.28 * 28) / 255, blue: (0.72 * 42 + 0.28 * 30) / 255, alpha: 1)
+            : UIColor(red: (0.78 * 243 + 0.22 * 245) / 255, green: (0.78 * 243 + 0.22 * 245) / 255, blue: (0.78 * 246 + 0.22 * 245) / 255, alpha: 1)
+    })
     static let sidebarHairline = Color(uiColor: UIColor {
         $0.userInterfaceStyle == .dark ? UIColor.white.withAlphaComponent(0.09) : UIColor.black.withAlphaComponent(0.08)
     })

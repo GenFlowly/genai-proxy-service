@@ -9,6 +9,7 @@ import { useAuth0 } from '@auth0/auth0-react'
 import { useToast } from '../../../../context/ToastContext'
 import * as conversationService from '../../../../services/conversationService'
 import { ModerationError } from '../../../../services/moderationService'
+import { clearHistoryCache, saveHistoryCache } from '../../../../components/widgets/ConversationHistoryWidget/historyCache'
 
 jest.mock('../../../../context/ConversationContext')
 jest.mock('../../../../context/AuthContext', () => ({
@@ -547,5 +548,63 @@ describe('ConversationHeader', () => {
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         expect(screen.getByTestId('mobile-subtitle')).toHaveTextContent('Smart Helper')
+    })
+
+    describe('a new chat started from a project', () => {
+        const seedProjects = () => saveHistoryCache('cust-1', {
+            items: [],
+            pinned: [],
+            lastKey: null,
+            hasMore: false,
+            projects: [{ projectId: 'proj-1', name: 'Startup', createdAt: 'c', updatedAt: 'u' }],
+            projectItems: {},
+        })
+
+        beforeEach(() => {
+            clearHistoryCache()
+            seedProjects()
+            mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
+            mockUseAuth.mockReturnValue({ entitlements: { canShare: true }, customerId: 'cust-1' })
+        })
+
+        afterEach(() => clearHistoryCache())
+
+        test('phone: the subtitle says which project, then the instruction', () => {
+            mockUseConversation.mockReturnValue({
+                conversationId: '',
+                conversationTitle: null,
+                conversationRole: 'OWNER',
+                resetConversation: jest.fn(),
+                pendingProjectId: 'proj-1',
+            })
+            render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+
+            const subtitle = screen.getByTestId('mobile-subtitle')
+            expect(subtitle).toHaveTextContent('in Startup·Choose instruction')
+            expect(screen.getByTestId('mobile-header-project')).toHaveTextContent('in Startup')
+        })
+
+        test('phone: no project line once the conversation exists, or for an unknown project', () => {
+            mockUseConversation.mockReturnValue({
+                conversationId: 'conv-1',
+                conversationTitle: 'Pitch',
+                conversationRole: 'OWNER',
+                resetConversation: jest.fn(),
+                pendingProjectId: 'proj-1',
+            })
+            const { unmount } = render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+            expect(screen.queryByTestId('mobile-header-project')).not.toBeInTheDocument()
+            unmount()
+
+            mockUseConversation.mockReturnValue({
+                conversationId: '',
+                conversationTitle: null,
+                conversationRole: 'OWNER',
+                resetConversation: jest.fn(),
+                pendingProjectId: 'proj-gone',
+            })
+            render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
+            expect(screen.queryByTestId('mobile-header-project')).not.toBeInTheDocument()
+        })
     })
 })

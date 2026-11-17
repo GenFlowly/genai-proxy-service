@@ -53,37 +53,17 @@ struct RightSidebarModal: View {
         .task(id: conversation.editorPrompt) { await updateTokenCount() }
     }
 
-    /// SidebarCard with a header: 16pt icon, 12/500 title, actions at the right end, a
-    /// hairline under the 34pt header, and the body padded 8 by 10.
+    /// A SidebarWidget whose body stacks its rows 6pt apart, as the dock's widgets do.
     private func card<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
         card(icon: icon, title: title, actions: { EmptyView() }, content: content)
     }
 
     private func card<Actions: View, Content: View>(icon: String, title: String, @ViewBuilder actions: () -> Actions, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                WebIcon(name: icon, size: 16, color: AppTheme.textSecondary)
-                Text(title)
-                    .webText(12, 500)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                actions()
-            }
-            .padding(.leading, 10)
-            .padding(.trailing, 6)
-            .frame(height: 34)
-            .overlay(alignment: .bottom) { Rectangle().fill(AppTheme.sidebarHairline).frame(height: 1) }
-
+        SidebarWidget(title: title, icon: icon, actions: actions) {
             VStack(alignment: .leading, spacing: 6) {
                 content()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .sidebarCard()
     }
 
     private func loadData() async {

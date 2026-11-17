@@ -22,6 +22,7 @@ export default function ChatMenuContent({ onClose }: { onClose: () => void }): R
                 <MenuSearchResults
                     query={query}
                     types={SEARCH_TYPES}
+                    surface="card"
                     untitledLabel={t('conversation.conversationHistory.untitledConversation')}
                     onSelect={result => {
                         navigate(`/chat/${result.key}`)

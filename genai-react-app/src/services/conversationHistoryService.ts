@@ -1,6 +1,13 @@
 import { HttpMethod } from '../constants/http';
 import { endpoints } from '../config/endpoints';
 import { fetchWithRetry } from '../utils/apiUtils';
+import { queryClient } from '../queryClient';
+import { MEMORIES_QUERY_KEY, PROJECTS_QUERY_KEY } from '../hooks/queries/queryKeys';
+import {
+    patchHistoryCache,
+    withoutProject,
+    withRenamedProject,
+} from '../components/widgets/ConversationHistoryWidget/historyCache';
 import {
     ForkConversationResponse,
     GetCustomerConversationsResponse,
@@ -181,6 +188,66 @@ export const createProject = async (
     }
 
     return response.json();
+};
+
+/**
+ * Renames the project. The server trims the name (1 to 100 characters); the
+ * trimmed name goes into every cached copy of the project and of its
+ * conversations' summaries.
+ */
+export const renameProject = async (
+    token: string,
+    projectId: string,
+    name: string
+): Promise<void> => {
+    const response = await fetchWithRetry(endpoints.renameProject(projectId), {
+        method: HttpMethod.POST,
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Failed to rename project: ${response.statusText}`);
+    }
+
+    const trimmed = name.trim();
+    patchHistoryCache(state => withRenamedProject(state, projectId, trimmed));
+    queryClient.setQueriesData<Project[]>(
+        { queryKey: [PROJECTS_QUERY_KEY] },
+        (old: Project[] | undefined) => old?.map(p => (p.projectId === projectId ? { ...p, name: trimmed } : p))
+    );
+};
+
+/**
+ * Deletes the project. Its conversations stay and return to the global
+ * history; memories that belonged only to this project are deleted with it,
+ * so the memory lists are refetched. A project that is already gone counts
+ * as deleted.
+ */
+export const deleteProject = async (
+    token: string,
+    projectId: string
+): Promise<void> => {
+    const response = await fetchWithRetry(endpoints.deleteProject(projectId), {
+        method: HttpMethod.DELETE,
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+
+    if (!response.ok && response.status !== 404) {
+        throw new Error(`Failed to delete project: ${response.statusText}`);
+    }
+
+    patchHistoryCache(state => withoutProject(state, projectId));
+    queryClient.setQueriesData<Project[]>(
+        { queryKey: [PROJECTS_QUERY_KEY] },
+        (old: Project[] | undefined) => old?.filter(p => p.projectId !== projectId)
+    );
+    void queryClient.invalidateQueries({ queryKey: [MEMORIES_QUERY_KEY] });
 };
 
 export const assignConversationToProject = async (

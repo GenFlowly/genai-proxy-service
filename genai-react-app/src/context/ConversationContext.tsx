@@ -604,6 +604,10 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         setPendingProjectId(projectId)
     }, [resetConversation, setPendingProjectId])
 
+    const clearPendingProject = useCallback(() => {
+        setPendingProjectId(null)
+    }, [setPendingProjectId])
+
     // --- Core Actions ---
     const addNewConversationBlock = useCallback(() => {
         const newConversation: ConversationBlock = {
@@ -1323,6 +1327,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         loadConversation,
         resetConversation,
         startConversationInProject,
+        clearPendingProject,
         pendingProjectId,
         conversationTitle,
         conversationRole,
@@ -1349,6 +1354,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         loadConversation,
         resetConversation,
         startConversationInProject,
+        clearPendingProject,
         pendingProjectId,
         conversationTitle,
         conversationRole,

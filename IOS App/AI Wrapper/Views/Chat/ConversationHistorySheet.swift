@@ -1,13 +1,15 @@
 import SwiftUI
 
-/// The history menu content (ConversationHistoryComponent): two stacked cards split by a
-/// draggable divider — Projects on top, Pinned + Recents below — with fork trees, per-row
-/// move/pin/delete actions, infinite scroll, and the project and delete dialogs.
+/// The history menu content (ConversationHistoryComponent): the Projects and Chats widgets
+/// stacked on a draggable split, with fork trees, per-row swipe actions (Pin to the right; Move
+/// and Delete, or Rename and Delete project, to the left), infinite scroll, and the project and
+/// delete dialogs.
 struct ConversationHistoryPanel: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
     @EnvironmentObject var router: AppRouter
     @EnvironmentObject var history: HistoryStore
+    @EnvironmentObject var memories: MemoriesStore
 
     /// Fires on tap, before the conversation loads, so the menu closes immediately.
     let onSelect: () -> Void
@@ -15,18 +17,23 @@ struct ConversationHistoryPanel: View {
     @State private var isCreateProjectOpen = false
     @State private var newProjectName = ""
     @State private var isCreatingProject = false
+    @State private var renameTarget: Project?
+    @State private var renameName = ""
+    @State private var isRenamingProject = false
+    @State private var deleteProjectTarget: Project?
+    @State private var isDeletingProject = false
+    @State private var deleteProjectError: String?
     @State private var moveTarget: ConversationSummary?
     /// Deleting is permanent, so a row's Delete asks first.
     @State private var deleteTarget: ConversationSummary?
     @State private var isDeleting = false
     @State private var deleteError: String?
-    @State private var openRowId: String?
+    @State private var openRow: SwipeOpenRow?
     /// The project just expanded, until its row has scrolled up with its conversations loaded.
     @State private var revealingProject: String?
     @State private var projectsCardHeight: CGFloat = 0
-    /// `scroll-margin-top`: the row lands 2pt below the pinned section header, like the web's. Any
-    /// more and the row above shows its text in the gap.
-    private static let pinnedHeaderSpace: CGFloat = 44
+    /// The web's `scroll-margin-top` on an expanding project: it lands 44pt below the list's top.
+    private static let revealMargin: CGFloat = 44
 
     private var showProjectsPanel: Bool { history.hasAnyData || (!history.isLoading && !history.loadFailed) }
 
@@ -41,11 +48,15 @@ struct ConversationHistoryPanel: View {
             topCollapsed: topCollapsed,
             bottomCollapsed: bottomCollapsed,
             hasTop: showProjectsPanel,
-            top: { projectsPanel },
-            bottom: { historyPanel }
+            bare: true,
+            top: { projectsWidget },
+            bottom: { chatsWidget }
         )
         .webModal(isPresented: $isCreateProjectOpen, title: L("conversation.conversationHistory.newProjectTitle"), maxWidth: 416) {
             createProjectForm
+        }
+        .webModal(isPresented: Binding(get: { renameTarget != nil }, set: { if !$0 { renameTarget = nil } }), title: L("conversation.conversationHistory.renameProjectTitle"), maxWidth: 416) {
+            renameProjectForm
         }
         .webModal(isPresented: Binding(get: { moveTarget != nil }, set: { if !$0 { moveTarget = nil } }), title: L("conversation.conversationHistory.moveToProjectTitle"), maxWidth: 416) {
             moveToProjectPicker
@@ -58,6 +69,15 @@ struct ConversationHistoryPanel: View {
             error: deleteError
         ) {
             Task { await deleteConversation() }
+        }
+        .deleteConfirmModal(
+            isPresented: Binding(get: { deleteProjectTarget != nil }, set: { if !$0 { deleteProjectTarget = nil } }),
+            title: L("conversation.conversationHistory.deleteProjectTitle"),
+            message: L("conversation.conversationHistory.deleteProjectConfirm", ["name": deleteProjectTarget?.name ?? ""]),
+            isDeleting: isDeletingProject,
+            error: deleteProjectError
+        ) {
+            Task { await deleteProject() }
         }
         .task(id: auth.customerId) { await history.load() }
         .onAppear { history.ensureExpandedProjectsLoaded(activeId: activeId) }
@@ -83,33 +103,76 @@ struct ConversationHistoryPanel: View {
         }
     }
 
-    // MARK: - Projects card
+    private func deleteProject() async {
+        guard let target = deleteProjectTarget else { return }
+        isDeletingProject = true
+        deleteProjectError = nil
+        defer { isDeletingProject = false }
+        do {
+            try await history.deleteProject(target)
+            memories.projectDeleted(target.projectId)
+            // A new chat waiting to start in the project starts outside it instead
+            if conversation.pendingProjectId == target.projectId { conversation.pendingProjectId = nil }
+            deleteProjectTarget = nil
+        } catch {
+            deleteProjectError = L("conversation.conversationHistory.deleteProjectFailed")
+        }
+    }
 
-    private var projectsPanel: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                projectsList
+    private func renameProject() async {
+        guard let target = renameTarget, !isRenamingProject else { return }
+        isRenamingProject = true
+        defer { isRenamingProject = false }
+        let name = renameName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if await history.renameProject(target, to: name) {
+            memories.projectRenamed(target.projectId, to: name)
+            renameTarget = nil
+        }
+    }
+
+    // MARK: - Projects widget
+
+    private var projectsWidget: some View {
+        SidebarWidget(
+            title: L("conversation.conversationHistory.projects"),
+            icon: "folder",
+            collapsible: true,
+            isExpanded: history.isSectionExpanded("projects"),
+            onToggle: { history.toggleSection("projects") },
+            bodyInsets: EdgeInsets(),
+            toggleIdentifier: "conv-history-projects-heading",
+            actions: {
+                SidebarHeaderAction(icon: "folder-plus", label: L("conversation.conversationHistory.newProject"), identifier: "conv-history-new-project") {
+                    newProjectName = ""
+                    isCreateProjectOpen = true
+                }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { projectsCardHeight = $0 }
-            .onChange(of: revealingProject) { _, _ in revealProject(proxy) }
-            // Conversations load after the first scroll, and only then can the row reach the top.
-            .onChange(of: revealingProject.flatMap { history.projectItems[$0]?.count }) { _, _ in revealProject(proxy) }
-            .onScrollPhaseChange { _, phase in
-                if phase == .interacting {
-                    revealingProject = nil
-                    openRowId = nil
+        ) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    projectsList
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { projectsCardHeight = $0 }
+                .onChange(of: revealingProject) { _, _ in revealProject(proxy) }
+                // Conversations load after the first scroll, and only then can the row reach the top.
+                .onChange(of: revealingProject.flatMap { history.projectItems[$0]?.count }) { _, _ in revealProject(proxy) }
+                .onScrollPhaseChange { _, phase in
+                    if phase == .interacting {
+                        revealingProject = nil
+                        openRow = nil
+                    }
                 }
             }
         }
     }
 
-    /// SidebarListPanel's `scrollIntoView` on expand: the row goes to the top of the card, below
-    /// the pinned section header (`scroll-margin-top`). Not on collapse, and not on appear.
+    /// SidebarListPanel's `scrollIntoView` on expand: the row goes up to the card's top, 44pt
+    /// below it (`scroll-margin-top`). Not on collapse, and not on appear.
     private func revealProject(_ proxy: ScrollViewProxy) {
         guard let id = revealingProject else { return }
         if history.projectItems[id] != nil { revealingProject = nil }
-        let anchor = UnitPoint(x: 0, y: Self.pinnedHeaderSpace / max(projectsCardHeight, Self.pinnedHeaderSpace))
+        let anchor = UnitPoint(x: 0, y: Self.revealMargin / max(projectsCardHeight, Self.revealMargin))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.projectAnchor(id), anchor: anchor) }
         }
@@ -118,39 +181,22 @@ struct ConversationHistoryPanel: View {
     private static func projectAnchor(_ id: String) -> String { "project-\(id)" }
 
     private var projectsList: some View {
-        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-            Section {
-                if history.isSectionExpanded("projects") {
-                    VStack(alignment: .leading, spacing: 1) {
-                        ForEach(history.projects) { project in
-                            projectRow(project)
-                        }
-                    }
-                    if history.projects.isEmpty {
-                        Text(L("conversation.conversationHistory.noProjectsYet"))
-                            .webText(13.6, lineHeight: 20.4)
-                            .foregroundStyle(AppTheme.textMuted)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 16)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-            } header: {
-                SectionHeader(
-                    title: L("conversation.conversationHistory.projects"),
-                    isExpanded: history.isSectionExpanded("projects"),
-                    canExpand: !history.projects.isEmpty,
-                    action: {
-                        ActionIcon(icon: "folder-plus", label: L("conversation.conversationHistory.newProject")) {
-                            isCreateProjectOpen = true
-                        }
-                    },
-                    onToggle: { history.toggleSection("projects") }
-                )
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(history.projects) { project in
+                projectRow(project)
+            }
+            if history.projects.isEmpty {
+                Text(L("conversation.conversationHistory.noProjectsYet"))
+                    .webText(13.6, lineHeight: 20.4)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity)
             }
         }
-        .padding(.bottom, history.isSectionExpanded("projects") ? 8 : 0)
+        .padding(.horizontal, 6)
+        .padding(.bottom, 8)
     }
 
     private func projectRow(_ project: Project) -> some View {
@@ -160,81 +206,73 @@ struct ConversationHistoryPanel: View {
         let recent = history.projectRecent(project.projectId)
         let cursor = history.projectCursors[project.projectId]
         let canExpand = !membersKnown || !pinned.isEmpty || !recent.isEmpty || cursor != nil
+        let isOpen = expanded && canExpand
 
         return VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: 0).id(Self.projectAnchor(project.projectId))
-            ZStack(alignment: .trailing) {
-                Button {
-                    guard canExpand else { return }
-                    history.toggleProject(project.projectId)
-                    revealingProject = expanded ? nil : project.projectId
-                } label: {
-                    HStack(spacing: 7.2) {
-                        if canExpand {
-                            Chevron(expanded: expanded)
-                        } else {
-                            Color.clear.frame(width: 12, height: 12)
+            SwipeableRow(id: "project-\(project.projectId)", openRow: $openRow, trailing: [
+                SwipeAction(icon: "edit", label: L("conversation.conversationHistory.renameProject"), tone: .neutral, identifier: "conv-history-project-rename-\(project.projectId)") {
+                    renameName = project.name
+                    renameTarget = project
+                },
+                SwipeAction(icon: "trash", label: L("conversation.conversationHistory.deleteProject"), tone: .muted, identifier: "conv-history-project-delete-\(project.projectId)") {
+                    deleteProjectError = nil
+                    deleteProjectTarget = project
+                },
+            ]) {
+                ZStack(alignment: .trailing) {
+                    Button {
+                        guard canExpand else { return }
+                        history.toggleProject(project.projectId)
+                        revealingProject = expanded ? nil : project.projectId
+                    } label: {
+                        HStack(spacing: 8) {
+                            if canExpand {
+                                Chevron(expanded: expanded)
+                            } else {
+                                Color.clear.frame(width: 12, height: 12)
+                            }
+                            WebTruncatedLine(project.name)
+                                .webText(arial: 15.2, lineHeight: 18.24)
+                                .foregroundStyle(AppTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        WebIcon(name: "folder", size: 14, color: AppTheme.textMuted)
-                        WebTruncatedLine(project.name)
-                            .webText(arial: 15.2, lineHeight: 18.24)
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 10)
+                        .padding(.trailing, 48)
+                        .frame(minHeight: 48)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.leading, 7.2)
-                    .padding(.trailing, 48)
-                    .frame(minHeight: 48)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(RowPressStyle())
+                    .buttonStyle(MenuRowPressStyle())
+                    .accessibilityIdentifier("conv-history-project-\(project.projectId)")
 
-                ActionIcon(icon: "add-icon", label: L("conversation.conversationHistory.newConversationInProject")) {
-                    history.expandedProjects[project.projectId] = true
-                    history.ensureProjectLoaded(project.projectId)
-                    conversation.startConversationInProject(project.projectId)
-                    router.navigate(.chat)
-                    onSelect()
+                    MenuRowAction(icon: "add-icon", label: L("conversation.conversationHistory.newConversationInProject"), identifier: "conv-history-project-new-conv-\(project.projectId)") {
+                        history.expandedProjects[project.projectId] = true
+                        history.ensureProjectLoaded(project.projectId)
+                        conversation.startConversationInProject(project.projectId)
+                        router.navigate(.chat)
+                        onSelect()
+                    }
                 }
             }
+            .menuRowHairline(!isOpen)
 
-            if expanded, canExpand {
-                VStack(alignment: .leading, spacing: 4) {
+            if isOpen {
+                VStack(alignment: .leading, spacing: 0) {
                     if !pinned.isEmpty {
-                        subsection(L("conversation.conversationHistory.pinned"), pinned, isPinned: true)
+                        MenuSectionLabel(title: L("conversation.conversationHistory.pinned"))
+                        treeRows(pinned, isPinned: true, lastId: recent.isEmpty && membersKnown ? pinned.last?.conversationId : nil)
                     }
                     if !recent.isEmpty || cursor != nil || !membersKnown {
-                        VStack(alignment: .leading, spacing: 0) {
-                            subsectionTitle(L("conversation.conversationHistory.recent"))
-                            treeRows(recent, isPinned: false)
-                            if !membersKnown {
-                                plainRow(L("conversation.conversationHistory.loading")) { history.ensureProjectLoaded(project.projectId) }
-                            }
+                        MenuSectionLabel(title: L("conversation.conversationHistory.recent"))
+                        treeRows(recent, isPinned: false, lastId: membersKnown ? recent.last?.conversationId : nil)
+                        if !membersKnown {
+                            plainRow(L("conversation.conversationHistory.loading")) { history.ensureProjectLoaded(project.projectId) }
                         }
                     }
                 }
-                .padding(.leading, 7.2 + 1)
-                .padding(.bottom, 4)
-                .overlay(alignment: .leading) { Rectangle().fill(AppTheme.borderLight).frame(width: 1) }
-                .padding(.leading, 11.2)
+                .menuTreeGuide()
             }
         }
-    }
-
-    private func subsection(_ title: String, _ list: [ConversationSummary], isPinned: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            subsectionTitle(title)
-            treeRows(list, isPinned: isPinned)
-        }
-    }
-
-    private func subsectionTitle(_ title: String) -> some View {
-        Text(title.uppercased())
-            .webText(12, 700)
-            .kerning(0.6)
-            .foregroundStyle(AppTheme.textMuted)
-            .padding(.leading, 8)
-            .padding(.trailing, 14.4)
-            .padding(.vertical, 6.4)
     }
 
     private func plainRow(_ label: String, action: @escaping () -> Void) -> some View {
@@ -242,71 +280,78 @@ struct ConversationHistoryPanel: View {
             Text(label)
                 .webText(arial: 15.2, lineHeight: 19.76)
                 .foregroundStyle(AppTheme.textSecondary)
-                .padding(.leading, 8)
-                .padding(.vertical, 9.6)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(MenuRowPressStyle())
     }
 
-    // MARK: - History card
+    // MARK: - Chats widget
 
-    private var historyPanel: some View {
-        Group {
-            if history.isLoading && !history.hasAnyData {
-                skeleton
-            } else if history.loadFailed && !history.hasAnyData {
-                centered(L("conversation.conversationHistory.failedToLoad"))
-            } else if history.globalPinned.isEmpty && history.globalRecent.isEmpty {
-                centered(L("conversation.conversationHistory.noConversationsYet"))
-            } else {
-                historyList
+    private var chatsWidget: some View {
+        SidebarWidget(
+            title: L("conversation.conversationHistory.chats"),
+            icon: "chat-bubble",
+            collapsible: true,
+            isExpanded: history.isSectionExpanded("history"),
+            onToggle: { history.toggleSection("history") },
+            bodyInsets: EdgeInsets(),
+            toggleIdentifier: "conv-history-history-heading"
+        ) {
+            Group {
+                if history.isLoading && !history.hasAnyData {
+                    skeleton
+                } else if history.loadFailed && !history.hasAnyData {
+                    centered(L("conversation.conversationHistory.failedToLoad"))
+                } else if history.globalPinned.isEmpty && history.globalRecent.isEmpty {
+                    centered(L("conversation.conversationHistory.noConversationsYet"))
+                } else {
+                    chatsList
+                }
             }
         }
     }
 
-    private var historyList: some View {
+    private var chatsList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 2, pinnedViews: [.sectionHeaders]) {
-                Section {
-                    if history.isSectionExpanded("history") {
-                        if !history.globalPinned.isEmpty {
-                            MenuSubLabel(title: L("conversation.conversationHistory.pinned"), icon: "pin")
-                            treeRows(history.globalPinned, isPinned: true)
-                        }
-                        if !history.globalRecent.isEmpty {
-                            MenuSubLabel(title: L("conversation.conversationHistory.recents"))
-                            treeRows(history.globalRecent, isPinned: false)
-                        }
-                        // Infinite scroll: older pages stream in as the end comes near, paused while a
-                        // fetch runs and after a failure (a failed page retries itself with backoff;
-                        // there is no Load more button). Each page re-arms it, so a page too short to
-                        // fill the list requests the next one. Unstructured because scrolling away must
-                        // not cancel a request that's already out.
-                        if history.hasMore {
-                            Color.clear
-                                .frame(height: 1)
-                                .task(id: history.lastKey) {
-                                    Task { await history.loadMore() }
-                                }
-                        }
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                if !history.globalPinned.isEmpty {
+                    Section {
+                        treeRows(history.globalPinned, isPinned: true)
+                    } header: {
+                        MenuSectionLabel(title: L("conversation.conversationHistory.pinned"), icon: "pin")
+                            .background(AppTheme.sidebarSurface)
                     }
-                } header: {
-                    SectionHeader(
-                        title: L("conversation.conversationHistory.chats"),
-                        isExpanded: history.isSectionExpanded("history"),
-                        canExpand: true,
-                        action: { EmptyView() },
-                        onToggle: { history.toggleSection("history") }
-                    )
+                }
+                if !history.globalRecent.isEmpty {
+                    Section {
+                        treeRows(history.globalRecent, isPinned: false)
+                    } header: {
+                        MenuSectionLabel(title: L("conversation.conversationHistory.recents"))
+                            .background(AppTheme.sidebarSurface)
+                    }
+                }
+                // Infinite scroll: older pages stream in as the end comes near, paused while a
+                // fetch runs and after a failure (a failed page retries itself with backoff;
+                // there is no Load more button). Each page re-arms it, so a page too short to
+                // fill the list requests the next one. Unstructured because scrolling away must
+                // not cancel a request that's already out.
+                if history.hasMore {
+                    Color.clear
+                        .frame(height: 1)
+                        .task(id: history.lastKey) {
+                            Task { await history.loadMore() }
+                        }
                 }
             }
-            .padding(.bottom, history.isSectionExpanded("history") ? 8 : 0)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 8)
         }
         .scrollBounceBehavior(.basedOnSize)
         .onScrollPhaseChange { _, phase in
-            if phase == .interacting { openRowId = nil }
+            if phase == .interacting { openRow = nil }
         }
         .refreshable { await history.load() }
     }
@@ -334,15 +379,16 @@ struct ConversationHistoryPanel: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(4)
+        .padding(10)
     }
 
     // MARK: - Rows
 
     /// Nests forks under their parent when it renders in the same list; otherwise a fork
     /// stays a flat root, so it never disappears just because its parent moved elsewhere.
+    /// `lastId` is the row that closes a project's tree, which draws no hairline.
     @ViewBuilder
-    private func treeRows(_ list: [ConversationSummary], isPinned: Bool) -> some View {
+    private func treeRows(_ list: [ConversationSummary], isPinned: Bool, lastId: String? = nil) -> some View {
         let ids = Set(list.map(\.conversationId))
         let roots = list.filter { c in
             guard let parent = c.parentConversationId, parent != c.conversationId else { return true }
@@ -352,7 +398,7 @@ struct ConversationHistoryPanel: View {
         // over when pinning moves it between the two
         ForEach(roots, id: \.conversationId) { root in
             TreeRow(conversation: root, all: list, isPinned: isPinned, row: { c in
-                AnyView(historyRow(c, isPinned: isPinned))
+                AnyView(historyRow(c, isPinned: isPinned).menuRowHairline(c.conversationId != lastId))
             })
             .id("\(isPinned)-\(root.conversationId)")
         }
@@ -360,22 +406,29 @@ struct ConversationHistoryPanel: View {
 
     private func historyRow(_ item: ConversationSummary, isPinned: Bool) -> some View {
         let isActive = item.conversationId == activeId
-        return SwipeableRow(id: item.conversationId, openRowId: $openRowId, actions: [
-            SwipeAction(icon: "folder", label: L("conversation.conversationHistory.moveToProject"), tone: .neutral) {
-                moveTarget = item
-            },
-            SwipeAction(
-                icon: isPinned ? "pin-off" : "pin",
-                label: isPinned ? L("conversation.conversationHistory.unpinConversation") : L("conversation.conversationHistory.pinConversation"),
-                tone: .primary
-            ) {
-                Task { if isPinned { await history.unpin(item) } else { await history.pin(item) } }
-            },
-            SwipeAction(icon: "trash", label: L("conversation.conversationHistory.deleteConversation"), tone: .muted) {
-                deleteError = nil
-                deleteTarget = item
-            }
-        ]) {
+        return SwipeableRow(
+            id: item.conversationId,
+            openRow: $openRow,
+            leading: [
+                SwipeAction(
+                    icon: isPinned ? "pin-off" : "pin",
+                    label: isPinned ? L("conversation.conversationHistory.unpin") : L("conversation.conversationHistory.pin"),
+                    tone: .primary,
+                    identifier: "conv-\(isPinned ? "unpin" : "pin")-btn-\(item.conversationId)"
+                ) {
+                    Task { if isPinned { await history.unpin(item) } else { await history.pin(item) } }
+                },
+            ],
+            trailing: [
+                SwipeAction(icon: "folder", label: L("conversation.conversationHistory.moveToProject"), tone: .neutral, identifier: "conv-move-btn-\(item.conversationId)") {
+                    moveTarget = item
+                },
+                SwipeAction(icon: "trash", label: L("conversation.conversationHistory.delete"), tone: .muted, identifier: "conv-delete-btn-\(item.conversationId)") {
+                    deleteError = nil
+                    deleteTarget = item
+                },
+            ]
+        ) {
             Button {
                 router.navigate(.chat)
                 Task { await conversation.loadConversation(item.conversationId) }
@@ -388,14 +441,14 @@ struct ConversationHistoryPanel: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                     details(item, isActive: isActive)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 9.6)
-                .frame(minHeight: 48)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
                 .background(isActive ? AppTheme.backgroundSelected : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: DSRadius.sm))
                 .contentShape(Rectangle())
             }
-            .buttonStyle(RowPressStyle())
+            .buttonStyle(MenuRowPressStyle())
+            .accessibilityIdentifier("conv-history-item-\(item.conversationId)")
         }
     }
 
@@ -429,7 +482,12 @@ struct ConversationHistoryPanel: View {
     private var createProjectForm: some View {
         VStack(alignment: .trailing, spacing: 16) {
             InputTextWithHint(placeholder: L("conversation.conversationHistory.projectNamePlaceholder"), text: $newProjectName, autofocus: true)
-            Button {
+                .accessibilityIdentifier("new-project-name-input")
+            dialogButton(
+                label: isCreatingProject ? L("conversation.conversationHistory.creatingProject") : L("conversation.conversationHistory.createProject"),
+                disabled: newProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreatingProject,
+                identifier: "new-project-create-btn"
+            ) {
                 Task {
                     let name = newProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !name.isEmpty, !isCreatingProject else { return }
@@ -440,19 +498,40 @@ struct ConversationHistoryPanel: View {
                         newProjectName = ""
                     }
                 }
-            } label: {
-                Text(isCreatingProject ? L("conversation.conversationHistory.creatingProject") : L("conversation.conversationHistory.createProject"))
-                    .webText(arial: 13.6, bold: true)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 7.2)
-                    .background(AppTheme.primary)
-                    .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
             }
-            .buttonStyle(WebPressStyle())
-            .disabled(newProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreatingProject)
-            .opacity(newProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreatingProject ? 0.5 : 1)
         }
+    }
+
+    private var renameProjectForm: some View {
+        let trimmed = renameName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unchanged = trimmed == renameTarget?.name
+        return VStack(alignment: .trailing, spacing: 16) {
+            InputTextWithHint(placeholder: L("conversation.conversationHistory.projectNamePlaceholder"), text: $renameName, autofocus: true)
+                .accessibilityIdentifier("rename-project-name-input")
+            dialogButton(
+                label: isRenamingProject ? L("conversation.conversationHistory.savingProjectName") : L("conversation.conversationHistory.saveProjectName"),
+                disabled: trimmed.isEmpty || unchanged || isRenamingProject,
+                identifier: "rename-project-save-btn"
+            ) {
+                Task { await renameProject() }
+            }
+        }
+    }
+
+    private func dialogButton(label: String, disabled: Bool, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .webText(arial: 13.6, bold: true)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 7.2)
+                .background(AppTheme.primary)
+                .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
+        }
+        .buttonStyle(WebPressStyle())
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+        .accessibilityIdentifier(identifier)
     }
 
     @ViewBuilder
@@ -489,6 +568,7 @@ struct ConversationHistoryPanel: View {
                             .buttonStyle(RowPressStyle())
                             .disabled(isCurrent)
                             .opacity(isCurrent ? 0.6 : 1)
+                            .accessibilityIdentifier("move-to-project-\(project.projectId)")
                         }
                     }
                 }
@@ -531,7 +611,8 @@ struct ChatMenuContent: View {
                 MenuSearchResults(
                     query: trimmedQuery,
                     types: ["conversation"],
-                    untitledLabel: L("conversation.conversationHistory.untitledConversation")
+                    untitledLabel: L("conversation.conversationHistory.untitledConversation"),
+                    surface: .card
                 ) { result in
                     router.navigate(.chat)
                     Task { await conversation.loadConversation(result.key) }
@@ -554,17 +635,15 @@ private struct TreeRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 0) {
             row(conversation)
             if !children.isEmpty {
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 0) {
                     ForEach(children) { child in
                         TreeRow(conversation: child, all: all, isPinned: isPinned, row: row)
                     }
                 }
-                .padding(.leading, 5.6)
-                .overlay(alignment: .leading) { Rectangle().fill(AppTheme.borderLight).frame(width: 1) }
-                .padding(.leading, 8.8)
+                .menuTreeGuide()
             }
         }
     }
@@ -619,23 +698,6 @@ struct Chevron: View {
     }
 }
 
-/// `.actionBtn`: 44pt hit target, 16pt icon.
-struct ActionIcon: View {
-    let icon: String
-    let label: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            WebIcon(name: icon, size: 16, color: AppTheme.textMuted)
-                .frame(width: 44, height: 42)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(WebPressStyle())
-        .accessibilityLabel(label)
-    }
-}
-
 struct RowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -657,6 +719,8 @@ struct VerticalSplit<Top: View, Bottom: View>: View {
     let bottomCollapsed: Bool
     let hasTop: Bool
     var separatorLabel = L("conversation.conversationHistory.resizePanels")
+    /// The panes draw their own card (SidebarWidget), so the split adds none.
+    var bare = false
     @ViewBuilder let top: () -> Top
     @ViewBuilder let bottom: () -> Bottom
 
@@ -684,14 +748,14 @@ struct VerticalSplit<Top: View, Bottom: View>: View {
             VStack(spacing: 0) {
                 if hasTop {
                     top()
-                        .sidebarCard()
+                        .modifier(SplitPaneCard(bare: bare))
                         .frame(height: topHeight(total))
                         .frame(maxHeight: !topCollapsed && bottomCollapsed ? .infinity : nil)
                         .fixedSize(horizontal: false, vertical: topCollapsed)
                     divider(total: total).zIndex(1)
                 }
                 bottom()
-                    .sidebarCard()
+                    .modifier(SplitPaneCard(bare: bare))
                     .frame(maxHeight: bottomCollapsed && !topCollapsed ? nil : .infinity)
                     .fixedSize(horizontal: false, vertical: bottomCollapsed)
             }
@@ -736,6 +800,19 @@ struct VerticalSplit<Top: View, Bottom: View>: View {
                         )
                 }
                 .accessibilityLabel(separatorLabel)
+        }
+    }
+}
+
+/// A split pane's card, unless the pane is a SidebarWidget that draws its own.
+private struct SplitPaneCard: ViewModifier {
+    let bare: Bool
+
+    func body(content: Content) -> some View {
+        if bare {
+            content
+        } else {
+            content.sidebarCard()
         }
     }
 }

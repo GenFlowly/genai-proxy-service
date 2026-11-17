@@ -59,6 +59,11 @@ struct ChatView: View {
                 conversationScroll
             }
 
+            if let projectName = conversation.pendingProjectName(in: history.projects),
+               !conversation.blocks.contains(where: { $0.status == .resolved || $0.isLoading }) {
+                NewChatProjectHint(name: projectName)
+            }
+
             ChatHeader(
                 showShare: $showShare,
                 showPicker: $showPicker,
@@ -278,6 +283,7 @@ struct ChatHeader: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var ai: AIStore
     @EnvironmentObject var conversation: ConversationStore
+    @EnvironmentObject var history: HistoryStore
     @Binding var showShare: Bool
     @Binding var showPicker: Bool
     var isOutlineOpen = false
@@ -325,6 +331,18 @@ struct ChatHeader: View {
         return items + moderation.menuItems
     }
 
+    @ViewBuilder
+    private var instructionLabel: some View {
+        if let instruction = loadedInstruction {
+            if let icon = instruction.icon, !icon.isEmpty {
+                EmojiIcon(text: icon, size: 12, advance: 15, lineHeight: 20)
+            }
+            Text(instruction.name)
+        } else {
+            Text(L("conversation.conversationHeader.chooseInstruction"))
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             if let sharedByLabel {
@@ -350,13 +368,19 @@ struct ChatHeader: View {
                 titleExpanded: isOutlineOpen,
                 onMenuClick: { router.isMobileMenuOpen = true }
             ) {
-                if let instruction = loadedInstruction {
-                    if let icon = instruction.icon, !icon.isEmpty {
-                        EmojiIcon(text: icon, size: 12, advance: 15, lineHeight: 20)
+                if let projectName = conversation.pendingProjectName(in: history.projects) {
+                    ProjectSubtitleLayout {
+                        HStack(spacing: 4) {
+                            WebIcon(name: "folder", size: 12, color: AppTheme.textMuted)
+                            Text(L("conversation.conversationHeader.inProject", ["name": projectName]))
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("mobile-header-project")
+                        Text("·").accessibilityHidden(true)
+                        HStack(spacing: 4.8) { instructionLabel }
                     }
-                    Text(instruction.name)
                 } else {
-                    Text(L("conversation.conversationHeader.chooseInstruction"))
+                    instructionLabel
                 }
             }
         }
@@ -524,3 +548,55 @@ extension EnvironmentValues {
     /// room the composer grows into.
     @Entry var chatScreenHeight: CGFloat = 0
 }
+
+/// NewChatProjectHint.tsx: what happens to the first message of a chat opened from a project's
+/// plus, on the empty page a little above its middle.
+struct NewChatProjectHint: View {
+    let name: String
+
+    var body: some View {
+        Text(L("conversation.conversationHeader.newChatInProjectHint", ["name": name]))
+            .webText(15, lineHeight: 22.5)
+            .foregroundStyle(AppTheme.textMuted)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 24)
+            .visualEffect { content, proxy in
+                content.offset(y: -proxy.size.height * 0.1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityIdentifier("new-chat-project-hint")
+    }
+}
+
+/// The header's subtitle while a new chat waits to start in a project: "in Startup", a dot, then
+/// the instruction. The instruction gives way first; the project keeps at most 60% of the line
+/// and at least 40pt, as the web's `.projectContext` does.
+struct ProjectSubtitleLayout: Layout {
+    var spacing: CGFloat = 4.8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let widths = Self.widths(available: proposal.width, ideal: subviews.map { $0.sizeThatFits(.unspecified).width }, spacing: spacing)
+        let height = zip(subviews, widths).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: proposal.height)).height }.max() ?? 0
+        return CGSize(width: widths.reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1)), height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let widths = Self.widths(available: bounds.width, ideal: subviews.map { $0.sizeThatFits(.unspecified).width }, spacing: spacing)
+        var x = bounds.minX
+        for (subview, width) in zip(subviews, widths) {
+            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width + spacing
+        }
+    }
+
+    /// Widths for [project, separator, instruction] within `available`.
+    static func widths(available: CGFloat?, ideal: [CGFloat], spacing: CGFloat) -> [CGFloat] {
+        guard let available, ideal.count == 3 else { return ideal }
+        let room = max(0, available - ideal[1] - spacing * 2)
+        guard ideal[0] + ideal[2] > room else { return ideal }
+        let project = min(ideal[0], max(40, room * 0.6), room)
+        return [project, ideal[1], max(0, min(ideal[2], room - project))]
+    }
+}
+

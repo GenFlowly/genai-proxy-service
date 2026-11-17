@@ -14,6 +14,7 @@ import { getLearnedFacts, deleteMemoryFact } from '../../../../services/learnedF
 import { useVendorDisplayNames } from '../../../../hooks/useVendorDisplayNames'
 import InstructionPickerModal from '../../../common/InstructionPickerModal/InstructionPickerModal'
 import { RunHitlBanner } from './RunHitlBanner'
+import NewChatProjectHint from './NewChatProjectHint'
 import InstructionChip from './InstructionChip'
 
 /**
@@ -90,6 +91,7 @@ export default function ConversationListWidget() {
             <ConversationWidgetProvider value={value}>
                 <ConversationWidget />
                 <RunHitlBanner />
+                <NewChatProjectHint />
             </ConversationWidgetProvider>
             <InstructionPickerModal
                 isOpen={isPickerOpen}

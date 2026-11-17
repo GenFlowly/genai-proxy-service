@@ -16,7 +16,7 @@ jest.mock('../../../../../services/agentsService');
 jest.mock('../../../../../services/saveAIConfigService');
 
 jest.mock('@genflowly/component-library', () => ({
-    SidebarCard: ({ title, children, 'data-testid': testId }: any) => (
+    SidebarWidget: ({ title, children, 'data-testid': testId }: any) => (
         <section data-testid={testId}>
             <h2>{title}</h2>
             {children}

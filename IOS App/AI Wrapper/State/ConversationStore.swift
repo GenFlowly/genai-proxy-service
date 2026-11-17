@@ -357,6 +357,13 @@ final class ConversationStore: ObservableObject {
         pendingProjectId = projectId
     }
 
+    /// The name of the project a new chat will start in (opened from a project's plus), until its
+    /// first message creates the conversation.
+    func pendingProjectName(in projects: [Project]) -> String? {
+        guard conversationId.isEmpty, let id = pendingProjectId else { return nil }
+        return projects.first { $0.projectId == id }?.name
+    }
+
     // MARK: - Generation
 
     private struct GenerationPrep {

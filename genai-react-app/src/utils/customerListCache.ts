@@ -10,6 +10,11 @@ import { customerKey } from './storageKeys'
 export interface CustomerCache<T> {
     load(customerId: string | null): T | null
     save(customerId: string | null, value: T): void
+    /**
+     * Rewrite the value of the customer this session last loaded or saved,
+     * memory and localStorage; nothing happens when there is none.
+     */
+    patch(updater: (value: T) => T): void
     /** Forget everything, for every customer — memory AND localStorage. */
     clear(): void
 }
@@ -51,6 +56,11 @@ export function createCustomerCache<T>(
             } catch {
                 // Best-effort persistence only
             }
+        },
+
+        patch(updater: (value: T) => T): void {
+            if (cache === null || cacheCustomerId === null) return
+            this.save(cacheCustomerId, updater(cache))
         },
 
         clear(): void {

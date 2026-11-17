@@ -185,6 +185,21 @@ enum ConversationHistoryService {
         try await APIClient.requestJSON(Endpoints.createProject, method: .post, token: token, body: CreateProjectRequest(name: name), as: Project.self)
     }
 
+    /// The server trims the name and takes 1 to 100 characters.
+    static func renameProject(token: String, projectId: String, name: String) async throws {
+        _ = try await APIClient.request(Endpoints.renameProject(projectId), method: .post, token: token, body: RenameProjectRequest(name: name))
+    }
+
+    /// Unassigns the project's conversations and deletes the memories that belonged only to it.
+    /// A project that is already gone counts as deleted.
+    static func deleteProject(token: String, projectId: String) async throws {
+        do {
+            _ = try await APIClient.request(Endpoints.deleteProject(projectId), method: .delete, token: token)
+        } catch let error as APIError where error.status == 404 {
+            return
+        }
+    }
+
     static func assignProject(token: String, conversationId: String, projectId: String) async throws {
         _ = try await APIClient.request(Endpoints.assignConversationProject(conversationId, projectId: projectId), method: .post, token: token)
     }
