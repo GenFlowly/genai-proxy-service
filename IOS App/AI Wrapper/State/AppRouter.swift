@@ -11,12 +11,14 @@ enum MenuLayer { case l1, l2 }
 /// the MobileHeader and the full-screen menu overlay.
 @MainActor
 final class AppRouter: ObservableObject {
-    /// Settings tree (SettingsSidebar.tsx): sections with sub-pages.
+    /// A Settings page (settingsNav.ts). Tools and Connectors keep their pages but aren't in the menu.
     enum SettingsSection: Hashable {
-        case profile
-        case llmKeys, embeddingKeys, vectorDb
+        case account, privacy, blocked, deleteData
+        case llmKeys, embeddingKeys, vectorDb, webSearchKey
+        case agents, memory, searchIndex, embeddingModels
         case usageLlm, usageEmbedding, usageVectorDb, usageWebSearch
-        case defaults, tools, connectors, developer
+        case developer
+        case tools, connectors
     }
 
     enum Route: Equatable {
@@ -38,7 +40,6 @@ final class AppRouter: ObservableObject {
         case settings(SettingsSection) // "/settings/:section"
         case privacyPolicy             // "/privacy-policy"
         case support                   // "/support"
-        case blockedUsers              // "/blocked-users"
     }
 
     @Published var route: Route = .chat
@@ -94,7 +95,7 @@ final class AppRouter: ObservableObject {
     var pageMenu: MenuLayer {
         switch route {
         case .chat, .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory, .agents, .settings: return .l2
-        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy, .support, .blockedUsers: return .l1
+        case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy, .support: return .l1
         }
     }
 
@@ -116,7 +117,7 @@ final class AppRouter: ObservableObject {
         case .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory: return "Memory"
         case .agents, .editAgent, .newAgent: return "Agents"
         case .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage: return "Instructions"
-        case .settings, .privacyPolicy, .support, .blockedUsers: return ""
+        case .settings, .privacyPolicy, .support: return ""
         }
     }
 }

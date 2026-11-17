@@ -414,7 +414,8 @@ enum SaveAIConfigService {
         embeddingModelConversations: String? = nil,
         embeddingModelNotes: String? = nil,
         memoryLearnFromChats: Bool? = nil,
-        memoryUseInReplies: Bool? = nil
+        memoryUseInReplies: Bool? = nil,
+        indexChats: Bool? = nil
     ) async throws {
         let body = SaveAIConfigPreferencesRequest(
             aiConfigPreferences: .init(
@@ -423,7 +424,8 @@ enum SaveAIConfigService {
                 embeddingModelConversations: embeddingModelConversations,
                 embeddingModelNotes: embeddingModelNotes,
                 memoryLearnFromChats: memoryLearnFromChats,
-                memoryUseInReplies: memoryUseInReplies
+                memoryUseInReplies: memoryUseInReplies,
+                indexChats: indexChats
             )
         )
         do {
@@ -431,10 +433,29 @@ enum SaveAIConfigService {
         } catch let error as APIError {
             // The server's validation message (e.g. an unsupported embedding model), else the
             // status line, as the web shows it.
-            let serverError = error.body
-                .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }?["error"] as? String
+            let json = error.body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let serverError = json?["error"] as? String
+            if error.status == 409, let locked = json?["embeddingModel"] as? String, !locked.isEmpty {
+                throw EmbeddingModelLockedError(message: serverError ?? "The embedding model is locked.", lockedModel: locked)
+            }
             throw UserFacingError(message: serverError?.isEmpty == false ? serverError! : "Failed to save AI config preferences: \(error.statusText)")
         }
+    }
+}
+
+/// A save refused because another embedding model is already chosen and locked (HTTP 409).
+struct EmbeddingModelLockedError: LocalizedError {
+    let message: String
+    let lockedModel: String
+    var errorDescription: String? { message }
+}
+
+// MARK: - Indexed chats (src/services/chatIndexingService.ts)
+
+enum ChatIndexingService {
+    /// Deletes what chat search has stored; the conversations themselves stay.
+    static func deleteIndexedChats(token: String) async throws {
+        _ = try await APIClient.request(Endpoints.indexedChats, method: .delete, token: token)
     }
 }
 

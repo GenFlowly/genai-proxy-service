@@ -12,6 +12,12 @@ struct VendorKeyRowData: Identifiable, Equatable {
     var savedModel: String?
     var savedPriority: Int?
     var models: [String] = []
+    /// More status after the key pill, e.g. "Used by your embedding model".
+    var extraPill: String?
+    /// A short note at the end of the card header, e.g. "Optional".
+    var hint: String?
+    /// This vendor's empty-field placeholder (e.g. "pa-…"), in place of the manager's.
+    var keyPlaceholder: String?
     var id: String { vendor }
 }
 
@@ -35,6 +41,10 @@ struct VendorKeySaveResult {
 struct VendorApiKeysManager: View {
     let rows: [VendorKeyRowData]
     let keyPlaceholder: String
+    var keyHint = L("settingsPage.aiSettings.apiKeyHint")
+    var keyReplacePlaceholder = L("settingsPage.llmKeys.replaceKey")
+    /// The pill for a stored priority; the main provider's says so.
+    var priorityPill: (Int) -> String = { L("library.vendorApiKeys.priorityPill", ["priority": $0]) }
     var removeKeyLabel: String?
     var keyRemovedMessage: String?
     let onSaveKey: (String, String) async throws -> VendorKeySaveResult
@@ -67,7 +77,7 @@ struct VendorApiKeysManager: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 14) {
             ForEach(rows) { row in
                 card(row)
             }
@@ -89,34 +99,39 @@ struct VendorApiKeysManager: View {
 
     private func card(_ row: VendorKeyRowData) -> some View {
         let current = state(row.vendor)
-        return CredentialCard(title: row.label, weight: row.labelWeight, message: current.message, messageKind: current.messageKind) {
-            if row.keySet, let priority = row.savedPriority {
-                CredentialStatusPill(kind: .neutral, text: L("library.vendorApiKeys.priorityPill", ["priority": priority]))
-            }
+        return CredentialCard(title: row.label, hint: row.hint, message: current.message, messageKind: current.messageKind) {
             CredentialStatusPill(
                 kind: row.keySet ? .ok : .unset,
                 text: row.keySet ? L("settingsPage.aiSettings.keySetPill") : L("settingsPage.aiSettings.keyNotSetPill")
             )
+            if row.keySet, let priority = row.savedPriority {
+                CredentialStatusPill(kind: .neutral, text: priorityPill(priority))
+            }
+            if let extraPill = row.extraPill {
+                CredentialStatusPill(kind: .neutral, text: extraPill)
+            }
         } content: {
             VStack(alignment: .leading, spacing: 12) {
                 InputTextWithHint(
-                    hint: L("settingsPage.aiSettings.apiKeyHint"),
-                    placeholder: row.keySet ? L("settingsPage.aiSettings.overwriteApiKey") : keyPlaceholder,
+                    hint: keyHint,
+                    placeholder: row.keySet ? keyReplacePlaceholder : (row.keyPlaceholder ?? keyPlaceholder),
                     text: binding(row.vendor, \.keyInput),
                     isSecure: true,
-                    disabled: current.busy
+                    disabled: current.busy,
+                    stacked: true
                 )
-                HStack(spacing: 12) {
-                    PillButton(
-                        label: current.busy ? L("settingsPage.aiSettings.savingLabel") : L("settingsPage.aiSettings.save"),
-                        disabled: current.busy || current.keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ) {
-                        Task { await saveKey(row.vendor) }
-                    }
-                    if row.keySet, onDeleteKey != nil {
-                        PillButton(label: removeKeyLabel ?? L("library.vendorApiKeys.removeKey"), style: .danger, disabled: current.busy) {
-                            Task { await deleteKey(row.vendor) }
-                        }
+                .accessibilityIdentifier("vendor-key-input-\(row.vendor)")
+                PillButton(
+                    label: current.busy ? L("settingsPage.aiSettings.savingLabel") : L("settingsPage.aiSettings.save"),
+                    size: .lg,
+                    disabled: current.busy || current.keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    fullWidth: true
+                ) {
+                    Task { await saveKey(row.vendor) }
+                }
+                if row.keySet, onDeleteKey != nil {
+                    PillButton(label: removeKeyLabel ?? L("library.vendorApiKeys.removeKey"), style: .danger, size: .lg, disabled: current.busy, fullWidth: true) {
+                        Task { await deleteKey(row.vendor) }
                     }
                 }
             }
@@ -125,6 +140,7 @@ struct VendorApiKeysManager: View {
                 configRow(row, current)
             }
         }
+        .accessibilityIdentifier("vendor-key-card-\(row.vendor)")
     }
 
     private func configRow(_ row: VendorKeyRowData, _ current: RowState) -> some View {
@@ -140,6 +156,7 @@ struct VendorApiKeysManager: View {
                 placeholder: L("settingsPage.aiSettings.configModelPlaceholder"),
                 value: current.selectedModel,
                 options: modelOptions.map { .init(value: $0, label: $0) },
+                stacked: true,
                 onChange: { value in update(row.vendor) { $0.selectedModel = value } }
             )
             InputSelectWithHint(
@@ -153,18 +170,22 @@ struct VendorApiKeysManager: View {
                     .init(value: "medium", label: L("library.vendorApiKeys.reasoningMedium")),
                     .init(value: "high", label: L("library.vendorApiKeys.reasoningHigh"))
                 ],
+                stacked: true,
                 onChange: { value in update(row.vendor) { $0.thinkingLevel = value } }
             )
             InputSelectWithHint(
-                hint: L("settingsPage.aiSettings.configPriorityHint"),
+                hint: L("settingsPage.llmKeys.priorityHint"),
                 placeholder: "—",
                 value: current.priority,
                 options: rows.indices.map { .init(value: String($0 + 1), label: String($0 + 1)) },
+                stacked: true,
                 onChange: { value in update(row.vendor) { $0.priority = value } }
             )
             PillButton(
-                label: current.savingConfig ? L("settingsPage.aiSettings.savingLabel") : L("settingsPage.aiSettings.configSave"),
-                disabled: current.savingConfig || current.selectedModel.isEmpty || current.priority.isEmpty || !dirty
+                label: current.savingConfig ? L("settingsPage.aiSettings.savingLabel") : L("settingsPage.llmKeys.savePreference"),
+                size: .lg,
+                disabled: current.savingConfig || current.selectedModel.isEmpty || current.priority.isEmpty || !dirty,
+                fullWidth: true
             ) {
                 Task { await saveConfig(row.vendor) }
             }
@@ -318,33 +339,41 @@ struct AISettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            Text(L("settingsPage.aiSettings.primaryProviderNote"))
-                .webText(14, lineHeight: 21)
-                .foregroundStyle(AppTheme.textMuted)
-                .frame(maxWidth: 640, alignment: .leading)
-                .accessibilityIdentifier("ai-settings-primary-note")
-
+        let setCount = rows.filter(\.keySet).count
+        VStack(alignment: .leading, spacing: 12) {
             VendorApiKeysManager(
                 rows: rows,
-                keyPlaceholder: "sk-...",
+                keyPlaceholder: L("settingsPage.llmKeys.enterKey"),
+                priorityPill: { $0 == 1 ? L("settingsPage.llmKeys.priorityPrimary") : L("settingsPage.llmKeys.priorityPill", ["priority": $0]) },
                 onSaveKey: saveKey,
                 onSaveConfig: saveConfig
             )
 
             if !addableOptions.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    WebFieldLabel(L("settingsPage.aiSettings.addVendorLabel"), color: Color(hex: "#6B7280"))
+                    Text(L("settingsPage.aiSettings.addVendorLabel"))
+                        .webText(13, 500)
+                        .foregroundStyle(AppTheme.textSecondary)
                     InputSelectWithHint(
                         hint: L("settingsPage.aiSettings.addVendorHint"),
                         placeholder: L("settingsPage.aiSettings.addVendorPlaceholder"),
                         value: "",
                         options: addableOptions,
+                        stacked: true,
                         onChange: { revealedVendors.append($0) }
                     )
                 }
+                .accessibilityIdentifier("add-vendor-select")
             }
         }
+        .settingsPage(
+            status: L("settingsPage.llmKeys.setCount", ["count": setCount]),
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.llmKeys.whichTitle"), text: L("settingsPage.llmKeys.whichText")),
+                KnowledgeItem(title: L("settingsPage.llmKeys.priorityTitle"), text: L("settingsPage.llmKeys.priorityText")),
+                KnowledgeItem(title: L("settingsPage.llmKeys.whereTitle"), text: L("settingsPage.llmKeys.whereText"))
+            ]
+        )
         .task {
             guard let token = try? await auth.getAccessTokenSilently() else { return }
             await catalog.load(token: token)
@@ -417,26 +446,22 @@ struct EmbeddingKeysSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            VendorApiKeysManager(
-                rows: [
-                    VendorKeyRowData(vendor: EmbeddingVendor.openAI, label: catalog.displayName(for: EmbeddingVendor.openAI), keySet: isSet(EmbeddingVendor.openAI)),
-                    VendorKeyRowData(vendor: EmbeddingVendor.voyage, label: L("settingsPage.embeddingKeysSettings.voyageLabel"), labelWeight: 600, keySet: isSet(EmbeddingVendor.voyage))
-                ],
-                keyPlaceholder: "sk-... / pa-...",
-                onSaveKey: saveKey
-            )
-
-            Text(L("settingsPage.embeddingKeysSettings.huggingFaceNote"))
-                .webText(14)
-                .foregroundStyle(AppTheme.textMuted)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        let chosenVendor = EmbeddingModelChoice.vendor(EmbeddingModelChoice.chosen(auth.aiConfigPreferences))
+        let usedPill = { (vendor: String) in chosenVendor == vendor ? L("settingsPage.embeddingKeys.usedPill") : nil }
+        let rows = [
+            VendorKeyRowData(vendor: EmbeddingVendor.openAI, label: catalog.displayName(for: EmbeddingVendor.openAI), keySet: isSet(EmbeddingVendor.openAI), extraPill: usedPill(EmbeddingVendor.openAI), hint: L("settingsPage.embeddingKeys.sharedHint")),
+            VendorKeyRowData(vendor: EmbeddingVendor.voyage, label: L("settingsPage.embeddingKeysSettings.voyageLabel"), keySet: isSet(EmbeddingVendor.voyage), extraPill: usedPill(EmbeddingVendor.voyage), keyPlaceholder: "pa-…")
+        ]
+        let setCount = rows.filter(\.keySet).count
+        VStack(alignment: .leading, spacing: 12) {
+            VendorApiKeysManager(rows: rows, keyPlaceholder: L("settingsPage.llmKeys.enterKey"), onSaveKey: saveKey)
 
             VendorApiKeysManager(
                 rows: [
-                    VendorKeyRowData(vendor: EmbeddingVendor.huggingFace, label: L("settingsPage.embeddingKeysSettings.huggingFaceLabel"), labelWeight: 600, keySet: isSet(EmbeddingVendor.huggingFace))
+                    VendorKeyRowData(vendor: EmbeddingVendor.huggingFace, label: L("settingsPage.embeddingKeysSettings.huggingFaceLabel"), keySet: isSet(EmbeddingVendor.huggingFace), hint: L("settingsPage.embeddingKeys.optionalHint"))
                 ],
-                keyPlaceholder: "hf_...",
+                keyPlaceholder: "hf_…",
+                keyHint: L("settingsPage.embeddingKeys.tokenHint"),
                 removeKeyLabel: L("settingsPage.embeddingKeysSettings.removeKey"),
                 keyRemovedMessage: L("settingsPage.embeddingKeysSettings.keyRemoved"),
                 onSaveKey: saveKey,
@@ -448,8 +473,16 @@ struct EmbeddingKeysSettingsView: View {
                     .webText(13)
                     .foregroundStyle(AppTheme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("embedding-key-problem-\(status.vendor)")
             }
         }
+        .settingsPage(
+            status: L("settingsPage.llmKeys.setCount", ["count": setCount]),
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.embeddingKeys.whatTitle"), text: L("settingsPage.embeddingKeys.whatText")),
+                KnowledgeItem(title: L("settingsPage.embeddingKeys.hfTitle"), text: L("settingsPage.embeddingKeys.hfText"))
+            ]
+        )
         .task {
             guard let token = try? await auth.getAccessTokenSilently() else { return }
             if let loaded = try? await EmbeddingService.getKeys(token: token) { statuses = loaded }
@@ -482,7 +515,7 @@ struct EmbeddingKeysSettingsView: View {
     }
 }
 
-// MARK: - Vector DB connection (DatabaseConnectionsSettingsWidget.tsx)
+// MARK: - Vector DB connection (VectorDBSettings.tsx + DatabaseConnectionsSettingsWidget.tsx)
 
 struct VectorDBSettingsView: View {
     @EnvironmentObject var auth: AuthStore
@@ -492,41 +525,59 @@ struct VectorDBSettingsView: View {
     @State private var token = ""
     @State private var isSaving = false
 
-    private var status: String {
-        auth.vectorDBConfigStatusList.first { $0.vendor.lowercased() == "zilliz" }?.status ?? "NOT_SET"
+    private var connected: Bool {
+        auth.vectorDBConfigStatusList.contains { $0.vendor.lowercased() == "zilliz" && $0.status == "PRESENT" }
     }
 
     var body: some View {
-        CredentialCard(title: L("dbSettings.databaseConnectionsSettingsWidget.milvusCloud")) {
-            if status == "PRESENT" {
-                HStack(spacing: 8) {
-                    WebIcon(name: "valid", size: 16, color: AppTheme.success)
-                    Text(status).webText(14.4, 500).foregroundStyle(AppTheme.success)
+        let statusText = connected ? L("settingsPage.vectorDb.connected") : L("settingsPage.vectorDb.notConnected")
+        VStack(alignment: .leading, spacing: 12) {
+            if connected {
+                SettingsCard(title: L("dbSettings.databaseConnectionsSettingsWidget.milvusCloud")) {
+                    StatusPill(kind: .ok, text: statusText)
+                } content: {
+                    SettingsRow(label: L("settingsPage.vectorDb.tokenRow"), description: L("settingsPage.vectorDb.tokenSaved"))
                 }
-            } else {
-                Text(status).webText(14.4).foregroundStyle(Color(hex: "#6B7280"))
+                .accessibilityIdentifier("vector-db-connected")
             }
-        } content: {
-            VStack(spacing: 16) {
-                InputTextWithHint(
-                    hint: L("dbSettings.databaseConnectionsSettingsWidget.endpointHint"),
-                    placeholder: L("dbSettings.databaseConnectionsSettingsWidget.zillizEndpointPlaceholder"),
-                    text: $endpoint
-                )
-                InputTextWithHint(
-                    hint: L("dbSettings.databaseConnectionsSettingsWidget.tokenHint"),
-                    placeholder: L("dbSettings.databaseConnectionsSettingsWidget.zillizTokenPlaceholder"),
-                    text: $token
-                )
+            CredentialCard(title: connected ? L("settingsPage.vectorDb.replaceCard") : L("dbSettings.databaseConnectionsSettingsWidget.milvusCloud")) {
+                if !connected { StatusPill(kind: .unset, text: statusText) }
+            } content: {
+                VStack(spacing: 16) {
+                    InputTextWithHint(
+                        hint: L("dbSettings.databaseConnectionsSettingsWidget.endpointHint"),
+                        placeholder: L("dbSettings.databaseConnectionsSettingsWidget.zillizEndpointPlaceholder"),
+                        text: $endpoint,
+                        stacked: true
+                    )
+                    InputTextWithHint(
+                        hint: L("dbSettings.databaseConnectionsSettingsWidget.tokenHint"),
+                        placeholder: L("dbSettings.databaseConnectionsSettingsWidget.zillizTokenPlaceholder"),
+                        text: $token,
+                        isSecure: true,
+                        stacked: true
+                    )
+                }
+                PillButton(
+                    label: isSaving ? L("dbSettings.databaseConnectionsSettingsWidget.saving") : L("dbSettings.databaseConnectionsSettingsWidget.save"),
+                    icon: "save-icon",
+                    size: .lg,
+                    disabled: isSaving || endpoint.trimmingCharacters(in: .whitespaces).isEmpty || token.trimmingCharacters(in: .whitespaces).isEmpty,
+                    fullWidth: true
+                ) {
+                    Task { await save() }
+                }
             }
-            PillButton(
-                label: isSaving ? L("dbSettings.databaseConnectionsSettingsWidget.saving") : L("dbSettings.databaseConnectionsSettingsWidget.save"),
-                icon: "save-icon",
-                disabled: isSaving || endpoint.trimmingCharacters(in: .whitespaces).isEmpty || token.trimmingCharacters(in: .whitespaces).isEmpty
-            ) {
-                Task { await save() }
-            }
+            .accessibilityIdentifier("vector-db-zilliz")
         }
+        .settingsPage(
+            status: statusText,
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.vectorDb.storesTitle"), text: L("settingsPage.vectorDb.storesText")),
+                KnowledgeItem(title: L("settingsPage.vectorDb.needTitle"), text: L("settingsPage.vectorDb.needText")),
+                KnowledgeItem(title: L("settingsPage.vectorDb.changeTitle"), text: L("settingsPage.vectorDb.changeText"))
+            ]
+        )
     }
 
     private func save() async {

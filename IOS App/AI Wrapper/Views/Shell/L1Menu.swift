@@ -162,7 +162,7 @@ struct L1Menu: View {
             if case .settings = router.route {
                 router.openWithL2Menu(router.route)
             } else {
-                router.openWithL2Menu(.settings(.profile))
+                router.openWithL2Menu(.settings(.account))
             }
         } label: {
             HStack(spacing: 10) {

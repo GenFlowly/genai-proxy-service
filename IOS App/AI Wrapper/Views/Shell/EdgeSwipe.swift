@@ -133,3 +133,78 @@ struct DialogShownKey: PreferenceKey {
     static var defaultValue: Bool { false }
     static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
 }
+
+/// A swipe in from the right edge of the screen (EdgeSwipeContext.tsx `useRightEdgeSwipe`): a
+/// settings page opens its info drawer with it. It travels leftwards and commits like the
+/// left-edge swipe: past 30% of the screen, or on a flick.
+struct RightEdgeSwipeGesture: UIGestureRecognizerRepresentable {
+    var isEnabled = true
+    let onCommit: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> Recognizer {
+        let recognizer = Recognizer()
+        recognizer.maximumNumberOfTouches = 1
+        recognizer.delegate = context.coordinator
+        return recognizer
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: Recognizer, context: Context) {
+        recognizer.isEnabled = isEnabled
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: Recognizer, context: Context) {
+        guard recognizer.state == .ended else { return }
+        let view = recognizer.view
+        let travel = max(0, -recognizer.translation(in: view).x)
+        let velocity = -recognizer.velocity(in: view).x
+        if EdgeSwipeGesture.commits(translation: travel, velocity: velocity, width: view?.bounds.width ?? .infinity) {
+            onCommit()
+        }
+    }
+
+    /// A pan that only starts from the right edge of the window.
+    final class Recognizer: UIPanGestureRecognizer {
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            super.touchesBegan(touches, with: event)
+            let width = touches.first?.window?.bounds.width ?? view?.window?.bounds.width ?? .infinity
+            guard let touch = touches.first, touch.location(in: nil).x >= width - EdgeSwipeGesture.edgeZone else {
+                state = .failed
+                return
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = pan.velocity(in: pan.view)
+            return -velocity.x > abs(velocity.y)
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            other is UIPanGestureRecognizer && !(other is Recognizer) && !(other is EdgeSwipeGesture.Recognizer)
+        }
+    }
+}
+
+extension View {
+    /// Runs `action` on a swipe in from the right edge; nil leaves that edge alone.
+    func rightEdgeSwipe(_ action: (() -> Void)?) -> some View {
+        modifier(RightEdgeSwipe(action: action))
+    }
+}
+
+private struct RightEdgeSwipe: ViewModifier {
+    @Environment(\.allowsEdgeSwipe) private var allowsEdgeSwipe
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.gesture(RightEdgeSwipeGesture(isEnabled: allowsEdgeSwipe, onCommit: action))
+        } else {
+            content
+        }
+    }
+}

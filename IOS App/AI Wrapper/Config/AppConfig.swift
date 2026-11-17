@@ -113,6 +113,7 @@ enum Endpoints {
     }
     static var getTextGenerationModels: URL { URL(string: "\(base)/models")! }
     static var saveAIConfig: URL { URL(string: "\(base)/save-ai-config")! }
+    static var indexedChats: URL { URL(string: "\(base)/indexing/chats")! }
     static var deleteAccount: URL { URL(string: "\(base)/account")! }
     static var deleteAllCredentials: URL { URL(string: "\(base)/credentials")! }
     static var createInstruction: URL { URL(string: "\(base)/instruction")! }

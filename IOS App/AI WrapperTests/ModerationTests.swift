@@ -78,8 +78,8 @@ struct ModerationTests {
     }
 
     @Test func aBlockDateIsShownWithOrWithoutFractionalSeconds() {
-        #expect(!BlockedUsersView.displayDate("2026-11-08T10:00:00.123456Z").isEmpty)
-        #expect(!BlockedUsersView.displayDate("2026-11-08T10:00:00Z").isEmpty)
-        #expect(BlockedUsersView.displayDate("not a date").isEmpty)
+        #expect(!BlockedUsersSettingsView.displayDate("2026-11-08T10:00:00.123456Z").isEmpty)
+        #expect(!BlockedUsersSettingsView.displayDate("2026-11-08T10:00:00Z").isEmpty)
+        #expect(BlockedUsersSettingsView.displayDate("not a date").isEmpty)
     }
 }

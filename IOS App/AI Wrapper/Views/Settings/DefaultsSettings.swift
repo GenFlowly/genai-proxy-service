@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Settings > Defaults: which agent powers each built-in action, the Conversation Agent
-/// for new chats, the memory switches and the per-category embedding models
-/// (DefaultsSettings.tsx).
+/// Defaults › Agents (DefaultsSettings.tsx): the Conversation agent for new chats, and which
+/// agent does each built-in job, with one Save.
 struct DefaultsSettingsView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var ai: AIStore
@@ -17,6 +16,12 @@ struct DefaultsSettingsView: View {
         titleRow: "settingsPage.defaultAgents.titleAgent",
         "MEMORY_EXTRACTION": "settingsPage.defaultAgents.learnAboutMeAgent",
         "INSTRUCTION_PERSONA": "settingsPage.defaultAgents.instructionPersonaAgent"
+    ]
+    /// One line under each known row's select: what that job does.
+    private static let rowHintKeys = [
+        titleRow: "settingsPage.agentsDefaults.titleHint",
+        "MEMORY_EXTRACTION": "settingsPage.agentsDefaults.memoryHint",
+        "INSTRUCTION_PERSONA": "settingsPage.agentsDefaults.personaHint"
     ]
 
     private struct MappingRow: Identifiable {
@@ -43,72 +48,85 @@ struct DefaultsSettingsView: View {
     private var rows: [MappingRow] { Self.buildRows(actions) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 12) {
             if isLoading {
                 hint(L("settingsPage.defaultAgents.loading"))
             } else {
-                form
-            }
-            LearnedFactsSettingsView()
-                .padding(.top, 32)
-            EmbeddingModelDefaultsView()
-                .padding(.top, 32)
-        }
-        .task { await load() }
-        .onChange(of: ai.agents) { _, _ in apply() }
-    }
-
-    private var form: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ForEach(rows) { row in
-                field(label: rowLabel(row)) {
+                SettingsCard(title: L("settingsPage.defaultAgents.conversationAgent")) {
+                    if conversationAgents.first(where: { $0.graphId == conversationAgentId })?.isSystem == true {
+                        StatusPill(text: L("settingsPage.defaultAgents.systemBadge"))
+                    }
+                } content: {
                     InputSelectWithHint(
                         hint: L("settingsPage.defaultAgents.agentHint"),
-                        value: selected[row.key] ?? Self.platformDefault,
-                        options: options(for: row),
-                        onChange: { selected[row.key] = $0 }
+                        placeholder: L("settingsPage.defaultAgents.conversationPlaceholder"),
+                        value: conversationAgentId,
+                        options: conversationAgents.map { agent in
+                            .init(
+                                value: agent.graphId,
+                                label: agent.isSystem == true ? "\(agent.name) (\(L("settingsPage.defaultAgents.systemBadge")))" : agent.name
+                            )
+                        },
+                        stacked: true,
+                        onChange: { conversationAgentId = $0 }
                     )
+                    .accessibilityIdentifier("default-agent-CONVERSATION")
+                }
+                SettingsCard(title: L("settingsPage.agentsDefaults.builtInJobs")) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(rowLabel(row))
+                                .webText(13, 500)
+                                .foregroundStyle(AppTheme.textPrimary)
+                            InputSelectWithHint(
+                                hint: L("settingsPage.defaultAgents.agentHint"),
+                                value: selected[row.key] ?? Self.platformDefault,
+                                options: options(for: row),
+                                stacked: true,
+                                onChange: { selected[row.key] = $0 }
+                            )
+                            .accessibilityIdentifier("default-agent-\(row.key)")
+                            if let hintKey = Self.rowHintKeys[row.key] {
+                                Text(L(hintKey))
+                                    .webText(12)
+                                    .foregroundStyle(AppTheme.textMuted)
+                            }
+                        }
+                        .padding(.top, index > 0 ? 10 : 0)
+                        .overlay(alignment: .top) {
+                            if index > 0 { Rectangle().fill(AppTheme.sidebarHairline).frame(height: 1) }
+                        }
+                    }
+                    if ownAgents.isEmpty {
+                        hint(L("settingsPage.defaultAgents.noAgents")).padding(.top, 4)
+                    }
+                    PillButton(
+                        label: isSaving ? L("settingsPage.defaultAgents.saving") : L("settingsPage.defaultAgents.save"),
+                        icon: "save-icon",
+                        size: .lg,
+                        disabled: isSaving,
+                        fullWidth: true
+                    ) {
+                        Task { await save() }
+                    }
+                    .padding(.top, 4)
+                    .accessibilityIdentifier("default-agents-save")
                 }
             }
-            field(label: L("settingsPage.defaultAgents.conversationAgent")) {
-                InputSelectWithHint(
-                    hint: L("settingsPage.defaultAgents.agentHint"),
-                    placeholder: L("settingsPage.defaultAgents.conversationPlaceholder"),
-                    value: conversationAgentId,
-                    options: conversationAgents.map { agent in
-                        .init(
-                            value: agent.graphId,
-                            label: agent.isSystem == true ? "\(agent.name) (\(L("settingsPage.defaultAgents.systemBadge")))" : agent.name
-                        )
-                    },
-                    onChange: { conversationAgentId = $0 }
-                )
-            }
-            if ownAgents.isEmpty {
-                hint(L("settingsPage.defaultAgents.noAgents")).padding(.top, 4)
-            }
-            PillButton(
-                label: isSaving ? L("settingsPage.defaultAgents.saving") : L("settingsPage.defaultAgents.save"),
-                icon: "save-icon",
-                disabled: isSaving
-            ) {
-                Task { await save() }
-            }
-            .padding(.top, 4)
         }
-    }
-
-    private func field<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            WebFieldLabel(label, color: Color(hex: "#6B7280"))
-            content()
-        }
+        .settingsPage(knowledge: [
+            KnowledgeItem(title: L("settingsPage.agentsDefaults.whatTitle"), text: L("settingsPage.agentsDefaults.whatText")),
+            KnowledgeItem(title: L("settingsPage.agentsDefaults.ownTitle"), text: L("settingsPage.agentsDefaults.ownText")),
+            KnowledgeItem(title: L("settingsPage.agentsDefaults.conversationTitle"), text: L("settingsPage.agentsDefaults.conversationText"))
+        ])
+        .task { await load() }
+        .onChange(of: ai.agents) { _, _ in apply() }
     }
 
     private func hint(_ text: String) -> some View {
         Text(text)
             .webText(13)
-            .foregroundStyle(Color(hex: "#6B7280"))
+            .foregroundStyle(AppTheme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -221,139 +239,190 @@ struct DefaultsSettingsView: View {
     }
 }
 
-/// Per-category default embedding models, picked vendor-first then model. Only vendors
-/// with a stored embedding key offer models (EmbeddingModelDefaults.tsx).
-private struct EmbeddingModelDefaultsView: View {
+// MARK: - Defaults › Embedding models (EmbeddingModelDefaults.tsx)
+
+/// The one model that indexes and searches the customer's data: chosen once, confirmed by
+/// typing LOCK, read-only after that. A locked model the key can no longer use may be chosen
+/// again; the server allows exactly that and answers 409 with the locked model otherwise.
+struct EmbeddingModelsSettingsView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var toasts: ToastCenter
-    @ObservedObject private var catalog = ProviderCatalog.shared
+    @EnvironmentObject var router: AppRouter
 
-    private struct Selection: Equatable {
-        var vendor = ""
-        var model = ""
-    }
+    private enum PageState { case notChosen, locked, unavailable }
 
-    /// No app saves notes any more, so only conversations are offered; a stored notes
-    /// default is left as it is.
-    private static let categories = ["conversations"]
+    private static let lockWord = "LOCK"
+    private static let vendors = [EmbeddingVendor.openAI, EmbeddingVendor.voyage]
 
-    @State private var selections: [String: Selection] = [:]
     @State private var vendorModels: [EmbeddingVendorModels] = []
-    @State private var isSaving = false
+    @State private var modelsLoaded = false
+    @State private var vendor = ""
+    @State private var model = ""
+    @State private var confirmOpen = false
+    @State private var saving = false
 
-    private static func vendor(forModel model: String) -> String {
-        if model.hasPrefix("voyage") { return EmbeddingVendor.voyage }
-        if model.hasPrefix("text-embedding") { return EmbeddingVendor.openAI }
-        return ""
+    private var chosen: String? { EmbeddingModelChoice.chosen(auth.aiConfigPreferences) }
+
+    private var state: PageState {
+        guard let chosen else { return .notChosen }
+        return modelsLoaded && EmbeddingModelChoice.isUnusable(chosen, vendorModels: vendorModels) ? .unavailable : .locked
     }
 
-    private var vendorOptions: [InputSelectWithHint.Option] {
-        vendorModels.map {
-            .init(
-                value: $0.vendor,
-                label: $0.vendor == EmbeddingVendor.voyage ? L("settingsPage.embeddingDefaults.voyageLabel") : catalog.displayName(for: $0.vendor)
-            )
+    private var statusText: String {
+        switch state {
+        case .notChosen: return L("settingsPage.embeddingModels.notChosen")
+        case .locked: return L("settingsPage.embeddingModels.locked")
+        case .unavailable: return L("settingsPage.embeddingModels.unavailable")
         }
     }
 
-    private func modelOptions(_ vendor: String) -> [InputSelectWithHint.Option] {
-        (vendorModels.first { $0.vendor == vendor }?.models ?? []).map { .init(value: $0, label: $0) }
+    private var statusKind: StatusPillKind {
+        switch state {
+        case .notChosen: return .unset
+        case .locked: return .locked
+        case .unavailable: return .warn
+        }
     }
 
-    private var cacheKey: String? {
-        auth.customerId.map { StorageSuffix.customerKey($0, StorageSuffix.embeddingModels) }
-    }
-
-    private var hasSelection: Bool {
-        selections.values.contains { !$0.model.isEmpty }
+    private var hint: String? {
+        switch state {
+        case .notChosen: return L("settingsPage.embeddingModels.inUse", ["model": EmbeddingModelChoice.platformDefault])
+        case .locked:
+            guard let at = auth.aiConfigPreferences?.embeddingModelChosenAt, let date = ServerDate.parse(at) else { return nil }
+            return L("settingsPage.embeddingModels.chosenOn", ["date": date.formatted(date: .numeric, time: .omitted)])
+        case .unavailable: return L("settingsPage.embeddingModels.unavailableHint", ["model": chosen ?? ""])
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                SettingsSectionTitle(L("settingsPage.embeddingDefaults.title"))
-                Text(L("settingsPage.embeddingDefaults.subtitle"))
-                    .webText(14)
-                    .foregroundStyle(Color(hex: "#6B7280"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if vendorOptions.isEmpty {
-                Text(L("settingsPage.embeddingDefaults.noModels"))
-                    .webText(13)
-                    .foregroundStyle(Color(hex: "#6B7280"))
-                    .padding(.top, 4)
-            }
-            ForEach(Self.categories, id: \.self) { category in
-                VStack(alignment: .leading, spacing: 6) {
-                    WebFieldLabel(L("settingsPage.embeddingDefaults.category_\(category)"), color: Color(hex: "#6B7280"))
-                    VStack(spacing: 12) {
-                        InputSelectWithHint(
-                            hint: L("settingsPage.embeddingDefaults.vendorHint"),
-                            placeholder: L("settingsPage.embeddingDefaults.vendorPlaceholder"),
-                            value: selections[category]?.vendor ?? "",
-                            options: vendorOptions,
-                            // A new vendor invalidates the previous model choice.
-                            onChange: { selections[category] = Selection(vendor: $0) }
-                        )
-                        InputSelectWithHint(
-                            hint: L("settingsPage.embeddingDefaults.modelHint"),
-                            placeholder: L("settingsPage.embeddingDefaults.modelPlaceholder"),
-                            value: selections[category]?.model ?? "",
-                            options: modelOptions(selections[category]?.vendor ?? ""),
-                            onChange: { selections[category, default: Selection()].model = $0 }
-                        )
+        SettingsCard(title: L("settingsPage.embeddingModels.card"), hint: hint) {
+            StatusPill(kind: statusKind, text: statusText)
+        } content: {
+            if state == .locked {
+                VStack(spacing: 10) {
+                    InputTextWithHint(
+                        hint: L("settingsPage.embeddingDefaults.vendorHint"),
+                        text: .constant(EmbeddingModelChoice.vendor(chosen).map(EmbeddingModelChoice.vendorLabel) ?? ""),
+                        stacked: true,
+                        readOnly: true
+                    )
+                    .accessibilityIdentifier("embedding-model-locked-vendor")
+                    InputTextWithHint(hint: L("settingsPage.embeddingDefaults.modelHint"), text: .constant(chosen ?? ""), stacked: true, readOnly: true)
+                        .accessibilityIdentifier("embedding-model-locked-model")
+                }
+            } else {
+                VStack(spacing: 10) {
+                    InputSelectWithHint(
+                        hint: L("settingsPage.embeddingDefaults.vendorHint"),
+                        placeholder: L("settingsPage.embeddingDefaults.vendorPlaceholder"),
+                        value: vendor,
+                        options: vendorModels.map { .init(value: $0.vendor, label: EmbeddingModelChoice.vendorLabel($0.vendor)) },
+                        stacked: true,
+                        onChange: { vendor = $0; model = "" }
+                    )
+                    .accessibilityIdentifier("embedding-vendor-select-conversations")
+                    InputSelectWithHint(
+                        hint: L("settingsPage.embeddingDefaults.modelHint"),
+                        placeholder: L("settingsPage.embeddingDefaults.modelPlaceholder"),
+                        value: model,
+                        options: (vendorModels.first { $0.vendor == vendor }?.models ?? []).map { .init(value: $0, label: $0) },
+                        stacked: true,
+                        onChange: { model = $0 }
+                    )
+                    .accessibilityIdentifier("embedding-model-select-conversations")
+                }
+                if modelsLoaded && vendorModels.isEmpty {
+                    note(L("settingsPage.embeddingDefaults.noModels"))
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    PillButton(label: L("settingsPage.embeddingModels.chooseAndLock"), size: .lg, disabled: model.isEmpty || saving, fullWidth: true) {
+                        confirmOpen = true
                     }
+                    .accessibilityIdentifier("save-default-embedding-model")
+                    note(L("settingsPage.embeddingModels.permanent"))
+                }
+                if auth.hasOwnKeys {
+                    SettingsRow(label: L("settingsPage.embeddingModels.ready"), stack: false) {
+                        if Self.vendors.contains(where: { vendor in !vendorModels.contains { $0.vendor == vendor } }) {
+                            SettingsLink(text: L("settingsPage.searchIndex.setUp")) { router.navigate(.settings(.embeddingKeys)) }
+                        }
+                    } extra: {
+                        WrapRow(spacing: 6, lineSpacing: 6) {
+                            ForEach(Self.vendors, id: \.self) { id in
+                                let ready = vendorModels.contains { $0.vendor == id }
+                                StatusPill(
+                                    kind: ready ? .ok : .unset,
+                                    text: L(ready ? "settingsPage.embeddingModels.vendorReady" : "settingsPage.embeddingModels.vendorNotSet", ["vendor": EmbeddingModelChoice.vendorLabel(id)])
+                                )
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                    .accessibilityIdentifier("embedding-model-readiness")
                 }
             }
-            PillButton(
-                label: isSaving ? L("settingsPage.embeddingDefaults.saving") : L("settingsPage.embeddingDefaults.save"),
-                icon: "save-icon",
-                disabled: isSaving || !hasSelection
+        }
+        .accessibilityIdentifier("embedding-model-card")
+        .settingsPage(
+            status: statusText,
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.embeddingModels.doesTitle"), text: L("settingsPage.embeddingModels.doesText")),
+                KnowledgeItem(title: L("settingsPage.embeddingModels.onceTitle"), text: L("settingsPage.embeddingModels.onceText"))
+            ]
+        )
+        .settingsDialog(isPresented: confirmOpen) {
+            TypedConfirmDialog(
+                title: L("settingsPage.embeddingModels.lockTitle", ["model": model]),
+                confirmWord: Self.lockWord,
+                inputLabel: L("settingsPage.embeddingModels.lockPrompt", ["word": Self.lockWord]),
+                confirmLabel: saving ? L("settingsPage.embeddingDefaults.saving") : L("settingsPage.embeddingModels.lockButton"),
+                danger: false,
+                busy: saving,
+                identifier: "embedding-model-lock-dialog",
+                onClose: { confirmOpen = false },
+                onConfirm: { Task { await lock() } }
             ) {
-                Task { await save() }
+                Text(L("settingsPage.embeddingModels.lockText"))
             }
-            .padding(.top, 4)
         }
-        .padding(.top, 33)
-        .overlay(alignment: .top) { Rectangle().fill(Color(hex: "#E5E7EB")).frame(height: 1) }
-        .task { await load() }
-        .onChange(of: auth.aiConfigPreferences?.embeddingModelConversations) { _, _ in prefill() }
+        .task { await loadModels() }
     }
 
-    /// The per-category preference wins; the legacy single embeddingModel is the fallback.
-    private func prefill() {
-        let preferences = auth.aiConfigPreferences
-        let conversations = preferences?.embeddingModelConversations ?? preferences?.embeddingModel ?? ""
-        selections = [
-            "conversations": Selection(vendor: Self.vendor(forModel: conversations), model: conversations)
-        ]
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .webText(12)
+            .foregroundStyle(AppTheme.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The last known list renders immediately; the fetch (which can wait on a server-side
-    /// probe) revalidates it. A failed refresh keeps showing what's cached.
-    private func load() async {
-        prefill()
-        if let cacheKey, let cached = CacheStore.shared.read([EmbeddingVendorModels].self, key: cacheKey) {
-            vendorModels = cached
+    private func loadModels() async {
+        guard let token = try? await auth.getAccessTokenSilently() else { return }
+        if let models = try? await EmbeddingService.getModels(token: token) { vendorModels = models }
+        modelsLoaded = true
+    }
+
+    private func lock() async {
+        guard auth.isAuthenticated else {
+            toasts.showToast(L("settingsPage.embeddingDefaults.loginFirstToast"))
+            return
         }
-        guard let token = try? await auth.getAccessTokenSilently(),
-              let fresh = try? await EmbeddingService.getModels(token: token) else { return }
-        vendorModels = fresh
-        if let cacheKey { CacheStore.shared.write(fresh, key: cacheKey) }
-    }
-
-    private func save() async {
-        let conversations = selections["conversations"]?.model ?? ""
-        guard !conversations.isEmpty else { return }
-        isSaving = true
-        defer { isSaving = false }
+        saving = true
+        defer { saving = false }
+        let picked = model
         do {
             let token = try await auth.getAccessTokenSilently()
-            try await SaveAIConfigService.savePreferences(token: token, embeddingModelConversations: conversations)
-            auth.mergePreferences(embeddingModelConversations: conversations)
-            toasts.showToast(L("settingsPage.embeddingDefaults.savedToast"))
+            try await SaveAIConfigService.savePreferences(token: token, embeddingModelConversations: picked)
+            auth.mergePreferences(embeddingModelConversations: picked, embeddingModelNotes: picked, embeddingModel: picked)
+            auth.resyncAccount()
+            confirmOpen = false
+            toasts.showToast(L("settingsPage.embeddingModels.lockedToast", ["model": picked]))
+        } catch let locked as EmbeddingModelLockedError {
+            auth.mergePreferences(embeddingModelConversations: locked.lockedModel, embeddingModelNotes: locked.lockedModel, embeddingModel: locked.lockedModel)
+            confirmOpen = false
+            toasts.showToast(L("settingsPage.embeddingModels.alreadyLockedToast", ["model": locked.lockedModel]))
         } catch {
-            toasts.showToast(error.localizedDescription.isEmpty ? L("settingsPage.embeddingDefaults.saveErrorToast") : error.localizedDescription)
+            let message = error.localizedDescription
+            toasts.showToast(message.isEmpty ? L("settingsPage.embeddingDefaults.saveErrorToast") : message)
         }
     }
 }

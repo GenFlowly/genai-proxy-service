@@ -42,6 +42,8 @@ enum AppTheme {
     static let buttonDanger = Color(hex: "#DC2626")
     static let primaryPressed = dynamic(light: "#005BC5", dark: "#005A9E")
     static let primaryLight = dynamic(light: "#E6F3FF", dark: "#1C2A3A")
+    /// BarChart.module.scss: the touched bar (`--color-primary-pressed`, #5ab0ff in dark).
+    static let chartBarActive = dynamic(light: "#005BC5", dark: "#5AB0FF")
     static let success = dynamic(light: "#3C7267", dark: "#32D74B")
     static let error = Color(uiColor: UI.error)
     static let background = Color(uiColor: UI.background)

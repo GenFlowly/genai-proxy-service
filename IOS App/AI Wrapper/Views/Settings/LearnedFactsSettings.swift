@@ -1,14 +1,48 @@
 import SwiftUI
 
-// MARK: - Learned facts (LearnedFactsSettings.tsx)
+// MARK: - The one embedding model (utils/embeddingModel.ts)
 
-/// Settings › Defaults › Learned facts: the memory switches and "Delete all learned facts". A
-/// switch is on until the user turns it off (unset means on, as on the server) and saves as
-/// soon as it changes; after a failed save it falls back to the stored value.
-struct LearnedFactsSettingsView: View {
+enum EmbeddingModelChoice {
+    /// In use until the customer chooses one. Must match EmbeddingConstants.MODEL_NAME in the proxy server.
+    static let platformDefault = "voyage-4-large"
+
+    /// The chosen model, read the way the server locks it: conversations, the single field, then notes.
+    static func chosen(_ preferences: AIConfigPreferences?) -> String? {
+        [preferences?.embeddingModelConversations, preferences?.embeddingModel, preferences?.embeddingModelNotes]
+            .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
+    }
+
+    /// voyage-* is Voyage, text-embedding-* OpenAI.
+    static func vendor(_ model: String?) -> String? {
+        guard let model else { return nil }
+        if model.hasPrefix("voyage") { return EmbeddingVendor.voyage }
+        if model.hasPrefix("text-embedding") { return EmbeddingVendor.openAI }
+        return nil
+    }
+
+    /// A locked model the server lets the customer replace: no known vendor owns its name, or its
+    /// vendor's working key no longer lists it. A vendor missing from the list keeps the lock.
+    static func isUnusable(_ model: String, vendorModels: [EmbeddingVendorModels]) -> Bool {
+        guard let vendor = vendor(model) else { return true }
+        guard let listed = vendorModels.first(where: { $0.vendor == vendor }) else { return false }
+        return !listed.models.contains(model)
+    }
+
+    static func vendorLabel(_ vendor: String) -> String {
+        vendor == EmbeddingVendor.voyage ? L("settingsPage.embeddingDefaults.voyageLabel") : ProviderCatalog.shared.displayName(for: vendor)
+    }
+}
+
+// MARK: - Defaults › Memory (LearnedFactsSettings.tsx)
+
+/// Whether the assistant learns facts from chats and uses them in replies. A switch is on until
+/// the user turns it off (unset means on, as on the server) and saves as soon as it changes;
+/// after a failed save it falls back. Deleting facts lives on Profile › Delete your data.
+struct MemorySettingsView: View {
     @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var router: AppRouter
     @EnvironmentObject var toasts: ToastCenter
-    @EnvironmentObject var dialogs: SettingsDialogCenter
 
     enum Switch: CaseIterable {
         case learnFromChats, useInReplies
@@ -17,13 +51,6 @@ struct LearnedFactsSettingsView: View {
             switch self {
             case .learnFromChats: return L("settingsPage.learnedFacts.fromChats")
             case .useInReplies: return L("settingsPage.learnedFacts.useInReplies")
-            }
-        }
-
-        var description: String {
-            switch self {
-            case .learnFromChats: return L("settingsPage.learnedFacts.fromChatsDescription")
-            case .useInReplies: return L("settingsPage.learnedFacts.useInRepliesDescription")
             }
         }
 
@@ -49,58 +76,29 @@ struct LearnedFactsSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                SettingsSectionTitle(L("settingsPage.learnedFacts.title"))
-                Text(L("settingsPage.learnedFacts.subtitle"))
-                    .webText(14)
-                    .foregroundStyle(Color(hex: "#6B7280"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        let learning = Self.isOn(.learnFromChats, preferences: auth.aiConfigPreferences, pending: pending)
+        SettingsCard(title: L("settingsPage.deleteData.factsCard"), icon: "brain") {
+            ForEach(Array(Switch.allCases.enumerated()), id: \.element) { index, key in
+                ToggleRow(
+                    label: key.label,
+                    isOn: Self.isOn(key, preferences: auth.aiConfigPreferences, pending: pending),
+                    disabled: pending[key] != nil,
+                    separated: index > 0,
+                    identifier: key.identifier
+                ) { checked in Task { await toggle(key, checked) } }
             }
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(Switch.allCases, id: \.self) { key in
-                    toggleRow(key)
-                }
-                PillButton(label: L("settingsPage.learnedFacts.deleteAll"), style: .danger) {
-                    dialogs.open(.deleteLearnedFacts)
-                }
-                .accessibilityIdentifier("learned-facts-delete-all")
-                .padding(.top, 4)
+            SettingsRow(label: L("settingsPage.memoryDefaults.listedNote"), mutedLabel: true, stack: false, separated: true) {
+                SettingsLink(text: L("settingsPage.memoryDefaults.openMemory")) { router.navigate(.memory) }
             }
-            .frame(maxWidth: 512, alignment: .leading)
         }
-        // margin-top/padding-top 2rem under a 1pt border (the section is below the agents)
-        .padding(.top, 33)
-        .overlay(alignment: .top) { Rectangle().fill(Color(hex: "#E5E7EB")).frame(height: 1) }
-    }
-
-    /// `<label class="toggleGroup">`: the whole row toggles its checkbox.
-    private func toggleRow(_ key: Switch) -> some View {
-        let isOn = Self.isOn(key, preferences: auth.aiConfigPreferences, pending: pending)
-        let isPending = pending[key] != nil
-        return HStack(alignment: .top, spacing: 24) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(key.label)
-                    .webText(16, 500)
-                    .foregroundStyle(AppTheme.textPrimary)
-                Text(key.description)
-                    .webText(14, lineHeight: 19.6)
-                    .foregroundStyle(AppTheme.textMuted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            WebCheckbox(isOn: isOn, size: 20, disabled: isPending, label: key.label) { value in
-                Task { await toggle(key, value) }
-            }
-            .padding(.top, 4)
-            .accessibilityIdentifier(key.identifier)
-        }
-        .padding(17)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !isPending else { return }
-            Task { await toggle(key, !isOn) }
-        }
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(AppTheme.borderLight, lineWidth: 1))
+        .settingsPage(
+            status: learning ? L("settingsPage.memoryDefaults.learningOn") : L("settingsPage.memoryDefaults.learningOff"),
+            knowledge: [
+                KnowledgeItem(title: L("settingsPage.memoryDefaults.learnsTitle"), text: L("settingsPage.memoryDefaults.learnsText")),
+                KnowledgeItem(title: L("settingsPage.memoryDefaults.runsTitle"), text: L("settingsPage.memoryDefaults.runsText")),
+                KnowledgeItem(title: L("settingsPage.memoryDefaults.goesTitle"), text: L("settingsPage.memoryDefaults.goesText"))
+            ]
+        )
     }
 
     private func toggle(_ key: Switch, _ checked: Bool) async {
@@ -127,57 +125,97 @@ struct LearnedFactsSettingsView: View {
     }
 }
 
-struct DeleteLearnedFactsDialog: View {
+// MARK: - Defaults › Search index (ChatIndexingSettings.tsx)
+
+/// Whether new chats are saved for search. Off until the user turns it on (unset means off, as on
+/// the server). Own-key customers see what indexing needs; deleting lives on Delete your data.
+struct SearchIndexSettingsView: View {
     @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var router: AppRouter
     @EnvironmentObject var toasts: ToastCenter
-    @EnvironmentObject var memories: MemoriesStore
-    @EnvironmentObject var dialogs: SettingsDialogCenter
 
-    @State private var deleting = false
+    @State private var saving: Bool?
+    @State private var keyStatuses: [EmbeddingKeyStatus]?
 
-    var body: some View {
-        WebModal(title: L("settingsPage.learnedFacts.deleteAllTitle"), maxWidth: 416, onClose: { dialogs.active = nil }) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(L("settingsPage.learnedFacts.deleteAllConfirm"))
-                    .webText(15, lineHeight: 22.5)
-                    .foregroundStyle(AppTheme.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 20)
-                HStack(spacing: 12) {
-                    Spacer(minLength: 0)
-                    PillButton(label: L("settingsPage.learnedFacts.cancel"), style: .secondary, disabled: deleting) {
-                        dialogs.active = nil
-                    }
-                    PillButton(
-                        label: deleting ? L("settingsPage.learnedFacts.deleting") : L("settingsPage.learnedFacts.deleteAllConfirmButton"),
-                        style: .danger,
-                        disabled: deleting
-                    ) {
-                        Task { await deleteAll() }
-                    }
-                    .accessibilityIdentifier("learned-facts-delete-confirm")
-                }
+    private var isOn: Bool { saving ?? (auth.aiConfigPreferences?.indexChats == true) }
+
+    private var databaseReady: Bool {
+        auth.vectorDBConfigStatusList.contains { $0.status == "PRESENT" }
+    }
+
+    private var searchKeyReady: Bool? {
+        keyStatuses.map { statuses in
+            [EmbeddingVendor.openAI, EmbeddingVendor.voyage].contains { vendor in
+                statuses.first { $0.vendor == vendor }.map { $0.isAPIKeyValid || $0.status == APIKeyStatus.valid } ?? false
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("delete-learned-facts-dialog")
         }
     }
 
-    private func deleteAll() async {
-        deleting = true
-        defer { deleting = false }
+    var body: some View {
+        let model = EmbeddingModelChoice.chosen(auth.aiConfigPreferences)
+        SettingsCard(title: L("settingsPage.searchIndex.card")) {
+            ToggleRow(
+                label: L("settingsPage.chatIndexing.indexChats"),
+                isOn: isOn,
+                disabled: saving != nil,
+                identifier: "chat-indexing-switch"
+            ) { checked in Task { await toggle(checked) } }
+            if auth.hasOwnKeys {
+                SettingsRow(label: L("settingsPage.searchIndex.needsTitle"), stack: false, separated: true) {
+                    if !databaseReady || searchKeyReady == false {
+                        SettingsLink(text: L("settingsPage.searchIndex.setUp")) {
+                            router.navigate(.settings(databaseReady ? .embeddingKeys : .vectorDb))
+                        }
+                    }
+                } extra: {
+                    WrapRow(spacing: 6, lineSpacing: 6) {
+                        StatusPill(kind: databaseReady ? .ok : .unset, text: L(databaseReady ? "settingsPage.searchIndex.databaseReady" : "settingsPage.searchIndex.databaseNotSet"))
+                        if let searchKeyReady {
+                            StatusPill(kind: searchKeyReady ? .ok : .unset, text: L(searchKeyReady ? "settingsPage.searchIndex.keyReady" : "settingsPage.searchIndex.keyNotSet"))
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .accessibilityIdentifier("search-index-requirements")
+            }
+            SettingsRow(
+                label: L("settingsPage.searchIndex.modelRow"),
+                description: model ?? L("settingsPage.searchIndex.platformDefault", ["model": EmbeddingModelChoice.platformDefault]),
+                stack: false,
+                separated: true
+            ) {
+                SettingsLink(text: model == nil ? L("settingsPage.searchIndex.modelChange") : L("settingsPage.searchIndex.modelDetails")) {
+                    router.navigate(.settings(.embeddingModels))
+                }
+            }
+        }
+        .settingsPage(
+            status: isOn ? L("settingsPage.searchIndex.on") : L("settingsPage.searchIndex.off"),
+            knowledge: [KnowledgeItem(title: L("settingsPage.searchIndex.doesTitle"), text: L("settingsPage.searchIndex.doesText"))]
+                + (auth.hasOwnKeys ? [KnowledgeItem(title: L("settingsPage.searchIndex.needsTitle"), text: L("settingsPage.searchIndex.needsText"))] : [])
+        )
+        .task(id: auth.hasOwnKeys) { await loadKeys() }
+    }
+
+    private func loadKeys() async {
+        guard auth.hasOwnKeys, let token = try? await auth.getAccessTokenSilently() else { return }
+        keyStatuses = try? await EmbeddingService.getKeys(token: token)
+    }
+
+    private func toggle(_ checked: Bool) async {
+        guard auth.isAuthenticated else {
+            toasts.showToast(L("settingsPage.chatIndexing.loginFirstToast"))
+            return
+        }
+        saving = checked
+        defer { saving = nil }
         do {
             let token = try await auth.getAccessTokenSilently()
-            let deleted = try await LearnedFactsService.deleteAll(token: token)
-            memories.memories = []
-            if let customerId = auth.customerId {
-                CacheStore.shared.write([CustomerMemory](), key: StorageSuffix.customerKey(customerId, StorageSuffix.memories))
-            }
-            toasts.showToast(L("settingsPage.learnedFacts.deletedToast", ["count": deleted]))
-            dialogs.active = nil
+            try await SaveAIConfigService.savePreferences(token: token, indexChats: checked)
+            auth.mergePreferences(indexChats: checked)
         } catch {
-            AppObservability.capture(error, context: ["where": "deleteAllLearnedFacts"])
-            toasts.showToast(L("settingsPage.learnedFacts.deleteErrorToast"))
+            let message = error.localizedDescription
+            toasts.showToast(message.isEmpty ? L("settingsPage.chatIndexing.saveErrorToast") : message)
         }
     }
 }
