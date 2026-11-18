@@ -388,8 +388,9 @@ struct KnowledgeList: View {
 
 // MARK: - InfoDrawer (InfoDrawer.tsx on SlideOverPanel.tsx)
 
-/// "About this page": slides in from the left over a scrim, with a close button, the page's
-/// name in a pill, its knowledge cards and how to open it again.
+/// "About this page": covers the screen, sliding in from the right, with a close button, the
+/// page's name in a pill, its knowledge cards and how to open it again. While it is open the
+/// left-edge swipe is off, so the menu can't open over it.
 struct InfoDrawer: View {
     let isOpen: Bool
     let subtitle: String
@@ -397,22 +398,50 @@ struct InfoDrawer: View {
     let onClose: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// How far a swipe has pulled the panel back toward the right edge.
+    @State private var dragOffset: CGFloat = 0
+
+    private var motion: Animation? {
+        reduceMotion ? nil : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.25)
+    }
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .leading) {
+            ZStack(alignment: .trailing) {
                 if isOpen {
                     Color.black.opacity(0.45)
                         .ignoresSafeArea()
                         .onTapGesture(perform: onClose)
                         .transition(.opacity)
                         .accessibilityHidden(true)
-                    panel(width: min(330, proxy.size.width * 0.88))
-                        .transition(reduceMotion ? .identity : .move(edge: .leading))
                 }
+                // Kept in place while closed, off past the right edge, so a swipe that closes it
+                // slides on from where the finger let go.
+                panel(width: proxy.size.width)
+                    .offset(x: isOpen ? dragOffset : proxy.size.width + 32)
+                    .gesture(closeSwipe(width: proxy.size.width))
+                    .allowsHitTesting(isOpen)
+                    .accessibilityHidden(!isOpen)
             }
-            .animation(reduceMotion ? nil : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.25), value: isOpen)
+            .animation(motion, value: isOpen)
         }
+        .preference(key: DialogShownKey.self, value: isOpen)
+    }
+
+    /// A swipe back to the right closes it, like the left-edge swipe closes a page; it commits
+    /// past 30% of the screen or on a flick (EdgeSwipeGesture.commits).
+    private func closeSwipe(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard dragOffset > 0 || value.translation.width > abs(value.translation.height) else { return }
+                dragOffset = max(0, value.translation.width)
+            }
+            .onEnded { value in
+                let commits = dragOffset > 0
+                    && EdgeSwipeGesture.commits(translation: dragOffset, velocity: value.velocity.width, width: width)
+                if commits { onClose() }
+                withAnimation(motion) { dragOffset = 0 }
+            }
     }
 
     private func panel(width: CGFloat) -> some View {
@@ -462,7 +491,7 @@ struct InfoDrawer: View {
         .frame(width: width)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(AppTheme.background.ignoresSafeArea())
-        .shadow(color: .black.opacity(0.25), radius: 12, x: 8)
+        .shadow(color: .black.opacity(0.25), radius: 12, x: -8)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityIdentifier("settings-info-drawer")
