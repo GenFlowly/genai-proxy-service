@@ -177,3 +177,37 @@ struct SwipeRowTests {
         #expect(Row.edgeGuard == 24)
     }
 }
+
+// MARK: - Variants and row tokens (SidebarWidget.tsx, sidebar-row.scss)
+
+@Suite("Sidebar widget variants")
+@MainActor
+struct SidebarWidgetVariantTests {
+    private func widget(_ variant: SidebarWidgetVariant, surface: SidebarWidgetSurface? = nil) -> SidebarWidget<EmptyView, EmptyView> {
+        SidebarWidget(variant: variant, surface: surface) { EmptyView() }
+    }
+
+    @Test func listsAndMenusPaintTheSidebarBackgroundAndTheRestShowTheMaterial() {
+        #expect(widget(.history).resolvedSurface == .material)
+        #expect(widget(.custom).resolvedSurface == .material)
+        #expect(widget(.directory).resolvedSurface == .sidebar)
+        #expect(widget(.menu).resolvedSurface == .sidebar)
+        #expect(widget(.custom, surface: .sidebar).resolvedSurface == .sidebar)
+    }
+
+    @Test func historyRowsAreSquareAndTheOthersRounded() {
+        #expect(SidebarRowTokens.history.radius == 0)
+        #expect(SidebarRowTokens.history.pressedRadius == 0)
+        #expect(SidebarRowTokens.directory.radius == DSRadius.sm)
+        #expect(SidebarRowTokens.menu.radius == DSRadius.md)
+    }
+
+    @Test func memoryRowsDifferFromTheOtherDirectoryRowsOnlyInCornersAndSelectedLabel() {
+        let memory = SidebarRowTokens.directoryMemory
+        let directory = SidebarRowTokens.directory
+        #expect(memory.radius == DSRadius.md)
+        #expect(memory.minHeight == directory.minHeight)
+        #expect(memory.fontSize == directory.fontSize)
+        #expect(memory.pressedRadius == directory.pressedRadius)
+    }
+}

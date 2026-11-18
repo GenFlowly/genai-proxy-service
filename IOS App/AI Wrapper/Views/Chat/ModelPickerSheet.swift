@@ -59,7 +59,7 @@ struct RightSidebarModal: View {
     }
 
     private func card<Actions: View, Content: View>(icon: String, title: String, @ViewBuilder actions: () -> Actions, @ViewBuilder content: () -> Content) -> some View {
-        SidebarWidget(title: title, icon: icon, actions: actions) {
+        SidebarWidget(variant: .custom, title: title, icon: icon, actions: actions) {
             VStack(alignment: .leading, spacing: 6) {
                 content()
             }

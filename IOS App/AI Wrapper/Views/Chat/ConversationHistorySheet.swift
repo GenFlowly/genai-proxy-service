@@ -48,7 +48,6 @@ struct ConversationHistoryPanel: View {
             topCollapsed: topCollapsed,
             bottomCollapsed: bottomCollapsed,
             hasTop: showProjectsPanel,
-            bare: true,
             top: { projectsWidget },
             bottom: { chatsWidget }
         )
@@ -134,6 +133,7 @@ struct ConversationHistoryPanel: View {
 
     private var projectsWidget: some View {
         SidebarWidget(
+            variant: .history,
             title: L("conversation.conversationHistory.projects"),
             icon: "folder",
             collapsible: true,
@@ -233,16 +233,15 @@ struct ConversationHistoryPanel: View {
                                 Color.clear.frame(width: 12, height: 12)
                             }
                             WebTruncatedLine(project.name)
-                                .webText(arial: 15.2, lineHeight: 18.24)
-                                .foregroundStyle(AppTheme.textSecondary)
+                                .sidebarRowText(.history, group: true)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(.leading, 10)
                         .padding(.trailing, 48)
-                        .frame(minHeight: 48)
+                        .frame(minHeight: SidebarRowTokens.history.groupMinHeight)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(MenuRowPressStyle())
+                    .buttonStyle(SidebarRowPressStyle(.history))
                     .accessibilityIdentifier("conv-history-project-\(project.projectId)")
 
                     MenuRowAction(icon: "add-icon", label: L("conversation.conversationHistory.newConversationInProject"), identifier: "conv-history-project-new-conv-\(project.projectId)") {
@@ -278,20 +277,20 @@ struct ConversationHistoryPanel: View {
     private func plainRow(_ label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .webText(arial: 15.2, lineHeight: 19.76)
-                .foregroundStyle(AppTheme.textSecondary)
+                .sidebarRowText(.history)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 11)
-                .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: SidebarRowTokens.history.minHeight, alignment: .topLeading)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(MenuRowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.history))
     }
 
     // MARK: - Chats widget
 
     private var chatsWidget: some View {
         SidebarWidget(
+            variant: .history,
             title: L("conversation.conversationHistory.chats"),
             icon: "chat-bubble",
             collapsible: true,
@@ -436,18 +435,17 @@ struct ConversationHistoryPanel: View {
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     WebTruncatedLine(displayTitle(item))
-                        .webText(arial: 15.2, bold: isActive, lineHeight: 19.76)
-                        .foregroundStyle(isActive ? AppTheme.textPrimary : AppTheme.textSecondary)
+                        .sidebarRowText(.history, active: isActive)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     details(item, isActive: isActive)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 11)
-                .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
-                .background(isActive ? AppTheme.backgroundSelected : Color.clear)
+                .frame(maxWidth: .infinity, minHeight: SidebarRowTokens.history.minHeight, alignment: .topLeading)
+                .sidebarRowFill(.history, active: isActive)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(MenuRowPressStyle())
+            .buttonStyle(SidebarRowPressStyle(.history))
             .accessibilityIdentifier("conv-history-item-\(item.conversationId)")
         }
     }
@@ -612,7 +610,7 @@ struct ChatMenuContent: View {
                     query: trimmedQuery,
                     types: ["conversation"],
                     untitledLabel: L("conversation.conversationHistory.untitledConversation"),
-                    surface: .card
+                    variant: .history
                 ) { result in
                     router.navigate(.chat)
                     Task { await conversation.loadConversation(result.key) }
@@ -708,7 +706,7 @@ struct RowPressStyle: ButtonStyle {
 
 // MARK: - Vertical split (VerticalSplit.module.scss + sidebar-card.scss)
 
-/// Two stacked floating cards split by a draggable divider with an always-visible grip. The
+/// Two stacked SidebarWidgets split by a draggable divider with an always-visible grip. The
 /// divider is 12pt with a 44pt touch area, reaching further into the pane above so the header at
 /// the top of the pane below stays tappable. The fraction persists; a collapsed pane hugs its
 /// header.
@@ -719,8 +717,6 @@ struct VerticalSplit<Top: View, Bottom: View>: View {
     let bottomCollapsed: Bool
     let hasTop: Bool
     var separatorLabel = L("conversation.conversationHistory.resizePanels")
-    /// The panes draw their own card (SidebarWidget), so the split adds none.
-    var bare = false
     @ViewBuilder let top: () -> Top
     @ViewBuilder let bottom: () -> Bottom
 
@@ -748,14 +744,12 @@ struct VerticalSplit<Top: View, Bottom: View>: View {
             VStack(spacing: 0) {
                 if hasTop {
                     top()
-                        .modifier(SplitPaneCard(bare: bare))
                         .frame(height: topHeight(total))
                         .frame(maxHeight: !topCollapsed && bottomCollapsed ? .infinity : nil)
                         .fixedSize(horizontal: false, vertical: topCollapsed)
                     divider(total: total).zIndex(1)
                 }
                 bottom()
-                    .modifier(SplitPaneCard(bare: bare))
                     .frame(maxHeight: bottomCollapsed && !topCollapsed ? nil : .infinity)
                     .fixedSize(horizontal: false, vertical: bottomCollapsed)
             }
@@ -800,19 +794,6 @@ struct VerticalSplit<Top: View, Bottom: View>: View {
                         )
                 }
                 .accessibilityLabel(separatorLabel)
-        }
-    }
-}
-
-/// A split pane's card, unless the pane is a SidebarWidget that draws its own.
-private struct SplitPaneCard: ViewModifier {
-    let bare: Bool
-
-    func body(content: Content) -> some View {
-        if bare {
-            content
-        } else {
-            content.sidebarCard()
         }
     }
 }

@@ -1,22 +1,6 @@
 import SwiftUI
 import UIKit
 
-// MARK: - Card chrome (sidebar-card.scss)
-
-extension View {
-    /// The floating sidebar card shared by VerticalSplit's panes and single cards.
-    func sidebarCard() -> some View {
-        self
-            .frame(maxWidth: .infinity)
-            .background(AppTheme.sidebarBackground)
-            .padding(1)
-            .background(AppTheme.sidebarMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: DSRadius.lg))
-            .overlay(RoundedRectangle(cornerRadius: DSRadius.lg).strokeBorder(AppTheme.sidebarHairline, lineWidth: 1))
-            .shadow(color: AppTheme.sidebarShadow, radius: 8, y: 4)
-    }
-}
-
 /// A scroll view as tall as its content until the surrounding column runs out of room, so a
 /// single card hugs its rows.
 struct HuggingScrollView<Content: View>: View {
@@ -119,18 +103,15 @@ extension MobileMenuBody where Results == EmptyView {
 
 // MARK: - Search results (MenuSearchResults.tsx)
 
-/// Where search results sit: the menu's classic card, or a SidebarWidget's surface with the
-/// menu rows of the chat page's widgets.
-enum MenuSurface { case panel, card }
-
-/// Results of the unified search API, listed in a card. The request goes out once typing pauses.
+/// Results of the unified search API, listed in a card: a history card with the chat widgets'
+/// rows, or a directory card. The request goes out once typing pauses.
 struct MenuSearchResults: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var router: AppRouter
     let query: String
     let types: [String]
     let untitledLabel: String
-    var surface = MenuSurface.panel
+    var variant = SidebarWidgetVariant.directory
     let onSelect: (SearchResultItem) -> Void
 
     private enum Phase: Equatable {
@@ -144,7 +125,7 @@ struct MenuSearchResults: View {
     private static let debounce: Duration = .milliseconds(300)
 
     var body: some View {
-        Group {
+        SidebarWidget(variant: variant) {
             switch phase {
             case .loading:
                 VStack(spacing: 3) {
@@ -162,7 +143,7 @@ struct MenuSearchResults: View {
                 }
             case .loaded(let results) where results.isEmpty:
                 message(L("layout.mobileMenu.noSearchResults"))
-            case .loaded(let results) where surface == .card:
+            case .loaded(let results) where variant == .history:
                 HuggingScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         MenuSectionLabel(title: L("layout.mobileMenu.searchResults"))
@@ -185,7 +166,6 @@ struct MenuSearchResults: View {
                 }
             }
         }
-        .modifier(SearchResultsCard(surface: surface))
         .task(id: query) { await search() }
     }
 
@@ -194,8 +174,7 @@ struct MenuSearchResults: View {
         Button { onSelect(result) } label: {
             VStack(alignment: .leading, spacing: 4) {
                 WebTruncatedLine(displayTitle(result))
-                    .webText(arial: 15.2, lineHeight: 19.76)
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .sidebarRowText(.history)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 WebTruncatedLine(result.snippet)
                     .webText(arial: 11.52, lineHeight: 13.824)
@@ -204,10 +183,10 @@ struct MenuSearchResults: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 11)
-            .frame(maxWidth: .infinity, minHeight: 62, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: SidebarRowTokens.history.minHeight, alignment: .topLeading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(MenuRowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.history))
         .menuRowHairline()
         .accessibilityIdentifier("menu-search-result-\(result.key)")
     }
@@ -256,8 +235,7 @@ struct MenuSearchResults: View {
         Button { onSelect(result) } label: {
             VStack(alignment: .leading, spacing: 4) {
                 WebTruncatedLine(displayTitle(result))
-                    .webText(arial: 15.2, lineHeight: 19.76)
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .sidebarRowText(.directory)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 WebTruncatedLine(result.snippet)
                     .webText(arial: 11.52, lineHeight: 13.824)
@@ -266,26 +244,15 @@ struct MenuSearchResults: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 9.6)
-            .frame(minHeight: 48)
+            .frame(minHeight: SidebarRowTokens.directory.minHeight)
             .contentShape(Rectangle())
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.directory))
     }
 
     private func displayTitle(_ result: SearchResultItem) -> String {
         let title = result.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return title.isEmpty ? untitledLabel : title
-    }
-}
-
-private struct SearchResultsCard: ViewModifier {
-    let surface: MenuSurface
-
-    func body(content: Content) -> some View {
-        switch surface {
-        case .panel: content.sidebarCard()
-        case .card: content.sidebarWidgetCard()
-        }
     }
 }
 
@@ -329,14 +296,6 @@ struct MenuSectionLabel: View {
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityAddTraits(.isHeader)
-    }
-}
-
-/// A flat menu row's pressed look: the hover fill, square, since hairlines separate the rows.
-struct MenuRowPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(configuration.isPressed ? AppTheme.backgroundHover : Color.clear)
     }
 }
 
