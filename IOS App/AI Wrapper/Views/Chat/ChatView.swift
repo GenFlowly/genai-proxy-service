@@ -86,7 +86,7 @@ struct ChatView: View {
                 VStack {
                     Spacer()
                     askPill(selection)
-                        .padding(.bottom, 88)
+                        .padding(.bottom, 148)
                 }
             }
         }
@@ -244,8 +244,8 @@ struct ChatView: View {
     static let contentSpace = "chat-content"
     static func turnAnchor(_ blockId: String) -> String { "turn-\(blockId)" }
 
-    /// Touch selection: the pill docks above the response action bar because the OS
-    /// selection callout draws over the page wherever the selection sits.
+    /// Touch selection: the pill docks above the idle follow-up editor stuck to the bottom of
+    /// the page because the OS selection callout draws over the page wherever the selection sits.
     private func askPill(_ selection: AskSelection) -> some View {
         Button {
             conversation.ask(selectedText: selection.text, fromBlock: selection.blockId, message: selection.message)
@@ -408,10 +408,9 @@ struct ConversationBlockView: View {
             if block.status == .resolved || block.isLoading {
                 ResolvedRequestView(block: block)
             } else {
-                ComposerView(
-                    blockId: block.conversationBlockId,
-                    isLastBlock: conversation.blocks.last?.conversationBlockId == block.conversationBlockId
-                )
+                let isLastBlock = conversation.blocks.last?.conversationBlockId == block.conversationBlockId
+                ComposerView(blockId: block.conversationBlockId, isLastBlock: isLastBlock)
+                    .modifier(StickyViewportBottom(isActive: isLastBlock))
             }
 
             if block.status == .resolved || !block.responseMessages.isEmpty {
@@ -430,6 +429,30 @@ struct ConversationBlockView: View {
             }
 
             RunHitlBanner(block: block)
+        }
+    }
+}
+
+/// The trailing editor's `position: sticky; bottom: 0` against the whole conversation: lifted
+/// onto the bottom of the viewport while its place at the conversation's end is below it, over
+/// the turns scrolled behind it. The viewport ends above the home indicator, so the page's color
+/// runs on under the indicator.
+private struct StickyViewportBottom: ViewModifier {
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        if isActive {
+            content
+                .background(alignment: .bottom) {
+                    AppTheme.background.frame(height: 40).offset(y: 40)
+                }
+                .visualEffect { view, proxy in
+                    let frame = proxy.frame(in: .scrollView(axis: .vertical))
+                    let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height ?? .greatestFiniteMagnitude
+                    return view.offset(y: -max(0, frame.maxY - viewport))
+                }
+        } else {
+            content
         }
     }
 }
