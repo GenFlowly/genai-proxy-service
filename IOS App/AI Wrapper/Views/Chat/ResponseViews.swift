@@ -276,10 +276,8 @@ struct ResponseCardView: View {
     let swipe: ResponseSwipeModel
     let isSwipeNeighbor: Bool
 
-    @State private var cardHeight: CGFloat = 0
-
     /// Nothing follows, so the bar takes up the group's 8pt below it and its buttons end where
-    /// the scrolled page does, the same place they stick to.
+    /// the scrolled page does.
     private var endsConversation: Bool { conversation.blocks.last?.conversationBlockId == block.conversationBlockId }
 
     private var hasAnyValidApiKey: Bool { auth.aiVendorAPIKeyStatusList.contains { $0.isAPIKeyValid == true } }
@@ -336,7 +334,6 @@ struct ResponseCardView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
     }
 
     private var selectionHandler: ((String?) -> Void)? {
@@ -402,8 +399,7 @@ struct ResponseCardView: View {
         .padding(.top, 14)
     }
 
-    /// `.responseActionButtonsWrapper`: spans the screen edge to edge and sticks to the bottom
-    /// of the viewport while the response is taller than the screen, over the page's color.
+    /// `.responseActionButtonsWrapper`: spans the screen edge to edge at the end of the response.
     private var actionBar: some View {
         HStack(spacing: 8) {
             if message.isLoading {
@@ -438,8 +434,6 @@ struct ResponseCardView: View {
         .padding(.top, 16)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
-        .background(ActionBarBackground())
-        .modifier(StickyBottom(containerHeight: cardHeight, barHeight: 62, bottomPadding: 12))
         .modifier(ResponseSwipeOffset(model: swipe, factor: -1))
         .padding(.horizontal, -8)
         .padding(.bottom, endsConversation ? -8 : 0)
@@ -471,35 +465,6 @@ struct ResponseCardView: View {
     /// "$1.23" / "$0.0421" — sub-dollar amounts keep enough decimals for sub-cent turns.
     static func formatUsd(_ cost: Double) -> String {
         cost >= 1 ? String(format: "$%.2f", cost) : String(format: "$%.4f", cost)
-    }
-}
-
-/// CSS `position: sticky; bottom: 0` inside the card: lifted while the card extends past the
-/// viewport, never above the card's own top. The viewport ends above the home indicator, and
-/// the bar's bottom padding hangs past it, so the buttons stay clear of the indicator.
-private struct StickyBottom: ViewModifier {
-    let containerHeight: CGFloat
-    let barHeight: CGFloat
-    let bottomPadding: CGFloat
-
-    func body(content: Content) -> some View {
-        content.visualEffect { [bottomPadding] view, proxy in
-            let frame = proxy.frame(in: .scrollView(axis: .vertical))
-            let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height ?? .greatestFiniteMagnitude
-            let overflow = max(0, frame.maxY - (viewport + bottomPadding))
-            let limit = max(0, containerHeight - barHeight)
-            return view.offset(y: -min(overflow, limit))
-        }
-    }
-}
-
-/// `backdrop-filter: blur(4px)` over `color-mix(page 85%, transparent)`. Past the web's, it runs
-/// under the home indicator to the bottom of the screen.
-private struct ActionBarBackground: View {
-    var body: some View {
-        AppTheme.background.opacity(0.85)
-            .background(BackdropBlur(fraction: 0.1))
-            .padding(.bottom, -40)
     }
 }
 

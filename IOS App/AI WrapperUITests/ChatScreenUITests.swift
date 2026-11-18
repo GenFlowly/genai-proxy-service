@@ -55,6 +55,29 @@ final class ChatScreenUITests: XCTestCase {
         XCTAssertTrue(title.isHittable)
     }
 
+    /// Not scrolled: the idle follow-up editor rests on the bottom of the screen, over the
+    /// response, and a tap there types into it.
+    @MainActor
+    func testTheIdleFollowUpEditorSticksToTheBottomAndTakesATap() throws {
+        let app = launchMockConversation()
+        XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
+        XCTAssertFalse(element(app.buttons, labelled: "Fork").isHittable)
+
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.87)).tap()
+        app.typeText("Make it shorter")
+
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        let editor = element(app.textViews, labelled: "Generate")
+        XCTAssertEqual(editor.value as? String, "Make it shorter")
+        let send = element(app.buttons, labelled: "Generate")
+        let deadline = Date().addingTimeInterval(3)
+        while send.frame.maxY > keyboard.frame.minY, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        XCTAssertLessThanOrEqual(send.frame.maxY, keyboard.frame.minY)
+    }
+
     @MainActor
     func testTypingAFollowUpKeepsTheEditorAboveTheKeyboard() throws {
         let app = launchMockConversation()
