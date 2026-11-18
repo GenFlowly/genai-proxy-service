@@ -6,6 +6,7 @@ import {
     CreateAttachmentUploadResponse,
     GetAttachmentUrlResponse,
 } from '../models/attachment.models'
+import { downscaleImageForUpload } from '../utils/imageDownscale'
 
 /**
  * Media type declared for files the browser cannot type. Browsers report
@@ -18,8 +19,12 @@ export const UNKNOWN_ATTACHMENT_MEDIA_TYPE = 'application/octet-stream'
  * Uploads an image for use as a message attachment:
  * 1. asks the proxy server for a presigned S3 PUT URL, declaring the file's
  *    media type (or application/octet-stream when the browser reports none)
- * 2. PUTs the raw, unmodified file bytes straight to S3 (no proxy hop)
+ * 2. PUTs the file bytes straight to S3 (no proxy hop)
  * Returns the AttachmentRef to include in the generate request.
+ *
+ * An image over MAX_IMAGE_UPLOAD_BYTES that this browser can decode is first
+ * resized to a PNG under that size (downscaleImageForUpload); every other file
+ * goes up unmodified.
  *
  * No image-type or size restriction is applied here or by the proxy: the
  * proxy only normalizes the declared media type (blank, malformed, non-image
@@ -30,7 +35,8 @@ export const UNKNOWN_ATTACHMENT_MEDIA_TYPE = 'application/octet-stream'
  * converts/compresses losslessly for the LLM vendors; the original object in
  * S3 is never modified.
  */
-export async function uploadAttachment(token: string, file: File): Promise<AttachmentRef> {
+export async function uploadAttachment(token: string, original: File): Promise<AttachmentRef> {
+    const file = await downscaleImageForUpload(original)
     const presignResponse = await fetchWithRetry(endpoints.attachments, {
         method: HttpMethod.POST,
         headers: {

@@ -407,11 +407,16 @@ struct ComposerView: View {
     }
 
     private func upload(_ file: PickedAttachment) {
-        let (data, fileName, mediaType) = (file.data, file.fileName, file.mediaType)
-        let entry = PendingAttachment(fileName: fileName, mediaType: mediaType, preview: file.isPDF ? nil : UIImage(data: data))
+        let isPDF = file.isPDF
+        let original = file.data
+        let entry = PendingAttachment(fileName: file.fileName, mediaType: file.mediaType, preview: isPDF ? nil : UIImage(data: original))
         pending.append(entry)
         Task {
             do {
+                var (data, fileName, mediaType) = (original, file.fileName, file.mediaType)
+                if !isPDF, let png = await Task.detached(operation: { ImageDownscale.png(from: original) }).value {
+                    (data, fileName, mediaType) = (png, ImageDownscale.pngName(fileName), "image/png")
+                }
                 let token = try await auth.getAccessTokenSilently()
                 let ref = try await AttachmentService.upload(token: token, data: data, fileName: fileName, mediaType: mediaType)
                 if let index = pending.firstIndex(where: { $0.id == entry.id }) {

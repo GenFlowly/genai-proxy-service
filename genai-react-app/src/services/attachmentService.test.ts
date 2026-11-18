@@ -1,10 +1,13 @@
 import { uploadAttachment, getAttachmentViewUrl } from './attachmentService'
 import { fetchWithRetry } from '../utils/apiUtils'
 import { endpoints } from '../config/endpoints'
+import { downscaleImageForUpload } from '../utils/imageDownscale'
 
 jest.mock('../utils/apiUtils')
+jest.mock('../utils/imageDownscale')
 
 const mockFetchWithRetry = fetchWithRetry as jest.Mock
+const mockDownscale = downscaleImageForUpload as jest.Mock
 
 const makeFile = (name = 'shot.png', type = 'image/png', size = 1234): File => {
     const file = new File(['x'.repeat(10)], name, { type })
@@ -15,6 +18,7 @@ const makeFile = (name = 'shot.png', type = 'image/png', size = 1234): File => {
 describe('attachmentService', () => {
     beforeEach(() => {
         jest.clearAllMocks()
+        mockDownscale.mockImplementation(async (file: File) => file)
     })
 
     describe('uploadAttachment', () => {
@@ -100,7 +104,27 @@ describe('attachmentService', () => {
             })
         })
 
-        test('sends a large HEIC as-is: no client-side type allowlist, size cap or transcoding', async () => {
+        test('uploads the downscaled PNG in place of a large photo', async () => {
+            const original = makeFile('IMG_0001.jpg', 'image/jpeg', 24 * 1024 * 1024)
+            const png = makeFile('IMG_0001.png', 'image/png', 4 * 1024 * 1024)
+            mockDownscale.mockResolvedValue(png)
+            const presign = {
+                attachmentId: 'att-3',
+                s3Key: 'customers/CU1/attachments/att-3',
+                mediaType: 'image/png',
+                uploadUrl: 'https://bucket.s3.amazonaws.com/signed-3',
+            }
+
+            const { ref, presignBody, putInit } = await uploadWithPresign(original, presign)
+
+            expect(mockDownscale).toHaveBeenCalledWith(original)
+            expect(presignBody).toEqual({ fileName: 'IMG_0001.png', mediaType: 'image/png', sizeBytes: png.size })
+            expect(putInit.headers).toEqual({ 'Content-Type': 'image/png' })
+            expect(putInit.body).toBe(png)
+            expect(ref.filename).toBe('IMG_0001.png')
+        })
+
+        test('sends a file the browser cannot downscale as-is, with no type allowlist or size cap', async () => {
             const fortyMb = 40 * 1024 * 1024
             const presign = {
                 attachmentId: 'att-3',
@@ -114,7 +138,6 @@ describe('attachmentService', () => {
 
             expect(presignBody).toEqual({ fileName: 'IMG_0002.heic', mediaType: 'image/heic', sizeBytes: fortyMb })
             expect(putInit.headers).toEqual({ 'Content-Type': 'image/heic' })
-            // The exact File object is uploaded — the bytes are never re-encoded client-side
             expect(putInit.body).toBe(file)
             expect(ref.mediaType).toBe('image/heic')
         })
