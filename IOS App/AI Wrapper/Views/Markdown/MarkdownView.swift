@@ -87,14 +87,65 @@ struct CodeBlockView: View {
         }
     }
 
-    @ViewBuilder private var codeText: some View {
-        if let highlighted {
-            Text(highlighted).webText(mono: 15.2, lineHeight: lineHeight)
-        } else {
-            Text(verbatim: code)
-                .webText(mono: 15.2, lineHeight: lineHeight)
-                .foregroundStyle(colorScheme == .dark ? Color(hex: "#C9D1D9") : Color(hex: "#24292E"))
+    private var codeText: some View {
+        let chunks = Self.chunks(highlighted ?? plain, lineHeight: lineHeight)
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(chunks.enumerated()), id: \.offset) { _, chunk in
+                Text(chunk).webText(mono: 15.2, lineHeight: lineHeight)
+            }
         }
+    }
+
+    private var plain: AttributedString {
+        var text = AttributedString(code)
+        text.foregroundColor = colorScheme == .dark ? Color(hex: "#C9D1D9") : Color(hex: "#24292E")
+        return text
+    }
+
+    /// Each `Text` draws into a single layer that is as wide as its longest line, and iOS leaves a
+    /// layer blank once it passes about 0.25 billion pixels. So the lines are stacked in several
+    /// `Text`s, each kept well under that area and a few screens tall.
+    private static let maxChunkArea: CGFloat = 4_000_000
+    private static let maxChunkHeight: CGFloat = 2_000
+
+    static func chunks(_ text: AttributedString, lineHeight: CGFloat) -> [AttributedString] {
+        let advance = ("0" as NSString).size(withAttributes: [.font: DSFont.uiMono(15.2)]).width
+        let chars = text.characters
+        var lines: [AttributedString] = []
+        var start = chars.startIndex
+        var index = start
+        while index < chars.endIndex {
+            if chars[index].isNewline {
+                lines.append(AttributedString(text[start..<index]))
+                start = chars.index(after: index)
+            }
+            index = chars.index(after: index)
+        }
+        lines.append(AttributedString(text[start..<chars.endIndex]))
+
+        var chunks: [AttributedString] = []
+        var current: [AttributedString] = []
+        var widest: CGFloat = 0
+        func flush() {
+            guard !current.isEmpty else { return }
+            var chunk = current[0]
+            for line in current.dropFirst() {
+                chunk.append(AttributedString("\n"))
+                chunk.append(line)
+            }
+            chunks.append(chunk)
+            current = []
+            widest = 0
+        }
+        for line in lines {
+            let width = CGFloat(line.characters.reduce(0) { $0 + ($1 == "\t" ? 8 : 1) }) * advance
+            let height = CGFloat(current.count + 1) * lineHeight
+            if height > maxChunkHeight || max(widest, width) * height > maxChunkArea { flush() }
+            current.append(line)
+            widest = max(widest, width)
+        }
+        flush()
+        return chunks
     }
 }
 
