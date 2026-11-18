@@ -230,8 +230,8 @@ struct AgentsMenuContent: View {
                 bottomCollapsed: false,
                 hasTop: true,
                 separatorLabel: L("agentsPage.menu.resizePanels"),
-                top: { categoriesCard },
-                bottom: { agentsCard }
+                top: { SidebarWidget(variant: .directory) { categoriesCard } },
+                bottom: { SidebarWidget(variant: .directory) { agentsCard } }
             )
         }
     }
@@ -256,8 +256,7 @@ struct AgentsMenuContent: View {
             HStack(spacing: 8) {
                 WebIcon(name: category.menuIcon, size: 18, color: AppTheme.textMuted)
                 Text(L(category.labelKey))
-                    .webText(arial: 15.2, bold: active, lineHeight: 19.76)
-                    .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
+                    .sidebarRowText(.directory, active: active)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(String(count))
@@ -269,12 +268,11 @@ struct AgentsMenuContent: View {
                     .clipShape(Capsule())
             }
             .padding(.horizontal, 8)
-            .frame(minHeight: 48)
-            .background(active ? AppTheme.backgroundSelected : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: DSRadius.sm))
+            .frame(minHeight: SidebarRowTokens.directory.minHeight)
+            .sidebarRowFill(.directory, active: active)
             .contentShape(Rectangle())
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.directory))
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
@@ -320,8 +318,7 @@ struct AgentsMenuContent: View {
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 WebTruncatedLine(agent.name)
-                    .webText(arial: 15.2, lineHeight: 19.76)
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .sidebarRowText(.directory)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(L(agent.isSystem == true ? "agentsPage.menu.systemReadOnly" : "agentsPage.menu.createdByYou"))
                     .webText(arial: 11.52, lineHeight: 13.824)
@@ -329,10 +326,10 @@ struct AgentsMenuContent: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 9.6)
-            .frame(minHeight: 48)
+            .frame(minHeight: SidebarRowTokens.directory.minHeight)
             .contentShape(Rectangle())
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.directory))
     }
 }
 

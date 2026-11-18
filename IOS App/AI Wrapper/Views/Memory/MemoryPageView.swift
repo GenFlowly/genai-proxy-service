@@ -378,19 +378,13 @@ struct MemoryMenuContent: View {
     }
 
     private func card<Rows: View>(title: String, isOpen: Binding<Bool>, @ViewBuilder rows: () -> Rows) -> some View {
-        VStack(spacing: 0) {
-            SectionHeader(title: title, isExpanded: isOpen.wrappedValue, canExpand: true, action: { EmptyView() }) {
-                isOpen.wrappedValue.toggle()
-            }
-            if isOpen.wrappedValue {
-                HuggingScrollView {
-                    VStack(spacing: 0) { rows() }
-                        .padding(.horizontal, 4)
-                        .padding(.bottom, 4)
-                }
+        SidebarWidget(variant: .directory, title: title, collapsible: true, isExpanded: isOpen.wrappedValue, onToggle: { isOpen.wrappedValue.toggle() }) {
+            HuggingScrollView {
+                VStack(spacing: 0) { rows() }
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 4)
             }
         }
-        .sidebarCard()
     }
 
     private func row(_ scope: MemoryScope, label: String, icon: String) -> some View {
@@ -404,8 +398,7 @@ struct MemoryMenuContent: View {
             HStack(spacing: 10) {
                 WebIcon(name: icon, size: 18, color: AppTheme.textMuted)
                 WebTruncatedLine(label)
-                    .webText(arial: 15.2, bold: active, lineHeight: 19.76)
-                    .foregroundStyle(AppTheme.textSecondary)
+                    .sidebarRowText(.directoryMemory, active: active)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if count > 0 {
                     Text("\(count)")
@@ -418,12 +411,11 @@ struct MemoryMenuContent: View {
                 }
             }
             .padding(.horizontal, 8)
-            .frame(minHeight: 48)
-            .background(active ? AppTheme.backgroundSelected : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
+            .frame(minHeight: SidebarRowTokens.directoryMemory.minHeight)
+            .sidebarRowFill(.directoryMemory, active: active)
             .contentShape(Rectangle())
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.directoryMemory))
         .accessibilityAddTraits(active ? .isSelected : [])
         .accessibilityIdentifier("memory-scope-\(scope.countKey)")
     }

@@ -50,9 +50,7 @@ describe('LandingPage Routing Logic', () => {
 
         mockGetPageConfig.mockReturnValue({
             pageId: 'CHAT_PAGE',
-            leftSidebar: ['LEFT'],
             centerSection: ['CENTER'],
-            rightSidebar: ['RIGHT']
         });
 
         // Default behavior: use actual implementation

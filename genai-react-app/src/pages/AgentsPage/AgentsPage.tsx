@@ -13,7 +13,7 @@ import {
     PillButton,
     ResizableSidebar,
     ScrollArea,
-    SidebarListPanel,
+    SidebarWidget,
 } from '@genflowly/component-library'
 import type { SidebarListGroup } from '@genflowly/component-library'
 import styles from './AgentsPage.module.scss'
@@ -378,14 +378,18 @@ export default function AgentsPage() {
                         maxWidth={320}
                         data-testid="agents-category-sidebar"
                     >
-                        <SidebarListPanel
-                            groups={[categoryGroup]}
-                            isLoading={loading}
-                            hasError={false}
-                            errorText=""
-                            emptyText=""
-                            listAriaLabel={t('agentsPage.categories.navAriaLabel')}
-                            data-testid="agents-category-panel"
+                        <SidebarWidget
+                            variant="directory"
+                            fill
+                            list={{
+                                groups: [categoryGroup],
+                                isLoading: loading,
+                                hasError: false,
+                                errorText: '',
+                                emptyText: '',
+                                listAriaLabel: t('agentsPage.categories.navAriaLabel'),
+                                'data-testid': 'agents-category-panel',
+                            }}
                         />
                     </ResizableSidebar>
                 )}

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useLocation } from 'react-router'
 import { useAuth } from '../../../context/AuthContext'
-import { Icon, MenuSearchField, PillButton, ScrollArea, SidebarWidget, TreeMenu } from '@genflowly/component-library'
+import { Icon, MenuSearchField, PillButton, SidebarWidget } from '@genflowly/component-library'
 import type { TreeMenuItem } from '@genflowly/component-library'
 import MobileMenuBody from '../../../components/widgets/MobileMenuBody/MobileMenuBody'
 import { ICONS } from '../../../constants/icons'
@@ -44,19 +44,16 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
         onNavigate?.()
     }
 
-    const tree = (
-        <TreeMenu
-            items={items}
-            activePath={location.pathname}
-            onNavigate={go}
-            query={query}
-            extraSearchHits={menu ? [supportHit] : []}
-            noResultsLabel={t('layout.mobileMenu.noSearchResults')}
-            variant={menu ? 'menu' : 'sidebar'}
-            aria-label={t('settingsPage.nav.title')}
-            testIdPrefix="settings"
-        />
-    )
+    const tree = {
+        items,
+        activePath: location.pathname,
+        onNavigate: go,
+        query,
+        extraSearchHits: menu ? [supportHit] : [],
+        noResultsLabel: t('layout.mobileMenu.noSearchResults'),
+        'aria-label': t('settingsPage.nav.title'),
+        testIdPrefix: 'settings',
+    }
 
     const logOut = () => logout({ returnTo: window.location.origin })
 
@@ -67,10 +64,7 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                 onSearchChange={setQuery}
                 searchPlaceholder={t('layout.mobileMenu.searchSettings')}
             >
-                <SidebarWidget className={styles.menuCard}>
-                    <h2 className={styles.menuHeader}>{t('settingsPage.nav.title')}</h2>
-                    <ScrollArea className={styles.menuScroll}>{tree}</ScrollArea>
-                </SidebarWidget>
+                <SidebarWidget variant="menu" touch title={t('settingsPage.nav.title')} menu={tree} />
                 {!query.trim() && (
                     <SidebarWidget className={styles.menuLinkCard}>
                         <button className={styles.menuLink} onClick={() => go('/support')} data-testid="settings-menu-support">
@@ -93,9 +87,12 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
     }
 
     return (
-        <aside className={styles.sidebar}>
-            <h2 className={styles.header}>{t('settingsPage.nav.title')}</h2>
-            <div className={styles.search}>
+        <SidebarWidget
+            variant="menu"
+            fill
+            title={t('settingsPage.nav.title')}
+            menu={tree}
+            search={
                 <MenuSearchField
                     value={query}
                     onChange={setQuery}
@@ -104,9 +101,8 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                     variant="sidebar"
                     data-testid="settings-sidebar-search"
                 />
-            </div>
-            <ScrollArea className={styles.navScroll}>{tree}</ScrollArea>
-            <div className={styles.footer}>
+            }
+            footer={
                 <PillButton
                     label={t('settingsPage.nav.logout')}
                     icon={ICONS.LOGOUT}
@@ -115,7 +111,7 @@ export function SettingsSidebar({ onNavigate, menu = false }: SettingsSidebarPro
                     onClick={logOut}
                     data-testid="settings-sidebar-logout"
                 />
-            </div>
-        </aside>
+            }
+        />
     )
 }

@@ -142,7 +142,6 @@ export default function MemoryPage(): React.ReactElement {
                 {!isNarrow && (
                     <ResizableSidebar
                         storageKey={SIDEBAR_WIDTH_STORAGE_KEY}
-                        variant="plain"
                         minWidth={200}
                         defaultWidth={272}
                         maxWidth={380}

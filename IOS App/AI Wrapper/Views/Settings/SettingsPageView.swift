@@ -204,15 +204,8 @@ struct SettingsSidebar: View {
     var body: some View {
         MobileMenuBody(searchText: $query, searchPlaceholder: L("layout.mobileMenu.searchSettings")) {
             VStack(spacing: 12) {
-                HuggingScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(L("settingsPage.nav.title").uppercased())
-                            .webText(12, 700)
-                            .kerning(0.72)
-                            .foregroundStyle(AppTheme.textMuted)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: 42)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                SidebarWidget(variant: .menu, title: L("settingsPage.nav.title")) {
+                    HuggingScrollView {
                         VStack(alignment: .leading, spacing: 2) {
                             if normalizedQuery.isEmpty {
                                 ForEach(SettingsNav.sections) { section in
@@ -235,7 +228,6 @@ struct SettingsSidebar: View {
                         .padding(.bottom, 4)
                     }
                 }
-                .sidebarCard()
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(L("settingsPage.nav.title"))
 
@@ -281,8 +273,7 @@ struct SettingsSidebar: View {
             HStack(spacing: 10) {
                 WebIcon(name: icon, size: 18, color: state == .plain ? AppTheme.textMuted : AppTheme.primary)
                 Text(label)
-                    .webText(15, state == .plain ? 400 : 500)
-                    .foregroundStyle(state == .plain ? AppTheme.textSecondary : AppTheme.textPrimary)
+                    .sidebarRowText(.menu, active: state != .plain)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if let chevron {
@@ -292,12 +283,11 @@ struct SettingsSidebar: View {
             }
             .padding(.leading, 8)
             .padding(.trailing, 10)
-            .frame(minHeight: 48)
-            .background(state == .active ? AppTheme.backgroundSelected : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
+            .frame(minHeight: SidebarRowTokens.menu.minHeight)
+            .sidebarRowFill(.menu, active: state == .active)
             .contentShape(Rectangle())
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.menu))
         .accessibilityIdentifier(identifier)
     }
 
@@ -305,23 +295,27 @@ struct SettingsSidebar: View {
         let active = page.page == activePage
         return Button { go(page.page) } label: {
             Text(L(page.labelKey))
-                .webText(15, active ? 500 : 400)
-                .foregroundStyle(active ? AppTheme.textPrimary : AppTheme.textSecondary)
+                .sidebarRowText(.menu, active: active)
                 .lineLimit(1)
                 .padding(.leading, 12)
                 .padding(.trailing, 10)
-                .frame(minHeight: 44)
+                .frame(minHeight: SidebarRowTokens.menu.childMinHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(active ? AppTheme.backgroundSelected : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
+                .sidebarRowFill(.menu, active: active)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(RowPressStyle())
+        .buttonStyle(SidebarRowPressStyle(.menu))
         .accessibilityIdentifier("settings-page-\(sectionKey)-\(page.key)")
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private var footerCard: some View {
+        SidebarWidget(variant: .custom, surface: .sidebar) {
+            footerLinks
+        }
+    }
+
+    private var footerLinks: some View {
         VStack(spacing: 0) {
             footerLink(L("settingsPage.nav.support"), identifier: "settings-menu-support") {
                 router.navigate(.support)
@@ -357,7 +351,6 @@ struct SettingsSidebar: View {
             .accessibilityIdentifier("settings-menu-logout")
         }
         .padding(4)
-        .sidebarCard()
     }
 
     private func footerLink(_ label: String, identifier: String, action: @escaping () -> Void) -> some View {

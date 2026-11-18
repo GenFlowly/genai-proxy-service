@@ -5,9 +5,6 @@ describe('PageWidgetConfig', () => {
         const config = getPageConfig('CHAT_PAGE');
         expect(config).toBeDefined();
         expect(config.pageId).toBe('CHAT_PAGE');
-        // The chat page composes its sidebar and AI settings dock directly
-        expect(config.leftSidebar).toEqual([]);
-        expect(config.rightSidebar).toEqual([]);
         expect(config.centerSection).toContain('CONVERSATION_LIST');
     });
 

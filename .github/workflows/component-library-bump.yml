@@ -1,0 +1,139 @@
+name: Component Library Bump
+
+# Keeps one PR open into development that moves the apps to the newest
+# @genflowly/component-library. Runs daily; "Run workflow" checks now.
+# Needs Settings → Actions → General → "Allow GitHub Actions to create and
+# approve pull requests".
+on:
+  schedule:
+    - cron: '17 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: component-library-bump
+
+env:
+  PACKAGE: '@genflowly/component-library'
+  BASE: development
+  BRANCH: deps/component-library
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout development
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE }}
+
+      # The registry token goes in the runner's npmrc, outside the checkout,
+      # because this job commits.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com/
+          scope: '@genflowly'
+
+      - name: Move the apps to the newest library
+        id: bump
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_PAT_TOKEN_FOR_FREE_ACCOUNT }}
+        run: |
+          latest=$(npm view "$PACKAGE" version)
+          # The library has no tags; its pipeline's bump commits mark each release.
+          gh api "repos/GenFlowly/component-library/commits?per_page=100" > "$RUNNER_TEMP/library-commits.json" \
+            || echo '[]' > "$RUNNER_TEMP/library-commits.json"
+          release_commit() {
+            jq -r --arg m "chore: bump version to $1 [skip ci]" \
+              'map(select(.commit.message == $m))[0].sha // empty' "$RUNNER_TEMP/library-commits.json"
+          }
+          apps=""
+          for app in genai-react-app admin-panel; do
+            current=$(jq -r --arg p "node_modules/$PACKAGE" '.packages[$p].version' "$app/package-lock.json")
+            if [ "$current" = "$latest" ]; then continue; fi
+            (cd "$app" && npm install "$PACKAGE@$latest" --no-audit --no-fund)
+            apps="$apps $app"
+            from=$(release_commit "$current"); to=$(release_commit "$latest")
+            if [ -n "$from" ] && [ -n "$to" ]; then
+              changes="[compare](https://github.com/GenFlowly/component-library/compare/$from...$to)"
+            else
+              changes="[commits](https://github.com/GenFlowly/component-library/commits/main)"
+            fi
+            echo "| \`$app\` | $current → $latest | $changes |" >> "$RUNNER_TEMP/rows.md"
+          done
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "apps=${apps# }" >> "$GITHUB_OUTPUT"
+
+      - name: Commit the bump
+        id: commit
+        if: steps.bump.outputs.apps != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -- genai-react-app/package.json genai-react-app/package-lock.json admin-panel/package.json admin-panel/package-lock.json
+          git commit -m "chore(deps): bump $PACKAGE to ${{ steps.bump.outputs.latest }}"
+          # A branch already holding this exact tree passed the checks when it
+          # was pushed; pushing it again would only churn the PR.
+          if git fetch --depth=1 origin "$BRANCH" && [ "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse 'FETCH_HEAD^{tree}')" ]; then
+            echo "The PR branch already has this change."
+          else
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and test the React app
+        if: steps.commit.outputs.push == 'true' && contains(steps.bump.outputs.apps, 'genai-react-app')
+        working-directory: genai-react-app
+        run: |
+          npm run build
+          npm test
+
+      - name: Build the admin panel
+        if: steps.commit.outputs.push == 'true' && contains(steps.bump.outputs.apps, 'admin-panel')
+        working-directory: admin-panel
+        run: npm run build
+
+      - name: Push the PR branch
+        if: steps.commit.outputs.push == 'true'
+        run: git push --force origin "HEAD:refs/heads/$BRANCH"
+
+      - name: Open or update the PR
+        if: steps.bump.outputs.apps != ''
+        env:
+          LATEST: ${{ steps.bump.outputs.latest }}
+          PUSHED: ${{ steps.commit.outputs.push }}
+        run: |
+          title="chore(deps): bump $PACKAGE to $LATEST"
+          {
+            echo "Moves the apps to the newest \`$PACKAGE\`."
+            echo
+            echo "| App | Version | Library changes |"
+            echo "|---|---|---|"
+            cat "$RUNNER_TEMP/rows.md"
+            echo
+            echo "This branch was pushed only after each app listed above built on $LATEST; for the React app that includes its tests. Merging deploys them to \`$BASE\`."
+            echo
+            echo "The Component Library Bump workflow rebuilds this branch from \`$BASE\` on each run, so commits pushed here get overwritten."
+          } > "$RUNNER_TEMP/body.md"
+          pr=$(gh pr list --base "$BASE" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            gh pr create --base "$BASE" --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          elif [ "$PUSHED" = "true" ]; then
+            gh pr edit "$pr" --title "$title" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+      - name: Close the PR once development is current
+        if: steps.bump.outputs.apps == ''
+        env:
+          LATEST: ${{ steps.bump.outputs.latest }}
+        run: |
+          for pr in $(gh pr list --base "$BASE" --head "$BRANCH" --state open --json number --jq '.[].number'); do
+            gh pr close "$pr" --delete-branch --comment "\`$BASE\` already has $PACKAGE $LATEST."
+          done

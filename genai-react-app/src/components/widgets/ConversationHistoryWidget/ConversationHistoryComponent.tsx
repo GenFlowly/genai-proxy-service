@@ -32,7 +32,6 @@ export default function ConversationHistoryComponent({ onSelect, menu = false }:
     return (
         <>
             <VerticalSplit
-                bare
                 storageKey={HISTORY_SPLIT_STORAGE_KEY}
                 separatorLabel={t('conversation.conversationHistory.resizePanels')}
                 topCollapsed={history.projects.length === 0 || !history.sectionExpanded.projects}
