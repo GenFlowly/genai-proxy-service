@@ -1,77 +1,11 @@
 @import '../../../styles/themes.scss';
 @import '../../../styles/mixins.scss';
 
-// Desktop: fills the ResizableSidebar panel (which brings width, material and border)
-.sidebar {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    background-color: transparent;
-}
-
-.header {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    height: 34px;
-    margin: 0;
-    padding: 0 12px;
-    border-bottom: 1px solid var(--sidebar-hairline, $color-border-light);
-    color: $color-text-muted;
-    font-size: 0.6875rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
-.search {
-    flex-shrink: 0;
-    padding: 8px 8px 4px;
-}
-
-.navScroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 4px 8px;
-}
-
-.footer {
-    flex-shrink: 0;
-    padding: 8px;
-    border-top: 1px solid var(--sidebar-hairline, $color-border-light);
-}
-
 .logoutButton {
     width: 100%;
 }
 
 // ── Full-screen phone menu ───────────────────────────────────────────────────
-
-.menuCard {
-    background-color: $color-sidebar-background;
-}
-
-.menuHeader {
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    min-height: 2.625rem;
-    margin: 0;
-    padding: 0 0.75rem;
-    color: $color-text-muted;
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
-.menuScroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 0 0.25rem 0.25rem;
-}
 
 .menuLinkCard {
     flex-shrink: 0;

@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, SidebarWidget, SidebarListPanel } from '@genflowly/component-library'
+import { Icon, SidebarWidget } from '@genflowly/component-library'
 import type { SidebarListGroup } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { Project } from '../../../models/conversationHistory.models'
@@ -83,34 +83,38 @@ export default function MemoryScopePanels({
 
     return (
         <>
-            <SidebarWidget className={styles.profileCard}>
-                <SidebarListPanel
-                    title={menu ? undefined : t('memoryPage.menu.profileMemories')}
-                    variant={menu ? 'menu' : 'default'}
-                    groups={section('memoryProfile', t('memoryPage.menu.profileMemories'), [profileRow('CORE'), profileRow('EPISODIC')])}
-                    isLoading={false}
-                    hasError={false}
-                    errorText=""
-                    emptyText=""
-                    listAriaLabel={t('memoryPage.menu.profileMemories')}
-                    data-testid={menu ? 'memory-profile-panel-mobile' : 'memory-profile-panel'}
-                />
-            </SidebarWidget>
-            <SidebarWidget className={styles.projectsCard}>
-                <SidebarListPanel
-                    title={menu ? undefined : t('memoryPage.menu.projects')}
-                    variant={menu ? 'menu' : 'default'}
-                    groups={projectItems.length > 0 || menu
+            <SidebarWidget
+                variant="directory"
+                title={menu ? undefined : t('memoryPage.menu.profileMemories')}
+                touch={menu}
+                className={styles.profileCard}
+                list={{
+                    groups: section('memoryProfile', t('memoryPage.menu.profileMemories'), [profileRow('CORE'), profileRow('EPISODIC')]),
+                    isLoading: false,
+                    hasError: false,
+                    errorText: '',
+                    emptyText: '',
+                    listAriaLabel: t('memoryPage.menu.profileMemories'),
+                    'data-testid': menu ? 'memory-profile-panel-mobile' : 'memory-profile-panel',
+                }}
+            />
+            <SidebarWidget
+                variant="directory"
+                title={menu ? undefined : t('memoryPage.menu.projects')}
+                touch={menu}
+                className={styles.projectsCard}
+                list={{
+                    groups: projectItems.length > 0 || menu
                         ? section('memoryProjects', t('memoryPage.menu.projects'), projectItems)
-                        : []}
-                    isLoading={isLoading && projects.length === 0}
-                    hasError={hasError && projects.length === 0}
-                    errorText={t('memoryPage.menu.projectsFailed')}
-                    emptyText={t('memoryPage.menu.noProjects')}
-                    listAriaLabel={t('memoryPage.menu.projects')}
-                    data-testid={menu ? 'memory-projects-panel-mobile' : 'memory-projects-panel'}
-                />
-            </SidebarWidget>
+                        : [],
+                    isLoading: isLoading && projects.length === 0,
+                    hasError: hasError && projects.length === 0,
+                    errorText: t('memoryPage.menu.projectsFailed'),
+                    emptyText: t('memoryPage.menu.noProjects'),
+                    listAriaLabel: t('memoryPage.menu.projects'),
+                    'data-testid': menu ? 'memory-projects-panel-mobile' : 'memory-projects-panel',
+                }}
+            />
         </>
     )
 }

@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, SidebarListPanel, SidebarWidget } from '@genflowly/component-library'
+import { Icon, SidebarWidget } from '@genflowly/component-library'
 import type { SidebarListGroup } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { historyRowBuilder } from './historyRows'
@@ -39,6 +39,7 @@ export default function ChatsWidget({ history, menu }: ChatsWidgetProps): React.
 
     return (
         <SidebarWidget
+            variant="history"
             title={title}
             icon={ICONS.CHAT_BUBBLE}
             collapsible
@@ -46,28 +47,25 @@ export default function ChatsWidget({ history, menu }: ChatsWidgetProps): React.
             onCollapsedChange={collapsed => history.toggleSection('history', !collapsed)}
             collapseLabel={t('layout.chatSidebar.collapseSection', { name: title })}
             expandLabel={t('layout.chatSidebar.expandSection', { name: title })}
-            variant={menu ? 'menu' : 'default'}
+            touch={menu}
             toggleTestId="conv-history-history-heading"
             data-testid="chats-widget"
-        >
-            <SidebarListPanel
-                variant={menu ? 'menu' : 'default'}
-                surface="card"
-                moreActionsLabel={t('layout.mobileHeader.moreActions')}
-                groups={groups}
-                testIds={{ list: 'history-scroll-list', endSentinel: 'history-end-sentinel' }}
+            list={{
+                moreActionsLabel: t('layout.mobileHeader.moreActions'),
+                groups,
+                testIds: { list: 'history-scroll-list', endSentinel: 'history-end-sentinel' },
                 // Older pages stream in as the end of the list nears; paused
                 // while a fetch runs and after a failure — re-arming on a
                 // failing request would loop, so a failed page retries itself
                 // with backoff instead. A collapsed card has no visible end to
                 // reach, so it requests nothing.
-                onEndReached={history.hasMore && !history.isLoading && !history.error && expanded ? history.loadMore : undefined}
-                isLoading={history.isLoading}
-                hasError={history.error}
-                errorText={t('conversation.conversationHistory.failedToLoad')}
-                emptyText={t('conversation.conversationHistory.noConversationsYet')}
-                listAriaLabel={t('conversation.conversationHistory.listAriaLabel')}
-            />
-        </SidebarWidget>
+                onEndReached: history.hasMore && !history.isLoading && !history.error && expanded ? history.loadMore : undefined,
+                isLoading: history.isLoading,
+                hasError: history.error,
+                errorText: t('conversation.conversationHistory.failedToLoad'),
+                emptyText: t('conversation.conversationHistory.noConversationsYet'),
+                listAriaLabel: t('conversation.conversationHistory.listAriaLabel'),
+            }}
+        />
     )
 }

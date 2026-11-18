@@ -107,7 +107,7 @@ describe('ConversationHistoryComponent', () => {
             expect(within(screen.getByRole('heading', { name: 'Chats' })).getByRole('button')).toBe(heading)
             expect(screen.getByText('Pinned')).toBeInTheDocument()
             expect(screen.getByText('Recents')).toBeInTheDocument()
-            expect(screen.getByTestId('chats-widget').className).toMatch(/menu/)
+            expect(screen.getByTestId('chats-widget').className).toMatch(/touch/)
 
             fireEvent.click(heading)
             expect(heading).toHaveAttribute('aria-expanded', 'false')
@@ -139,7 +139,7 @@ describe('ConversationHistoryComponent', () => {
 
             expect(await screen.findByText('Pinned Chat')).toBeInTheDocument()
             expect(screen.getByTestId('conv-history-history-heading')).toHaveTextContent('Chats')
-            expect(screen.getByTestId('chats-widget').className).not.toMatch(/menu/)
+            expect(screen.getByTestId('chats-widget').className).not.toMatch(/touch/)
             expect(screen.getByText('Pinned')).toBeInTheDocument()
             expect(screen.getByText('Recents')).toBeInTheDocument()
             expect(screen.getByText('conv-raw-id')).toBeInTheDocument()

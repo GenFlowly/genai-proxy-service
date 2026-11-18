@@ -3,7 +3,6 @@ import React, { lazy } from 'react'
 import ConversationListWidget from '../components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget'
 import ConfigureAIVendorSettingsWidget from '../components/widgets/ConfigureAIVendorSettingsWidget/ConfigureAIVendorSettingsWidget'
 import DatabaseConnectionsSettingsWidget from '../components/widgets/DatabaseConnectionsSettingsWidget/DatabaseConnectionsSettingsWidget'
-import SidebarMenu from '../components/widgets/SidebarWidgets/SidebarMenu/SidebarMenu'
 import ConversationHistoryComponent from '../components/widgets/ConversationHistoryWidget/ConversationHistoryComponent'
 
 export interface WidgetContext {
@@ -39,10 +38,6 @@ export const WIDGET_REGISTRY: Record<string, WidgetDefinition> = {
         id: 'DATABASE_CONNECTIONS_SETTINGS',
         component: DatabaseConnectionsSettingsWidget,
         name: 'Database Settings',
-    },
-    'SIDEBAR_MENU': {
-        id: 'SIDEBAR_MENU',
-        component: SidebarMenu,
     },
     'CONVERSATION_HISTORY': {
         id: 'CONVERSATION_HISTORY',

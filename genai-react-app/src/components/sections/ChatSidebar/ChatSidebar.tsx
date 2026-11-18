@@ -69,7 +69,6 @@ export default function ChatSidebar(): React.ReactElement {
             storageKey={WIDTH_STORAGE_KEY}
             defaultWidth={240}
             minWidth={200}
-            variant="plain"
             data-testid="chat-sidebar"
             handleTestId="chat-sidebar-resize-handle"
         >
@@ -109,8 +108,8 @@ export default function ChatSidebar(): React.ReactElement {
                         <MenuSearchResults
                             query={query}
                             types={SEARCH_TYPES}
-                            surface="card"
-                            variant="default"
+                            variant="history"
+                            touch={false}
                             untitledLabel={t('conversation.conversationHistory.untitledConversation')}
                             onSelect={result => {
                                 navigate(`/chat/${result.key}`)

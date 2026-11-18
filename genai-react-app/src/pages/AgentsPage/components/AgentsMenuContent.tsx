@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Chip, Icon, SidebarListPanel, VerticalSplit, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
+import { Chip, Icon, SidebarWidget, VerticalSplit, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import type { SidebarListGroup } from '@genflowly/component-library'
 import MobileMenuBody from '../../../components/widgets/MobileMenuBody/MobileMenuBody'
 import { ICONS } from '../../../constants/icons'
@@ -118,29 +118,36 @@ export default function AgentsMenuContent({
                 defaultFraction={DEFAULT_SPLIT_FRACTION}
                 separatorLabel={t('agentsPage.menu.resizePanels')}
                 showGrip
+                divider="seam"
                 handleTestId="agents-menu-split-handle"
                 top={
-                    <SidebarListPanel
-                        variant="menu"
-                        groups={[categoryGroup]}
-                        isLoading={loading}
-                        hasError={false}
-                        errorText=""
-                        emptyText=""
-                        listAriaLabel={t('agentsPage.categories.navAriaLabel')}
-                        data-testid="agents-category-panel-mobile"
+                    <SidebarWidget
+                        variant="directory"
+                        touch
+                        list={{
+                            groups: [categoryGroup],
+                            isLoading: loading,
+                            hasError: false,
+                            errorText: '',
+                            emptyText: '',
+                            listAriaLabel: t('agentsPage.categories.navAriaLabel'),
+                            'data-testid': 'agents-category-panel-mobile',
+                        }}
                     />
                 }
                 bottom={
-                    <SidebarListPanel
-                        variant="menu"
-                        groups={[agentsGroup]}
-                        isLoading={loading}
-                        hasError={false}
-                        errorText=""
-                        emptyText=""
-                        listAriaLabel={t('agentsPage.menu.agents')}
-                        data-testid="agents-list-panel-mobile"
+                    <SidebarWidget
+                        variant="directory"
+                        touch
+                        list={{
+                            groups: [agentsGroup],
+                            isLoading: loading,
+                            hasError: false,
+                            errorText: '',
+                            emptyText: '',
+                            listAriaLabel: t('agentsPage.menu.agents'),
+                            'data-testid': 'agents-list-panel-mobile',
+                        }}
                     />
                 }
             />

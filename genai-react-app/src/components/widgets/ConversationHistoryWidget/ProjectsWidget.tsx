@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Icon, IconButton, SidebarListPanel, SidebarWidget } from '@genflowly/component-library'
+import { Icon, IconButton, SidebarWidget } from '@genflowly/component-library'
 import type { SidebarListGroup, SidebarListItem } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { getExpandedProject, setExpandedProject } from './historyCache'
@@ -120,6 +120,7 @@ export default function ProjectsWidget({ history, menu }: ProjectsWidgetProps): 
 
     return (
         <SidebarWidget
+            variant="history"
             title={title}
             icon={ICONS.FOLDER}
             collapsible
@@ -127,7 +128,7 @@ export default function ProjectsWidget({ history, menu }: ProjectsWidgetProps): 
             onCollapsedChange={collapsed => history.toggleSection('projects', !collapsed)}
             collapseLabel={t('layout.chatSidebar.collapseSection', { name: title })}
             expandLabel={t('layout.chatSidebar.expandSection', { name: title })}
-            variant={menu ? 'menu' : 'default'}
+            touch={menu}
             actions={
                 <IconButton
                     icon={ICONS.FOLDER_PLUS}
@@ -139,18 +140,15 @@ export default function ProjectsWidget({ history, menu }: ProjectsWidgetProps): 
             }
             toggleTestId="conv-history-projects-heading"
             data-testid="projects-widget"
-        >
-            <SidebarListPanel
-                variant={menu ? 'menu' : 'default'}
-                surface="card"
-                moreActionsLabel={t('layout.mobileHeader.moreActions')}
-                groups={groups}
-                isLoading={false}
-                hasError={false}
-                errorText={t('conversation.conversationHistory.failedToLoad')}
-                emptyText={t('conversation.conversationHistory.noProjectsYet')}
-                listAriaLabel={title}
-            />
-        </SidebarWidget>
+            list={{
+                moreActionsLabel: t('layout.mobileHeader.moreActions'),
+                groups,
+                isLoading: false,
+                hasError: false,
+                errorText: t('conversation.conversationHistory.failedToLoad'),
+                emptyText: t('conversation.conversationHistory.noProjectsYet'),
+                listAriaLabel: title,
+            }}
+        />
     )
 }
