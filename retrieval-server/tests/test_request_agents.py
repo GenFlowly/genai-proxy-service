@@ -21,7 +21,9 @@ Pinned here:
     only; pipeline nodes keep their node-level setting
   * /encode-memory embeds, creates the collection on first use (schema
     mirroring MemoryProcessor), and deletes-then-inserts so re-encodes never
-    strand stale rows
+    strand stale rows, without a flush
+  * every routes.notes route is a plain def, so its blocking vector-DB calls
+    run in FastAPI's threadpool instead of on the event loop
 """
 import json
 import unittest
@@ -326,7 +328,7 @@ class _FakeMilvusForEncode:
         self.flushed = collection_name
 
 
-class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
+class EncodeMemoryRouteTests(unittest.TestCase):
     def _request(self, **overrides) -> EncodeMemoryRequest:
         payload = {
             "customer_id": "cust-1",
@@ -340,7 +342,7 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         payload.update(overrides)
         return EncodeMemoryRequest(**payload)
 
-    async def _run(self, req, has_collection: bool, vector=None):
+    def _run(self, req, has_collection: bool, vector=None):
         client = _FakeMilvusForEncode(has_collection)
         embeddings = [{"vector": vector if vector is not None else [0.1, 0.2], "text": req.memory_value}]
         with (
@@ -348,11 +350,11 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
             patch("graph.nodes.retrieval.customer_embedding_model", return_value=MagicMock()),
             patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=embeddings),
         ):
-            result = await encode_memory(req)
+            result = encode_memory(req)
         return result, client
 
-    async def test_creates_the_collection_on_first_use_with_the_mirrored_schema(self):
-        result, client = await self._run(self._request(), has_collection=False)
+    def test_creates_the_collection_on_first_use_with_the_mirrored_schema(self):
+        result, client = self._run(self._request(), has_collection=False)
 
         name, schema, _index = client.created
         self.assertEqual(name, "memory_voyage_4_large")
@@ -366,8 +368,8 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"model_name": "voyage-4-large"', schema.description)
         self.assertEqual(result["collection"], "memory_voyage_4_large")
 
-    async def test_deletes_then_inserts_so_reencodes_are_idempotent(self):
-        _, client = await self._run(self._request(), has_collection=True)
+    def test_deletes_then_inserts_so_reencodes_are_idempotent(self):
+        _, client = self._run(self._request(), has_collection=True)
 
         self.assertIsNone(client.created)
         self.assertEqual(client.deleted[0], "memory_voyage_4_large")
@@ -381,16 +383,18 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(record["note_value"], "Is named Alex.")
         self.assertEqual(record["memory_key"], "MEM#abc")
         self.assertEqual(record["created_at"], "2026-10-10T00:00:00Z")
-        self.assertEqual(client.flushed, "memory_voyage_4_large")
+        # No flush: the cluster allows ~1 per 20s in total, and each call
+        # waited out pymilvus's rate-limit retries.
+        self.assertIsNone(client.flushed)
 
-    async def test_blank_fields_are_a_400(self):
+    def test_blank_fields_are_a_400(self):
         from fastapi import HTTPException
 
         with self.assertRaises(HTTPException) as ctx:
-            await encode_memory(self._request(memory_value="   "))
+            encode_memory(self._request(memory_value="   "))
         self.assertEqual(ctx.exception.status_code, 400)
 
-    async def test_embedding_failure_is_a_500(self):
+    def test_embedding_failure_is_a_500(self):
         from fastapi import HTTPException
 
         client = _FakeMilvusForEncode(True)
@@ -400,11 +404,11 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
             patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=[]),
         ):
             with self.assertRaises(HTTPException) as ctx:
-                await encode_memory(self._request())
+                encode_memory(self._request())
         self.assertEqual(ctx.exception.status_code, 500)
         self.assertIsNone(client.inserted)
 
-    async def test_missing_embedding_key_is_a_409(self):
+    def test_missing_embedding_key_is_a_409(self):
         from fastapi import HTTPException
 
         from encoding_library.utils.embedding_utils import EmbeddingKeyMissing
@@ -418,12 +422,12 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
             ),
         ):
             with self.assertRaises(HTTPException) as ctx:
-                await encode_memory(self._request())
+                encode_memory(self._request())
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertIsNone(client.inserted)
 
 
-    async def test_no_vector_db_is_a_409_and_nothing_is_embedded(self):
+    def test_no_vector_db_is_a_409_and_nothing_is_embedded(self):
         from fastapi import HTTPException
 
         from encoding_library.utils.vector_db import VectorDBNotConfigured
@@ -434,10 +438,27 @@ class EncodeMemoryRouteTests(unittest.IsolatedAsyncioTestCase):
             patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=[]) as embed,
         ):
             with self.assertRaises(HTTPException) as ctx:
-                await encode_memory(self._request())
+                encode_memory(self._request())
         self.assertEqual(ctx.exception.status_code, 409)
         encoder.assert_not_called()
         embed.assert_not_called()
+
+
+class NotesRoutesOffTheEventLoopTests(unittest.TestCase):
+    def test_every_notes_route_is_a_plain_def(self):
+        # The vector routes make blocking Milvus/embedding/DynamoDB calls; as
+        # `async def` they ran on the event loop and froze the server (/health
+        # timed out). A plain `def` is run in FastAPI's threadpool.
+        import inspect
+
+        endpoints = [r.endpoint for r in notes_module.router.routes]
+        self.assertTrue(endpoints)
+        for endpoint in endpoints:
+            self.assertFalse(
+                inspect.iscoroutinefunction(endpoint),
+                f"{endpoint.__name__} must be a plain def so it runs off the event loop",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
