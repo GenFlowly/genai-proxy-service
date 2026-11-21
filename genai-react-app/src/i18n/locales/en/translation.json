@@ -42,7 +42,6 @@
             "agents": "Agents",
             "createdByYou": "Created by you",
             "noAgents": "No agents match",
-            "resizePanels": "Resize the Categories and Agents panels",
             "systemReadOnly": "System · read-only"
         },
         "filters": {

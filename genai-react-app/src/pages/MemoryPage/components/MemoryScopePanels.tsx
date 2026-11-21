@@ -87,7 +87,6 @@ export default function MemoryScopePanels({
                 variant="directory"
                 title={menu ? undefined : t('memoryPage.menu.profileMemories')}
                 touch={menu}
-                className={styles.profileCard}
                 list={{
                     groups: section('memoryProfile', t('memoryPage.menu.profileMemories'), [profileRow('CORE'), profileRow('EPISODIC')]),
                     isLoading: false,
@@ -102,7 +101,6 @@ export default function MemoryScopePanels({
                 variant="directory"
                 title={menu ? undefined : t('memoryPage.menu.projects')}
                 touch={menu}
-                className={styles.projectsCard}
                 list={{
                     groups: projectItems.length > 0 || menu
                         ? section('memoryProjects', t('memoryPage.menu.projects'), projectItems)

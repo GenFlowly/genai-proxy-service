@@ -31,4 +31,13 @@ describe('MobileMenuBody', () => {
         expect(screen.getByTestId('mobile-menu-cards')).toHaveAttribute('hidden')
         expect(screen.getByText('Cards')).toBeInTheDocument()
     })
+
+    test('stacks the cards in one column that scrolls as a whole', () => {
+        renderBody()
+        const cards = screen.getByTestId('mobile-menu-cards')
+        const stack = cards.firstElementChild!
+        expect(stack.className).toMatch(/scrollArea/)
+        expect(stack.className).toMatch(/stack/)
+        expect(stack).toContainElement(screen.getByText('Cards'))
+    })
 })
