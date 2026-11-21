@@ -185,6 +185,12 @@ struct AI_WrapperApp: App {
                         conversation.conversationId = "mock"
                         conversation.blocks = DebugFixtures.shortConversation
                     }
+                    if CommandLine.arguments.contains("--mock-two-turns") {
+                        router.navigate(.chat)
+                        conversation.conversationTitle = "Sorting algorithms compared"
+                        conversation.conversationId = "mock"
+                        conversation.blocks = DebugFixtures.twoTurnConversation
+                    }
                     if CommandLine.arguments.contains("--mock-generating") {
                         conversation.blocks = conversation.blocks.map { block in
                             var block = block

@@ -133,6 +133,34 @@ final class ChatScreenUITests: XCTestCase {
     }
 
     @MainActor
+    func testSwipingFromInsideALongResponseShowsTheNextOneFromItsTop() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--mock-two-turns", "--ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
+        for _ in 0..<8 { app.swipeUp() }
+        let header = app.buttons["mobile-header-title"]
+        let model = app.staticTexts.matching(NSPredicate(format: "label == %@", "gpt-5.6-sol")).allElementsBoundByIndex.last
+        XCTAssertLessThan(try XCTUnwrap(model).frame.minY, header.frame.maxY)
+
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.45))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.45)))
+
+        let incoming = element(app.staticTexts, labelled: "claude-fable-5")
+        XCTAssertTrue(incoming.waitForExistence(timeout: 5))
+        let deadline = Date().addingTimeInterval(3)
+        while incoming.frame.minY < header.frame.maxY, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        let swiped = XCTAttachment(screenshot: app.screenshot())
+        swiped.name = "swiped-from-inside-a-long-response"
+        swiped.lifetime = .keepAlways
+        add(swiped)
+        XCTAssertGreaterThanOrEqual(incoming.frame.minY, header.frame.maxY)
+        XCTAssertLessThan(incoming.frame.minY, header.frame.maxY + 80)
+    }
+
+    @MainActor
     func testTypingAFollowUpKeepsTheEditorAboveTheKeyboard() throws {
         let app = launchMockConversation()
         XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))

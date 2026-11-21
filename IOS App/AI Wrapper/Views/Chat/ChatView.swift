@@ -199,6 +199,14 @@ struct ChatView: View {
                 outlineTarget = nil
                 withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.turnAnchor(target), anchor: .top) }
             }
+            .onChange(of: conversation.responseTopRequest) { _, target in
+                guard let target else { return }
+                conversation.responseTopRequest = nil
+                // After the new response has laid out, or the scroll aims at the old one's height.
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(ResponseGroupView.topAnchor(target), anchor: .top) }
+                }
+            }
             .onChange(of: conversation.focusDraftRequest) { _, _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("conversation-end", anchor: .bottom) }
