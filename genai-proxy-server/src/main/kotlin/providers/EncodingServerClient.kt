@@ -16,12 +16,17 @@ import com.genflowly.models.encoding.EncodingSaveConversationRequest
 import com.genflowly.models.encoding.EncodingSaveInstructionRequest
 import com.genflowly.models.encoding.EncodingSaveMemoryRequest
 import com.genflowly.models.encoding.EncodingSaveNoteRequest
+import kotlinx.coroutines.CancellationException
 import mu.KLogger
 
 /**
  * The single HTTP client for the encoding-server (embedding pipeline). No
  * business logic — callers own scheduling (fire-and-forget vs awaited) and
  * any batching decisions.
+ *
+ * Failures are logged, never thrown — except cancellation, which is rethrown
+ * so a shutdown (AppScope.shutdown) or a cancelled request stops the call
+ * instead of being logged as an encoding error.
  */
 class EncodingServerClient(
     private val httpClient: HttpClient,
@@ -60,6 +65,8 @@ class EncodingServerClient(
             } else {
                 logger.info { "Collections successfully verified/created for customerId=$customerId" }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.error(e) { "Failed to ensure collection creation for customer $customerId" }
         }
@@ -90,6 +97,8 @@ class EncodingServerClient(
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to send note to encoding server: ${response.status} $errorBody" }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.error(e) { "Error sending note to encoding server" }
         }
@@ -120,6 +129,8 @@ class EncodingServerClient(
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to send memory to encoding server: ${response.status} $errorBody" }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.error(e) { "Error sending memory to encoding server" }
         }
@@ -150,6 +161,8 @@ class EncodingServerClient(
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to send instruction to encoding server: ${response.status} $errorBody" }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.error(e) { "Error sending instruction to encoding server" }
         }
@@ -180,6 +193,8 @@ class EncodingServerClient(
                 val errorBody = response.bodyAsText()
                 logger.error { "Failed to send conversation exchange to encoding server: ${response.status} $errorBody" }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             logger.error(e) { "Error sending conversation exchange to encoding server" }
         }
