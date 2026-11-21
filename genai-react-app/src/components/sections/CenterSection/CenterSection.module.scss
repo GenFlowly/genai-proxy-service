@@ -34,11 +34,20 @@
   align-items: center;
   gap: 0;
   padding-bottom: 3rem; // Ensure content is accessible globally
+  // At least the view's height, so the conversation's trailing editor can
+  // rest on the bottom of the view however short the conversation is
+  min-height: 100%;
 
   // The sub-bar sits above this scroller, not over it, so a turn the
   // Outline jumps to only needs a small gap above it
   :global(.conversation-block-item) {
     scroll-margin-top: 0.75rem;
+  }
+
+  // The trailing editor ends the page: padding below it would lift it off
+  // the bottom of the view at the conversation's end
+  &:has(> :global(.conversation-block-item):last-child [data-composer-sticky='true']) {
+    padding-bottom: 0;
   }
 }
 

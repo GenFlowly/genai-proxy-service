@@ -433,10 +433,11 @@ struct ConversationBlockView: View {
     }
 }
 
-/// The trailing editor's `position: sticky; bottom: 0` against the whole conversation: lifted
-/// onto the bottom of the viewport while its place at the conversation's end is below it, over
-/// the turns scrolled behind it. The viewport ends above the home indicator, so the page's color
-/// runs on under the indicator.
+/// The trailing editor's `position: sticky; bottom: 0` against the whole conversation: held on
+/// the bottom of the viewport, lifted over the turns scrolled behind it while its place at the
+/// conversation's end is below the viewport, and lowered when the conversation ends above it (a
+/// short conversation, or an offset left past the end when the content shrank). The viewport
+/// ends above the home indicator, so the page's color runs on under the indicator.
 private struct StickyViewportBottom: ViewModifier {
     let isActive: Bool
 
@@ -448,8 +449,8 @@ private struct StickyViewportBottom: ViewModifier {
                 }
                 .visualEffect { view, proxy in
                     let frame = proxy.frame(in: .scrollView(axis: .vertical))
-                    let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height ?? .greatestFiniteMagnitude
-                    return view.offset(y: -max(0, frame.maxY - viewport))
+                    guard let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height else { return view.offset(y: 0) }
+                    return view.offset(y: viewport - frame.maxY)
                 }
         } else {
             content

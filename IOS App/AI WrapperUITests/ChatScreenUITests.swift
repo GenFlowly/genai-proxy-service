@@ -79,6 +79,35 @@ final class ChatScreenUITests: XCTestCase {
     }
 
     @MainActor
+    func testAShortConversationStillRestsTheEditorOnTheBottom() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--mock-short-conversation", "--ui-testing"]
+        app.launch()
+        XCTAssertTrue(element(app.buttons, labelled: "Fork").waitForExistence(timeout: 10))
+        let resting = XCTAttachment(screenshot: app.screenshot())
+        resting.name = "short-conversation-resting"
+        resting.lifetime = .keepAlways
+        add(resting)
+
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.87)).tap()
+        app.typeText("Make it shorter")
+
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        XCTAssertEqual(element(app.textViews, labelled: "Generate").value as? String, "Make it shorter")
+        let send = element(app.buttons, labelled: "Generate")
+        let deadline = Date().addingTimeInterval(3)
+        while send.frame.maxY > keyboard.frame.minY, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        let typing = XCTAttachment(screenshot: app.screenshot())
+        typing.name = "short-conversation-typing"
+        typing.lifetime = .keepAlways
+        add(typing)
+        XCTAssertLessThanOrEqual(send.frame.maxY, keyboard.frame.minY)
+    }
+
+    @MainActor
     func testTypingAFollowUpKeepsTheEditorAboveTheKeyboard() throws {
         let app = launchMockConversation()
         XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
