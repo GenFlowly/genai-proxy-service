@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { CollapseStrip, MobileFullPageModal, ScrollArea, SidebarRail } from '@genflowly/component-library'
+import { CollapseStrip, MobileFullPageModal, SidebarRail, SidebarStack } from '@genflowly/component-library'
 import { useLayout } from '../../../context/LayoutContext'
 import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
 import { ICONS } from '../../../constants/icons'
@@ -37,7 +37,7 @@ export default function AiSettingsDock(): React.ReactElement | null {
         if (!isRightSidebarExpanded) return null
         return (
             <MobileFullPageModal onClose={() => setRightSidebarExpanded(false)} data-testid="ai-settings-modal">
-                <div className={styles.modalCards}>{cards}</div>
+                <SidebarStack data-testid="ai-settings-modal-cards">{cards}</SidebarStack>
             </MobileFullPageModal>
         )
     }
@@ -63,9 +63,7 @@ export default function AiSettingsDock(): React.ReactElement | null {
 
     return (
         <aside className={styles.dock} aria-label={t('layout.aiDock.label')} data-testid="ai-dock">
-            <ScrollArea className={styles.scroll}>
-                <div className={styles.cards} data-testid="ai-dock-cards">{cards}</div>
-            </ScrollArea>
+            <SidebarStack data-testid="ai-dock-cards">{cards}</SidebarStack>
             <CollapseStrip
                 direction="right"
                 label={t('layout.rightSidebar.collapseSidebar')}

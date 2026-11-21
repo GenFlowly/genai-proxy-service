@@ -8,32 +8,3 @@
     gap: 8px;
 }
 
-// The column scrolls; the cards never shrink and clip their content
-.scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
-// The gap lives on its own wrapper: ScrollArea's first child is its sticky,
-// zero-height scrollbar track, and a gap on the ScrollArea itself would push
-// the first card below the top edge the other columns start at
-.cards {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-
-    > * {
-        flex-shrink: 0;
-    }
-}
-
-// 📱 The AI Settings modal scrolls as a whole; its cards keep their height
-.modalCards {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-
-    > * {
-        flex-shrink: 0;
-    }
-}

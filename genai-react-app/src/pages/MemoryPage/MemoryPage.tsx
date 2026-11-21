@@ -147,16 +147,14 @@ export default function MemoryPage(): React.ReactElement {
                         maxWidth={380}
                         data-testid="memory-sidebar"
                     >
-                        <div className={styles.sidebarColumn}>
-                            <MemoryScopePanels
-                                scope={scope}
-                                counts={counts}
-                                projects={projects}
-                                isLoading={projectsQuery.isPending}
-                                hasError={projectsQuery.isError}
-                                onSelect={openScope}
-                            />
-                        </div>
+                        <MemoryScopePanels
+                            scope={scope}
+                            counts={counts}
+                            projects={projects}
+                            isLoading={projectsQuery.isPending}
+                            hasError={projectsQuery.isError}
+                            onSelect={openScope}
+                        />
                     </ResizableSidebar>
                 )}
 

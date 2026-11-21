@@ -1,16 +1,12 @@
 import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Chip, Icon, SidebarWidget, VerticalSplit, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
+import { Chip, Icon, SidebarWidget, sidebarListPanelStyles as panelStyles } from '@genflowly/component-library'
 import type { SidebarListGroup } from '@genflowly/component-library'
 import MobileMenuBody from '../../../components/widgets/MobileMenuBody/MobileMenuBody'
 import { ICONS } from '../../../constants/icons'
 import { AGENT_CATEGORIES, Agent, agentCategory } from '../../../models/agents.models'
 import { CATEGORY_LABEL_KEYS, CategoryFilter, categoryCount } from './AgentsCategoryNav'
 import styles from '../AgentsPage.module.scss'
-
-const SPLIT_STORAGE_KEY = 'agents_menu_split_fraction'
-// Fits the four categories on a typical phone before the Agents card takes the rest
-const DEFAULT_SPLIT_FRACTION = 0.37
 
 const CATEGORY_MENU_ICONS: Record<CategoryFilter, string> = {
     CONVERSATION: ICONS.CHAT_BUBBLE,
@@ -113,43 +109,31 @@ export default function AgentsMenuContent({
             onSearchChange={setQuery}
             searchPlaceholder={t('layout.mobileMenu.searchAgents')}
         >
-            <VerticalSplit
-                storageKey={SPLIT_STORAGE_KEY}
-                defaultFraction={DEFAULT_SPLIT_FRACTION}
-                separatorLabel={t('agentsPage.menu.resizePanels')}
-                showGrip
-                divider="seam"
-                handleTestId="agents-menu-split-handle"
-                top={
-                    <SidebarWidget
-                        variant="directory"
-                        touch
-                        list={{
-                            groups: [categoryGroup],
-                            isLoading: loading,
-                            hasError: false,
-                            errorText: '',
-                            emptyText: '',
-                            listAriaLabel: t('agentsPage.categories.navAriaLabel'),
-                            'data-testid': 'agents-category-panel-mobile',
-                        }}
-                    />
-                }
-                bottom={
-                    <SidebarWidget
-                        variant="directory"
-                        touch
-                        list={{
-                            groups: [agentsGroup],
-                            isLoading: loading,
-                            hasError: false,
-                            errorText: '',
-                            emptyText: '',
-                            listAriaLabel: t('agentsPage.menu.agents'),
-                            'data-testid': 'agents-list-panel-mobile',
-                        }}
-                    />
-                }
+            <SidebarWidget
+                variant="directory"
+                touch
+                list={{
+                    groups: [categoryGroup],
+                    isLoading: loading,
+                    hasError: false,
+                    errorText: '',
+                    emptyText: '',
+                    listAriaLabel: t('agentsPage.categories.navAriaLabel'),
+                    'data-testid': 'agents-category-panel-mobile',
+                }}
+            />
+            <SidebarWidget
+                variant="directory"
+                touch
+                list={{
+                    groups: [agentsGroup],
+                    isLoading: loading,
+                    hasError: false,
+                    errorText: '',
+                    emptyText: '',
+                    listAriaLabel: t('agentsPage.menu.agents'),
+                    'data-testid': 'agents-list-panel-mobile',
+                }}
             />
         </MobileMenuBody>
     )

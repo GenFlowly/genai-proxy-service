@@ -14,9 +14,9 @@ const WIDTH_STORAGE_KEY = 'chat_sidebar_width_rem'
 const SEARCH_TYPES = ['conversation' as const]
 
 /**
- * 🖥️ The chat page's left side: New Chat, the chat search field, then the
- * Projects and Chats cards, collapsing to a 28px rail. Only the user opens or
- * closes it.
+ * 🖥️ The chat page's left side: New Chat and the chat search field, then the
+ * Projects and Chats cards scrolling as one column, collapsing to a 28px rail.
+ * Only the user opens or closes it.
  */
 export default function ChatSidebar(): React.ReactElement {
     const { t } = useTranslation()
@@ -69,10 +69,10 @@ export default function ChatSidebar(): React.ReactElement {
             storageKey={WIDTH_STORAGE_KEY}
             defaultWidth={240}
             minWidth={200}
+            aria-label={t('layout.chatSidebar.label')}
             data-testid="chat-sidebar"
             handleTestId="chat-sidebar-resize-handle"
-        >
-            <aside className={styles.column} aria-label={t('layout.chatSidebar.label')}>
+            header={<>
                 <Tooltip content={t('conversation.conversationHeader.newChat')} position="bottom" fullWidth className={styles.newChatTip}>
                     <PillButton
                         label={t('conversation.conversationHeader.newChat')}
@@ -100,25 +100,8 @@ export default function ChatSidebar(): React.ReactElement {
                         />
                     </div>
                 </Tooltip>
-                <div className={styles.cards} hidden={searching} data-testid="chat-sidebar-cards">
-                    <ConversationHistoryComponent />
-                </div>
-                {searching && (
-                    <div className={styles.cards}>
-                        <MenuSearchResults
-                            query={query}
-                            types={SEARCH_TYPES}
-                            variant="history"
-                            touch={false}
-                            untitledLabel={t('conversation.conversationHistory.untitledConversation')}
-                            onSelect={result => {
-                                navigate(`/chat/${result.key}`)
-                                clearSearch()
-                            }}
-                            onLeave={clearSearch}
-                        />
-                    </div>
-                )}
+            </>}
+            footer={
                 <CollapseStrip
                     direction="left"
                     label={t('layout.rightSidebar.collapseSidebar')}
@@ -126,7 +109,25 @@ export default function ChatSidebar(): React.ReactElement {
                     aria-expanded={true}
                     data-testid="chat-sidebar-collapse"
                 />
-            </aside>
+            }
+        >
+            <div hidden={searching} data-testid="chat-sidebar-cards">
+                <ConversationHistoryComponent />
+            </div>
+            {searching && (
+                <MenuSearchResults
+                    query={query}
+                    types={SEARCH_TYPES}
+                    variant="history"
+                    touch={false}
+                    untitledLabel={t('conversation.conversationHistory.untitledConversation')}
+                    onSelect={result => {
+                        navigate(`/chat/${result.key}`)
+                        clearSearch()
+                    }}
+                    onLeave={clearSearch}
+                />
+            )}
         </ResizableSidebar>
     )
 }

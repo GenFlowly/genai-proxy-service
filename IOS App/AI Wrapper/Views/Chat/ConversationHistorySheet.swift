@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// The history menu content (ConversationHistoryComponent): the Projects and Chats widgets at
-/// their full height in one column that scrolls as a whole (SidebarStack), with fork trees, per-row swipe actions (Pin to the right; Move
-/// and Delete, or Rename and Delete project, to the left), infinite scroll, and the project and
-/// delete dialogs.
+/// their full height in the menu's scrolling column (SidebarStack), with fork trees, per-row
+/// swipe actions (Pin to the right; Move and Delete, or Rename and Delete project, to the left),
+/// infinite scroll, and the project and delete dialogs.
 struct ConversationHistoryPanel: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
@@ -31,33 +31,23 @@ struct ConversationHistoryPanel: View {
     @State private var openRow: SwipeOpenRow?
     /// The project just expanded, until its row has scrolled up with its conversations loaded.
     @State private var revealingProject: String?
-    @State private var stackHeight: CGFloat = 0
+    @Environment(\.sidebarStack) private var stack
     /// The web's `scroll-margin-top` on an expanding project: it lands 44pt below the column's top.
     private static let revealMargin: CGFloat = 44
 
     private var showProjectsPanel: Bool { history.hasAnyData || (!history.isLoading && !history.loadFailed) }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                // SidebarStack.module.scss: the touch gap between the cards
-                VStack(spacing: 12) {
-                    if showProjectsPanel { projectsWidget }
-                    chatsWidget
-                }
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stackHeight = $0 }
-            .onChange(of: revealingProject) { _, _ in revealProject(proxy) }
-            // Conversations load after the first scroll, and only then can the row reach the top.
-            .onChange(of: revealingProject.flatMap { history.projectItems[$0]?.count }) { _, _ in revealProject(proxy) }
-            .onScrollPhaseChange { _, phase in
-                if phase == .interacting {
-                    revealingProject = nil
-                    openRow = nil
-                }
-            }
-            .refreshable { await history.load() }
+        SidebarStack {
+            if showProjectsPanel { projectsWidget }
+            chatsWidget
+        }
+        .onChange(of: revealingProject) { _, _ in revealProject() }
+        // Conversations load after the first scroll, and only then can the row reach the top.
+        .onChange(of: revealingProject.flatMap { history.projectItems[$0]?.count }) { _, _ in revealProject() }
+        .onChange(of: stack?.interactions) { _, _ in
+            revealingProject = nil
+            openRow = nil
         }
         .webModal(isPresented: $isCreateProjectOpen, title: L("conversation.conversationHistory.newProjectTitle"), maxWidth: 416) {
             createProjectForm
@@ -162,12 +152,12 @@ struct ConversationHistoryPanel: View {
 
     /// SidebarListPanel's `scrollIntoView` on expand: the row goes up to the column's top, 44pt
     /// below it (`scroll-margin-top`). Not on collapse, and not on appear.
-    private func revealProject(_ proxy: ScrollViewProxy) {
-        guard let id = revealingProject else { return }
+    private func revealProject() {
+        guard let id = revealingProject, let stack else { return }
         if history.projectItems[id] != nil { revealingProject = nil }
-        let anchor = UnitPoint(x: 0, y: Self.revealMargin / max(stackHeight, Self.revealMargin))
+        let anchor = UnitPoint(x: 0, y: Self.revealMargin / max(stack.viewportHeight, Self.revealMargin))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.projectAnchor(id), anchor: anchor) }
+            withAnimation(.easeOut(duration: 0.3)) { stack.proxy.scrollTo(Self.projectAnchor(id), anchor: anchor) }
         }
     }
 
@@ -581,6 +571,7 @@ struct ConversationHistoryPanel: View {
 struct ChatMenuContent: View {
     @EnvironmentObject var conversation: ConversationStore
     @EnvironmentObject var router: AppRouter
+    @EnvironmentObject var history: HistoryStore
     let onClose: () -> Void
 
     @State private var query = ""
@@ -592,6 +583,7 @@ struct ChatMenuContent: View {
             searchText: $query,
             searchPlaceholder: L("layout.mobileMenu.searchChats"),
             isShowingResults: !trimmedQuery.isEmpty,
+            refresh: { await history.load() },
             cards: { ConversationHistoryPanel(onSelect: onClose) },
             results: {
                 MenuSearchResults(
@@ -689,99 +681,5 @@ struct RowPressStyle: ButtonStyle {
         configuration.label
             .background(configuration.isPressed ? AppTheme.backgroundHover : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: DSRadius.sm))
-    }
-}
-
-// MARK: - Vertical split (VerticalSplit.module.scss + sidebar-card.scss)
-
-/// Two stacked SidebarWidgets split by a draggable divider with an always-visible grip. The
-/// divider is 12pt with a 44pt touch area, reaching further into the pane above so the header at
-/// the top of the pane below stays tappable. The fraction persists; a collapsed pane hugs its
-/// header.
-struct VerticalSplit<Top: View, Bottom: View>: View {
-    let storageKey: String
-    var defaultFraction: CGFloat = 0.4
-    let topCollapsed: Bool
-    let bottomCollapsed: Bool
-    let hasTop: Bool
-    let separatorLabel: String
-    @ViewBuilder let top: () -> Top
-    @ViewBuilder let bottom: () -> Bottom
-
-    private static var minFraction: CGFloat { 0.15 }
-    private static var maxFraction: CGFloat { 0.85 }
-
-    @State private var storedFraction: CGFloat?
-    @State private var dragStart: CGFloat?
-
-    private var fraction: CGFloat { storedFraction ?? loadFraction() }
-
-    private func loadFraction() -> CGFloat {
-        #if DEBUG
-        // Headless capture: the browser's saved position, via `-debugSplitFraction <n>`.
-        let debugFraction = UserDefaults.standard.double(forKey: "debugSplitFraction")
-        if debugFraction > 0 { return CGFloat(debugFraction) }
-        #endif
-        guard let saved = CacheStore.shared.read(Double.self, key: storageKey), saved > 0, saved < 1 else { return defaultFraction }
-        return min(Self.maxFraction, max(Self.minFraction, CGFloat(saved)))
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            let total = proxy.size.height
-            VStack(spacing: 0) {
-                if hasTop {
-                    top()
-                        .frame(height: topHeight(total))
-                        .frame(maxHeight: !topCollapsed && bottomCollapsed ? .infinity : nil)
-                        .fixedSize(horizontal: false, vertical: topCollapsed)
-                    divider(total: total).zIndex(1)
-                }
-                bottom()
-                    .frame(maxHeight: bottomCollapsed && !topCollapsed ? nil : .infinity)
-                    .fixedSize(horizontal: false, vertical: bottomCollapsed)
-            }
-        }
-    }
-
-    private func topHeight(_ total: CGFloat) -> CGFloat? {
-        if topCollapsed || bottomCollapsed { return nil }
-        return total * fraction
-    }
-
-    @ViewBuilder
-    private func divider(total: CGFloat) -> some View {
-        if topCollapsed || bottomCollapsed {
-            Color.clear.frame(height: 12)
-        } else {
-            Color.clear
-                .frame(height: 12)
-                .overlay {
-                    Capsule()
-                        .fill(AppTheme.textMuted)
-                        .frame(width: 40, height: 4)
-                        .opacity(dragStart == nil ? 0.75 : 1)
-                }
-                .overlay {
-                    Color.clear
-                        .frame(height: 44)
-                        .contentShape(Rectangle())
-                        .offset(y: -4)
-                        .highPriorityGesture(
-                            DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                                .onChanged { value in
-                                    let start = dragStart ?? fraction
-                                    dragStart = start
-                                    guard total > 0 else { return }
-                                    storedFraction = min(Self.maxFraction, max(Self.minFraction, start + value.translation.height / total))
-                                }
-                                .onEnded { _ in
-                                    dragStart = nil
-                                    CacheStore.shared.write(Double(fraction), key: storageKey)
-                                }
-                        )
-                }
-                .accessibilityLabel(separatorLabel)
-        }
     }
 }

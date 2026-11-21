@@ -51,23 +51,6 @@ $mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
 // ── Sidebar cards (desktop sidebar and the L2 Menu) ──────────────────────────
 
-.sidebarColumn {
-    height: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: $widget-gap;
-}
-
-.profileCard {
-    flex: 0 0 auto;
-}
-
-.projectsCard {
-    flex: 1 1 0;
-    min-height: 0;
-}
-
 .scopeItem {
     display: flex;
     align-items: center;

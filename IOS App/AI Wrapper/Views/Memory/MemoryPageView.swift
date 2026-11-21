@@ -364,7 +364,6 @@ struct MemoryMenuContent: View {
                             row(.project(project.projectId), label: project.name, icon: "folder")
                         }
                     }
-                    .frame(maxHeight: .infinity, alignment: .top)
                 }
             },
             results: {

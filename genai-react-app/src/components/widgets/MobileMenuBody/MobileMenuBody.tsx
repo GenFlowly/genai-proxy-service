@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { MenuSearchField } from '@genflowly/component-library'
+import { MenuSearchField, SidebarStack } from '@genflowly/component-library'
 import styles from './MobileMenuBody.module.scss'
 
 interface MobileMenuBodyProps {
@@ -15,7 +15,10 @@ interface MobileMenuBodyProps {
     children: React.ReactNode
 }
 
-/** The L2 Menu's content area: the page's cards above the bottom search pill. */
+/**
+ * The L2 Menu's content area: the page's cards, each at its full height in one
+ * column that scrolls as a whole, above the bottom search pill.
+ */
 export default function MobileMenuBody({
     searchValue,
     onSearchChange,
@@ -28,9 +31,13 @@ export default function MobileMenuBody({
     return (
         <>
             <div className={styles.cards} hidden={results != null} data-testid="mobile-menu-cards">
-                {children}
+                <SidebarStack touch>{children}</SidebarStack>
             </div>
-            {results != null && <div className={styles.cards}>{results}</div>}
+            {results != null && (
+                <div className={styles.cards}>
+                    <SidebarStack touch>{results}</SidebarStack>
+                </div>
+            )}
             <MenuSearchField
                 value={searchValue}
                 onChange={onSearchChange}

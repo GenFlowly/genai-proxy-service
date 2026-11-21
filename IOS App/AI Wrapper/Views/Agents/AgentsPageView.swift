@@ -223,30 +223,19 @@ struct AgentsMenuContent: View {
 
     var body: some View {
         MobileMenuBody(searchText: $query, searchPlaceholder: L("layout.mobileMenu.searchAgents")) {
-            VerticalSplit(
-                storageKey: "agents_menu_split_fraction",
-                defaultFraction: 0.37,
-                topCollapsed: false,
-                bottomCollapsed: false,
-                hasTop: true,
-                separatorLabel: L("agentsPage.menu.resizePanels"),
-                top: { SidebarWidget(variant: .directory) { categoriesCard } },
-                bottom: { SidebarWidget(variant: .directory) { agentsCard } }
-            )
+            SidebarWidget(variant: .directory) { categoriesCard }
+            SidebarWidget(variant: .directory) { agentsCard }
         }
     }
 
     private var categoriesCard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 2) {
-                MenuCardLabel(title: L("agentsPage.categories.sectionLabel"))
-                ForEach(AgentCategory.allCases, id: \.self) { category in
-                    categoryRow(category)
-                }
+        VStack(alignment: .leading, spacing: 2) {
+            MenuCardLabel(title: L("agentsPage.categories.sectionLabel"))
+            ForEach(AgentCategory.allCases, id: \.self) { category in
+                categoryRow(category)
             }
-            .padding(.bottom, 8)
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .padding(.bottom, 8)
     }
 
     private func categoryRow(_ category: AgentCategory) -> some View {
@@ -290,23 +279,20 @@ struct AgentsMenuContent: View {
             .padding(.horizontal, 8)
             .frame(height: 52)
 
-            ScrollView {
-                if visibleAgents.isEmpty {
-                    Text(L("agentsPage.menu.noAgents"))
-                        .webText(13.6, lineHeight: 20.4)
-                        .foregroundStyle(AppTheme.textMuted)
-                        .padding(.vertical, 16)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(visibleAgents) { agent in
-                            agentRow(agent)
-                        }
+            if visibleAgents.isEmpty {
+                Text(L("agentsPage.menu.noAgents"))
+                    .webText(13.6, lineHeight: 20.4)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity)
+            } else {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(visibleAgents) { agent in
+                        agentRow(agent)
                     }
-                    .padding(.bottom, 8)
                 }
+                .padding(.bottom, 8)
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
     }
 

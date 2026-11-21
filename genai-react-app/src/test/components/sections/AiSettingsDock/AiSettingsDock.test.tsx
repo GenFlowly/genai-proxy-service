@@ -41,7 +41,9 @@ describe('AiSettingsDock', () => {
         expect(dock).toContainElement(screen.getByTestId('tokens-card'))
         // Nothing sits ahead of the first card in the gap: the scroll area's own
         // first child is its scrollbar track, so the cards have a wrapper
-        expect(screen.getByTestId('ai-dock-cards').firstElementChild).toBe(screen.getByTestId('models-card'))
+        const models = screen.getByTestId('models-card')
+        expect(screen.getByTestId('ai-dock-cards')).toContainElement(models)
+        expect(models.parentElement!.firstElementChild).toBe(models)
 
         fireEvent.click(screen.getByRole('button', { name: 'Collapse Sidebar' }))
         expect(screen.getByTestId('ai-dock-strip')).toBeInTheDocument()
