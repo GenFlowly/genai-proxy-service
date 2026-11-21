@@ -131,8 +131,10 @@ jobs:
           FLY_AWS_SECRET_ACCESS_KEY=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-FlyioIamStack --query "Stacks[0].Outputs[?OutputKey=='FlyioAwsSecretAccessKey'].OutputValue" --output text)
           ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
 
-          # Set secrets and deploy
-          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET
+          # Stage secrets; the flyctl deploy below applies them. An unstaged
+          # `secrets set` restarts the machine on the old image first, so every
+          # release restarted the server twice.
+          flyctl secrets set --app $APP_NAME --stage AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET
 
           # Supabase Postgres for durable agent runs (DBOS + LangGraph checkpointer;
           # see retrieval-server/DURABLE_AGENTS_DBOS_PLAN.md), from the
@@ -201,11 +203,14 @@ jobs:
           fi
           ATTACHMENTS_BUCKET=$(aws cloudformation describe-stacks --stack-name gen-ai-proxy-service-S3Stack --query "Stacks[0].Outputs[?OutputKey=='AttachmentsBucketName'].OutputValue" --output text)
 
-          # Set secrets and deploy
+          # Stage secrets and deploy: `flyctl deploy` applies them in its single
+          # blue-green release (fly.production.toml). An unstaged `secrets set`
+          # restarted the only machine on the old image and dropped live
+          # requests while the JVM booted.
           # Content reports are emailed through the support topic, named per stage by SupportStack.
           SUPPORT_TOPIC_ARN="arn:aws:sns:${{ env.AWS_REGION }}:$(aws sts get-caller-identity --query Account --output text):gen-ai-proxy-service-${{ env.STAGE }}-support-requests"
 
-          flyctl secrets set --app $APP_NAME AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID SUPPORT_TOPIC_ARN="$SUPPORT_TOPIC_ARN" AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.flycast" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}" AUTH0_REACT_APP_CLIENT_IDS="${{ env.AUTH0_REACT_APP_CLIENT_IDS }}" AUTH0_ADMIN_PANEL_CLIENT_IDS="${{ env.AUTH0_ADMIN_PANEL_CLIENT_IDS }}"
+          flyctl secrets set --app $APP_NAME --stage AWS_ACCESS_KEY_ID=$FLY_AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY=$FLY_AWS_SECRET_ACCESS_KEY AWS_REGION=${{ env.AWS_REGION }} KMS_KEY_ID=$KMS_KEY_ID SUPPORT_TOPIC_ARN="$SUPPORT_TOPIC_ARN" AUTH0_SPA_DOMAIN=${{ env.AUTH0_SPA_DOMAIN }} AUTH0_API_AUDIENCE=${{ env.AUTH0_API_AUDIENCE }} RETRIEVAL_SERVER_URL="http://${RETRIEVAL_APP}.flycast" ENCODING_SERVER_URL=$ENCODING_SERVER_URL ATTACHMENTS_BUCKET=$ATTACHMENTS_BUCKET ADMIN_EMAILS="${{ env.ADMIN_EMAILS }}" AUTH0_REACT_APP_CLIENT_IDS="${{ env.AUTH0_REACT_APP_CLIENT_IDS }}" AUTH0_ADMIN_PANEL_CLIENT_IDS="${{ env.AUTH0_ADMIN_PANEL_CLIENT_IDS }}"
 
           # Auth0 Management API credentials (a machine-to-machine app granted
           # delete:users), so account deletion also removes the Auth0 login.

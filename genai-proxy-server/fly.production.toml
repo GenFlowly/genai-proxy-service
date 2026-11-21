@@ -25,6 +25,24 @@ primary_region = "iad"
   min_machines_running = 1
   processes = ["app"]
 
+  # fly-proxy only routes to a machine once /health answers. Without a check it
+  # sent requests to the JVM before Ktor was listening on 8080 ("instance
+  # refused connection") on every restart. The JVM is ready in about 6s.
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "10s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+# Production runs a single machine, so the default rolling deploy stops it
+# before its replacement is up. Blue-green boots the new machine next to the
+# old one, waits for the /health check above, then moves traffic and destroys
+# the old one. Two instances overlapping for a few seconds is safe: the
+# PurgeJobWorker claim is conditional, and there are no volumes.
+[deploy]
+  strategy = "bluegreen"
+
 # Fly's org Prometheus scrapes /metrics directly over the private network.
 # The route itself 404s for traffic arriving through fly-proxy (public).
 [metrics]
