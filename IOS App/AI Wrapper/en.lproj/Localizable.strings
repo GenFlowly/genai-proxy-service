@@ -256,7 +256,6 @@
 "conversation.conversationHistory.moveToProjectTitle" = "Move to project";
 "conversation.conversationHistory.movedToProject" = "Moved to {{name}}";
 "conversation.conversationHistory.newConversationInProject" = "New chat in project";
-"conversation.conversationHistory.resizePanels" = "Resize panels";
 "conversation.conversationHistory.newProject" = "New project";
 "conversation.conversationHistory.newProjectTitle" = "Create project";
 "conversation.conversationHistory.noConversationsYet" = "No conversations yet";
