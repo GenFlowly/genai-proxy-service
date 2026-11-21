@@ -185,6 +185,19 @@ struct AI_WrapperApp: App {
                         conversation.conversationId = "mock"
                         conversation.blocks = DebugFixtures.shortConversation
                     }
+                    if CommandLine.arguments.contains("--mock-generating") {
+                        conversation.blocks = conversation.blocks.map { block in
+                            var block = block
+                            block.status = .draft
+                            block.isLoading = true
+                            block.responseMessages = block.responseMessages.map { message in
+                                var message = message
+                                message.isLoading = true
+                                return message
+                            }
+                            return block
+                        }
+                    }
                     if CommandLine.arguments.contains("--mock-project-chat") {
                         router.navigate(.chat)
                         history.projects = [Project(projectId: "mock-project", name: "Startup")]

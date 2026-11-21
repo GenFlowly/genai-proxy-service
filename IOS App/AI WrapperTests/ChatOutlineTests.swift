@@ -104,14 +104,19 @@ struct EditorAfterLastTurnTests {
         #expect(store.blocks.count == 2)
     }
 
-    @Test func nothingIsAddedWhileStreamingOrForAViewOnlyViewer() {
+    @Test func aTurnGetsItsEditorAsSoonAsItStartsGenerating() {
         let store = ConversationStore()
         var streaming = resolved("b1")
+        streaming.status = .draft
         streaming.isLoading = true
         store.blocks = [streaming]
         store.ensureTrailingDraft()
-        #expect(store.blocks.count == 1)
+        #expect(store.blocks.count == 2)
+        #expect(store.trailingDraft != nil)
+    }
 
+    @Test func nothingIsAddedForAViewOnlyViewer() {
+        let store = ConversationStore()
         store.blocks = [resolved("b1")]
         store.conversationRole = .view
         store.ensureTrailingDraft()

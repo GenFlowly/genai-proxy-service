@@ -44,6 +44,9 @@ struct ComposerView: View {
     @State private var textHeight: CGFloat = 0
 
     private var hasAnyValidApiKey: Bool { auth.aiVendorAPIKeyStatusList.contains { $0.isAPIKeyValid == true } }
+    /// The editor shows while the turn above it generates, but its prompt can only go once that
+    /// answer is in the conversation.
+    private var canGenerate: Bool { hasAnyValidApiKey && !conversation.blocks.contains(where: \.isLoading) }
 
     /// `--editor-height` without the strip.
     static func textAreaHeight(windowHeight: CGFloat) -> CGFloat {
@@ -102,17 +105,6 @@ struct ComposerView: View {
         .background(AppTheme.background)
         .onAppear(perform: restoreDraft)
         .onChange(of: conversation.focusDraftRequest) { _, _ in takeDraftFocus() }
-        .onChange(of: isFocused) { _, focused in
-            guard isFollowUp else { return }
-            conversation.isEditingFollowUp = focused
-            if focused { conversation.revealDraftRequest += 1 }
-        }
-        .onDisappear {
-            if isFocused, isFollowUp { conversation.isEditingFollowUp = false }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-            if isFocused, isFollowUp { conversation.revealDraftRequest += 1 }
-        }
         .onChange(of: conversation.pendingAsks) { _, asks in absorbAsks(asks) }
         .onChange(of: photoItems) { _, items in handlePhotos(items) }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, matching: .images)
@@ -179,13 +171,13 @@ struct ComposerView: View {
         Button(action: generate) {
             WebIcon(name: "send-icon", size: 22, color: .white)
                 .frame(width: 44, height: 44)
-                .background(hasAnyValidApiKey ? AppTheme.buttonPrimary : AppTheme.disabled)
+                .background(canGenerate ? AppTheme.buttonPrimary : AppTheme.disabled)
                 .clipShape(Circle())
-                .shadow(color: hasAnyValidApiKey ? .black.opacity(0.25) : .clear, radius: 4, y: 2)
-                .opacity(hasAnyValidApiKey ? 1 : 0.5)
+                .shadow(color: canGenerate ? .black.opacity(0.25) : .clear, radius: 4, y: 2)
+                .opacity(canGenerate ? 1 : 0.5)
         }
         .buttonStyle(WebPressStyle())
-        .disabled(!hasAnyValidApiKey)
+        .disabled(!canGenerate)
         .accessibilityLabel(L("conversation.request.generate"))
     }
 
@@ -306,7 +298,7 @@ struct ComposerView: View {
     }
 
     private func generate() {
-        guard hasAnyValidApiKey else { return }
+        guard canGenerate else { return }
         if pending.contains(where: \.isUploading) {
             toasts.showToast(L("conversation.request.attachmentsUploading"))
             return
