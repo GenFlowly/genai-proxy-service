@@ -91,6 +91,15 @@ enum DebugFixtures {
             )
         ]
     }
+
+    /// `--mock-short-conversation`: one turn whose only response is a line long.
+    static var shortConversation: [ConversationBlock] {
+        conversation.map { block in
+            var block = block
+            block.responseMessages = Array(block.responseMessages.suffix(1))
+            return block
+        }
+    }
 }
 /// Headless capture: lands the conversation at `-debugScrollY <n>` once it has rendered and logs
 /// the content height, so a long response can be compared against the web at the same offset.
