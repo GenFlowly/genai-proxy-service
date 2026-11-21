@@ -27,6 +27,9 @@ final class ConversationStore: ObservableObject {
     /// Last request a composer acted on. Following up creates the composer that must take focus,
     /// and a view created after the change never sees it through `onChange`.
     var handledFocusDraftRequest = 0
+    /// A turn whose responses should be read from their top: another vendor's response took
+    /// their place while the page was scrolled into them.
+    @Published var responseTopRequest: String?
 
     private var streamTasks: [String: Task<Void, Error>] = [:]
     /// Client-minted generation ids per stream key, so Stop can cancel server-side work

@@ -100,6 +100,23 @@ enum DebugFixtures {
             return block
         }
     }
+
+    /// `--mock-two-turns`: the turn asked again, its responses several screens long and the
+    /// second half as long as the first, for swipes from deep inside a response.
+    static var twoTurnConversation: [ConversationBlock] {
+        conversation + conversation.map { block in
+            var block = block
+            let text = block.responseMessages.first?.text ?? ""
+            block.conversationBlockId += "-again"
+            block.responseMessages = block.responseMessages.enumerated().map { index, message in
+                var message = message
+                message.messageId += "-again"
+                message.text = Array(repeating: text, count: index == 0 ? 4 : 2).joined(separator: "\n\n")
+                return message
+            }
+            return block
+        }
+    }
 }
 /// Headless capture: lands the conversation at `-debugScrollY <n>` once it has rendered and logs
 /// the content height, so a long response can be compared against the web at the same offset.

@@ -13,6 +13,8 @@ struct ResponseGroupView: View {
     /// In the middle half of the screen: a tall response still counts, and a block at the
     /// far edge doesn't use up the one hint.
     @State private var isInReadingZone = false
+    /// The responses' top is above the overlay header's bottom edge.
+    @State private var startsAboveView = false
     @State private var width: CGFloat = 0
     /// Each vendor is auto-selected at most once, or toggles would be undone mid-stream.
     @State private var autoSelected: Set<String> = []
@@ -109,8 +111,16 @@ struct ResponseGroupView: View {
                 .padding(.top, 18)
                 .padding(.horizontal, 8)
                 .padding(.bottom, 8)
+                // Scrolling to an id stops at the content margin, so this lands the responses
+                // just below the overlay header, like the web row's scroll margin.
+                .overlay(alignment: .top) {
+                    Color.clear.frame(height: 1).id(Self.topAnchor(block.conversationBlockId)).allowsHitTesting(false)
+                }
                 .background(swipe.isDragging ? Self.dragTint : .clear)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { swipe.pageHeight = $0 }
+                .onGeometryChange(for: Bool.self) { proxy in
+                    proxy.frame(in: .scrollView(axis: .vertical)).minY < mobileHeaderHeight - 0.5
+                } action: { startsAboveView = $0 }
                 .onGeometryChange(for: Bool.self) { proxy in
                     guard let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height else { return false }
                     let frame = proxy.frame(in: .scrollView(axis: .vertical))
@@ -196,9 +206,7 @@ struct ResponseGroupView: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                if let target {
-                    conversation.setVendorSelection(for: block.conversationBlockId, vendors: [target.vendor])
-                }
+                if let target { selectVendors([target.vendor]) }
                 swipe.neighbor = nil
                 swipe.dx = 0
             }
@@ -221,7 +229,7 @@ struct ResponseGroupView: View {
                 options: availableVendors.map { .init(id: $0, label: AIVendor(rawValue: $0).displayName) },
                 selected: effectiveSelected,
                 maxSelection: maxVendors,
-                onChange: { conversation.setVendorSelection(for: block.conversationBlockId, vendors: $0) }
+                onChange: selectVendors
             )
             .padding(.horizontal, 16)
             .frame(minWidth: width)
@@ -229,6 +237,16 @@ struct ResponseGroupView: View {
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .padding(.top, 12)
     }
+
+    /// Response.tsx handleVendorSelectionChange: the reading position inside one vendor's
+    /// response means nothing in another's, and a shorter one would leave the page blank
+    /// below its end, so the new response starts from its top.
+    private func selectVendors(_ vendors: [String]) {
+        conversation.setVendorSelection(for: block.conversationBlockId, vendors: vendors)
+        if startsAboveView { conversation.responseTopRequest = block.conversationBlockId }
+    }
+
+    static func topAnchor(_ blockId: String) -> String { "responses-top-\(blockId)" }
 
     private func autoSelectNewVendors() {
         let current = conversation.getVendorSelection(for: block.conversationBlockId)
