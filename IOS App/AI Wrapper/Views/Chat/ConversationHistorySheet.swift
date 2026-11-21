@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The history menu content (ConversationHistoryComponent): the Projects and Chats widgets
-/// stacked on a draggable split, with fork trees, per-row swipe actions (Pin to the right; Move
+/// The history menu content (ConversationHistoryComponent): the Projects and Chats widgets at
+/// their full height in one column that scrolls as a whole (SidebarStack), with fork trees, per-row swipe actions (Pin to the right; Move
 /// and Delete, or Rename and Delete project, to the left), infinite scroll, and the project and
 /// delete dialogs.
 struct ConversationHistoryPanel: View {
@@ -31,26 +31,34 @@ struct ConversationHistoryPanel: View {
     @State private var openRow: SwipeOpenRow?
     /// The project just expanded, until its row has scrolled up with its conversations loaded.
     @State private var revealingProject: String?
-    @State private var projectsCardHeight: CGFloat = 0
-    /// The web's `scroll-margin-top` on an expanding project: it lands 44pt below the list's top.
+    @State private var stackHeight: CGFloat = 0
+    /// The web's `scroll-margin-top` on an expanding project: it lands 44pt below the column's top.
     private static let revealMargin: CGFloat = 44
 
     private var showProjectsPanel: Bool { history.hasAnyData || (!history.isLoading && !history.loadFailed) }
 
-    private var topCollapsed: Bool { history.projects.isEmpty || !history.isSectionExpanded("projects") }
-
-    private var bottomCollapsed: Bool {
-        (!history.globalPinned.isEmpty || !history.globalRecent.isEmpty) && !history.isSectionExpanded("history")
-    }
-
     var body: some View {
-        VerticalSplit(
-            topCollapsed: topCollapsed,
-            bottomCollapsed: bottomCollapsed,
-            hasTop: showProjectsPanel,
-            top: { projectsWidget },
-            bottom: { chatsWidget }
-        )
+        ScrollViewReader { proxy in
+            ScrollView {
+                // SidebarStack.module.scss: the touch gap between the cards
+                VStack(spacing: 12) {
+                    if showProjectsPanel { projectsWidget }
+                    chatsWidget
+                }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { stackHeight = $0 }
+            .onChange(of: revealingProject) { _, _ in revealProject(proxy) }
+            // Conversations load after the first scroll, and only then can the row reach the top.
+            .onChange(of: revealingProject.flatMap { history.projectItems[$0]?.count }) { _, _ in revealProject(proxy) }
+            .onScrollPhaseChange { _, phase in
+                if phase == .interacting {
+                    revealingProject = nil
+                    openRow = nil
+                }
+            }
+            .refreshable { await history.load() }
+        }
         .webModal(isPresented: $isCreateProjectOpen, title: L("conversation.conversationHistory.newProjectTitle"), maxWidth: 416) {
             createProjectForm
         }
@@ -148,31 +156,16 @@ struct ConversationHistoryPanel: View {
                 }
             }
         ) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    projectsList
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { projectsCardHeight = $0 }
-                .onChange(of: revealingProject) { _, _ in revealProject(proxy) }
-                // Conversations load after the first scroll, and only then can the row reach the top.
-                .onChange(of: revealingProject.flatMap { history.projectItems[$0]?.count }) { _, _ in revealProject(proxy) }
-                .onScrollPhaseChange { _, phase in
-                    if phase == .interacting {
-                        revealingProject = nil
-                        openRow = nil
-                    }
-                }
-            }
+            projectsList
         }
     }
 
-    /// SidebarListPanel's `scrollIntoView` on expand: the row goes up to the card's top, 44pt
+    /// SidebarListPanel's `scrollIntoView` on expand: the row goes up to the column's top, 44pt
     /// below it (`scroll-margin-top`). Not on collapse, and not on appear.
     private func revealProject(_ proxy: ScrollViewProxy) {
         guard let id = revealingProject else { return }
         if history.projectItems[id] != nil { revealingProject = nil }
-        let anchor = UnitPoint(x: 0, y: Self.revealMargin / max(projectsCardHeight, Self.revealMargin))
+        let anchor = UnitPoint(x: 0, y: Self.revealMargin / max(stackHeight, Self.revealMargin))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.projectAnchor(id), anchor: anchor) }
         }
@@ -313,46 +306,41 @@ struct ConversationHistoryPanel: View {
         }
     }
 
+    /// The rows grow the card; the column around the cards does the scrolling, so the section
+    /// headings pin to its top and paging follows its scroll.
     private var chatsList: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                if !history.globalPinned.isEmpty {
-                    Section {
-                        treeRows(history.globalPinned, isPinned: true)
-                    } header: {
-                        MenuSectionLabel(title: L("conversation.conversationHistory.pinned"), icon: "pin")
-                            .background(AppTheme.sidebarSurface)
-                    }
-                }
-                if !history.globalRecent.isEmpty {
-                    Section {
-                        treeRows(history.globalRecent, isPinned: false)
-                    } header: {
-                        MenuSectionLabel(title: L("conversation.conversationHistory.recents"))
-                            .background(AppTheme.sidebarSurface)
-                    }
-                }
-                // Infinite scroll: older pages stream in as the end comes near, paused while a
-                // fetch runs and after a failure (a failed page retries itself with backoff;
-                // there is no Load more button). Each page re-arms it, so a page too short to
-                // fill the list requests the next one. Unstructured because scrolling away must
-                // not cancel a request that's already out.
-                if history.hasMore {
-                    Color.clear
-                        .frame(height: 1)
-                        .task(id: history.lastKey) {
-                            Task { await history.loadMore() }
-                        }
+        LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+            if !history.globalPinned.isEmpty {
+                Section {
+                    treeRows(history.globalPinned, isPinned: true)
+                } header: {
+                    MenuSectionLabel(title: L("conversation.conversationHistory.pinned"), icon: "pin")
+                        .background(AppTheme.sidebarSurface)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.bottom, 8)
+            if !history.globalRecent.isEmpty {
+                Section {
+                    treeRows(history.globalRecent, isPinned: false)
+                } header: {
+                    MenuSectionLabel(title: L("conversation.conversationHistory.recents"))
+                        .background(AppTheme.sidebarSurface)
+                }
+            }
+            // Infinite scroll: older pages stream in as the end comes near, paused while a
+            // fetch runs and after a failure (a failed page retries itself with backoff;
+            // there is no Load more button). Each page re-arms it, so a page too short to
+            // fill the list requests the next one. Unstructured because scrolling away must
+            // not cancel a request that's already out.
+            if history.hasMore {
+                Color.clear
+                    .frame(height: 1)
+                    .task(id: history.lastKey) {
+                        Task { await history.loadMore() }
+                    }
+            }
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .onScrollPhaseChange { _, phase in
-            if phase == .interacting { openRow = nil }
-        }
-        .refreshable { await history.load() }
+        .padding(.horizontal, 6)
+        .padding(.bottom, 8)
     }
 
     private func centered(_ text: String) -> some View {
@@ -711,12 +699,12 @@ struct RowPressStyle: ButtonStyle {
 /// the top of the pane below stays tappable. The fraction persists; a collapsed pane hugs its
 /// header.
 struct VerticalSplit<Top: View, Bottom: View>: View {
-    var storageKey = "conversation_history_split_fraction"
+    let storageKey: String
     var defaultFraction: CGFloat = 0.4
     let topCollapsed: Bool
     let bottomCollapsed: Bool
     let hasTop: Bool
-    var separatorLabel = L("conversation.conversationHistory.resizePanels")
+    let separatorLabel: String
     @ViewBuilder let top: () -> Top
     @ViewBuilder let bottom: () -> Bottom
 
