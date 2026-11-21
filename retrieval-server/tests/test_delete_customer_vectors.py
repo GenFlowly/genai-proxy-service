@@ -31,18 +31,18 @@ class _FakeMilvus:
         self.dropped.append(collection_name)
 
 
-class DeleteCustomerVectorsTests(unittest.IsolatedAsyncioTestCase):
-    async def _run(self, client, customer_id="CU1"):
+class DeleteCustomerVectorsTests(unittest.TestCase):
+    def _run(self, client, customer_id="CU1"):
         with patch.object(notes_module, "get_milvus_client", return_value=client):
-            return await delete_customer_vectors(DeleteCustomerVectorsRequest(customer_id=customer_id))
+            return delete_customer_vectors(DeleteCustomerVectorsRequest(customer_id=customer_id))
 
-    async def test_deletes_the_customers_rows_from_every_shared_collection(self):
+    def test_deletes_the_customers_rows_from_every_shared_collection(self):
         client = _FakeMilvus([
             "conversation_voyage_4_large", "notes_voyage_4_large",
             "memory_voyage_4_large", "instructions_voyage_4_large", "email_voyage_4_large",
         ])
 
-        result = await self._run(client)
+        result = self._run(client)
 
         self.assertEqual(result["status"], "success")
         self.assertEqual(len(client.deletes), 5)
@@ -51,13 +51,13 @@ class DeleteCustomerVectorsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sum(result["deleted"].values()), 15)
         self.assertEqual(client.dropped, [])
 
-    async def test_a_data_type_limits_the_delete_to_that_type(self):
+    def test_a_data_type_limits_the_delete_to_that_type(self):
         client = _FakeMilvus([
             "conversation_voyage_4_large", "memory_voyage_4_large", "CU1_conversation_minilm", "CU1_notes_minilm",
         ])
 
         with patch.object(notes_module, "get_milvus_client", return_value=client):
-            result = await delete_customer_vectors(
+            result = delete_customer_vectors(
                 DeleteCustomerVectorsRequest(customer_id="CU1", data_type="conversation")
             )
 
@@ -65,35 +65,35 @@ class DeleteCustomerVectorsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.dropped, ["CU1_conversation_minilm"])
         self.assertEqual(result["deleted"], {"conversation_voyage_4_large": 3})
 
-    async def test_drops_only_this_customers_legacy_collections(self):
+    def test_drops_only_this_customers_legacy_collections(self):
         client = _FakeMilvus(["CU1_notes_minilm", "CU1_memory", "CU10_notes_minilm", "CU2_notes_minilm", "unrelated"])
 
-        result = await self._run(client)
+        result = self._run(client)
 
         self.assertEqual(client.dropped, ["CU1_notes_minilm", "CU1_memory"])
         self.assertEqual(result["dropped"], ["CU1_notes_minilm", "CU1_memory"])
         self.assertEqual(client.deletes, [])
 
-    async def test_no_vector_db_means_nothing_to_delete(self):
+    def test_no_vector_db_means_nothing_to_delete(self):
         with patch.object(notes_module, "get_milvus_client", side_effect=VectorDBNotConfigured("none")):
-            result = await delete_customer_vectors(DeleteCustomerVectorsRequest(customer_id="CU1"))
+            result = delete_customer_vectors(DeleteCustomerVectorsRequest(customer_id="CU1"))
 
         self.assertEqual(result, {"status": "success", "deleted": {}, "dropped": []})
 
-    async def test_a_failure_is_an_error_so_the_caller_retries(self):
+    def test_a_failure_is_an_error_so_the_caller_retries(self):
         client = _FakeMilvus(["notes_voyage_4_large"], fail_on="notes_voyage_4_large")
 
         with self.assertRaises(HTTPException) as raised:
-            await self._run(client)
+            self._run(client)
 
         self.assertEqual(raised.exception.status_code, 500)
 
-    async def test_refuses_an_id_that_could_widen_the_legacy_prefix(self):
+    def test_refuses_an_id_that_could_widen_the_legacy_prefix(self):
         for bad in ("", "CU1_", "CU*", "a/b", "x" * 65):
             with self.subTest(customer_id=bad):
                 client = _FakeMilvus(["CU1_notes_minilm"])
                 with self.assertRaises(HTTPException) as raised:
-                    await self._run(client, customer_id=bad)
+                    self._run(client, customer_id=bad)
                 self.assertEqual(raised.exception.status_code, 400)
                 self.assertEqual(client.dropped, [])
 

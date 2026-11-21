@@ -25,6 +25,11 @@ logger = logging.getLogger(__name__)
 # '{customer_id}_' collection prefix to other tenants' collections.
 CUSTOMER_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
 
+# Every route here is a plain `def`, not `async def`: their Milvus, embedding
+# and DynamoDB calls are all blocking, and FastAPI runs a plain `def` in its
+# threadpool. As `async def` they ran on the event loop and froze the whole
+# server for as long as they took — /health timed out and every streaming run
+# stalled while a burst of /encode-memory calls waited on Milvus flushes.
 router = APIRouter()
 
 
@@ -97,7 +102,7 @@ def _tenant_scoped_collections(client, customer_id: str, type_token: str, legacy
 
 
 @router.post("/delete-note-vectors")
-async def delete_note_vectors(req: DeleteNoteVectorsRequest):
+def delete_note_vectors(req: DeleteNoteVectorsRequest):
     """
     Hard-delete every vector chunk of a note from the vector DB: the shared
     'notes_{model}' collections (scoped to the customer's rows) plus any
@@ -170,7 +175,7 @@ def _memory_collection_schema(dim: int, description: str):
 
 
 @router.post("/encode-memory")
-async def encode_memory(req: EncodeMemoryRequest):
+def encode_memory(req: EncodeMemoryRequest):
     """
     Embed one user memory and upsert it into the shared 'memory_{model}'
     collection (created on first use), stamped with the customer's
@@ -240,8 +245,11 @@ async def encode_memory(req: EncodeMemoryRequest):
             "client": (req.client or "memory")[:100],
             "created_at": req.created_at or datetime.now(timezone.utc).isoformat(),
         }
+        # No flush, same as /encode-conversation: the cluster allows ~1 flush
+        # per 20s in total and reads see growing segments. A per-memory flush
+        # made each call wait out pymilvus's rate-limit retries (~10s average),
+        # and an extraction encodes several memories back to back.
         result = client.insert(collection_name=collection_name, data=[record])
-        client.flush(collection_name=collection_name)
         count("vector_store_chunks_total", result.get("insert_count", 1), data_type="MEMORY")
         return {"status": "success", "collection": collection_name}
     except HTTPException:
@@ -287,7 +295,7 @@ def _conversation_collection_schema(dim: int, description: str):
 
 
 @router.post("/encode-conversation")
-async def encode_conversation(req: EncodeConversationRequest):
+def encode_conversation(req: EncodeConversationRequest):
     """
     Embed one user/assistant exchange into the shared 'conversation_{model}'
     collection, producing the same rows as the encoding-server pipeline
@@ -380,7 +388,7 @@ async def encode_conversation(req: EncodeConversationRequest):
 
 
 @router.post("/delete-memory-vectors")
-async def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
+def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
     """
     Hard-delete every vector chunk of a user memory from the vector DB: the
     shared 'memory_{model}' collections (scoped to the customer's rows) plus
@@ -422,7 +430,7 @@ async def delete_memory_vectors(req: DeleteMemoryVectorsRequest):
 
 
 @router.post("/delete-instruction-vectors")
-async def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
+def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
     """
     Hard-delete every vector chunk of an instruction from the vector DB: the
     shared 'instructions_{model}' collections (scoped to the customer's rows)
@@ -467,7 +475,7 @@ async def delete_instruction_vectors(req: DeleteInstructionVectorsRequest):
 
 
 @router.post("/delete-conversation-vectors")
-async def delete_conversation_vectors(req: DeleteConversationVectorsRequest):
+def delete_conversation_vectors(req: DeleteConversationVectorsRequest):
     """
     Hard-delete every vector chunk of one conversation from the vector DB: the
     shared 'conversation_{model}' collections (scoped to the customer's rows)
@@ -506,7 +514,7 @@ async def delete_conversation_vectors(req: DeleteConversationVectorsRequest):
 
 
 @router.post("/delete-customer-vectors")
-async def delete_customer_vectors(req: DeleteCustomerVectorsRequest):
+def delete_customer_vectors(req: DeleteCustomerVectorsRequest):
     """
     Hard-delete every vector a customer owns in their vector DB, for account
     deletion: their rows in each shared '{type}_{model}' collection, and their

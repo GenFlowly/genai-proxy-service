@@ -46,8 +46,8 @@ def _request(**overrides) -> EncodeConversationRequest:
     return EncodeConversationRequest(**payload)
 
 
-class EncodeConversationRouteTests(unittest.IsolatedAsyncioTestCase):
-    async def _run(self, req, has_collection=True, chunks=("chunk one", "chunk two")):
+class EncodeConversationRouteTests(unittest.TestCase):
+    def _run(self, req, has_collection=True, chunks=("chunk one", "chunk two")):
         client = _FakeMilvus(has_collection)
         embeddings = [{"vector": [0.1, 0.2], "text": c, "index": i} for i, c in enumerate(chunks)]
         with (
@@ -57,11 +57,11 @@ class EncodeConversationRouteTests(unittest.IsolatedAsyncioTestCase):
             patch("encoding_library.utils.embedding_utils.create_chunks", return_value=list(chunks)),
             patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=embeddings),
         ):
-            result = await encode_conversation(req)
+            result = encode_conversation(req)
         return result, client
 
-    async def test_writes_the_pipeline_rows_after_deleting_the_exchange(self):
-        result, client = await self._run(_request())
+    def test_writes_the_pipeline_rows_after_deleting_the_exchange(self):
+        result, client = self._run(_request())
 
         self.assertEqual(client.deleted[0], "conversation_voyage_4_large")
         self.assertIn('message_key == "msg-2"', client.deleted[1])
@@ -74,8 +74,8 @@ class EncodeConversationRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({r["created_at"] for r in data}, {"2026-11-05T00:00:00Z"})
         self.assertEqual(result["chunks"], 2)
 
-    async def test_creates_the_collection_with_the_pipeline_schema(self):
-        _, client = await self._run(_request(), has_collection=False)
+    def test_creates_the_collection_with_the_pipeline_schema(self):
+        _, client = self._run(_request(), has_collection=False)
 
         _, schema, _ = client.created
         self.assertEqual(
@@ -84,12 +84,12 @@ class EncodeConversationRouteTests(unittest.IsolatedAsyncioTestCase):
              "client", "created_at", "customer_id"},
         )
 
-    async def test_blank_text_is_a_400(self):
+    def test_blank_text_is_a_400(self):
         with self.assertRaises(HTTPException) as ctx:
-            await encode_conversation(_request(text="  "))
+            encode_conversation(_request(text="  "))
         self.assertEqual(ctx.exception.status_code, 400)
 
-    async def test_no_vector_db_is_a_409_and_nothing_is_embedded(self):
+    def test_no_vector_db_is_a_409_and_nothing_is_embedded(self):
         with (
             patch.object(notes_module, "get_milvus_client", side_effect=VectorDBNotConfigured("cust-1")),
             patch("graph.nodes.retrieval.customer_embedding_model", return_value=MagicMock()),
@@ -99,11 +99,11 @@ class EncodeConversationRouteTests(unittest.IsolatedAsyncioTestCase):
                   return_value=[{"vector": [0.1], "text": "c"}]) as embed,
         ):
             with self.assertRaises(HTTPException) as ctx:
-                await encode_conversation(_request())
+                encode_conversation(_request())
         self.assertEqual(ctx.exception.status_code, 409)
         embed.assert_not_called()
 
-    async def test_an_embedding_with_no_vector_is_a_500(self):
+    def test_an_embedding_with_no_vector_is_a_500(self):
         with self.assertRaises(HTTPException) as ctx:
             client = _FakeMilvus(True)
             with (
@@ -113,6 +113,6 @@ class EncodeConversationRouteTests(unittest.IsolatedAsyncioTestCase):
                 patch("encoding_library.utils.embedding_utils.create_chunks", return_value=["c"]),
                 patch("encoding_library.utils.embedding_utils.create_embeddings", return_value=[{"text": "c"}]),
             ):
-                await encode_conversation(_request())
+                encode_conversation(_request())
         self.assertEqual(ctx.exception.status_code, 500)
         self.assertIsNone(client.inserted)
