@@ -161,14 +161,15 @@ class PurgeJobRepository(private val dynamoDbClient: DynamoDbClient) {
 
     /**
      * Marks the job done: it leaves the pending index, and the login and
-     * username it no longer needs are removed from the row.
+     * username it no longer needs are removed from the row. `state` and `sub`
+     * are DynamoDB reserved words, so both go through aliases.
      */
     suspend fun complete(job: PurgeJob, at: Instant) =
         update(
             job,
-            "SET #state = :done, $COMPLETED_AT = :at REMOVE $PENDING_SHARD, $DUE_AT, $SUB, $CLIENT, $USERNAME, $LAST_ERROR",
+            "SET #state = :done, $COMPLETED_AT = :at REMOVE $PENDING_SHARD, $DUE_AT, #sub, $CLIENT, $USERNAME, $LAST_ERROR",
             mapOf(":done" to s(STATE_DONE), ":at" to s(at.toString())),
-            mapOf("#state" to STATE)
+            mapOf("#state" to STATE, "#sub" to SUB)
         )
 
     private suspend fun update(

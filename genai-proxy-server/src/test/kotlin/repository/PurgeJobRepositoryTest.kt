@@ -153,9 +153,16 @@ class PurgeJobRepositoryTest {
         repo.complete(account, requestedAt)
 
         val expression = update.captured.updateExpression()
-        val removed = expression.substringAfter("REMOVE ").split(",").map { it.trim() }.toSet()
+        val names = update.captured.expressionAttributeNames()
+        val removed = expression.substringAfter("REMOVE ").split(",").map { names[it.trim()] ?: it.trim() }.toSet()
         assertEquals(setOf("pendingShard", "dueAt", "sub", "client", "username", "lastError"), removed)
         assertEquals("DONE", update.captured.expressionAttributeValues()[":done"]?.s())
         assertEquals(mapOf("jobKey" to s("ACCOUNT#CU1")), update.captured.key())
+        // "state" and "sub" are DynamoDB reserved words: a bare one fails every
+        // completion with a 400, which mocked DynamoDB can't catch
+        val words = expression.split(Regex("[\\s,=]+")).toSet()
+        assertTrue(words.none { it == "state" || it == "sub" }, expression)
+        assertEquals("state", names["#state"])
+        assertEquals("sub", names["#sub"])
     }
 }
