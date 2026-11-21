@@ -2,17 +2,22 @@ import SwiftUI
 import UIKit
 
 /// A scroll view as tall as its content until the surrounding column runs out of room, so a
-/// single card hugs its rows.
+/// single card hugs its rows. In a SidebarStack it is just its content: the stack scrolls.
 struct HuggingScrollView<Content: View>: View {
     @ViewBuilder var content: Content
+    @Environment(\.sidebarStack) private var stack
     @State private var contentHeight: CGFloat = 0
 
     var body: some View {
-        ScrollView {
-            content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        if stack != nil {
+            content
+        } else {
+            ScrollView {
+                content.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: contentHeight)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxHeight: contentHeight)
     }
 }
 
@@ -64,26 +69,30 @@ struct MenuSearchField: View {
 
 // MARK: - Menu body (MobileMenuBody.tsx)
 
-/// The L2 Menu's content area: the page's cards above the bottom search pill. Results replace
-/// the cards while searching; the cards stay mounted so clearing the search returns to the same
-/// scroll position and open rows.
+/// The L2 Menu's content area: the page's cards, each at its full height in one column that
+/// scrolls as a whole (SidebarStack), above the bottom search pill. Results replace the cards
+/// while searching; the cards stay mounted so clearing the search returns to the same scroll
+/// position and open rows.
 struct MobileMenuBody<Cards: View, Results: View>: View {
     @Binding var searchText: String
     let searchPlaceholder: String
     let isShowingResults: Bool
+    /// Pull to refresh on the cards' column.
+    var refresh: (() async -> Void)?
     @ViewBuilder var cards: Cards
     @ViewBuilder var results: Results
 
     var body: some View {
         VStack(spacing: 12) {
             ZStack(alignment: .top) {
-                cards
+                SidebarStack(refresh: refresh) { cards }
                     .frame(maxHeight: .infinity, alignment: .top)
                     .opacity(isShowingResults ? 0 : 1)
                     .allowsHitTesting(!isShowingResults)
                     .accessibilityHidden(isShowingResults)
                 if isShowingResults {
-                    results.frame(maxHeight: .infinity, alignment: .top)
+                    SidebarStack { results }
+                        .frame(maxHeight: .infinity, alignment: .top)
                 }
             }
             MenuSearchField(text: $searchText, placeholder: searchPlaceholder)

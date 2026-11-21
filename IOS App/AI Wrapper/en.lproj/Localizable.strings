@@ -981,7 +981,6 @@
 "agentsPage.menu.agents" = "Agents";
 "agentsPage.menu.createdByYou" = "Created by you";
 "agentsPage.menu.noAgents" = "No agents match";
-"agentsPage.menu.resizePanels" = "Resize the Categories and Agents panels";
 "agentsPage.menu.systemReadOnly" = "System · read-only";
 "memoryPage.title" = "Memory";
 "memoryPage.kinds.core" = "Core";
