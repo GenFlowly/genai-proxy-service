@@ -23,6 +23,21 @@ struct ImageDownscaleTests {
         return output as Data
     }
 
+    private func flatPNG(width: Int, height: Int) throws -> Data {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ))
+        context.setFillColor(red: 0.2, green: 0.4, blue: 0.8, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let image = try #require(context.makeImage())
+        let output = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(output, UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        #expect(CGImageDestinationFinalize(destination))
+        return output as Data
+    }
+
     private func info(_ data: Data) throws -> (type: String, width: Int, height: Int) {
         let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
         let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
@@ -53,9 +68,27 @@ struct ImageDownscaleTests {
         #expect(out.height > out.width)
     }
 
-    @Test func anImageWithinTheLimitIsLeftAlone() throws {
+    @Test func aPNGWithinBothLimitsIsLeftAlone() throws {
         let small = try noise(width: 400, height: 300, as: .png)
         #expect(ImageDownscale.png(from: small) == nil)
+    }
+
+    @Test func aPhoneSizedJPEGUnder5MBIsStillConvertedAndCappedAt5MP() throws {
+        let photo = try noise(width: 4032, height: 3024, as: .jpeg, orientation: 6)
+        let png = try #require(ImageDownscale.png(from: photo))
+        let out = try info(png)
+        #expect(out.type == UTType.png.identifier)
+        #expect(Double(out.width * out.height) <= ImageDownscale.maxPixels)
+        #expect(out.height > out.width)
+        #expect(png.count <= ImageDownscale.maxBytes)
+    }
+
+    @Test func aSmallPNGOver5MPIsShrunkTo5MP() throws {
+        let flat = try flatPNG(width: 4000, height: 3000)
+        #expect(flat.count <= ImageDownscale.maxBytes)
+        let out = try info(try #require(ImageDownscale.png(from: flat)))
+        #expect(Double(out.width * out.height) <= ImageDownscale.maxPixels)
+        #expect(Double(out.width * out.height) > ImageDownscale.maxPixels * 0.98)
     }
 
     @Test func bytesImageIOCannotReadAreLeftForTheBackend() {
