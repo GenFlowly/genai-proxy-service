@@ -112,7 +112,6 @@ describe('ConversationHistoryComponent', () => {
             fireEvent.click(heading)
             expect(heading).toHaveAttribute('aria-expanded', 'false')
             expect(screen.getByText('Pinned Chat')).not.toBeVisible()
-            expect(screen.getByTestId('history-split-handle')).toHaveAttribute('aria-hidden', 'true')
 
             fireEvent.click(heading)
             expect(screen.getByText('Pinned Chat')).toBeVisible()
@@ -211,17 +210,17 @@ describe('ConversationHistoryComponent', () => {
         })
         expect(screen.getByText('Projects')).toBeInTheDocument()
         // The History panel below shows its own empty state
-        expect(within(screen.getByTestId('history-pane')).getByText('No conversations yet')).toBeInTheDocument()
+        expect(within(screen.getByTestId('chats-widget')).getByText('No conversations yet')).toBeInTheDocument()
     })
 
-    test('Projects and History render as separate stacked panels', async () => {
+    test('Projects and Chats render as separate widgets in one scrolling column', async () => {
         render(<ConversationHistoryComponent />)
 
         await waitFor(() => {
-            expect(screen.getByTestId('projects-pane')).toBeInTheDocument()
+            expect(screen.getByTestId('projects-widget')).toBeInTheDocument()
         })
-        const projectsPane = screen.getByTestId('projects-pane')
-        const historyPane = screen.getByTestId('history-pane')
+        const projectsPane = screen.getByTestId('projects-widget')
+        const historyPane = screen.getByTestId('chats-widget')
 
         // Projects panel holds the Projects content; History holds Pinned/Recents
         expect(within(projectsPane).getByText('Projects')).toBeInTheDocument()
@@ -234,17 +233,13 @@ describe('ConversationHistoryComponent', () => {
             projectsPane.compareDocumentPosition(historyPane) & Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy()
 
-        // A draggable divider sits between the panes so their heights trade
-        // off against each other
-        const divider = screen.getByTestId('history-split-handle')
-        expect(divider).toHaveAttribute('role', 'separator')
-        expect(divider).toHaveAttribute('aria-label', 'Resize panels')
-        expect(
-            projectsPane.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING
-        ).toBeTruthy()
-        expect(
-            divider.compareDocumentPosition(historyPane) & Node.DOCUMENT_POSITION_FOLLOWING
-        ).toBeTruthy()
+        // Both sit in one column that scrolls as a whole, with no divider
+        // between them; the rows grow each card instead of scrolling inside it
+        const stack = screen.getByTestId('history-stack')
+        expect(stack).toContainElement(projectsPane)
+        expect(stack).toContainElement(historyPane)
+        expect(screen.queryByRole('separator')).not.toBeInTheDocument()
+        expect(screen.getByTestId('history-scroll-list').className).not.toMatch(/scrollArea/)
     })
 
     test('shows error state when fetch fails', async () => {
@@ -408,19 +403,14 @@ describe('ConversationHistoryComponent', () => {
         await waitFor(() => {
             expect(screen.getByTestId('conv-history-projects-heading')).toBeInTheDocument()
         })
-        expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
-        // Normal (uncollapsed) state: the Projects pane keeps its dragged
-        // fraction height, and the History pane fills the rest
-        expect(screen.getByTestId('projects-pane')).toHaveStyle({ flexBasis: '40%' })
-        expect(screen.getByTestId('history-pane').className).not.toContain('paneFillCollapsed')
+        expect(screen.getByTestId('conv-history-item-conv-1')).toBeVisible()
 
         fireEvent.click(screen.getByTestId('conv-history-projects-heading'))
 
-        // Projects hugs its own header now (no fixed fraction)...
-        expect(screen.getByTestId('projects-pane').style.flexBasis).toBe('')
-        // ...History is untouched: still rendering normally, nothing collapsed
-        expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
-        expect(screen.getByTestId('history-pane').className).not.toContain('paneFillCollapsed')
+        expect(screen.getByTestId('conv-history-project-proj-1')).not.toBeVisible()
+        // Chats is untouched: still expanded, its rows still showing
+        expect(screen.getByTestId('conv-history-history-heading')).toHaveAttribute('aria-expanded', 'true')
+        expect(screen.getByTestId('conv-history-item-conv-1')).toBeVisible()
     })
 
     test('patches title of existing item when conversationTitle changes', async () => {
@@ -635,7 +625,7 @@ describe('ConversationHistoryComponent', () => {
             const item = screen.getByTestId('conv-history-item-conv-2')
             expect(pinnedHeader.compareDocumentPosition(item)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
 
-            // Pinned and Recents scroll together inside the Chats card
+            // Pinned and Recents share the Chats card's one list
             const scrollList = screen.getByTestId('history-scroll-list')
             expect(within(scrollList).getByTestId('conv-history-item-conv-1')).toBeInTheDocument()
             expect(within(scrollList).getByTestId('conv-history-item-conv-2')).toBeInTheDocument()
@@ -1200,7 +1190,7 @@ describe('ConversationHistoryComponent', () => {
             await waitFor(() => {
                 expect(screen.queryByTestId('conv-history-project-proj-1')).not.toBeInTheDocument()
             })
-            expect(within(screen.getByTestId('history-pane')).getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
+            expect(within(screen.getByTestId('chats-widget')).getByTestId('conv-history-item-conv-p1')).toBeInTheDocument()
             expect(mockShowToast).toHaveBeenCalledWith('Project deleted')
             expect(mockClearPendingProject).not.toHaveBeenCalled()
         })
@@ -1241,7 +1231,7 @@ describe('ConversationHistoryComponent', () => {
             expect(onSelect).toHaveBeenCalledTimes(1)
         })
 
-        test('collapsing Projects hides its rows and frees the split', async () => {
+        test('collapsing Projects hides its rows', async () => {
             render(<ConversationHistoryComponent />)
             const row = await screen.findByTestId('conv-history-project-proj-1')
             const toggle = screen.getByTestId('conv-history-projects-heading')
@@ -1251,7 +1241,6 @@ describe('ConversationHistoryComponent', () => {
 
             fireEvent.click(toggle)
             expect(row).not.toBeVisible()
-            expect(screen.getByTestId('history-split-handle')).toHaveAttribute('aria-hidden', 'true')
             fireEvent.mouseEnter(toggle.parentElement!)
             expect(screen.getByRole('tooltip')).toHaveTextContent('Expand Projects')
         })
@@ -1260,7 +1249,7 @@ describe('ConversationHistoryComponent', () => {
     test('with no projects the Projects card says how to make one', async () => {
         render(<ConversationHistoryComponent />)
         const hint = await screen.findByText(/No projects yet/)
-        expect(screen.getByTestId('projects-pane')).toContainElement(hint)
+        expect(screen.getByTestId('projects-widget')).toContainElement(hint)
     })
 
     describe('touch rows in the mobile menu', () => {
