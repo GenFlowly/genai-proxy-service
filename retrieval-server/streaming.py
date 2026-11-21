@@ -4,6 +4,8 @@ import re
 import time
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
+from dbos._error import DBOSMaxStepRetriesExceeded
+
 from encoding_library.observability import count
 from graph.image_normalize import ImageNormalizationError
 from graph.state import RetrievalState
@@ -85,6 +87,9 @@ def _extract_provider_detail(raw: str) -> str:
     # Drop "libname.SomeError: SomeError: VendorException - " chains and
     # leftover escape debris
     detail = re.sub(r"^(?:[\w.]*(?:Error|Exception)\b[\s:—-]*)+", "", detail)
+    # OpenAI rate-limit boilerplate: account IDs and a docs link the user can't act on
+    detail = re.sub(r"\s+(?:in\s+)?(?:project\s+proj_|organization\s+org-)\S+", "", detail)
+    detail = re.sub(r"\s*Visit https?://\S+(?: to learn more)?\.?", "", detail)
     detail = detail.replace("\\", " ")
     return " ".join(detail.split())[:300]
 
@@ -95,6 +100,10 @@ def user_facing_llm_error(e: Exception, provider: str) -> tuple[str, str]:
     Vendor-agnostic by design: works off exception type/message markers, not
     per-vendor exception classes, so new BYOK providers are covered for free.
     """
+    if isinstance(e, DBOSMaxStepRetriesExceeded) and e.errors:
+        # The durable LLM step gave up after retrying a transient vendor error;
+        # DBOS's own message ("Step llm_invoke has exceeded…") hides it.
+        e = e.errors[-1]
     if isinstance(e, ImageNormalizationError):
         # Our own attachment check, not a vendor failure: the message is already
         # a user-facing sentence (unsupported format, too large, unreadable).
