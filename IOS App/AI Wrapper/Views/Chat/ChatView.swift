@@ -25,9 +25,10 @@ struct ChatView: View {
     @State private var askSelection: AskSelection?
     /// Blocks whose response already took the initial jump (ConversationBlock.hasScrolledRef).
     @State private var scrolledBlocks: Set<String> = []
-    /// The sticky-bottom follow: pauses on touch, resumes when back near the bottom.
-    @State private var followPaused = false
-    @State private var followArmed = false
+    /// The turn sent from this screen: held at the top of the view while its answer generates
+    /// below it (ConversationBlock's holdsTop).
+    @State private var heldTurnId: String?
+    @State private var viewportHeight: CGFloat = 0
     /// The conversation is taller than the screen, so its end can reach the home indicator.
     @State private var contentFillsViewport = false
     /// From the top of the page to the keyboard, or to the bottom edge while it is closed.
@@ -155,6 +156,7 @@ struct ChatView: View {
                         ConversationBlockView(block: block, onSelectionChange: { selection in
                             askSelection = selection
                         }, onTrailingEditorHeight: { trailingEditorHeight = $0 })
+                        .frame(minHeight: blockId == heldTurnId && blockId == latestTurn?.conversationBlockId ? heldTurnReserve : nil, alignment: .top)
                         .id(blockId)
                         // The web's 5rem scroll margin: an Outline jump lands the turn this far
                         // below the top of the page, clear of the overlay header.
@@ -170,7 +172,6 @@ struct ChatView: View {
                 .coordinateSpace(.named(Self.contentSpace))
             }
             .contentMargins(.top, mobileHeaderHeight, for: .scrollContent)
-            .environment(\.trailingEditorHeight, trailingEditorHeight)
             .scrollDismissesKeyboard(.interactively)
             .background(alignment: .bottom) { homeIndicatorBand }
             .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -181,10 +182,8 @@ struct ChatView: View {
             #if DEBUG
             .modifier(DebugConversationScroll())
             #endif
-            // A drag gesture here would take every swipe that starts on a message, the one from the
-            // left edge that opens the menus included.
-            .onScrollPhaseChange { _, phase in
-                if phase == .interacting { followPaused = true }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.containerSize.height } action: { _, height in
+                viewportHeight = height
             }
             .onScrollGeometryChange(for: String?.self) { geometry in
                 ChatOutline.viewedBlockId(
@@ -200,47 +199,36 @@ struct ChatView: View {
                 outlineTarget = nil
                 withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.turnAnchor(target), anchor: .top) }
             }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentSize.height - geometry.contentOffset.y - geometry.containerSize.height < 50
-            } action: { _, nearBottom in
-                if nearBottom { followPaused = false }
-            }
             .onChange(of: conversation.focusDraftRequest) { _, _ in
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("conversation-end", anchor: .bottom) }
                 }
             }
-            // A response appearing for the first time jumps to its start: animated as it generates,
-            // straight there when a conversation opens.
+            // A response appearing for the first time takes the view to it once: a finished one
+            // (conversation opened) lands straight on the response, a generating one (just sent)
+            // puts its prompt at the top of the view. The view doesn't follow the answer as it
+            // streams: it grows down from the prompt.
             .onChange(of: conversation.blocks.filter { !$0.responseMessages.isEmpty }.map(\.conversationBlockId), initial: true) { _, ids in
                 let fresh = ids.filter { !scrolledBlocks.contains($0) }
                 guard let target = fresh.last else { return }
                 scrolledBlocks.formUnion(fresh)
-                let isGenerating = latestTurn?.isLoading == true
-                let anchor = ConversationBlockView.responseAnchor(target)
+                guard latestTurn?.isLoading == true else {
+                    let anchor = ConversationBlockView.responseAnchor(target)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { proxy.scrollTo(anchor, anchor: .top) }
+                    return
+                }
+                heldTurnId = target
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    if isGenerating {
-                        withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(anchor, anchor: .top) }
-                    } else {
-                        proxy.scrollTo(anchor, anchor: .top)
-                    }
+                    withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.turnAnchor(target), anchor: .top) }
                 }
             }
-            // Armed shortly after generation starts: a regenerate's collapse to the short
-            // "thinking" placeholder must not snap the viewport up to its end.
-            // `initial`: this scroll view can first appear with the block already generating.
-            .onChange(of: latestTurn?.isLoading == true, initial: true) { _, loading in
-                followArmed = false
-                guard loading else { return }
-                followPaused = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { followArmed = true }
-            }
-            .onChange(of: latestTurn?.responseMessages.map(\.text.count)) { _, _ in
-                guard followArmed, !followPaused, let turn = latestTurn, turn.isLoading else { return }
-                let id = turn.conversationBlockId
-                proxy.scrollTo(ConversationBlockView.responseEndAnchor(id), anchor: .bottom)
-            }
         }
+    }
+
+    /// The held turn keeps a view of height from its top edge (the turn anchor's 80pt margin) to
+    /// the trailing editor, so it reaches the top however short its answer is.
+    private var heldTurnReserve: CGFloat {
+        max(0, viewportHeight - 80 - trailingEditorHeight)
     }
 
     static let contentSpace = "chat-content"
@@ -399,13 +387,11 @@ struct ChatHeader: View {
 struct ConversationBlockView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
-    @Environment(\.trailingEditorHeight) private var trailingEditorHeight
     let block: ConversationBlock
     let onSelectionChange: (AskSelection?) -> Void
     var onTrailingEditorHeight: (CGFloat) -> Void = { _ in }
 
     static func responseAnchor(_ blockId: String) -> String { "response-start-\(blockId)" }
-    static func responseEndAnchor(_ blockId: String) -> String { "response-end-\(blockId)" }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -429,16 +415,6 @@ struct ConversationBlockView: View {
                         VStack(spacing: 0) {
                             Color.clear.frame(height: mobileHeaderHeight)
                             Color.clear.frame(height: 1).id(Self.responseAnchor(block.conversationBlockId))
-                        }
-                        .allowsHitTesting(false)
-                    }
-                // Following a stream lands the response's end above the editor stuck to the
-                // bottom of the page, so the anchor sits that far below it.
-                Color.clear.frame(height: 0)
-                    .overlay(alignment: .top) {
-                        VStack(spacing: 0) {
-                            Color.clear.frame(height: trailingEditorHeight)
-                            Color.clear.frame(height: 1).id(Self.responseEndAnchor(block.conversationBlockId))
                         }
                         .allowsHitTesting(false)
                     }
@@ -590,8 +566,6 @@ extension EnvironmentValues {
     /// The chat page's height down to the keyboard, or to the bottom edge while it is closed: the
     /// room the composer grows into.
     @Entry var chatScreenHeight: CGFloat = 0
-    /// How much of the page's bottom the trailing editor stuck there covers.
-    @Entry var trailingEditorHeight: CGFloat = 0
 }
 
 /// NewChatProjectHint.tsx: what happens to the first message of a chat opened from a project's
