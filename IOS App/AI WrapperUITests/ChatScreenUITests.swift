@@ -63,6 +63,10 @@ final class ChatScreenUITests: XCTestCase {
         XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
         XCTAssertFalse(element(app.buttons, labelled: "Fork").isHittable)
 
+        let prompt = element(app.buttons, labelled: "Copy Prompt")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        let promptTop = prompt.frame.minY
+
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.87)).tap()
         app.typeText("Make it shorter")
 
@@ -70,6 +74,8 @@ final class ChatScreenUITests: XCTestCase {
         XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
         let editor = element(app.textViews, labelled: "Generate")
         XCTAssertEqual(editor.value as? String, "Make it shorter")
+        // The conversation stays where it was being read
+        XCTAssertEqual(prompt.frame.minY, promptTop, accuracy: 1)
         let send = element(app.buttons, labelled: "Generate")
         let deadline = Date().addingTimeInterval(3)
         while send.frame.maxY > keyboard.frame.minY, Date() < deadline {
@@ -105,6 +111,25 @@ final class ChatScreenUITests: XCTestCase {
         typing.lifetime = .keepAlways
         add(typing)
         XCTAssertLessThanOrEqual(send.frame.maxY, keyboard.frame.minY)
+    }
+
+    @MainActor
+    func testTheEditorStaysOnTheBottomWhileAResponseGenerates() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--mock-short-conversation", "--mock-generating", "--ui-testing"]
+        app.launch()
+        XCTAssertTrue(element(app.buttons, labelled: "Stop").waitForExistence(timeout: 10))
+        let generating = XCTAttachment(screenshot: app.screenshot())
+        generating.name = "editor-while-generating"
+        generating.lifetime = .keepAlways
+        add(generating)
+
+        let editor = element(app.textViews, labelled: "Generate")
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.87)).tap()
+        app.typeText("Next question")
+        XCTAssertEqual(editor.value as? String, "Next question")
+        XCTAssertFalse(element(app.buttons, labelled: "Generate").isEnabled)
     }
 
     @MainActor

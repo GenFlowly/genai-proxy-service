@@ -32,6 +32,8 @@ struct ChatView: View {
     @State private var contentFillsViewport = false
     /// From the top of the page to the keyboard, or to the bottom edge while it is closed.
     @State private var screenHeight: CGFloat = 0
+    /// The trailing editor stuck to the bottom of the page covers this much of it.
+    @State private var trailingEditorHeight: CGFloat = 0
 
     private var outlineItems: [OutlineItem] {
         ChatOutline.items(blocks: conversation.blocks, vendorName: catalog.displayName(for:))
@@ -41,6 +43,11 @@ struct ChatView: View {
     private var trailingDraftKey: String {
         guard let last = conversation.blocks.last else { return "" }
         return "\(last.conversationBlockId)|\(last.status.rawValue)|\(last.isLoading)|\(conversation.conversationRole.rawValue)"
+    }
+
+    /// The last sent turn: the one generating, or the latest answered one.
+    private var latestTurn: ConversationBlock? {
+        conversation.blocks.last { $0.status == .resolved || $0.isLoading }
     }
 
     private var isFreshChat: Bool {
@@ -93,7 +100,9 @@ struct ChatView: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { screenHeight = $0 }
         .environment(\.chatScreenHeight, screenHeight)
         .statusBarBand()
-        .background(AppTheme.background)
+        // Under the keyboard too: the page can be drawn at its keyboard-up size after the keyboard
+        // has gone (a screenshot does that), and nothing but the page's color may show there.
+        .background { AppTheme.background.ignoresSafeArea() }
         .webModal(isPresented: $showPicker, title: L("conversation.instructionPicker.title"), maxWidth: 768, scrollsContent: false) {
             InstructionPickerModal(onClose: { showPicker = false }) { instruction in
                 ai.selectedInstructionId = instruction.id
@@ -145,7 +154,7 @@ struct ChatView: View {
                         let blockId = block.conversationBlockId
                         ConversationBlockView(block: block, onSelectionChange: { selection in
                             askSelection = selection
-                        })
+                        }, onTrailingEditorHeight: { trailingEditorHeight = $0 })
                         .id(blockId)
                         // The web's 5rem scroll margin: an Outline jump lands the turn this far
                         // below the top of the page, clear of the overlay header.
@@ -161,9 +170,7 @@ struct ChatView: View {
                 .coordinateSpace(.named(Self.contentSpace))
             }
             .contentMargins(.top, mobileHeaderHeight, for: .scrollContent)
-            // A line added to the follow-up editor grows the page at its end; scrolling after the
-            // fact would let the editor slip under the keyboard for a frame.
-            .defaultScrollAnchor(conversation.isEditingFollowUp ? .bottom : nil, for: .sizeChanges)
+            .environment(\.trailingEditorHeight, trailingEditorHeight)
             .scrollDismissesKeyboard(.interactively)
             .background(alignment: .bottom) { homeIndicatorBand }
             .onScrollGeometryChange(for: Bool.self) { geometry in
@@ -203,18 +210,13 @@ struct ChatView: View {
                     withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo("conversation-end", anchor: .bottom) }
                 }
             }
-            .onChange(of: conversation.revealDraftRequest) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("conversation-end", anchor: .bottom) }
-                }
-            }
             // A response appearing for the first time jumps to its start: animated as it generates,
             // straight there when a conversation opens.
             .onChange(of: conversation.blocks.filter { !$0.responseMessages.isEmpty }.map(\.conversationBlockId), initial: true) { _, ids in
                 let fresh = ids.filter { !scrolledBlocks.contains($0) }
                 guard let target = fresh.last else { return }
                 scrolledBlocks.formUnion(fresh)
-                let isGenerating = conversation.blocks.last?.isLoading == true
+                let isGenerating = latestTurn?.isLoading == true
                 let anchor = ConversationBlockView.responseAnchor(target)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     if isGenerating {
@@ -227,15 +229,15 @@ struct ChatView: View {
             // Armed shortly after generation starts: a regenerate's collapse to the short
             // "thinking" placeholder must not snap the viewport up to its end.
             // `initial`: this scroll view can first appear with the block already generating.
-            .onChange(of: conversation.blocks.last?.isLoading == true, initial: true) { _, loading in
+            .onChange(of: latestTurn?.isLoading == true, initial: true) { _, loading in
                 followArmed = false
                 guard loading else { return }
                 followPaused = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { followArmed = true }
             }
-            .onChange(of: conversation.blocks.last?.responseMessages.map(\.text.count)) { _, _ in
-                guard followArmed, !followPaused, conversation.blocks.last?.isLoading == true,
-                      let id = conversation.blocks.last?.conversationBlockId else { return }
+            .onChange(of: latestTurn?.responseMessages.map(\.text.count)) { _, _ in
+                guard followArmed, !followPaused, let turn = latestTurn, turn.isLoading else { return }
+                let id = turn.conversationBlockId
                 proxy.scrollTo(ConversationBlockView.responseEndAnchor(id), anchor: .bottom)
             }
         }
@@ -397,8 +399,10 @@ struct ChatHeader: View {
 struct ConversationBlockView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
+    @Environment(\.trailingEditorHeight) private var trailingEditorHeight
     let block: ConversationBlock
     let onSelectionChange: (AskSelection?) -> Void
+    var onTrailingEditorHeight: (CGFloat) -> Void = { _ in }
 
     static func responseAnchor(_ blockId: String) -> String { "response-start-\(blockId)" }
     static func responseEndAnchor(_ blockId: String) -> String { "response-end-\(blockId)" }
@@ -411,6 +415,9 @@ struct ConversationBlockView: View {
                 let isLastBlock = conversation.blocks.last?.conversationBlockId == block.conversationBlockId
                 ComposerView(blockId: block.conversationBlockId, isLastBlock: isLastBlock)
                     .modifier(StickyViewportBottom(isActive: isLastBlock))
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                        if isLastBlock { onTrailingEditorHeight(height) }
+                    }
             }
 
             if block.status == .resolved || !block.responseMessages.isEmpty {
@@ -425,7 +432,16 @@ struct ConversationBlockView: View {
                         }
                         .allowsHitTesting(false)
                     }
-                Color.clear.frame(height: 0).id(Self.responseEndAnchor(block.conversationBlockId))
+                // Following a stream lands the response's end above the editor stuck to the
+                // bottom of the page, so the anchor sits that far below it.
+                Color.clear.frame(height: 0)
+                    .overlay(alignment: .top) {
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: trailingEditorHeight)
+                            Color.clear.frame(height: 1).id(Self.responseEndAnchor(block.conversationBlockId))
+                        }
+                        .allowsHitTesting(false)
+                    }
             }
 
             RunHitlBanner(block: block)
@@ -574,6 +590,8 @@ extension EnvironmentValues {
     /// The chat page's height down to the keyboard, or to the bottom edge while it is closed: the
     /// room the composer grows into.
     @Entry var chatScreenHeight: CGFloat = 0
+    /// How much of the page's bottom the trailing editor stuck there covers.
+    @Entry var trailingEditorHeight: CGFloat = 0
 }
 
 /// NewChatProjectHint.tsx: what happens to the first message of a chat opened from a project's
