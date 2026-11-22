@@ -51,6 +51,8 @@ from routes.retrieve import (
     _enabled_builtin_tools,
     _prepare_agent_node_configs,
 )
+from activity import ActivityRecorder
+from activity.schema import TURN_COMPLETED, TURN_ERROR
 from streaming import stream_events_dicts
 
 logger = logging.getLogger(__name__)
@@ -125,6 +127,7 @@ def _resolve_durable_graph(customer_id: str, graph_id, checkpointer):
     cache_key = f"graph#{graph_id}" if graph_id else customer_id
     graph, max_iterations = get_or_build_durable_graph(cache_key, graph_record, nodes, checkpointer)
     node_type_map, node_configs, streaming_nodes = _build_node_configs(nodes)
+    streaming_nodes = streaming_nodes or answer_nodes(graph_record, nodes)
     node_name_map = {n["nodeId"]: n.get("name") or n["nodeType"] for n in nodes}
     return graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations
 
@@ -168,6 +171,14 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     error: dict = {}
     cfg = {"configurable": {"thread_id": run_id}}
     graph_input = state  # dict on a fresh run; Command(resume=...) after an interrupt
+    # One activity log for the whole run, across every human-input resume.
+    recorder = ActivityRecorder(
+        node_type_map=node_type_map,
+        node_name_map=node_name_map,
+        streaming_nodes=streaming_nodes,
+        structured_output=bool(req.response_schema),
+        started_at=request_start,
+    )
     stop = _local_runs[run_id] = asyncio.Event()
     try:
         resume_cycles = 0
@@ -183,6 +194,7 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
                 structured_output=bool(req.response_schema),
                 builtin_tool_names=set(builtin_tools),
                 thread_id=run_id,
+                recorder=recorder,
             )) as events:
                 async for payload in events:
                     # The model streams far ahead of the per-event inserts, so
@@ -209,6 +221,9 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
                 break
             _ai = pending[0]
             _ai_payload = {**_ai, "run_id": run_id} if isinstance(_ai, dict) else {"value": _ai, "run_id": run_id}
+            # Time spent waiting on the human is not counted as the agent's time.
+            for activity_event in recorder.pause():
+                await run_events.publish(run_id, {"activity": activity_event})
             await run_events.publish(run_id, {"awaiting_input": _ai_payload})
             count("agent_run_awaiting_input_total")
             from dbos import DBOS
@@ -219,8 +234,10 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
                 error = {"error": "timed out waiting for input", "error_type": "resume_timeout"}
                 break
             graph_input = Command(resume=value)
-            # Time spent waiting on the human is not thinking time.
-            request_start = time.monotonic()
+            recorder.resume()
+
+        for activity_event in recorder.finish(TURN_ERROR if error else TURN_COMPLETED):
+            await run_events.publish(run_id, {"activity": activity_event})
 
         # Authoritative final state from the checkpoint (post-resume-safe).
         final: dict = {}

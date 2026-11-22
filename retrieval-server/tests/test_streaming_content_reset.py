@@ -129,6 +129,21 @@ class StopReasonTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_stop_reason_of(_M(content="", response_metadata={"finish_reason": "SAFETY"})), "safety")
         self.assertEqual(_stop_reason_of(_M(content="", response_metadata={})), "")
 
+    def test_the_responses_api_status_becomes_a_stop_reason(self):
+        # gpt-5 models run on the OpenAI Responses API, which reports a status
+        # and incomplete_details instead of a finish_reason.
+        _M = AIMessage
+        self.assertEqual(_stop_reason_of(_M(content="", response_metadata={"status": "completed"})), "stop")
+        self.assertEqual(_stop_reason_of(_M(content="", response_metadata={
+            "status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"}})), "max_output_tokens")
+        self.assertEqual(_stop_reason_of(_M(content="", response_metadata={
+            "status": "incomplete", "incomplete_details": {"reason": "content_filter"}})), "content_filter")
+        self.assertEqual(_stop_reason_of(_M(content="", response_metadata={"status": "incomplete"})), "incomplete")
+        self.assertEqual(_stop_reason_of(_M(content="", response_metadata={"status": "failed"})), "failed")
+        # A real finish reason always wins.
+        self.assertEqual(_stop_reason_of(_M(content="", response_metadata={
+            "finish_reason": "length", "status": "completed"})), "length")
+
     async def test_a_terminal_round_streams_its_raw_reason(self):
         # A refusal (empty content, no tool calls) must still surface its reason.
         payloads = await _collect([

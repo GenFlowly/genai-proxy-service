@@ -44,6 +44,7 @@ class Source:
     url: str
     content: str = ""          # snippet the model reads under the [n] header
     published_date: str = ""   # optional; surfaced when the tool has it
+    favicon: str = ""          # optional site icon URL, shown next to the source
 
     def to_dict(self) -> dict:
         d: dict = {"title": self.title, "url": self.url}
@@ -51,6 +52,8 @@ class Source:
             d["content"] = self.content
         if self.published_date:
             d["published_date"] = self.published_date
+        if self.favicon:
+            d["favicon"] = self.favicon
         return d
 
 

@@ -29,6 +29,7 @@ import re
 import time
 import uuid
 
+from activity.facts import report_call
 from encoding_library.observability import count, observe
 from graph.fs_tools import SCRATCH_TAGS
 from graph.lookup_pool import OUTCOME_DEDUPLICATED, OUTCOME_SHARED, lookup_pool
@@ -173,11 +174,9 @@ def _spill_oversized(
         note = f"Full output saved to scratch file '{path}'."
     return _truncate_for_context(content, max_chars, note), (path, len(data))
 
-# How much of each tool result to surface in the client's thinking panel. Web
-# results carry several dated snippets, so this is generous — the model always
-# sees the full untruncated content in loop_messages regardless.
-_TRACE_TOOL_LIMIT = 600
-_TRACE_TOTAL_LIMIT = 4000
+# First characters of each call's own result text kept for the activity panel
+# (what the tool said, e.g. "No web results found" or a provider error).
+_RESULT_EXCERPT_CHARS = 200
 
 _CITATION_INSTRUCTION = (
     "Cite each claim inline with the bracketed number shown next to the source "
@@ -229,13 +228,19 @@ def _render_sources(preamble: str, sources: list, base_index: int) -> str:
     return "\n".join(lines).strip()
 
 
-def _summarize(name: str, result, content: str) -> str:
-    """One-line trace summary for a tool call — source titles when the tool
-    cited any, otherwise a (generously truncated) slice of its text."""
-    if result is not None and result.sources:
-        titles = "; ".join(s.title for s in result.sources if s.title)
-        return f"{name}: {len(result.sources)} source(s) — {titles}"[:_TRACE_TOOL_LIMIT]
-    return f"{name}: {content[:_TRACE_TOOL_LIMIT]}"
+def _elapsed_ms(start: float) -> int:
+    return int(round((time.perf_counter() - start) * 1000))
+
+
+def _source_entry(index: int, source) -> dict:
+    """The client-facing form of one numbered source: {index, title, url} plus
+    the site icon and publish date when the tool has them."""
+    entry = {"index": index, "title": source.title, "url": source.url}
+    if getattr(source, "favicon", ""):
+        entry["favicon"] = source.favicon
+    if source.published_date:
+        entry["published_date"] = source.published_date
+    return entry
 
 
 def tool_executor(node_id: str | None = None):
@@ -382,7 +387,6 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         "tool_calls": builtin_calls,
     }]
     artifacts: list[dict] = []
-    summaries: list[str] = []
     # Turn-global citation numbering: sources already emitted by earlier
     # TOOL_EXECUTOR rounds this turn set the base, so [n] markers never collide
     # across rounds. tool_sources is a plain overwrite field (see state.py), so
@@ -390,26 +394,36 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     prior_sources: list[dict] = state.get("tool_sources") or []
     new_sources: list[dict] = []
     running = len(prior_sources)
-    # Per-call breakdown for the thinking panel — one entry per call, distinct
-    # from `summaries`/`new_sources` above which flatten the whole round into
-    # one line / one list. Without this, three web_search calls in one round
-    # are indistinguishable in the trace ("web_search, web_search, web_search"
-    # with no query, no per-call source attribution).
+    # One entry per call, in the model's call order: the facts the activity
+    # panel shows for it (what ran, how the budget treated it, what came back).
     calls_trace: list[dict] = []
 
-    async def _run_one(call: dict, mode: str = "run"):
+    async def _run_one(seq: int, call: dict, mode: str = "run"):
         """Execute one call with per-call error isolation. Returns
-        (result | None, error | None) — never raises, so one failing tool can
-        neither stop the others nor abort the turn. mode "skip" short-circuits
-        a budget-exhausted web_search without touching the search API; "note"
-        executes but appends the consolidation note to the result."""
+        (result | None, error | None, duration_ms) — never raises, so one
+        failing tool can neither stop the others nor abort the turn. mode
+        "skip" short-circuits a budget-exhausted web_search without touching
+        the search API; "note" executes but appends the consolidation note."""
+        result, error, duration_ms = await _execute_one(call, mode)
+        await report_call({
+            "id": call.get("id", ""),
+            "seq": seq,
+            "name": call.get("name", ""),
+            "mode": mode,
+            "duration_ms": duration_ms,
+            "result_count": len(result.sources) if result is not None else None,
+            "error": error,
+        })
+        return result, error, duration_ms
+
+    async def _execute_one(call: dict, mode: str):
         name = call.get("name", "")
         if mode == "exhausted":
             count("tool_execution_total", status="budget_exhausted", tool=name)
-            return ToolResult(content=_search_budget_exhausted_message(hard_search_cap)), None
+            return ToolResult(content=_search_budget_exhausted_message(hard_search_cap)), None, 0
         if mode == "skip":
             count("tool_execution_total", status="budget_skipped", tool=name)
-            return ToolResult(content=_search_budget_skip_message(searches_after_round)), None
+            return ToolResult(content=_search_budget_skip_message(searches_after_round)), None, 0
         start = time.perf_counter()
         tool = by_name[name]
         args = call.get("args") or {}
@@ -425,11 +439,11 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             count("tool_execution_total", status=status, tool=name)
             if mode == "note":
                 result.content = (result.content or "") + _search_budget_note(searches_after_round)
-            return result, None
+            return result, None, _elapsed_ms(start)
         except Exception as e:
             count("tool_execution_total", status="error", tool=name)
             logger.error("Node tool_executor: %s failed — %s", name, e, exc_info=True)
-            return None, str(e)
+            return None, str(e), _elapsed_ms(start)
         finally:
             observe("tool_execution_duration_seconds", time.perf_counter() - start, tool=name)
 
@@ -447,10 +461,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     except Exception:
         durable = False
     if durable:
-        outcomes = [await _run_one(c, m) for c, m in zip(builtin_calls, call_modes)]
+        outcomes = [
+            await _run_one(i, c, m)
+            for i, (c, m) in enumerate(zip(builtin_calls, call_modes), start=1)
+        ]
     else:
         outcomes = await asyncio.gather(
-            *(_run_one(c, m) for c, m in zip(builtin_calls, call_modes))
+            *(_run_one(i, c, m) for i, (c, m) in enumerate(zip(builtin_calls, call_modes), start=1))
         )
 
     # Accumulated across the round, merged into the update once at the end.
@@ -459,7 +476,9 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     spilled_files: dict[str, int] = {}
     fs_read_enabled = "fs_read" in by_name
 
-    for seq, (call, (result, error)) in enumerate(zip(builtin_calls, outcomes), start=1):
+    for seq, (call, mode, (result, error, duration_ms)) in enumerate(
+        zip(builtin_calls, call_modes, outcomes), start=1
+    ):
         name = call.get("name", "")
         args = call.get("args") or {}
         call_sources_start = len(new_sources)
@@ -473,9 +492,7 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
                 # preamble + structured sources (see ToolResult / Source).
                 content = _render_sources(result.content, result.sources, running)
                 for offset, s in enumerate(result.sources, start=1):
-                    new_sources.append(
-                        {"index": running + offset, "title": s.title, "url": s.url}
-                    )
+                    new_sources.append(_source_entry(running + offset, s))
                 running += len(result.sources)
             # Tool-declared state changes (todo list, fs index entries) and
             # LLM spend (a spawned subagent's) fold into the round's totals.
@@ -500,10 +517,15 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
             "tool_call_id": call.get("id", ""),
             "content": content,
         })
-        summaries.append(_summarize(name, result, content))
         call_entry = {
+            "id": call.get("id", ""),
+            "seq": seq,
             "name": name,
             "args": args,
+            "mode": mode,
+            "duration_ms": duration_ms,
+            "result_count": len(result.sources) if result is not None else None,
+            "result_excerpt": (result.content or "")[:_RESULT_EXCERPT_CHARS] if result is not None else None,
             # This call's own slice of new_sources — reuses the already-numbered
             # entries above rather than re-deriving titles/urls from result.sources.
             "sources": new_sources[call_sources_start:],
@@ -538,14 +560,14 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     scratch_update = {"fs_namespace": fs_namespace, **round_scratch}
     trace_entry = {
         "node": "TOOL_EXECUTOR",
-        "prompt": ", ".join(c.get("name", "") for c in builtin_calls),
-        "response": "\n".join(summaries)[:_TRACE_TOTAL_LIMIT],
         "calls": calls_trace,
     }
+    if any(c.get("name") == _WEB_SEARCH_TOOL for c in builtin_calls):
+        trace_entry["budget"] = {"used": searches_after_round, "max": hard_search_cap}
     if "todos" in round_scratch:
         # The round updated the plan — surface the current checklist on this
-        # step so the streaming layer can emit it (and the proxy persist it)
-        # with the turn's thinking content.
+        # step so the activity log carries it (and the proxy persists it)
+        # with the rest of the turn's activity.
         trace_entry["todos"] = round_scratch["todos"]
     update: dict = {
         "loop_messages": loop_messages,

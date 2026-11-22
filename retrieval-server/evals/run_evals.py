@@ -95,14 +95,14 @@ def _run_task(task: dict, base_url: str) -> dict:
                     content_parts.append(event["content"])
                 elif "content_reset" in event:
                     content_parts = []
-                elif "thinking_step" in event:
-                    step = event["thinking_step"]
-                    if step.get("kind") == "TOOL" and step.get("status") == "done":
+                elif "activity" in event:
+                    step = event["activity"]
+                    if step.get("type") == "step.end" and step.get("kind") == "tools":
                         observed["tool_rounds"] += 1
                         for call in step.get("calls") or []:
                             observed["tools_called"].append(call.get("name", ""))
-                    if step.get("todos"):
-                        observed["todos_seen"] = True
+                        if step.get("todos"):
+                            observed["todos_seen"] = True
                 elif "web_sources" in event:
                     observed["web_sources"] = len(event["web_sources"])
                 elif "error" in event:
@@ -137,7 +137,7 @@ def _check(task: dict, observed: dict) -> list[str]:
         if observed["web_sources"] == 0:
             failures.append("no web_sources event emitted")
     if task.get("expect_todos") and not observed["todos_seen"]:
-        failures.append("no thinking_step carried a todos checklist")
+        failures.append("no tools step in the activity log carried a todos checklist")
     if observed["tool_rounds"] < int(task.get("min_tool_rounds") or 0):
         failures.append(f"only {observed['tool_rounds']} tool round(s)")
     if "max_tool_rounds" in task and observed["tool_rounds"] > int(task["max_tool_rounds"]):

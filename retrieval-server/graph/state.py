@@ -156,9 +156,10 @@ class RetrievalState(TypedDict):
     # block. The response-generating nodes append it to their persona.
     memories_block: Optional[str]
 
-    # Execution trace for the client's "thinking" panel: one entry per
-    # LLM-calling node — {node, prompt, response} (truncated). Appended by the
-    # nodes, surfaced by the streaming layer as thinking_step events.
+    # Execution facts per node run, appended by the nodes: LLM nodes record
+    # {node, prompt, response} excerpts, the tool executor its per-call
+    # breakdown. The activity recorder reads the newest entry of each node's
+    # output into the activity log.
     trace: Annotated[list, _append_list]
 
     # Free-form state: node outputs whose output_key is not a first-class

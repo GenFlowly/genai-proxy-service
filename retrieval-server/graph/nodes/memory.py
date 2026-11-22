@@ -392,7 +392,7 @@ def memory(node_id: Optional[str] = None):
 
       - memories_block: appended to the response node's persona (system prompt)
       - scratch["memories"]: usable as {memories} in any later node's templates
-      - scratch["memory_stats"]: {"core": n, "recalled": n} for the thinking step
+      - scratch["memory_stats"]: {"core": n, "recalled": n} for the activity log's memory step
 
     Two halves:
       - CORE memories (compact, always-relevant) are injected on every turn,
