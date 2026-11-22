@@ -1239,8 +1239,8 @@ struct MarkdownTableTests {
 struct LocalizationCoverageTests {
     /// Every `{{count}}` key used in code resolves through the plural suffix.
     @Test func pluralsPickOneOrOther() {
-        #expect(L("conversation.response.thoughtForSeconds", ["count": 1]) == "Thought for 1 second")
-        #expect(L("conversation.response.thoughtForSeconds", ["count": 3]) == "Thought for 3 seconds")
+        #expect(L("conversation.activity.header.searches", ["count": 1]) == "1 search")
+        #expect(L("conversation.activity.header.searches", ["count": 3]) == "3 searches")
     }
 
     @Test func placeholdersAreFilled() {
