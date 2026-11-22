@@ -74,6 +74,20 @@ class SystemApiKeyService(
     }
 
     /**
+     * Flags the vendor's stored key INVALID after the vendor rejected
+     * [rejectedApiKey] (401/403), so the admin panel stops reporting a dead key
+     * as VALID and [getPrioritizedProviderConfigs] stops handing it out.
+     * No-op when the key was rotated since: a new key is never flagged for its
+     * predecessor's rejection. Re-saving a key clears the flag.
+     * Returns true when the flag was written.
+     */
+    suspend fun markSystemApiKeyInvalid(vendor: AIVendor, rejectedApiKey: String): Boolean {
+        val encrypted = systemApiKeyRepository.getSystemApiKeyItem(vendor.name)?.get("apiKey")?.s()
+        if (encrypted.isNullOrBlank() || kmsProvider.decrypt(encrypted) != rejectedApiKey) return false
+        return systemApiKeyRepository.markSystemApiKeyInvalid(vendor.name, encrypted)
+    }
+
+    /**
      * Status per vendor (never the key material itself) plus the admin-selected
      * model and failover priority. One GetItem per known vendor.
      */

@@ -242,5 +242,7 @@ data class VendorModelMetadata(
     val vendor: AIVendor,
     val models: List<ModelCatalogEntry>,
     /** Non-null when the vendor fetch failed on the retrieval-server side. */
-    val error: String? = null
+    val error: String? = null,
+    /** The vendor rejected the key itself (HTTP 401/403), not a transient failure. */
+    val authFailed: Boolean = false
 )

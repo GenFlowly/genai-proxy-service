@@ -83,8 +83,12 @@ class ModelCatalogService(
         for (vendorMetadata in retrievalServerClient.fetchModelMetadata(vendorKeys)) {
             val vendor = vendorMetadata.vendor
             if (vendorMetadata.error != null) {
-                logger.warn {
-                    "Model metadata fetch failed for ${vendor.name}: ${vendorMetadata.error} — keeping existing catalog rows"
+                if (vendorMetadata.authFailed) {
+                    flagRejectedSystemKey(vendor, vendorKeys.toMap()[vendor], vendorMetadata.error)
+                } else {
+                    logger.warn {
+                        "Model metadata fetch failed for ${vendor.name}: ${vendorMetadata.error} — keeping existing catalog rows"
+                    }
                 }
                 continue
             }
@@ -144,6 +148,24 @@ class ModelCatalogService(
 
         logger.info { "Model catalog refreshed: $counts" }
         return counts
+    }
+
+    /**
+     * The vendor rejected a system key outright. Flag it INVALID so the admin
+     * panel shows it needs rotating — otherwise the panel keeps reporting it
+     * VALID and the only trace is a WARN on every boot.
+     */
+    private suspend fun flagRejectedSystemKey(vendor: AIVendor, apiKey: String?, error: String) {
+        val flagged = apiKey != null && try {
+            systemApiKeyService.markSystemApiKeyInvalid(vendor, apiKey)
+        } catch (e: Exception) {
+            logger.warn(e) { "Could not mark the ${vendor.name} system API key invalid" }
+            false
+        }
+        logger.error {
+            "System ${vendor.name} API key rejected by the vendor: $error" +
+                    if (flagged) " — marked INVALID, rotate it in the admin panel" else ""
+        }
     }
 
     // Provider-id (retrieval-server /embedding-providers, LiteLLM-shaped) ->
