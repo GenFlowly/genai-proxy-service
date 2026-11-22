@@ -139,8 +139,6 @@ struct DebugConversationScroll: ViewModifier {
     }
 }
 
-#endif
-
 extension DebugFixtures {
     /// A one-response turn from a shared activity fixture: its log, live state,
     /// stop reason and cited sources, with a short placeholder answer.
@@ -181,3 +179,5 @@ extension DebugFixtures {
         #"{"v":2,"at":5174,"type":"turn.end","duration_ms":5174,"outcome":"completed","cited":[1]}"#,
     ].compactMap { JSONValue.parse($0).flatMap(ActivityEvent.init(json:)) }
 }
+
+#endif
