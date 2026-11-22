@@ -112,7 +112,7 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         summary, published = await self._run(_fake_resolve)
 
         kinds = [next(iter(ev)) for _, ev, _ in published if not _is_terminal(ev)]
-        # thinking_step, content, usage streamed before the terminal event
+        # activity, content, usage streamed before the terminal event
         self.assertIn("content", [k for k in kinds])
         content = "".join(ev["content"] for _, ev, _ in published if "content" in ev)
         self.assertEqual(content, "Hello world")
@@ -130,16 +130,21 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(summary["error"])
         self.assertNotIn("llm_credentials", summary)
 
-    async def test_thinking_duration_precedes_the_first_content_chunk(self):
-        # Clients only show "Thought for Ns" when this event arrives.
+    async def test_the_activity_log_opens_and_closes_the_run_once(self):
+        # One recorder spans the whole run: a single turn.start first, a single
+        # turn.end after the graph finished, both before the terminal event.
         _, published = await self._run(_fake_resolve)
 
-        kinds = [next(iter(ev)) for _, ev, term in published if not term]
-        self.assertIn("thinking_duration_ms", kinds)
-        self.assertLess(kinds.index("thinking_duration_ms"), kinds.index("content"))
-        durations = [ev["thinking_duration_ms"] for _, ev, _ in published if "thinking_duration_ms" in ev]
-        self.assertEqual(len(durations), 1)
-        self.assertGreaterEqual(durations[0], 0)
+        activity = [ev["activity"] for _, ev, term in published if not term and "activity" in ev]
+        kinds = [a["type"] for a in activity]
+        self.assertEqual(kinds[0], "turn.start")
+        self.assertEqual(kinds.count("turn.start"), 1)
+        self.assertEqual(kinds[-1], "turn.end")
+        self.assertEqual(kinds.count("turn.end"), 1)
+        self.assertEqual(activity[-1]["outcome"], "completed")
+        last_activity = max(i for i, (_, ev, _) in enumerate(published) if "activity" in ev)
+        terminal = next(i for i, (_, _, term) in enumerate(published) if term)
+        self.assertLess(last_activity, terminal)
 
     async def test_graph_error_becomes_error_status(self):
         summary, published = await self._run(_fake_resolve_boom)

@@ -28,13 +28,9 @@ class StreamChunkNdjsonTest {
     }
 
     @Test
-    fun `thinking step embeds raw object`() {
-        assertEquals("{\"t\":\"ks\",\"v\":{\"node\":\"n\"}}\n", StreamChunk.ThinkingStep("{\"node\":\"n\"}").toNdjsonFrame())
-    }
-
-    @Test
-    fun `thinking duration is a number`() {
-        assertEquals("{\"t\":\"kd\",\"v\":1200}\n", StreamChunk.ThinkingDuration(1200L).toNdjsonFrame())
+    fun `activity event embeds the raw object`() {
+        val event = "{\"v\":2,\"at\":0,\"type\":\"turn.start\"}"
+        assertEquals("{\"t\":\"ac\",\"v\":$event}\n", StreamChunk.Activity(event).toNdjsonFrame())
     }
 
     @Test

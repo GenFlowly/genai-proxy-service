@@ -76,6 +76,13 @@ class SpawnAgentTool(GraphTool):
     parameters = {
         "type": "object",
         "properties": {
+            "purpose": {
+                "type": "string",
+                "description": (
+                    "One short sentence for the user: what this delegated task "
+                    "should find out and why you need it."
+                ),
+            },
             "prompt": {
                 "type": "string",
                 "description": (
@@ -91,7 +98,7 @@ class SpawnAgentTool(GraphTool):
                 ),
             },
         },
-        "required": ["prompt"],
+        "required": ["purpose", "prompt"],
     }
 
     async def run(self, args: dict, context: ToolContext) -> ToolResult:

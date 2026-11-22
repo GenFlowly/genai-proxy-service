@@ -56,17 +56,9 @@ enum ConversationService {
                     messageId: resp.messageId ?? "msg-\(index)-\(respIndex)",
                     previousMessageId: item.promptMessageId,
                     isLoading: resp.inFlight,
-                    // Persisted raw running/done events fold into the same per-node list
-                    // the live stream builds; a step that never finished must not pulse
-                    // forever in a historical view.
-                    thinkingStepList: resp.thinkingSteps
-                        .reduce([ThinkingStep]()) { applyThinkingStep($0, $1) }
-                        .map { step in
-                            var done = step
-                            if done.status == "running" { done.status = "done" }
-                            return done
-                        },
-                    thinkingDurationMs: resp.thinkingDurationMs,
+                    // An in-flight placeholder's log continues over the reattach stream,
+                    // which replays it from the start.
+                    activity: resp.inFlight ? [] : resp.activity,
                     stopReason: resp.stopReason,
                     webSources: resp.webSources,
                     generatedAttachments: resp.generatedAttachments,

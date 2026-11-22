@@ -180,7 +180,7 @@ class CredentialTests(unittest.IsolatedAsyncioTestCase):
 class SourceTests(unittest.IsolatedAsyncioTestCase):
     """Structured sources are the one citation path for all tools: the host
     numbers them turn-globally, renders them into the tool message the model
-    reads, and returns the {index,title,url} snapshot the streaming layer emits
+    reads, and returns the {index,title,url,favicon?,published_date?} snapshot the streaming layer emits
     as web_sources — so inline [n] markers in the answer resolve to links."""
 
     async def test_sources_are_numbered_and_rendered_into_the_tool_message(self):
@@ -195,9 +195,10 @@ class SourceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("snippet a", msg)
         self.assertIn("[2] B (https://b)", msg)
         self.assertIn("published 2026-09-01", msg)
+        # The publish date rides with the numbered source for the client too.
         self.assertEqual(out["tool_sources"], [
             {"index": 1, "title": "A", "url": "https://a"},
-            {"index": 2, "title": "B", "url": "https://b"},
+            {"index": 2, "title": "B", "url": "https://b", "published_date": "2026-09-01"},
         ])
 
     async def test_numbering_continues_across_rounds(self):
@@ -354,7 +355,7 @@ class HarnessStateTests(unittest.IsolatedAsyncioTestCase):
     """The executor is the host side of the harness contract: tool
     state_patches land in scratch, tool-incurred LLM spend lands in usage,
     the scratch-FS namespace is pinned, and an updated todo list rides the
-    trace entry (→ the thinking_step event → proxy persistence)."""
+    trace entry (→ the activity log's tools step → proxy persistence)."""
 
     async def test_state_patch_lands_in_scratch_and_namespace_is_pinned(self):
         class _Patcher(_Recorder):
@@ -692,6 +693,99 @@ class HardSearchCapTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ActivityFactsTests(unittest.IsolatedAsyncioTestCase):
+    """The facts each call records for the activity panel: identity, order,
+    how the budget treated it, how long it took and what came back."""
+
+    @staticmethod
+    def _searches(n, start=1):
+        return [{"id": f"call-{i}", "name": "web_search", "args": {"query": f"q{i}"}}
+                for i in range(start, start + n)]
+
+    async def test_each_call_records_identity_order_mode_and_result(self):
+        tool = _Recorder("web_search", sources=[Source(title="A", url="https://a.example")],
+                         content="Web search results for 'q1'.")
+        out = await _run(_state(self._searches(1), ["web_search"]), [tool])
+
+        call = out["trace"][0]["calls"][0]
+        self.assertEqual(call["id"], "call-1")
+        self.assertEqual(call["seq"], 1)
+        self.assertEqual(call["mode"], "run")
+        self.assertIsInstance(call["duration_ms"], int)
+        self.assertGreaterEqual(call["duration_ms"], 0)
+        self.assertEqual(call["result_count"], 1)
+        self.assertEqual(call["result_excerpt"], "Web search results for 'q1'.")
+
+    async def test_budget_modes_are_recorded_per_call(self):
+        tool = _Recorder("web_search")
+        out = await _run(_state(self._searches(5), ["web_search"]), [tool])
+
+        calls = out["trace"][0]["calls"]
+        self.assertEqual([c["mode"] for c in calls], ["run", "run", "run", "skip", "skip"])
+        self.assertEqual([c["seq"] for c in calls], [1, 2, 3, 4, 5])
+        self.assertEqual(calls[3]["duration_ms"], 0)
+        self.assertTrue(calls[3]["result_excerpt"].startswith("Web search skipped"))
+        self.assertEqual(out["trace"][0]["budget"], {"used": 3, "max": 5})
+
+    async def test_calls_past_the_hard_cap_are_exhausted(self):
+        state = _state(self._searches(2), ["web_search"])
+        state["scratch"] = {"web_search_calls": 5}
+        out = await _run(state, [_Recorder("web_search")])
+
+        self.assertEqual([c["mode"] for c in out["trace"][0]["calls"]], ["exhausted", "exhausted"])
+        self.assertEqual(out["trace"][0]["budget"], {"used": 5, "max": 5})
+
+    async def test_no_budget_when_the_round_made_no_search(self):
+        out = await _run(_state([{"id": "1", "name": "t"}], ["t"]), [_Recorder("t")])
+        self.assertNotIn("budget", out["trace"][0])
+
+    async def test_the_trace_no_longer_carries_flattened_summaries(self):
+        out = await _run(_state(self._searches(1), ["web_search"]), [_Recorder("web_search")])
+        self.assertEqual(set(out["trace"][0]), {"node", "calls", "budget"})
+
+    async def test_icon_and_date_ride_with_each_numbered_source(self):
+        tool = _Recorder("web_search", sources=[
+            Source(title="A", url="https://a.example/x", published_date="2026-03-01",
+                   favicon="https://a.example/favicon.ico"),
+            Source(title="B", url="https://b.example/y"),
+        ])
+        out = await _run(_state(self._searches(1), ["web_search"]), [tool])
+
+        expected = [
+            {"index": 1, "title": "A", "url": "https://a.example/x",
+             "favicon": "https://a.example/favicon.ico", "published_date": "2026-03-01"},
+            {"index": 2, "title": "B", "url": "https://b.example/y"},
+        ]
+        self.assertEqual(out["trace"][0]["calls"][0]["sources"], expected)
+        self.assertEqual(out["tool_sources"], expected)
+
+    async def test_a_failed_call_has_an_error_and_no_result(self):
+        tool = _Recorder("web_search", raises=RuntimeError("provider down"))
+        out = await _run(_state(self._searches(1), ["web_search"]), [tool])
+
+        call = out["trace"][0]["calls"][0]
+        self.assertEqual(call["error"], "provider down")
+        self.assertIsNone(call["result_count"])
+        self.assertIsNone(call["result_excerpt"])
+
+    async def test_every_finished_call_is_reported_live(self):
+        reported = []
+
+        async def capture(facts):
+            reported.append(facts)
+
+        tool = _Recorder("web_search", sources=[Source(title="A", url="https://a")])
+        with patch.object(tool_executor_module, "report_call", capture):
+            await _run(_state(self._searches(4), ["web_search"]), [tool])
+
+        self.assertEqual(sorted(r["seq"] for r in reported), [1, 2, 3, 4])
+        by_seq = {r["seq"]: r for r in reported}
+        self.assertEqual(by_seq[1]["id"], "call-1")
+        self.assertEqual(by_seq[1]["result_count"], 1)
+        self.assertEqual(by_seq[4]["mode"], "skip")
+        self.assertEqual(set(by_seq[1]), {"id", "seq", "name", "mode", "duration_ms", "result_count", "error"})
 
 
 class LookupPoolIntegrationTests(unittest.IsolatedAsyncioTestCase):

@@ -2,7 +2,7 @@
 
 **Effective date:** November 7, 2026
 
-**Last updated:** November 14, 2026
+**Last updated:** November 21, 2026
 
 Unbiase AI ("Unbiase AI", "we", "us") is operated by Genflowly, based in Seattle, Washington, United States. This policy explains what we collect when you use our web app at genflowly.com, our iOS app and our developer API, where that information goes, and the choices you have.
 
@@ -213,6 +213,8 @@ We don't ask you to provide sensitive information. If you include it in your con
 | **Apple** | iOS app distribution | As described in Apple's own terms. We don't send it your content. |
 
 In Pay-as-you-go, the providers in section 2.2 will also process your content on our behalf.
+
+**Website icons.** When an answer used web search, the app shows each source's small site icon, which your browser or phone loads directly from that website. Like opening any web page, this tells the site your IP address and that its icon was requested, which can suggest that your conversation involved it. No conversation text is sent, and sites whose icons can't be loaded show a letter instead.
 
 These companies process your information under their data protection terms with us. We may also disclose information if the law requires it, to protect people's rights and safety, or as part of a merger or sale of our business, in which case this policy continues to apply unless we notify you otherwise.
 

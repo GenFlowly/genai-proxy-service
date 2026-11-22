@@ -233,6 +233,14 @@ class LookupPoolTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotEqual(args_key({"query": "q", "topic": "news"}), args_key({"query": "q"}))
 
+    def test_args_key_ignores_the_explanatory_purpose(self):
+        # Two runs that search the same thing for different stated reasons still
+        # fetch the same results, so the pool must treat them as one lookup.
+        self.assertEqual(
+            args_key({"query": "q", "purpose": "Check the price."}),
+            args_key({"query": "q", "purpose": "Compare vendors."}),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

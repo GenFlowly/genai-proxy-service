@@ -307,11 +307,10 @@ final class ConversationStore: ObservableObject {
                 self?.updateMessage(blockId: blockId, matching: ids) { $0.text = "" }
             },
             onStopReason: { [weak self] reason in self?.updateMessage(blockId: blockId, matching: ids) { $0.stopReason = reason } },
-            onThinkingStep: { [weak self] step in
+            onActivity: { [weak self] event in
                 gotContent = true
-                self?.updateMessage(blockId: blockId, matching: ids) { $0.thinkingStepList = applyThinkingStep($0.thinkingStepList, step) }
+                self?.updateMessage(blockId: blockId, matching: ids) { $0.activity.append(event) }
             },
-            onThinkingDuration: { [weak self] ms in self?.updateMessage(blockId: blockId, matching: ids) { $0.thinkingDurationMs = ms } },
             onWebSources: { [weak self] sources in self?.updateMessage(blockId: blockId, matching: ids) { $0.webSources = sources } },
             onGeneratedAttachments: { [weak self] refs in
                 self?.updateMessage(blockId: blockId, matching: ids) { $0.generatedAttachments = ($0.generatedAttachments ?? []) + refs }
@@ -646,15 +645,11 @@ final class ConversationStore: ObservableObject {
         }
     }
 
-    /// A reply frozen by Stop: no longer loading, marked stopped, no step left pulsing.
+    /// A reply frozen by Stop: no longer loading, marked stopped. The activity panel
+    /// reads its open steps as stopped from that alone.
     private static func markStopped(_ message: inout Message) {
         message.isLoading = false
         message.stopReason = StopReasonNote.cancelled
-        message.thinkingStepList = message.thinkingStepList.map { step in
-            var closed = step
-            if closed.status == "running" { closed.status = "done" }
-            return closed
-        }
     }
 
     private func latestInstruction() -> InstructionResponse? {
@@ -721,12 +716,6 @@ final class ConversationStore: ObservableObject {
             flushText()
             update {
                 $0.isLoading = false
-                // A finished reply's interrupted step must not pulse on.
-                $0.thinkingStepList = $0.thinkingStepList.map { step in
-                    var closed = step
-                    if closed.status == "running" { closed.status = "done" }
-                    return closed
-                }
                 if let reason { $0.error = reason }
                 if let stopReason { $0.stopReason = stopReason }
             }
@@ -739,15 +728,13 @@ final class ConversationStore: ObservableObject {
                 if Date().timeIntervalSince(lastFlush) >= 0.04 { flushText() }
             },
             onContentReset: {
-                // Streamed text was a tool-call preamble — it stays visible in the thinking
-                // flow as the generator step's `reasoning`; clear and restart.
+                // Streamed text was a tool-call preamble — it stays visible in the activity
+                // log as the llm step's `reasoning`; clear and restart.
                 accumulatedText = ""
                 flushText()
             },
             onStopReason: { reason in update { $0.stopReason = reason } },
-            onThinking: { step in update { $0.thinkingSteps.append(step) } },
-            onThinkingStep: { step in update { $0.thinkingStepList = applyThinkingStep($0.thinkingStepList, step) } },
-            onThinkingDuration: { millis in update { $0.thinkingDurationMs = millis } },
+            onActivity: { event in update { $0.activity.append(event) } },
             onWebSources: { sources in update { $0.webSources = sources } },
             onGeneratedAttachments: { refs in
                 update { message in

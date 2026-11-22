@@ -65,11 +65,7 @@ enum DebugFixtures {
                         Done.
                         """,
                         messageId: "m1",
-                        thinkingStepList: [
-                            { var s = ThinkingStep(node: "n1", name: "Memory", kind: "MEMORY"); s.detail = "Applied 2 core memori(es)"; s.memoriesCore = ["Lives in Bothell"]; return s }(),
-                            { var s = ThinkingStep(node: "n2", name: "Tools", kind: "TOOL"); s.detail = "Executed 1 tool(s)"; s.calls = [ThinkingStepToolCall(name: "web_search", args: [("query", .string("sorting")), ("days", .number("30"))], sources: [WebSource(index: 1, title: "Sorting", url: "https://example.com/sort")])]; return s }()
-                        ],
-                        thinkingDurationMs: 5174,
+                        activity: DebugFixtures.sortingActivity,
                         webSources: [WebSource(index: 1, title: "Sorting algorithms overview", url: "https://example.com/sort")],
                         generatedAttachments: [AttachmentRef(attachmentId: "a1", s3Key: nil, mediaType: "application/pdf", filename: "report.pdf", sizeBytes: 15417)],
                         inputTokens: 4819, outputTokens: 326, totalTokens: 5145, tokensReadFromCache: 2099, costUsd: 0.0205,
@@ -144,3 +140,44 @@ struct DebugConversationScroll: ViewModifier {
 }
 
 #endif
+
+extension DebugFixtures {
+    /// A one-response turn from a shared activity fixture: its log, live state,
+    /// stop reason and cited sources, with a short placeholder answer.
+    static func activityFixtureBlock(_ fixture: JSONValue) -> ConversationBlock {
+        let live = fixture["live"]?.boolean ?? false
+        let stopped = fixture["stop_reason"]?.string
+        var message = Message(
+            aiVendor: .openai,
+            text: live || stopped != nil ? "" : "Two of the three had no buyer data. CCM billing is used by under 5% of eligible practices [1].",
+            messageId: "fixture-1",
+            isLoading: live
+        )
+        message.activity = fixture["events"]?.array?.compactMap(ActivityEvent.init(json:)) ?? []
+        message.webSources = fixture["web_sources"]?.array?.compactMap(WebSource.init(json:)) ?? []
+        message.stopReason = stopped
+        message.model = "gpt-5.4-nano"
+        return ConversationBlock(
+            conversationBlockId: "fixture-block",
+            prompt: "Those three wedges were guesses. Which of them actually have buyer data?",
+            responseMessages: [message],
+            isLoading: live,
+            status: live ? .draft : .resolved
+        )
+    }
+
+    /// A short activity log for the fixture conversation: memory, one search, the answer.
+    static let sortingActivity: [ActivityEvent] = [
+        #"{"v":2,"at":0,"type":"turn.start"}"#,
+        #"{"v":2,"at":0,"type":"step.start","id":"m:1","kind":"memory","node":"m","name":"Memory"}"#,
+        #"{"v":2,"at":300,"type":"step.end","id":"m:1","kind":"memory","node":"m","name":"Memory","duration_ms":300,"counts":{"core":2,"recalled":0},"memories":{"core":["Prefers short answers.","Writes Swift and TypeScript."],"recalled":[]}}"#,
+        #"{"v":2,"at":300,"type":"step.start","id":"g:1","kind":"llm","node":"g","name":"Agent"}"#,
+        #"{"v":2,"at":1500,"type":"step.end","id":"g:1","kind":"llm","node":"g","name":"Agent","duration_ms":1200,"outcome":"tool_calls","reasoning":"I'll check a current overview before comparing.","tool_calls":[{"id":"c1","name":"web_search","args":{"purpose":"Find a current overview of sorting algorithms.","query":"sorting algorithms overview"}}]}"#,
+        #"{"v":2,"at":1500,"type":"step.start","id":"t:1","kind":"tools","node":"t","name":"Tools"}"#,
+        #"{"v":2,"at":2900,"type":"step.end","id":"t:1","kind":"tools","node":"t","name":"Tools","duration_ms":1400,"calls":[{"id":"c1","seq":1,"name":"web_search","args":{"purpose":"Find a current overview of sorting algorithms.","query":"sorting algorithms overview"},"mode":"run","duration_ms":1300,"result_count":1,"sources":[{"index":1,"title":"Sorting algorithms overview","url":"https://example.com/sort"}]}],"budget":{"used":1,"max":5}}"#,
+        #"{"v":2,"at":2900,"type":"step.start","id":"g:2","kind":"llm","node":"g","name":"Agent"}"#,
+        #"{"v":2,"at":3600,"type":"step.progress","id":"g:2","first_token_ms":700}"#,
+        #"{"v":2,"at":5174,"type":"step.end","id":"g:2","kind":"llm","node":"g","name":"Agent","duration_ms":2274,"outcome":"answer","first_token_ms":700}"#,
+        #"{"v":2,"at":5174,"type":"turn.end","duration_ms":5174,"outcome":"completed","cited":[1]}"#,
+    ].compactMap { JSONValue.parse($0).flatMap(ActivityEvent.init(json:)) }
+}

@@ -10,7 +10,7 @@ of turn the stream emits ONE more web_sources event holding only the cited
 entries (original indices preserved — clients resolve [n] markers via the
 `index` field, not array position). Consumers treat web_sources as
 last-write-wins, so this single event trims the live panel and what the proxy
-persists, while the thinking trace keeps the full per-call lists.
+persists, while the activity log keeps the full per-call lists.
 
 The graph is faked exactly as in test_streaming_content_reset: the function
 only consumes `astream_events`, so hand-built v2 events exercise the real
@@ -131,6 +131,30 @@ class TrimmingTests(unittest.IsolatedAsyncioTestCase):
             _model_end_event([]),
         ])
         self.assertEqual(_web_sources_events(payloads)[-1], [_SOURCES[2]])
+
+    async def test_turn_end_carries_what_the_answer_cites(self):
+        # The activity log's turn.end names the cited indices, so the panel
+        # never guesses from interim full lists. A preamble's marker and a
+        # marker matching no source are not citations.
+        payloads = await _collect([
+            _stream_event("Checking source [1] again."),
+            _model_end_event(["web_search"]),
+            _executor_end_event(_SOURCES),
+            _stream_event("Answer per [3] and [2], not [9]."),
+            _model_end_event([]),
+        ])
+        turn_end = [p["activity"] for p in payloads if "activity" in p][-1]
+        self.assertEqual(turn_end["type"], "turn.end")
+        self.assertEqual(turn_end["cited"], [2, 3])
+
+    async def test_turn_end_has_an_empty_citation_list_for_an_uncited_answer(self):
+        payloads = await _collect([
+            _executor_end_event(_SOURCES),
+            _stream_event("No citations here."),
+            _model_end_event([]),
+        ])
+        turn_end = [p["activity"] for p in payloads if "activity" in p][-1]
+        self.assertEqual(turn_end["cited"], [])
 
     async def test_everything_cited_emits_no_extra_event(self):
         payloads = await _collect([

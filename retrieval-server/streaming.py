@@ -6,6 +6,9 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
 from dbos._error import DBOSMaxStepRetriesExceeded
 
+from activity import ActivityRecorder
+from activity.recorder import chunk_text, stop_reason_of as _stop_reason_of
+from activity.schema import TURN_COMPLETED, TURN_ERROR
 from encoding_library.observability import count
 from graph.image_normalize import ImageNormalizationError
 from graph.state import RetrievalState
@@ -28,7 +31,7 @@ def _cited_web_sources(sources: list, answer: str) -> Optional[list]:
     answer exists. Consumers treat web_sources as last-write-wins (the client
     replaces its list, the proxy persists the last event), so one trimmed
     event at end of turn is all it takes to show/persist only cited entries —
-    while the thinking trace keeps every per-call result for debugging.
+    while the activity log keeps every per-call result for the panel.
 
     Original `index` values are preserved: the client resolves [n] markers via
     each entry's index field, never array position, so gaps are fine and the
@@ -49,7 +52,6 @@ def _cited_web_sources(sources: list, answer: str) -> Optional[list]:
         return None
     return trimmed
 
-# Runtime primitive of a node type — drives the thinking panel's icon/verbs.
 # (substring set, error_type, user-facing label) — checked in order, first
 # match wins. Substrings are matched against the lowercased exception
 # type+message, which is vendor-agnostic: litellm, langchain and the native
@@ -120,150 +122,6 @@ def user_facing_llm_error(e: Exception, provider: str) -> tuple[str, str]:
     return kind, message
 
 
-def _kind_of(node_type: str) -> str:
-    key = (node_type or "").upper()
-    if key == "MEMORY":
-        return "MEMORY"
-    if key == "TOOL_EXECUTOR":
-        return "TOOL"
-    return "LLM"
-
-
-def _stop_reason_of(output) -> str:
-    """The vendor's raw finish reason for one LLM call, lowercased, or "".
-
-    stop_reason on Anthropic, finish_reason on OpenAI/Gemini — read both so this
-    is vendor-agnostic. Surfaced verbatim to the caller (a refusal, a length cap,
-    a normal end) rather than translated here: the client owns how each reason is
-    worded and how prominently it's shown. A refusal returns empty content and no
-    exception, so without streaming this back the turn would look like a silent
-    blank failure."""
-    meta = getattr(output, "response_metadata", None) or {}
-    reason = meta.get("stop_reason") or meta.get("finish_reason") or ""
-    return reason.lower() if isinstance(reason, str) else ""
-
-
-def _applied_memories(count: int, kind: str) -> str:
-    return f"Applied {count} {kind} {'memory' if count == 1 else 'memories'}"
-
-
-def _fmt_tool_call(call: dict) -> str:
-    """Human-readable call signature for the thinking panel, e.g.
-    web_search(query="...", topic="news") — generic over any tool's args, not
-    just web_search's, so a customer's own declarative tools render the same
-    way. Args are shown in full, untruncated — the query text is often the
-    one thing worth reading a tool call for."""
-    name = call.get("name", "")
-    args = call.get("args") or {}
-    if not args:
-        return name
-    parts = []
-    for k, v in args.items():
-        if isinstance(v, str):
-            parts.append(f'{k}="{v}"')
-        else:
-            parts.append(f"{k}={json.dumps(v, default=str)}")
-    return f"{name}({', '.join(parts)})"
-
-
-def _step_done_payload(node_type: str, output: dict) -> dict:
-    """detail / items / prompt / response of a completed node, from its update."""
-    payload: dict = {}
-    kind = _kind_of(node_type)
-
-    trace = output.get("trace") or []
-    if trace:
-        entry = trace[-1]
-        payload["prompt"] = entry.get("prompt", "")
-        payload["response"] = entry.get("response", "")
-
-    if kind == "TOOL":
-        artifacts = output.get("generated_artifacts", [])
-        sources = output.get("tool_sources", [])
-        # Per-call breakdown (name, args, its own sources/artifacts/error) — see
-        # tool_executor.py. Falls back to [] for any trace predating this field.
-        calls = (trace[-1].get("calls") if trace else None) or []
-        payload["detail"] = f"Executed {len(calls)} tool(s)"
-        payload["calls"] = calls
-        # The agent's current todo checklist, when this round updated it
-        # (write_todos). Rides the thinking_step so the client renders it live
-        # and the proxy persists it with the turn's thinking content.
-        todos = trace[-1].get("todos") if trace else None
-        if todos is not None:
-            payload["todos"] = todos
-        # Back-compat flat view: artifact filenames + cited titles.
-        items = [a.get("filename", "") for a in artifacts]
-        items += [s.get("title", "") for s in sources if s.get("title")]
-        payload["items"] = items
-    elif kind == "MEMORY":
-        block = output.get("memories_block") or ""
-        memories = [line[2:] for line in block.splitlines() if line.startswith("- ")]
-        stats = (output.get("scratch") or {}).get("memory_stats")
-        if stats is not None:
-            core_count = stats.get("core", 0)
-            recalled_count = stats.get("recalled", 0)
-            parts = []
-            if core_count:
-                parts.append(_applied_memories(core_count, "core"))
-            if recalled_count:
-                parts.append(f"recalled {recalled_count} related to this message")
-            payload["detail"] = "; ".join(parts) if parts else "No stored memories to apply"
-            # The block renders core lines first, then recalled. The labeled
-            # split is what current clients render (each group under its own
-            # heading); the flat items list stays for older clients, recalled
-            # first — they are the per-message news.
-            core_items = memories[:core_count]
-            recalled_items = memories[core_count:]
-            payload["memories"] = {"core": core_items, "recalled": recalled_items}
-            payload["items"] = recalled_items + core_items
-        else:
-            payload["detail"] = (
-                _applied_memories(len(memories), "learned") if memories else "No stored memories to apply"
-            )
-            payload["items"] = memories
-    else:
-        # LLM-backed nodes: summarize the well-known output fields.
-        intent = output.get("query_intent")
-        rewritten = output.get("rewritten_query")
-        ranked = output.get("ranked_results")
-        if intent:
-            needs = "yes" if output.get("needs_rewrite") else "no"
-            payload["detail"] = f"Intent: {intent} (needs rewrite: {needs})"
-        elif rewritten:
-            payload["detail"] = f"Rewrote the query to: {rewritten}"
-        elif isinstance(ranked, list):
-            payload["detail"] = f"Kept the {len(ranked)} most relevant result(s)"
-        elif output.get("tool_calls"):
-            # A tool-calling turn. The model may still have written text before
-            # deciding to call tools (its reasoning for searching again, e.g.)
-            # — surface it instead of silently dropping it in favor of the
-            # generic "Calling tools" label.
-            reasoning = (output.get("generated_response") or "").strip()
-            if reasoning:
-                payload["reasoning"] = reasoning
-            calls = output["tool_calls"]
-            labels = [_fmt_tool_call(c) for c in calls if c.get("name")]
-            payload["detail"] = ("Calling tools: " + ", ".join(labels)) if labels else "Calling tools"
-            # Structured form of the same calls, for clients that want to render
-            # name/args separately rather than parsing the label string.
-            payload["tool_calls"] = [
-                {"name": c.get("name", ""), "args": c.get("args") or {}} for c in calls
-            ]
-        elif output.get("generated_response"):
-            payload["detail"] = "Response generated"
-    return payload
-
-
-def _start_label(kind: str, name: str) -> str:
-    return {
-        "RETRIEVAL": f"{name}: searching the knowledge base…",
-        "WEB_SEARCH": f"{name}: searching the web…",
-        "MEMORY": f"{name}: loading what is known about you…",
-        "REFLECTION": f"{name}: generating and reflecting…",
-        "TOOL": f"{name}: running tools…",
-    }.get(kind, f"{name}: thinking…")
-
-
 async def stream_events_dicts(
     state: RetrievalState,
     graph: Any = None,
@@ -276,13 +134,17 @@ async def stream_events_dicts(
     builtin_tool_names: Optional[set[str]] = None,
     thread_id: Optional[str] = None,
     should_stop: Optional[Callable[[], Awaitable[bool]]] = None,
+    recorder: Optional[ActivityRecorder] = None,
 ) -> AsyncIterator[dict]:
     """
     Run a graph and yield outbound stream events as plain dict payloads:
-    {'thinking_step': …}, {'content': …}, {'content_reset': True},
+    {'activity': …}, {'content': …}, {'content_reset': True},
     {'tool_calls': …}, {'web_sources': …}, {'generated_artifacts': …},
-    {'thinking_duration_ms': …}, {'stop_reason': …}, {'usage': …}, or
-    {'error': …, 'error_type': …}.
+    {'stop_reason': …}, {'usage': …}, or {'error': …, 'error_type': …}.
+
+    activity events are the turn's step log for the client's thinking panel
+    (see the activity package); every graph event passes through the turn's
+    ActivityRecorder first.
 
     stop_reason is the vendor's raw finish reason (end_turn / stop / max_tokens /
     refusal / content_filter / …) for the round that ends the turn — streamed
@@ -307,9 +169,8 @@ async def stream_events_dicts(
         node_type_map:   Maps nodeId -> nodeType.
         streaming_nodes: Set of nodeIds whose LLM token output should be streamed
                          as content chunks. Agents with is_streaming=true in DDB config.
-        request_start:   time.monotonic() taken when the HTTP request was received.
-                         Used to emit thinking_duration_ms (request receipt → first
-                         generated token) just before the first content chunk.
+        request_start:   time.monotonic() taken when the HTTP request was received;
+                         the activity log's clock starts there.
         structured_output: True when the request carries a response_schema. Token
                          deltas are then partial JSON (only valid once complete),
                          so per-token streaming is suppressed and the finished
@@ -331,6 +192,10 @@ async def stream_events_dicts(
                          durable /runs path leaves it None — background runs
                          outlive their stream by design and are stopped via
                          their own cancel endpoint.
+        recorder:        The turn's ActivityRecorder when the caller runs several
+                         graph passes as one turn (durable human-input resumes):
+                         the caller then calls finish(). When None, this call
+                         owns a fresh recorder and ends the turn itself.
     """
     if graph is None:
         raise ValueError("stream_events_dicts requires a compiled graph — no fallback available")
@@ -339,6 +204,15 @@ async def stream_events_dicts(
     node_name_map = node_name_map or {}
     streaming_nodes = streaming_nodes or set()
     builtin_tool_names = builtin_tool_names or set()
+    owns_recorder = recorder is None
+    if owns_recorder:
+        recorder = ActivityRecorder(
+            node_type_map=node_type_map,
+            node_name_map=node_name_map,
+            streaming_nodes=streaming_nodes,
+            structured_output=structured_output,
+            started_at=request_start,
+        )
 
     # `state` is the initial RetrievalState dict on a fresh run, but on a durable
     # resume it's a langgraph Command(resume=...) — guard the dict-only accesses.
@@ -396,41 +270,19 @@ async def stream_events_dicts(
                 "Stream event #%d: type=%s node=%s name=%s",
                 event_count, event_type, node, event.get("name", ""),
             )
+            for activity_event in recorder.observe(event):
+                yield {"activity": activity_event}
 
             node_type = node_type_map.get(node, node)
-
-            # Only the node's own runnable (event name == node id) drives the
-            # thinking steps — inner chains repeat the langgraph_node metadata
-            # and previously caused duplicate messages.
             is_node_event = bool(node) and event.get("name") == node
 
             if event_type == "on_chain_start" and is_node_event:
                 logger.info("Stream: node START → %s (type=%s)", node, node_type)
-                kind = _kind_of(node_type)
-                name = node_name_map.get(node) or node_type or node
-                step = {
-                    "node": node,
-                    "name": name,
-                    "kind": kind,
-                    "status": "running",
-                    "label": _start_label(kind, name),
-                }
-                yield {"thinking_step": step}
 
             elif event_type == "on_chain_end" and is_node_event:
                 logger.info("Stream: node END   → %s (type=%s)", node, node_type)
                 output = event.get("data", {}).get("output", {})
                 if isinstance(output, dict):
-                    kind = _kind_of(node_type)
-                    name = node_name_map.get(node) or node_type or node
-                    step = {
-                        "node": node,
-                        "name": name,
-                        "kind": kind,
-                        "status": "done",
-                        **_step_done_payload(node_type, output),
-                    }
-                    yield {"thinking_step": step}
                     # Web sources go to the caller so [n] citation markers in the
                     # generated text can be rendered as links. Emitted as soon as
                     # the search node completes — before generation streams.
@@ -443,9 +295,7 @@ async def stream_events_dicts(
                         # Citable sources any built-in tool surfaced (web_search
                         # today). Already {index, title, url} with turn-global
                         # indices — the full accumulated snapshot, so the answer's
-                        # [n] markers resolve to links. Same event and shape the
-                        # legacy WEB_SEARCH node used to emit, so clients are
-                        # unchanged.
+                        # [n] markers resolve to links.
                         tool_sources = output.get("tool_sources") or []
                         if tool_sources:
                             last_web_sources = tool_sources
@@ -455,9 +305,6 @@ async def stream_events_dicts(
                     if structured_output and node in streaming_nodes:
                         content = output.get("generated_response")
                         if content:
-                            if token_count == 0 and request_start is not None:
-                                thinking_duration_ms = int((time.monotonic() - request_start) * 1000)
-                                yield {"thinking_duration_ms": thinking_duration_ms}
                             token_count += 1
                             answer_parts.append(content)
                             yield {"content": content}
@@ -508,8 +355,8 @@ async def stream_events_dicts(
                         # follows. Tell consumers to discard what they have
                         # accumulated so far: the proxy resets its persistence
                         # buffer and the client clears the visible text. The
-                        # preamble itself is preserved in the thinking step's
-                        # `reasoning` field, so nothing is lost from the panel.
+                        # preamble itself is preserved in the activity log's
+                        # llm step as `reasoning`, so nothing is lost from the panel.
                         answer_parts.clear()
                         yield {"content_reset": True}
                     if not raw_tool_calls:
@@ -527,26 +374,13 @@ async def stream_events_dicts(
                             yield {"stop_reason": stop_reason}
 
             if event_type == "on_chat_model_stream" and node in streaming_nodes and not structured_output:
-                chunk = event["data"].get("chunk")
                 # With tools bound, providers stream tool-call argument deltas as
-                # block lists — extract only the text so raw blocks never leak
-                # into the content stream.
-                if chunk and isinstance(chunk.content, list):
-                    text = "".join(
-                        b.get("text", "") for b in chunk.content
-                        if isinstance(b, dict) and b.get("type") == "text"
-                    )
-                    chunk.content = text
-                if chunk and chunk.content:
-                    if token_count == 0 and request_start is not None:
-                        # Actual response generation begins now — everything up to
-                        # this point (retrieval, ranking, LLM ramp-up) was "thinking"
-                        thinking_duration_ms = int((time.monotonic() - request_start) * 1000)
-                        logger.info("Stream: thinking phase took %d ms", thinking_duration_ms)
-                        yield {"thinking_duration_ms": thinking_duration_ms}
+                # block lists — only the text reaches the content stream.
+                text = chunk_text(event["data"].get("chunk"))
+                if text:
                     token_count += 1
-                    answer_parts.append(chunk.content)
-                    yield {"content": chunk.content}
+                    answer_parts.append(text)
+                    yield {"content": text}
 
         logger.info(
             "Stream: completed — %d events processed, %d tokens emitted",
@@ -565,13 +399,20 @@ async def stream_events_dicts(
         # subset (last-write-wins downstream: live panel trims, proxy persists
         # only these). Skipped on the error path above: a partial answer keeps
         # the full list.
-        trimmed_sources = _cited_web_sources(last_web_sources, "".join(answer_parts))
+        answer = "".join(answer_parts)
+        if last_web_sources:
+            found = {s.get("index") for s in last_web_sources}
+            recorder.cite(int(n) for n in _CITATION_MARKER.findall(answer) if int(n) in found)
+        trimmed_sources = _cited_web_sources(last_web_sources, answer)
         if trimmed_sources is not None:
             logger.info(
                 "Stream: trimming web_sources to cited entries — %d → %d",
                 len(last_web_sources), len(trimmed_sources),
             )
             yield {"web_sources": trimmed_sources}
+        if owns_recorder:
+            for activity_event in recorder.finish(TURN_COMPLETED):
+                yield {"activity": activity_event}
         yield {"usage": usage}
     except Exception as e:
         # The HTTP status is already 200 by now — this counter is the only
@@ -579,6 +420,9 @@ async def stream_events_dicts(
         count("stream_error_total", vendor=_provider)
         logger.error("Stream: unhandled exception — %s", e, exc_info=True)
         kind, message = user_facing_llm_error(e, _provider)
+        if owns_recorder:
+            for activity_event in recorder.finish(TURN_ERROR):
+                yield {"activity": activity_event}
         yield {"error": message, "error_type": kind}
 
 

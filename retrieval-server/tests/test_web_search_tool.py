@@ -87,6 +87,31 @@ class WebSearchToolTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("[1]", result.content)
         self.assertIn("latest news", result.content)
 
+    async def test_site_icons_are_requested_and_only_https_ones_kept(self):
+        tool = WebSearchTool()
+        data = {"results": [
+            {"title": "A", "url": "https://a.example/1", "favicon": " https://a.example/favicon.ico "},
+            {"title": "B", "url": "https://b.example/2", "favicon": "http://b.example/favicon.ico"},
+            {"title": "C", "url": "https://c.example/3", "favicon": None},
+        ]}
+        search = AsyncMock(return_value=data)
+        with patch.object(tool, "_search", search):
+            result = await tool.run({"query": "x"}, _keyed_ctx())
+        self.assertTrue(search.await_args.args[0]["include_favicon"])
+        self.assertEqual([s.favicon for s in result.sources], ["https://a.example/favicon.ico", "", ""])
+        self.assertEqual(result.sources[0].to_dict()["favicon"], "https://a.example/favicon.ico")
+        self.assertNotIn("favicon", result.sources[1].to_dict())
+
+    async def test_purpose_is_required_but_never_sent_to_tavily(self):
+        # The model must say why it searches (the panel shows it); a call that
+        # omits it anyway still runs.
+        tool = WebSearchTool()
+        self.assertIn("purpose", tool.parameters["required"])
+        search = AsyncMock(return_value={"results": []})
+        with patch.object(tool, "_search", search):
+            await tool.run({"query": "x", "purpose": "Check the latest price."}, _keyed_ctx())
+        self.assertNotIn("purpose", search.await_args.args[0])
+
     async def test_domain_scoping_is_passed_to_tavily_and_normalized(self):
         tool = WebSearchTool()
         search = AsyncMock(return_value={"results": []})
@@ -254,7 +279,7 @@ class WebSearchRegistrationTest(unittest.TestCase):
         spec = next(s for s in registry.specs(["web_search"]))
         self.assertEqual(spec["name"], "web_search")
         self.assertIn("query", spec["parameters"]["properties"])
-        self.assertEqual(spec["parameters"]["required"], ["query"])
+        self.assertEqual(spec["parameters"]["required"], ["purpose", "query"])
         # Deliberately unadvertised — models asked for the cap whenever the
         # schema offered one (run() still clamps a value passed anyway).
         self.assertNotIn("max_results", spec["parameters"]["properties"])

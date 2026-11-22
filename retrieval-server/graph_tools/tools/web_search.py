@@ -67,6 +67,13 @@ def _clean_domains(value) -> list[str]:
     return out
 
 
+def _https_url(value) -> str:
+    """Only https icon URLs reach clients: an http image is blocked (iOS App
+    Transport Security) or downgrades the page (mixed content on the web)."""
+    url = value.strip() if isinstance(value, str) else ""
+    return url if url.startswith("https://") else ""
+
+
 def _sources_from_data(data: dict) -> list[Source]:
     """Map Tavily's payload into structured Source objects. Publish dates
     (populated by Tavily on the "news" topic) are surfaced so the model can
@@ -78,6 +85,7 @@ def _sources_from_data(data: dict) -> list[Source]:
             url=(r.get("url") or "").strip(),
             content=(r.get("content") or "").strip(),
             published_date=(r.get("published_date") or "").strip(),
+            favicon=_https_url(r.get("favicon")),
         )
         for r in (data.get("results") or [])
     ]
@@ -108,6 +116,14 @@ class WebSearchTool(GraphTool):
     parameters = {
         "type": "object",
         "properties": {
+            "purpose": {
+                "type": "string",
+                "description": (
+                    "One short sentence for the user: what this search should "
+                    "establish and why you need it, e.g. 'Check whether the funded "
+                    "startups in this space sell to small practices'."
+                ),
+            },
             "query": {
                 "type": "string",
                 "description": (
@@ -160,7 +176,7 @@ class WebSearchTool(GraphTool):
                 "description": "Drop results from these domains.",
             },
         },
-        "required": ["query"],
+        "required": ["purpose", "query"],
     }
 
     async def run(self, args: dict, context: ToolContext) -> ToolResult:
@@ -198,6 +214,9 @@ class WebSearchTool(GraphTool):
             "search_depth": search_depth,
             "topic": topic,
             "include_answer": False,
+            # Each result's site icon, shown next to the source in the client's
+            # activity panel so readers can tell where a result came from.
+            "include_favicon": True,
         }
         if topic == "news":
             try:

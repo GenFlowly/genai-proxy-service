@@ -3,8 +3,8 @@ import { fetchWithRetry } from "../utils/apiUtils";
 import { config } from '../config/env';
 import { endpoints } from '../config/endpoints';
 import { HttpMethod } from '../constants/http';
-import { ConversationBlock, LearnedFact, Message, MessageSender, ThinkingStep, WebSource } from '../models/conversation.models';
-import { applyThinkingStep } from '../utils/thinkingStepUtils';
+import { ConversationBlock, LearnedFact, Message, MessageSender, WebSource } from '../models/conversation.models';
+import { ActivityEvent, isActivityEvent } from '@genflowly/component-library';
 import { AttachmentRef } from '../models/attachment.models';
 import { AIVendor } from '../constants/vendors';
 import { SearchUserResponse } from '../models/user.models';
@@ -38,11 +38,10 @@ interface BackendResponse {
     totalTokens?: number | null;
     tokensReadFromCache?: number | null;
     costUsd?: number | null;
-    thinkingDurationMs?: number | null;
     /** Vendor's raw finish reason for the turn (end_turn / max_tokens / refusal / …) */
     stopReason?: string | null;
-    /** Raw thinking-step events ("ks" chunks) persisted with the message */
-    thinkingSteps?: ThinkingStep[] | null;
+    /** The turn's activity log (the "ac" events), as persisted with the message */
+    activity?: ActivityEvent[] | null;
     webSources?: WebSource[] | null;
     /** Files built-in tools produced during the turn (e.g. generated PDFs) */
     generatedAttachments?: AttachmentRef[] | null;
@@ -154,17 +153,10 @@ export async function getConversation(
                     totalTokens: resp.totalTokens ?? null,
                     tokensReadFromCache: resp.tokensReadFromCache ?? null,
                     costUsd: resp.costUsd ?? null,
-                    thinkingDurationMs: resp.thinkingDurationMs ?? null,
                     stopReason: resp.stopReason ?? null,
-                    // Persisted raw running/done events fold into the same
-                    // per-node list the live "ks" stream builds. Any step
-                    // without a done event (aborted stream) must not pulse
-                    // forever in a historical view.
-                    thinkingStepList: resp.thinkingSteps?.length
-                        ? resp.thinkingSteps
-                            .reduce(applyThinkingStep, [] as ThinkingStep[])
-                            .map(s => s.status === 'running' ? { ...s, status: 'done' as const } : s)
-                        : undefined,
+                    // An in-flight placeholder's log continues over the reattach
+                    // stream, which replays it from the start.
+                    activity: resp.inFlight ? [] : (resp.activity ?? []).filter(isActivityEvent),
                     webSources: resp.webSources ?? null,
                     generatedAttachments: resp.generatedAttachments ?? null,
                     // Always set for historical messages (null = extraction

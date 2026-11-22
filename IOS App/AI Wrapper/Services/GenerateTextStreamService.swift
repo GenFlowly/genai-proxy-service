@@ -33,9 +33,7 @@ struct StreamCallbacks {
     var onDelta: (String) -> Void
     var onContentReset: () -> Void = {}
     var onStopReason: (String) -> Void = { _ in }
-    var onThinking: (String) -> Void = { _ in }            // legacy flat `k`
-    var onThinkingStep: (ThinkingStep) -> Void = { _ in }  // structured `ks`
-    var onThinkingDuration: (Int) -> Void = { _ in }       // `kd`
+    var onActivity: (ActivityEvent) -> Void = { _ in }      // `ac`: one activity log event
     var onWebSources: ([WebSource]) -> Void = { _ in }      // `ws`
     var onGeneratedAttachments: ([AttachmentRef]) -> Void = { _ in }  // `ga`
     var onAwaitingInput: (AwaitingInput) -> Void = { _ in } // `ai` (HITL)
@@ -69,15 +67,10 @@ enum GenerateTextStreamService {
             cb.onContentReset()
         case "sr":
             if let v = msg["v"] as? String, !v.isEmpty { cb.onStopReason(v) }
-        case "k":
-            if let v = msg["v"] as? String { cb.onThinking(v) }
-        case "ks":
-            // Parsed from the raw line: tool-call arguments must keep their key order.
-            if let v = JSONValue.parse(trimmed)?["v"], let step = ThinkingStep(json: v) {
-                cb.onThinkingStep(step)
+        case "ac":
+            if let v = JSONValue.parse(trimmed)?["v"], let event = ActivityEvent(json: v) {
+                cb.onActivity(event)
             }
-        case "kd":
-            if let millis = (msg["v"] as? NSNumber)?.intValue { cb.onThinkingDuration(millis) }
         case "ws":
             if let v = msg["v"], let sources = decode([WebSource].self, from: v), !sources.isEmpty {
                 cb.onWebSources(sources)

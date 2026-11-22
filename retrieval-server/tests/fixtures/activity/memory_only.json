@@ -1,0 +1,82 @@
+{
+  "name": "memory_only",
+  "description": "No tools: memory, then the answer.",
+  "live": false,
+  "stop_reason": null,
+  "events": [
+    {
+      "v": 2,
+      "at": 0,
+      "type": "turn.start"
+    },
+    {
+      "v": 2,
+      "at": 0,
+      "type": "step.start",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory"
+    },
+    {
+      "v": 2,
+      "at": 200,
+      "type": "step.end",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory",
+      "duration_ms": 200,
+      "counts": {
+        "core": 2,
+        "recalled": 0
+      },
+      "memories": {
+        "core": [
+          "Prefers free and open-source tools.",
+          "Asked not to treat past topics as a chosen direction."
+        ],
+        "recalled": []
+      }
+    },
+    {
+      "v": 2,
+      "at": 200,
+      "type": "step.start",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 800,
+      "type": "step.progress",
+      "id": "NODAGENT001:1",
+      "first_token_ms": 600
+    },
+    {
+      "v": 2,
+      "at": 2100,
+      "type": "step.end",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 1900,
+      "outcome": "answer",
+      "developer": {
+        "prompt_excerpt": "Give me a one-line summary of what you know about my preferences."
+      },
+      "first_token_ms": 600
+    },
+    {
+      "v": 2,
+      "at": 2100,
+      "type": "turn.end",
+      "duration_ms": 2100,
+      "outcome": "completed"
+    }
+  ],
+  "web_sources": []
+}

@@ -25,7 +25,8 @@ sealed class StreamChunk {
      * up…"), not answer text, and a fresh generation round follows. Consumers
      * accumulating Content into answer text must discard what they hold: the
      * orchestrator resets its persistence buffer, the web app clears the
-     * visible text. The preamble survives in the thinking step's `reasoning`.
+     * visible text. The preamble survives in the activity log's llm step
+     * (`reasoning`).
      */
     object ContentReset : StreamChunk()
     /**
@@ -36,14 +37,12 @@ sealed class StreamChunk {
      * Persisted on the Message so it survives a reload.
      */
     data class StopReason(val reason: String) : StreamChunk()
-    data class Thinking(val text: String) : StreamChunk()
     /**
-     * Raw JSON of one structured graph-execution step for the thinking panel:
-     * {"node","name","kind","status","label"?,"detail"?,"items"?,"prompt"?,"response"?}
+     * Raw JSON of one activity event (contract v2, retrieval-server
+     * activity/schema.py): {"v","at","type",...}. The turn's events, in order,
+     * are the thinking panel's data; persisted as Message.activityJson.
      */
-    data class ThinkingStep(val json: String) : StreamChunk()
-    /** Request receipt on the retrieval server → first generated token, in ms */
-    data class ThinkingDuration(val millis: Long) : StreamChunk()
+    data class Activity(val json: String) : StreamChunk()
     /** Raw JSON array of tool calls the model made: [{"id","name","args"}] */
     data class ToolCalls(val json: String) : StreamChunk()
     /**
@@ -94,7 +93,7 @@ sealed class StreamChunk {
  *
  * Shared by the streaming `/retrieve` reader and the durable `/runs` reattach
  * stream: both transports emit the identical event vocabulary
- * (content / thinking_step / thinking / thinking_duration_ms / web_sources /
+ * (content / content_reset / stop_reason / activity / web_sources /
  * generated_artifacts / tool_calls / awaiting_input / error / usage). Key
  * precedence and the null/empty guards mirror the original inline reader exactly.
  * (`awaiting_input` is durable-runs-only — the /retrieve stream never emits it.)
@@ -109,15 +108,9 @@ fun parseRetrievalEvent(jsonObj: JsonObject): StreamChunk? = when {
         val reason = jsonObj["stop_reason"]?.jsonPrimitive?.content
         if (!reason.isNullOrBlank()) StreamChunk.StopReason(reason) else null
     }
-    jsonObj.containsKey("thinking_step") ->
-        jsonObj["thinking_step"]?.let { StreamChunk.ThinkingStep(it.toString()) }
-    jsonObj.containsKey("thinking") -> {
-        val thinking = jsonObj["thinking"]?.jsonPrimitive?.content
-        if (!thinking.isNullOrEmpty()) StreamChunk.Thinking(thinking) else null
-    }
-    jsonObj.containsKey("thinking_duration_ms") -> {
-        val millis = jsonObj["thinking_duration_ms"]?.jsonPrimitive?.content?.toLongOrNull()
-        if (millis != null) StreamChunk.ThinkingDuration(millis) else null
+    jsonObj.containsKey("activity") -> {
+        val event = jsonObj["activity"]
+        if (event is JsonObject) StreamChunk.Activity(event.toString()) else null
     }
     jsonObj.containsKey("web_sources") -> {
         val webSources = jsonObj["web_sources"]

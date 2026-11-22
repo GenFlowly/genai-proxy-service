@@ -881,7 +881,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             # call signatures with no stated motive. One narrated sentence per
             # round gives every vendor the "why I'm searching" visibility some
             # models (Grok, often Claude) already provide by habit. The sentence
-            # is surfaced as the thinking step's `reasoning` field and recorded
+            # is surfaced as the activity log's `reasoning` for the round and recorded
             # in loop_messages; tool_executor clears generated_response after
             # each round so it can never stand in for the final answer.
             if state.get("builtin_tools") or state.get("tools"):

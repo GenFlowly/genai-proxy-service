@@ -63,10 +63,15 @@ def _normalize(value):
     return value
 
 
+# Arguments that explain a call to the user but never change what it fetches.
+_NON_FETCH_ARGS = frozenset({"purpose"})
+
+
 def args_key(args: dict) -> str:
     """Two calls with the same key would fetch the same thing: argument order,
-    case and whitespace do not count."""
-    return json.dumps(_normalize(args or {}), sort_keys=True, default=str)
+    case, whitespace and the explanatory `purpose` do not count."""
+    fetch_args = {k: v for k, v in (args or {}).items() if k not in _NON_FETCH_ARGS}
+    return json.dumps(_normalize(fetch_args), sort_keys=True, default=str)
 
 
 def _describe(args: dict) -> str:

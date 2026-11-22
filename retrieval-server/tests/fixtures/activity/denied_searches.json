@@ -1,0 +1,640 @@
+{
+  "name": "denied_searches",
+  "description": "Soft budget 3, hard cap 5: run, note, skip and exhausted calls.",
+  "live": false,
+  "stop_reason": null,
+  "events": [
+    {
+      "v": 2,
+      "at": 0,
+      "type": "turn.start"
+    },
+    {
+      "v": 2,
+      "at": 0,
+      "type": "step.start",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory"
+    },
+    {
+      "v": 2,
+      "at": 200,
+      "type": "step.end",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory",
+      "duration_ms": 200,
+      "counts": {
+        "core": 3,
+        "recalled": 0
+      },
+      "memories": {
+        "core": [
+          "Works as a software engineer.",
+          "Prefers free and open-source tools.",
+          "Asked not to treat past topics as a chosen direction."
+        ],
+        "recalled": []
+      }
+    },
+    {
+      "v": 2,
+      "at": 200,
+      "type": "step.start",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 2000,
+      "type": "step.end",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 1800,
+      "outcome": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_d11",
+          "name": "web_search",
+          "args": {
+            "purpose": "Find self-hosted CRMs that are actively maintained.",
+            "query": "open source CRM self-hosted 2026"
+          }
+        },
+        {
+          "id": "call_d12",
+          "name": "web_search",
+          "args": {
+            "purpose": "Check how active the leading open-source CRM is.",
+            "query": "Twenty CRM release notes"
+          }
+        },
+        {
+          "id": "call_d13",
+          "name": "web_search",
+          "args": {
+            "purpose": "Compare the two older open-source CRMs.",
+            "query": "SuiteCRM vs EspoCRM comparison"
+          }
+        },
+        {
+          "id": "call_d14",
+          "name": "web_search",
+          "args": {
+            "purpose": "Gauge community size.",
+            "query": "open source CRM GitHub stars ranking"
+          }
+        }
+      ],
+      "developer": {
+        "prompt_excerpt": "Which open-source CRM can I self-host on a small VPS?"
+      }
+    },
+    {
+      "v": 2,
+      "at": 2000,
+      "type": "step.start",
+      "id": "NODTOOLS001:1",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools"
+    },
+    {
+      "v": 2,
+      "at": 2000,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_d14",
+        "seq": 4,
+        "name": "web_search",
+        "mode": "skip",
+        "duration_ms": 0,
+        "result_count": 0
+      }
+    },
+    {
+      "v": 2,
+      "at": 3800,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_d12",
+        "seq": 2,
+        "name": "web_search",
+        "mode": "run",
+        "duration_ms": 1800,
+        "result_count": 1
+      }
+    },
+    {
+      "v": 2,
+      "at": 4100,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_d11",
+        "seq": 1,
+        "name": "web_search",
+        "mode": "run",
+        "duration_ms": 2100,
+        "result_count": 2
+      }
+    },
+    {
+      "v": 2,
+      "at": 4300,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_d13",
+        "seq": 3,
+        "name": "web_search",
+        "mode": "run",
+        "duration_ms": 2300,
+        "result_count": 1
+      }
+    },
+    {
+      "v": 2,
+      "at": 4400,
+      "type": "step.end",
+      "id": "NODTOOLS001:1",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools",
+      "duration_ms": 2400,
+      "calls": [
+        {
+          "id": "call_d11",
+          "seq": 1,
+          "name": "web_search",
+          "args": {
+            "purpose": "Find self-hosted CRMs that are actively maintained.",
+            "query": "open source CRM self-hosted 2026"
+          },
+          "mode": "run",
+          "duration_ms": 2100,
+          "result_count": 2,
+          "result_excerpt": "Web search results for 'open source CRM self-hosted 2026'.",
+          "sources": [
+            {
+              "index": 1,
+              "title": "Twenty: the open-source CRM",
+              "url": "https://github.com/twentyhq/twenty",
+              "favicon": "https://github.com/favicon.ico",
+              "published_date": "2026-10-30"
+            },
+            {
+              "index": 2,
+              "title": "Best open-source CRMs in 2026",
+              "url": "https://www.zdnet.com/article/best-open-source-crm-2026/",
+              "favicon": "https://www.zdnet.com/favicon.ico",
+              "published_date": "2026-03-02"
+            }
+          ],
+          "artifacts": [],
+          "error": null
+        },
+        {
+          "id": "call_d12",
+          "seq": 2,
+          "name": "web_search",
+          "args": {
+            "purpose": "Check how active the leading open-source CRM is.",
+            "query": "Twenty CRM release notes"
+          },
+          "mode": "run",
+          "duration_ms": 1800,
+          "result_count": 1,
+          "result_excerpt": "Web search results for 'Twenty CRM release notes'.",
+          "sources": [
+            {
+              "index": 3,
+              "title": "Twenty release notes",
+              "url": "https://twenty.com/releases",
+              "favicon": "https://twenty.com/favicon.ico",
+              "published_date": "2026-11-10"
+            }
+          ],
+          "artifacts": [],
+          "error": null
+        },
+        {
+          "id": "call_d13",
+          "seq": 3,
+          "name": "web_search",
+          "args": {
+            "purpose": "Compare the two older open-source CRMs.",
+            "query": "SuiteCRM vs EspoCRM comparison"
+          },
+          "mode": "run",
+          "duration_ms": 2300,
+          "result_count": 1,
+          "result_excerpt": "Web search results for 'SuiteCRM vs EspoCRM comparison'.",
+          "sources": [
+            {
+              "index": 4,
+              "title": "SuiteCRM vs EspoCRM",
+              "url": "https://www.g2.com/compare/suitecrm-vs-espocrm",
+              "favicon": "https://www.g2.com/favicon.ico"
+            }
+          ],
+          "artifacts": [],
+          "error": null
+        },
+        {
+          "id": "call_d14",
+          "seq": 4,
+          "name": "web_search",
+          "args": {
+            "purpose": "Gauge community size.",
+            "query": "open source CRM GitHub stars ranking"
+          },
+          "mode": "skip",
+          "duration_ms": 0,
+          "result_count": 0,
+          "result_excerpt": "Web search skipped — this turn has already used 3 web search(es). Review the results you already have before searching again.",
+          "sources": [],
+          "artifacts": [],
+          "error": null
+        }
+      ],
+      "budget": {
+        "used": 3,
+        "max": 5
+      }
+    },
+    {
+      "v": 2,
+      "at": 4400,
+      "type": "step.start",
+      "id": "NODAGENT001:2",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 6100,
+      "type": "step.end",
+      "id": "NODAGENT001:2",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 1700,
+      "outcome": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_d21",
+          "name": "web_search",
+          "args": {
+            "purpose": "Check what self-hosting Twenty needs.",
+            "query": "Twenty CRM self-hosting requirements"
+          }
+        },
+        {
+          "id": "call_d22",
+          "name": "web_search",
+          "args": {
+            "purpose": "Check which EspoCRM features cost money.",
+            "query": "EspoCRM pricing extensions"
+          }
+        },
+        {
+          "id": "call_d23",
+          "name": "web_search",
+          "args": {
+            "purpose": "Check whether SuiteCRM 8 is usable.",
+            "query": "SuiteCRM 8 performance"
+          }
+        }
+      ],
+      "reasoning": "I need the self-hosting requirements next.",
+      "developer": {
+        "prompt_excerpt": "Which open-source CRM can I self-host on a small VPS?"
+      }
+    },
+    {
+      "v": 2,
+      "at": 6100,
+      "type": "step.start",
+      "id": "NODTOOLS001:2",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools"
+    },
+    {
+      "v": 2,
+      "at": 6100,
+      "type": "step.call",
+      "id": "NODTOOLS001:2",
+      "call": {
+        "id": "call_d22",
+        "seq": 2,
+        "name": "web_search",
+        "mode": "skip",
+        "duration_ms": 0,
+        "result_count": 0
+      }
+    },
+    {
+      "v": 2,
+      "at": 6100,
+      "type": "step.call",
+      "id": "NODTOOLS001:2",
+      "call": {
+        "id": "call_d23",
+        "seq": 3,
+        "name": "web_search",
+        "mode": "skip",
+        "duration_ms": 0,
+        "result_count": 0
+      }
+    },
+    {
+      "v": 2,
+      "at": 8000,
+      "type": "step.call",
+      "id": "NODTOOLS001:2",
+      "call": {
+        "id": "call_d21",
+        "seq": 1,
+        "name": "web_search",
+        "mode": "note",
+        "duration_ms": 1900,
+        "result_count": 1
+      }
+    },
+    {
+      "v": 2,
+      "at": 8100,
+      "type": "step.end",
+      "id": "NODTOOLS001:2",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools",
+      "duration_ms": 2000,
+      "calls": [
+        {
+          "id": "call_d21",
+          "seq": 1,
+          "name": "web_search",
+          "args": {
+            "purpose": "Check what self-hosting Twenty needs.",
+            "query": "Twenty CRM self-hosting requirements"
+          },
+          "mode": "note",
+          "duration_ms": 1900,
+          "result_count": 1,
+          "result_excerpt": "Web search results for 'Twenty CRM self-hosting requirements'.",
+          "sources": [
+            {
+              "index": 5,
+              "title": "Self-hosting Twenty",
+              "url": "https://twenty.com/developers/self-hosting",
+              "favicon": "https://twenty.com/favicon.ico",
+              "published_date": "2026-09-01"
+            }
+          ],
+          "artifacts": [],
+          "error": null
+        },
+        {
+          "id": "call_d22",
+          "seq": 2,
+          "name": "web_search",
+          "args": {
+            "purpose": "Check which EspoCRM features cost money.",
+            "query": "EspoCRM pricing extensions"
+          },
+          "mode": "skip",
+          "duration_ms": 0,
+          "result_count": 0,
+          "result_excerpt": "Web search skipped — this turn has already used 4 web search(es). Review the results you already have before searching again.",
+          "sources": [],
+          "artifacts": [],
+          "error": null
+        },
+        {
+          "id": "call_d23",
+          "seq": 3,
+          "name": "web_search",
+          "args": {
+            "purpose": "Check whether SuiteCRM 8 is usable.",
+            "query": "SuiteCRM 8 performance"
+          },
+          "mode": "skip",
+          "duration_ms": 0,
+          "result_count": 0,
+          "result_excerpt": "Web search skipped — this turn has already used 4 web search(es). Review the results you already have before searching again.",
+          "sources": [],
+          "artifacts": [],
+          "error": null
+        }
+      ],
+      "budget": {
+        "used": 4,
+        "max": 5
+      }
+    },
+    {
+      "v": 2,
+      "at": 8100,
+      "type": "step.start",
+      "id": "NODAGENT001:3",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 9400,
+      "type": "step.end",
+      "id": "NODAGENT001:3",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 1300,
+      "outcome": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_d31",
+          "name": "web_search",
+          "args": {
+            "purpose": "Confirm Twenty's memory footprint.",
+            "query": "Twenty CRM docker compose memory"
+          }
+        },
+        {
+          "id": "call_d32",
+          "name": "web_search",
+          "args": {
+            "purpose": "Compare EspoCRM's footprint.",
+            "query": "EspoCRM docker image size"
+          }
+        }
+      ],
+      "developer": {
+        "prompt_excerpt": "Which open-source CRM can I self-host on a small VPS?"
+      }
+    },
+    {
+      "v": 2,
+      "at": 9400,
+      "type": "step.start",
+      "id": "NODTOOLS001:3",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools"
+    },
+    {
+      "v": 2,
+      "at": 9400,
+      "type": "step.call",
+      "id": "NODTOOLS001:3",
+      "call": {
+        "id": "call_d32",
+        "seq": 2,
+        "name": "web_search",
+        "mode": "exhausted",
+        "duration_ms": 0,
+        "result_count": 0
+      }
+    },
+    {
+      "v": 2,
+      "at": 11100,
+      "type": "step.call",
+      "id": "NODTOOLS001:3",
+      "call": {
+        "id": "call_d31",
+        "seq": 1,
+        "name": "web_search",
+        "mode": "note",
+        "duration_ms": 1700,
+        "result_count": 1
+      }
+    },
+    {
+      "v": 2,
+      "at": 11200,
+      "type": "step.end",
+      "id": "NODTOOLS001:3",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools",
+      "duration_ms": 1800,
+      "calls": [
+        {
+          "id": "call_d31",
+          "seq": 1,
+          "name": "web_search",
+          "args": {
+            "purpose": "Confirm Twenty's memory footprint.",
+            "query": "Twenty CRM docker compose memory"
+          },
+          "mode": "note",
+          "duration_ms": 1700,
+          "result_count": 1,
+          "result_excerpt": "Web search results for 'Twenty CRM docker compose memory'.",
+          "sources": [
+            {
+              "index": 6,
+              "title": "Twenty docker compose",
+              "url": "https://github.com/twentyhq/twenty/blob/main/packages/twenty-docker/docker-compose.yml",
+              "favicon": "https://github.com/favicon.ico"
+            }
+          ],
+          "artifacts": [],
+          "error": null
+        },
+        {
+          "id": "call_d32",
+          "seq": 2,
+          "name": "web_search",
+          "args": {
+            "purpose": "Compare EspoCRM's footprint.",
+            "query": "EspoCRM docker image size"
+          },
+          "mode": "exhausted",
+          "duration_ms": 0,
+          "result_count": 0,
+          "result_excerpt": "Web search is no longer available this turn: the per-message search limit (5) has been reached. Do not call web_search again.",
+          "sources": [],
+          "artifacts": [],
+          "error": null
+        }
+      ],
+      "budget": {
+        "used": 5,
+        "max": 5
+      }
+    },
+    {
+      "v": 2,
+      "at": 11200,
+      "type": "step.start",
+      "id": "NODAGENT001:4",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 12600,
+      "type": "step.progress",
+      "id": "NODAGENT001:4",
+      "first_token_ms": 1400
+    },
+    {
+      "v": 2,
+      "at": 14000,
+      "type": "step.end",
+      "id": "NODAGENT001:4",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 2800,
+      "outcome": "answer",
+      "developer": {
+        "prompt_excerpt": "Which open-source CRM can I self-host on a small VPS?"
+      },
+      "first_token_ms": 1400
+    },
+    {
+      "v": 2,
+      "at": 14000,
+      "type": "turn.end",
+      "duration_ms": 14000,
+      "outcome": "completed",
+      "cited": [
+        1,
+        5
+      ]
+    }
+  ],
+  "web_sources": [
+    {
+      "index": 1,
+      "title": "Twenty: the open-source CRM",
+      "url": "https://github.com/twentyhq/twenty",
+      "favicon": "https://github.com/favicon.ico",
+      "published_date": "2026-10-30"
+    },
+    {
+      "index": 5,
+      "title": "Self-hosting Twenty",
+      "url": "https://twenty.com/developers/self-hosting",
+      "favicon": "https://twenty.com/favicon.ico",
+      "published_date": "2026-09-01"
+    }
+  ]
+}

@@ -16,7 +16,6 @@ Pinned here:
   * CORE past max_memories is demoted to recall-eligible — never silently lost
   * any recall failure degrades to the CORE-only block — never breaks the turn
   * recall_top_k: 0 (node config) disables recall entirely
-  * the thinking-step payload distinguishes core vs recalled memories
 """
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -24,7 +23,6 @@ from unittest.mock import MagicMock, patch
 
 from graph.nodes import memory as memory_mod
 from graph.nodes.memory import _is_memory_collection, _parse_timestamp, _recency_boost, memory
-from streaming import _step_done_payload
 
 
 def _mem(key: str, kind: str, text: str, updated: str = "2026-01-01T00:00:00Z") -> dict:
@@ -323,68 +321,6 @@ class MemoryCollectionFilterTests(unittest.TestCase):
         # lives in the shared collection's customer_id partition key.
         self.assertFalse(_is_memory_collection("cust-1_memory_voyage3"))
         self.assertFalse(_is_memory_collection("cust-1"))
-
-
-class MemoryThinkingStepTests(unittest.TestCase):
-    """The MEMORY branch of streaming._step_done_payload."""
-
-    def test_distinguishes_core_and_recalled(self):
-        block = (
-            "## What you know about this user\nintro:\n- Core fact A.\n- Core fact B.\n\n"
-            "## Possibly relevant background for this message\nintro:\n- Recalled fact."
-        )
-        payload = _step_done_payload(
-            "MEMORY",
-            {"memories_block": block, "scratch": {"memory_stats": {"core": 2, "recalled": 1}}},
-        )
-        self.assertEqual(
-            payload["detail"],
-            "Applied 2 core memories; recalled 1 related to this message",
-        )
-        # Labeled split for clients that render the two groups
-        self.assertEqual(
-            payload["memories"],
-            {"core": ["Core fact A.", "Core fact B."], "recalled": ["Recalled fact."]},
-        )
-        # Back-compat flat list: recalled items lead — they are the per-message news
-        self.assertEqual(payload["items"][0], "Recalled fact.")
-        self.assertEqual(payload["items"][1:], ["Core fact A.", "Core fact B."])
-
-    def test_nothing_is_capped_or_truncated(self):
-        # Regression: 8 core + 1 recalled used to render as 5 bullets cut at
-        # 120 chars — every memory must survive in full.
-        long = "L" * 300
-        core_lines = "\n".join(f"- Core fact {i}. {long}" for i in range(8))
-        block = (
-            f"## What you know about this user\nintro:\n{core_lines}\n\n"
-            f"## Possibly relevant background for this message\nintro:\n- Recalled fact. {long}"
-        )
-        payload = _step_done_payload(
-            "MEMORY",
-            {"memories_block": block, "scratch": {"memory_stats": {"core": 8, "recalled": 1}}},
-        )
-        self.assertEqual(len(payload["items"]), 9)
-        self.assertEqual(len(payload["memories"]["core"]), 8)
-        self.assertEqual(payload["memories"]["recalled"], [f"Recalled fact. {long}"])
-        self.assertTrue(all(len(m) > 120 for m in payload["items"]))
-
-    def test_core_only_wording(self):
-        block = "## What you know about this user\nintro:\n- Core fact A."
-        payload = _step_done_payload(
-            "MEMORY",
-            {"memories_block": block, "scratch": {"memory_stats": {"core": 1, "recalled": 0}}},
-        )
-        self.assertEqual(payload["detail"], "Applied 1 core memory")
-        self.assertEqual(payload["items"], ["Core fact A."])
-
-    def test_falls_back_to_line_count_without_stats(self):
-        block = "## What you know about this user\nintro:\n- Core fact A."
-        payload = _step_done_payload("MEMORY", {"memories_block": block})
-        self.assertEqual(payload["detail"], "Applied 1 learned memory")
-
-    def test_empty_update_reads_as_no_memories(self):
-        payload = _step_done_payload("MEMORY", {})
-        self.assertEqual(payload["detail"], "No stored memories to apply")
 
 
 if __name__ == "__main__":

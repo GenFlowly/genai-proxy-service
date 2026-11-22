@@ -1,0 +1,224 @@
+{
+  "name": "subagent_call",
+  "description": "A spawn_agent call; the child graph's events never become steps.",
+  "live": false,
+  "stop_reason": null,
+  "events": [
+    {
+      "v": 2,
+      "at": 0,
+      "type": "turn.start"
+    },
+    {
+      "v": 2,
+      "at": 0,
+      "type": "step.start",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory"
+    },
+    {
+      "v": 2,
+      "at": 300,
+      "type": "step.end",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory",
+      "duration_ms": 300,
+      "counts": {
+        "core": 2,
+        "recalled": 1
+      },
+      "memories": {
+        "core": [
+          "Works as a software engineer.",
+          "Prefers free and open-source tools."
+        ],
+        "recalled": [
+          "Rejected three earlier wedge ideas for lacking buyer data."
+        ]
+      }
+    },
+    {
+      "v": 2,
+      "at": 300,
+      "type": "step.start",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 2100,
+      "type": "step.end",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 1800,
+      "outcome": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_s1",
+          "name": "spawn_agent",
+          "args": {
+            "purpose": "Compare the two funded CCM vendors on price and practice size.",
+            "prompt": "Compare ChartSpan and ThoroughCare: pricing model, minimum practice size, and who their typical customer is. Cite sources."
+          }
+        }
+      ],
+      "reasoning": "This needs a side-by-side, so I'll delegate the comparison.",
+      "developer": {
+        "prompt_excerpt": "Which of the two CCM vendors would sell to a three-doctor practice?"
+      }
+    },
+    {
+      "v": 2,
+      "at": 2100,
+      "type": "step.start",
+      "id": "NODTOOLS001:1",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools"
+    },
+    {
+      "v": 2,
+      "at": 11500,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_s1",
+        "seq": 1,
+        "name": "spawn_agent",
+        "mode": "run",
+        "duration_ms": 9400,
+        "result_count": 2
+      }
+    },
+    {
+      "v": 2,
+      "at": 11500,
+      "type": "step.end",
+      "id": "NODTOOLS001:1",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools",
+      "duration_ms": 9400,
+      "calls": [
+        {
+          "id": "call_s1",
+          "seq": 1,
+          "name": "spawn_agent",
+          "args": {
+            "purpose": "Compare the two funded CCM vendors on price and practice size.",
+            "prompt": "Compare ChartSpan and ThoroughCare: pricing model, minimum practice size, and who their typical customer is. Cite sources."
+          },
+          "mode": "run",
+          "duration_ms": 9400,
+          "result_count": 2,
+          "result_excerpt": "ChartSpan sells a done-for-you service to groups of 10+ physicians [1]; ThoroughCare licenses software per practice [2].",
+          "sources": [
+            {
+              "index": 1,
+              "title": "ChartSpan Medical Technologies: customers and pricing",
+              "url": "https://www.chartspan.com/customers",
+              "favicon": "https://www.chartspan.com/favicon.ico",
+              "published_date": "2026-01-15"
+            },
+            {
+              "index": 2,
+              "title": "ThoroughCare pricing",
+              "url": "https://www.thoroughcare.net/pricing",
+              "favicon": "https://www.thoroughcare.net/favicon.ico",
+              "published_date": "2026-02-01"
+            }
+          ],
+          "artifacts": [],
+          "error": null,
+          "details": {
+            "subagent": "general",
+            "subagent_trace": [
+              {
+                "node": "RESPONSE_GENERATOR",
+                "prompt": "Compare ChartSpan and ThoroughCare",
+                "response": ""
+              },
+              {
+                "node": "TOOL_EXECUTOR",
+                "calls": [
+                  {
+                    "name": "web_search",
+                    "args": {
+                      "query": "ChartSpan pricing"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "v": 2,
+      "at": 11500,
+      "type": "step.start",
+      "id": "NODAGENT001:2",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 13000,
+      "type": "step.progress",
+      "id": "NODAGENT001:2",
+      "first_token_ms": 1500
+    },
+    {
+      "v": 2,
+      "at": 14200,
+      "type": "step.end",
+      "id": "NODAGENT001:2",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 2700,
+      "outcome": "answer",
+      "developer": {
+        "prompt_excerpt": "Which of the two CCM vendors would sell to a three-doctor practice?"
+      },
+      "first_token_ms": 1500
+    },
+    {
+      "v": 2,
+      "at": 14200,
+      "type": "turn.end",
+      "duration_ms": 14200,
+      "outcome": "completed",
+      "cited": [
+        1,
+        2
+      ]
+    }
+  ],
+  "web_sources": [
+    {
+      "index": 1,
+      "title": "ChartSpan Medical Technologies: customers and pricing",
+      "url": "https://www.chartspan.com/customers",
+      "favicon": "https://www.chartspan.com/favicon.ico",
+      "published_date": "2026-01-15"
+    },
+    {
+      "index": 2,
+      "title": "ThoroughCare pricing",
+      "url": "https://www.thoroughcare.net/pricing",
+      "favicon": "https://www.thoroughcare.net/favicon.ico",
+      "published_date": "2026-02-01"
+    }
+  ]
+}

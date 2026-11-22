@@ -64,18 +64,12 @@ data class Message(
      */
     val learnedFactsJson: String? = null,
     /**
-     * How long the retrieval server "thought" before response generation began
-     * (request receipt → first generated token), in milliseconds. Assistant
-     * messages only; null for user messages and pre-feature records.
+     * Assistant messages: the turn's activity log, the retrieval server's
+     * `activity` events in stream order (contract v2) — JSON
+     * [{"v":2,"at","type",...}]. The thinking panel's data; clients reduce it
+     * into steps, timings and sources. Null for user messages.
      */
-    val thinkingDurationMs: Long? = null,
-    /**
-     * Assistant messages: the agent graph's thinking-step events for the turn,
-     * as streamed ("ks" chunks) — JSON [{"node","name","kind","status",...}].
-     * Raw running+done events; clients fold them into the per-node step list.
-     * Null for user messages and records predating the feature.
-     */
-    val thinkingStepsJson: String? = null,
+    val activityJson: String? = null,
     /**
      * Assistant messages: the vendor's raw finish reason for the turn
      * (end_turn / stop / max_tokens / refusal / content_filter / …), streamed

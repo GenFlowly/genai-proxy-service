@@ -1,54 +1,50 @@
 package com.genflowly.utils
 
+import com.genflowly.utils.ActivityLog.isMemoryEnd
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 
 /**
  * Memory privacy for shared conversations.
  *
- * A MEMORY thinking step carries the turn author's actual long-term memory
- * texts (`memories` {core, recalled} and the flat `items` fallback). Those are
- * private to the user they were loaded for: any OTHER viewer of the
- * conversation — the owner reading a share recipient's turn, a share
- * recipient, a PUBLIC-link visitor, a logged-out reader — may only learn how
- * many memories were applied. The step's `detail` line already says exactly
- * that ("Applied N core memories; recalled M related to this message"), so
- * redaction removes the content-bearing keys and keeps the counts.
+ * A turn's activity log carries the turn author's long-term memory texts (the
+ * memory step's `memories`) and developer data that can echo them (each llm
+ * step's prompt and response excerpts, a subagent call's own trace in
+ * `details`). Those belong to the user they were loaded for. Any OTHER viewer
+ * of the conversation (the owner reading a share recipient's turn, a share
+ * recipient, a PUBLIC-link visitor, a logged-out reader) learns how many
+ * memories were applied, from the memory step's `counts`, and nothing else.
  */
 object MemoryRedaction {
 
-    /** MEMORY-step keys that carry memory texts rather than counts. */
-    private val CONTENT_KEYS = setOf("memories", "items")
-
     private val json = Json { ignoreUnknownKeys = true }
 
-    /**
-     * Redacts every MEMORY step in a persisted thinking-steps array (the
-     * element parsed from Message.thinkingStepsJson). Non-MEMORY steps and
-     * unexpected shapes pass through unchanged.
-     */
-    fun redactThinkingSteps(steps: JsonElement): JsonElement =
-        if (steps is JsonArray) JsonArray(steps.map(::redactStep)) else steps
+    /** Redacts a persisted activity log (the parsed Message.activityJson) for a non-author viewer. */
+    fun redactActivity(events: JsonElement): JsonElement =
+        if (events is JsonArray) JsonArray(events.map(::redactEvent)) else events
 
     /**
-     * Redacts one live "ks" frame payload (StreamChunk.ThinkingStep.json) for
-     * relaying to a viewer who isn't the turn's author. Returns null when the
-     * payload doesn't parse — the caller must drop the frame rather than relay
-     * content it couldn't inspect.
+     * Redacts one live `ac` frame payload for a non-author viewer. Returns null
+     * when the payload doesn't parse: the caller drops the frame rather than
+     * relay content it couldn't inspect.
      */
-    fun redactThinkingStepJson(stepJson: String): String? {
-        val step = runCatching { json.parseToJsonElement(stepJson) }.getOrNull() ?: return null
-        return redactStep(step).toString()
+    fun redactActivityEventJson(eventJson: String): String? {
+        val event = runCatching { json.parseToJsonElement(eventJson) }.getOrNull() ?: return null
+        return redactEvent(event).toString()
     }
 
-    private fun redactStep(step: JsonElement): JsonElement {
-        if (step !is JsonObject) return step
-        val kind = (step["kind"] as? JsonPrimitive)?.contentOrNull
-        if (kind != "MEMORY") return step
-        return JsonObject(step.filterKeys { it !in CONTENT_KEYS })
+    private fun redactEvent(event: JsonElement): JsonElement {
+        if (event !is JsonObject) return event
+        var out = JsonObject(event - "developer")
+        if (isMemoryEnd(out)) out = JsonObject(out - "memories")
+        val calls = out["calls"] as? JsonArray
+        if (calls != null) {
+            out = JsonObject(out + ("calls" to JsonArray(calls.map { c ->
+                if (c is JsonObject) JsonObject(c - "details") else c
+            })))
+        }
+        return out
     }
 }

@@ -22,6 +22,7 @@ COPY run_events.py .
 COPY runs.py .
 COPY models.py .
 COPY streaming.py .
+COPY activity/ ./activity/
 COPY routes/ ./routes/
 COPY graph/ ./graph/
 COPY graph_tools/ ./graph_tools/

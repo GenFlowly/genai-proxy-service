@@ -6,7 +6,6 @@
 export type {
     WebSource,
     LearnedFact,
-    ThinkingStep,
     Message,
     MessageSender,
     ConversationBlock,

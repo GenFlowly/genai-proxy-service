@@ -58,6 +58,13 @@
     // Disabled
     --color-disabled: #dedede;
     --color-disabled-text: #454545;
+    // Activity panel time phases (mirrors the component library's tokens;
+    // validated for the white response card).
+    --color-activity-memory: #006be8;
+    --color-activity-plan: #b3680a;
+    --color-activity-search: #8a3fc4;
+    --color-activity-reason: #1d8a3a;
+    --color-activity-answer: #1a7fa8;
 
     // Spacing
     --spacing-xs: 0.25rem;
@@ -167,6 +174,12 @@
     // Disabled
     --color-disabled: #48484a;
     --color-disabled-text: #636366;
+    // Validated for the #3a3a3c response card.
+    --color-activity-memory: #0a84ff;
+    --color-activity-plan: #c47a10;
+    --color-activity-search: #a04ed8;
+    --color-activity-reason: #22a040;
+    --color-activity-answer: #2a9ac4;
 }
 
 // SCSS Variables for backwards compatibility

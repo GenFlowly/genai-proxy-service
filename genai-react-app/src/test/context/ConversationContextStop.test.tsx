@@ -149,15 +149,17 @@ describe('ConversationContext Stop', () => {
         expect(mockCancel).toHaveBeenCalledWith('token', expect.any(String));
     });
 
-    test('a reply stopped while thinking keeps its card, steps and stop reason', async () => {
-        streamUntilAborted(args => args[8]?.({ node: 'n1', name: 'Response Generator', status: 'running' }));
+    test('a reply stopped while thinking keeps its card, activity log and stop reason', async () => {
+        const stepStart = { v: 2, at: 40, type: 'step.start', id: 'n1:1', kind: 'llm', node: 'n1', name: 'Response Generator' };
+        streamUntilAborted(args => args[4]?.(stepStart));
         const { getByTestId } = renderTester();
 
         await stop(getByTestId);
 
         const [reply] = latest.responseMessages;
         expect(reply).toMatchObject({ messageId: 'rm1', text: '', isLoading: false, stopReason: 'cancelled' });
-        expect(reply.thinkingStepList).toEqual([expect.objectContaining({ node: 'n1', status: 'done' })]);
+        // The open step stays as streamed; the panel reads it as stopped from the stop reason.
+        expect(reply.activity).toEqual([stepStart]);
     });
 
     describe('a new chat with several vendors', () => {

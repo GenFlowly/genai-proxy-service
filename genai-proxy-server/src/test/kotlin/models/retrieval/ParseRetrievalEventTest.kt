@@ -46,22 +46,25 @@ class ParseRetrievalEventTest {
     }
 
     @Test
-    fun `thinking maps to Thinking`() {
-        assertEquals(StreamChunk.Thinking("pondering"), parse("""{"thinking":"pondering"}"""))
+    fun `activity keeps the raw event object json`() {
+        val chunk = parse("""{"activity":{"v":2,"at":400,"type":"step.start","id":"N:1","kind":"llm","node":"N","name":"Agent"}}""")
+        assertTrue(chunk is StreamChunk.Activity)
+        val event = json.parseToJsonElement((chunk as StreamChunk.Activity).json).jsonObject
+        assertEquals("step.start", event["type"]!!.toString().trim('"'))
+        assertEquals("N:1", event["id"]!!.toString().trim('"'))
     }
 
     @Test
-    fun `thinking_step keeps the raw object json`() {
-        val chunk = parse("""{"thinking_step":{"node":"qa","name":"Query Analyzer","status":"running"}}""")
-        assertTrue(chunk is StreamChunk.ThinkingStep)
-        val stepJson = (chunk as StreamChunk.ThinkingStep).json
-        // Round-trips as a JSON object carrying the node id
-        assertEquals("qa", json.parseToJsonElement(stepJson).jsonObject["node"]!!.toString().trim('"'))
+    fun `an activity payload that is not an object is skipped`() {
+        assertNull(parse("""{"activity":null}"""))
+        assertNull(parse("""{"activity":"step.start"}"""))
     }
 
     @Test
-    fun `thinking_duration_ms maps to ThinkingDuration`() {
-        assertEquals(StreamChunk.ThinkingDuration(4321L), parse("""{"thinking_duration_ms":4321}"""))
+    fun `the retired thinking keys are no longer recognized`() {
+        assertNull(parse("""{"thinking":"pondering"}"""))
+        assertNull(parse("""{"thinking_step":{"node":"qa"}}"""))
+        assertNull(parse("""{"thinking_duration_ms":4321}"""))
     }
 
     @Test

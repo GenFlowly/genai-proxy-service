@@ -36,6 +36,17 @@ A turn with N selected models is N independent graph runs of the same user messa
 - State is in-process (`BoundedCache`, 10-minute TTL); with more than one retrieval machine, siblings landing on different machines simply search as before.
 - Metrics: `lookup_pool_total{tool,status}` (outcomes above), `lookup_pool_wait_duration_seconds{tool}`, and `web_search_total` now counts only calls that reached Tavily. Backend Services dashboard → "Web search, tools, streaming, voice" row: *Web search*, *Web search pool*, *Searches avoided 24h*.
 
+## Activity log (the thinking panel's data)
+
+Every turn streams an activity log next to its content: `{"activity": <event>}` from `stream_events_dicts`, relayed by the proxy as the `{"t":"ac","v":<event>}` NDJSON frame and persisted, in stream order, as `Message.activityJson`. The response card's thinking panel (component library `ActivityPanel`, iOS `ActivityViews.swift`) renders nothing else.
+
+- **One module.** `activity/` is the only code that knows the wire shape: `schema.py` (contract v2, builders, `validate`), `recorder.py` (LangGraph `astream_events` → events; one `ActivityRecorder` per turn, `pause`/`resume` around human-input waits on `/runs`), `facts.py` (`report_call`, a LangGraph custom event a node sends when one tool call finishes), `legacy.py` (v1 `thinkingStepsJson` → v2, used by the one-off history migration).
+- **Nodes record facts, never wording.** The tool executor puts each call's id, order, budget mode (`run` / `note` / `skip` / `exhausted`), duration, result count, result excerpt and numbered sources (with `favicon` and `published_date`) on its trace entry, plus `budget: {used, max}`; LLM nodes keep their prompt and response excerpts. Titles, phases and beats are decided by the clients' reducers.
+- **Events:** `turn.start`, `step.start`, `step.progress` (a streaming llm step's first text), `step.call` (one tool call finished), `step.end` (kind `memory` / `llm` / `tools` / `input`), `turn.end` (with `cited`, the source indices the final answer cites). `at` is milliseconds since the turn started; clients order by array position.
+- **The fixtures are the contract.** `tests/activity_scenarios.py` scripts turns as LangGraph events on a fake clock; `tests/fixtures/activity/*.json` are the logs the recorder writes from them. The component library and the iOS test bundle keep byte-identical copies and test their reducers against them. A deliberate contract change: `REGENERATE_ACTIVITY_FIXTURES=1 .venv/bin/python -m unittest tests.test_activity_recorder`, then copy the files to both clients.
+- **Privacy:** memory texts, developer excerpts and subagent traces in the log belong to the turn's author; the proxy strips them for every other viewer (`MemoryRedaction.kt`).
+- **Tool schemas** ask for a required `purpose` (one sentence for the user: what the call should establish). The tools ignore it and the lookup pool leaves it out of its dedupe key.
+
 ## Third-party calls: retry with exponential backoff
 
 Every outbound call to a third-party API MUST go through `encoding_library.utils.retry` (`@retry`, `retry_call`, or a `RetryingProxy`-wrapped client). Each retry emits `retry_attempt_total{operation}`; giving up emits `retry_exhausted_total{operation}`.
@@ -202,7 +213,7 @@ The agent harness is a **thin code kernel + prompts-as-data**. The kernel
 
 | Piece | Where | What |
 |---|---|---|
-| `write_todos` | `graph_tools/tools/write_todos.py` | the agent's plan as a checklist; full-list replace; current list lands in `scratch["todos"]`, rides the TOOL_EXECUTOR `thinking_step` (`todos` field) and is persisted by the proxy with the turn's thinking JSON |
+| `write_todos` | `graph_tools/tools/write_todos.py` | the agent's plan as a checklist; full-list replace; current list lands in `scratch["todos"]`, rides the tools step of the activity log (`todos` field) and is persisted by the proxy with the turn's `activityJson` |
 | scratch FS | `graph/fs_tools.py` | `fs_write`/`fs_read`/`fs_list` on run-scoped S3 keys `customers/{cid}/agent-fs/{namespace}/…`; one namespace per request, pinned in scratch, shared down the subagent tree |
 | result spill | `tool_executor.py` | tool results over `max_tool_result_chars` (default 8k) spill: full content → scratch FS, head+tail excerpt + fs path → `loop_messages`; messages are never dropped, `tool_call_id` pairing never breaks |
 | compaction | `llm_node.py` | past `compaction_threshold_tokens` (default 40k) older loop rounds fold into an LLM-written summary (durable-step billed, `operation=compaction`), pinned in `scratch["compaction"]`; whole rounds fold as a unit so pairing stays vendor-legal; a failed summarization degrades to clipping and retries next iteration |
