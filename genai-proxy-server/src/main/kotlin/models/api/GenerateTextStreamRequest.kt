@@ -23,7 +23,7 @@ data class GenerateTextStreamRequest(
      * JSON Schema (type=object) the response must conform to. Enforced through
      * the vendor's native structured-output mechanism. Because the JSON is only
      * valid once complete, the stream emits it as a single content chunk when
-     * generation finishes (after any thinking events) rather than token by
+     * generation finishes (after any activity events) rather than token by
      * token. Mutually exclusive with [tools]. Works across all vendors.
      */
     val responseSchema: kotlinx.serialization.json.JsonObject? = null,

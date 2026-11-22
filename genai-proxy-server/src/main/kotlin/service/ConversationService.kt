@@ -144,7 +144,7 @@ class ConversationService(
                     if (nextMsg.role == "assistant") {
                         val config = nextMsg.aiConfig.firstOrNull()
                         val vendor = config?.aiVendor?.name
-                        // Memory privacy: the MEMORY thinking step and the learned
+                        // Memory privacy: the activity log's memory step and the learned
                         // facts carry the turn author's actual memory texts
                         // (assistant messages inherit the author's customerId).
                         // Only that author gets the contents; every other viewer —
@@ -165,11 +165,10 @@ class ConversationService(
                                 reasoningTokens = nextMsg.reasoningTokens,
                                 costUsd = nextMsg.costUsd,
                                 reasoningCostUsd = nextMsg.reasoningCostUsd,
-                                thinkingDurationMs = nextMsg.thinkingDurationMs,
                                 stopReason = nextMsg.stopReason,
-                                thinkingSteps = nextMsg.thinkingStepsJson?.let {
+                                activity = nextMsg.activityJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
-                                }?.let { if (viewerIsAuthor) it else MemoryRedaction.redactThinkingSteps(it) },
+                                }?.let { if (viewerIsAuthor) it else MemoryRedaction.redactActivity(it) },
                                 learnedFacts = if (viewerIsAuthor) nextMsg.learnedFactsJson?.let {
                                     runCatching { webSourcesJsonParser.parseToJsonElement(it) }.getOrNull()
                                 } else null,

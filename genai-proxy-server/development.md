@@ -431,3 +431,11 @@ before a user report surfaced it.
   retry loop, timeout raise) ships with a tracked follow-up issue AND an alert
   that fires if the defect persists — a stopgap with neither silently becomes
   the status quo.
+
+## Activity log relay and persistence
+
+The retrieval server's `{"activity": …}` stream events (contract v2, see `retrieval-server/development.md`) become `StreamChunk.Activity`, are relayed to clients as the `{"t":"ac","v":…}` NDJSON frame, and are persisted in stream order as `Message.activityJson` (read back as `GenerateTextResponse.activity`).
+
+- **Size:** `utils/ActivityLog.kt` keeps the stored log under 250 KB (the item shares DynamoDB's 400 KB limit with the message), shrinking in a fixed order and stopping at the first step that fits: developer excerpts, then result excerpts, then sources beyond 10 per call, then argument strings over 500 chars, then memory texts (counts stay).
+- **Privacy:** for any viewer who is not the turn's author, `utils/MemoryRedaction.kt` strips memory texts (counts stay), developer excerpts and subagent traces, on both the conversation read (`ConversationService`) and the live reattach relay (`RunActivity`). A live frame that doesn't parse is dropped, not relayed.
+- The retired `ks` / `k` / `kd` frames and `thinkingStepsJson` / `thinkingDurationMs` are no longer read or written. Dev history was converted once (`activityJson` added, old attributes kept); prod conversion waits for an explicit go-ahead.

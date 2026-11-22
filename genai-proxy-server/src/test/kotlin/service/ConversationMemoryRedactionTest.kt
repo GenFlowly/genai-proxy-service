@@ -12,6 +12,7 @@ import com.genflowly.utils.MemoryRedaction
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -24,10 +25,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Memory privacy on shared conversations: the MEMORY thinking step's memory
- * texts and the turn's learned facts are visible ONLY to the turn's author.
- * Every other viewer — owner reading a recipient's turn, share recipients,
- * PUBLIC/logged-out — gets the step's count-only detail line and no facts.
+ * Memory privacy on shared conversations: the activity log's memory texts,
+ * its developer excerpts, subagent traces and the turn's learned facts are
+ * visible ONLY to the turn's author. Every other viewer (the owner reading a
+ * recipient's turn, a direct share recipient, a signed-in public-link visitor,
+ * a logged-out reader) gets the memory counts and nothing else of that kind.
  */
 class ConversationMemoryRedactionTest {
 
@@ -39,14 +41,24 @@ class ConversationMemoryRedactionTest {
     private val customerProfileRepo = mockk<CustomerProfileRepository>(relaxed = true)
     private val service = ConversationService(conversationRepo, shareRepo, customerProfileRepo, mockk(relaxed = true), mockk(relaxed = true), ContentFilter(emptyList()))
 
-    private val thinkingStepsJson = """
+    private val activityJson = """
         [
-          {"node":"m1","name":"Memory","kind":"MEMORY","status":"running","label":"Memory: loading what is known about you…"},
-          {"node":"m1","name":"Memory","kind":"MEMORY","status":"done",
-           "detail":"Applied 2 core memori(es); recalled 1 related to this message",
-           "memories":{"core":["Works at Acme","Is vegetarian"],"recalled":["Allergic to penicillin"]},
-           "items":["Allergic to penicillin","Works at Acme","Is vegetarian"]},
-          {"node":"g1","name":"Generate","kind":"LLM","status":"done","detail":"Response generated"}
+          {"v":2,"at":0,"type":"turn.start"},
+          {"v":2,"at":0,"type":"step.start","id":"m1:1","kind":"memory","node":"m1","name":"Memory"},
+          {"v":2,"at":300,"type":"step.end","id":"m1:1","kind":"memory","node":"m1","name":"Memory","duration_ms":300,
+           "counts":{"core":2,"recalled":1},
+           "memories":{"core":["Works at Acme","Is vegetarian"],"recalled":["Allergic to penicillin"]}},
+          {"v":2,"at":300,"type":"step.start","id":"g1:1","kind":"llm","node":"g1","name":"Agent"},
+          {"v":2,"at":1900,"type":"step.end","id":"g1:1","kind":"llm","node":"g1","name":"Agent","duration_ms":1600,
+           "outcome":"tool_calls","reasoning":"Checking the menu.",
+           "tool_calls":[{"id":"c1","name":"spawn_agent","args":{"purpose":"Find options on the menu.","prompt":"Find options"}}],
+           "developer":{"prompt_excerpt":"Is vegetarian. Works at Acme. What can I order?"}},
+          {"v":2,"at":1900,"type":"step.start","id":"t1:1","kind":"tools","node":"t1","name":"Tools"},
+          {"v":2,"at":4000,"type":"step.end","id":"t1:1","kind":"tools","node":"t1","name":"Tools","duration_ms":2100,
+           "calls":[{"id":"c1","seq":1,"name":"spawn_agent","args":{"purpose":"Find options on the menu."},"mode":"run",
+                     "sources":[{"index":1,"title":"Menu","url":"https://cafe.example/menu"}],
+                     "details":{"subagent":"general","subagent_trace":[{"node":"RESPONSE_GENERATOR","prompt":"vegetarian at Acme"}]}}]},
+          {"v":2,"at":5000,"type":"turn.end","duration_ms":5000,"outcome":"completed"}
         ]
     """.trimIndent()
 
@@ -61,7 +73,7 @@ class ConversationMemoryRedactionTest {
     private fun assistantMsg(id: String, seq: Int, prev: String, author: String = owner) = Message(
         messageId = id, conversationId = conv, text = "hi", client = "REACT_APP", role = "assistant",
         customerId = author, sequence = seq, systemPrompt = "", aiConfig = listOf(AIConfig(AIVendor.OPENAI, "gpt-4o")),
-        previousMessageId = prev, thinkingStepsJson = thinkingStepsJson, learnedFactsJson = learnedFactsJson
+        previousMessageId = prev, activityJson = activityJson, learnedFactsJson = learnedFactsJson
     )
 
     private fun stubConversation(messages: List<Message>) {
@@ -76,88 +88,98 @@ class ConversationMemoryRedactionTest {
     private suspend fun fetchResponseAs(viewer: String): com.genflowly.models.GenerateTextResponse =
         service.getConversationHistory(conv, viewer).promptAndResponseList[0].responses!![0]
 
-    private fun memoryDoneStep(resp: com.genflowly.models.GenerateTextResponse): JsonObject =
-        resp.thinkingSteps!!.jsonArray.map { it.jsonObject }
-            .first { it["kind"]?.jsonPrimitive?.content == "MEMORY" && it["status"]?.jsonPrimitive?.content == "done" }
+    private fun events(resp: com.genflowly.models.GenerateTextResponse): List<JsonObject> =
+        resp.activity!!.jsonArray.map { it.jsonObject }
 
-    @Test
-    fun `author sees memory texts and learned facts`() = runTest {
-        stubConversation(listOf(userMsg("u1", 1), assistantMsg("a1", 2, prev = "u1")))
+    private fun JsonObject.str(key: String) = this[key]?.jsonPrimitive?.content
 
-        val resp = fetchResponseAs(owner)
+    private fun end(resp: com.genflowly.models.GenerateTextResponse, kind: String): JsonObject =
+        events(resp).first { it.str("type") == "step.end" && it.str("kind") == kind }
 
-        val step = memoryDoneStep(resp)
-        assertTrue("memories" in step)
-        assertTrue("items" in step)
+    private fun firstCall(resp: com.genflowly.models.GenerateTextResponse): JsonObject =
+        end(resp, "tools")["calls"]!!.jsonArray[0].jsonObject
+
+    private fun assertAuthorView(resp: com.genflowly.models.GenerateTextResponse) {
+        assertTrue("memories" in end(resp, "memory"))
+        assertTrue("developer" in end(resp, "llm"))
+        assertTrue("details" in firstCall(resp))
         assertNotNull(resp.learnedFacts)
     }
 
+    private fun assertCountsOnly(resp: com.genflowly.models.GenerateTextResponse) {
+        val memory = end(resp, "memory")
+        assertFalse("memories" in memory)
+        assertEquals("""{"core":2,"recalled":1}""", memory["counts"].toString())
+        assertFalse(events(resp).any { "developer" in it })
+        assertFalse("details" in firstCall(resp))
+        assertFalse(resp.activity.toString().contains("vegetarian", ignoreCase = true))
+        assertFalse(resp.activity.toString().contains("Acme"))
+        // Everything the panel needs for the story and the evidence survives.
+        assertEquals("Checking the menu.", end(resp, "llm").str("reasoning"))
+        assertEquals(1, firstCall(resp)["sources"]!!.jsonArray.size)
+        assertEquals(Json.parseToJsonElement(activityJson).jsonArray.size, events(resp).size)
+        assertNull(resp.learnedFacts)
+    }
+
     @Test
-    fun `public viewer gets counts only - no memory texts, no learned facts`() = runTest {
+    fun `author sees memory texts, developer data and learned facts`() = runTest {
+        stubConversation(listOf(userMsg("u1", 1), assistantMsg("a1", 2, prev = "u1")))
+        assertAuthorView(fetchResponseAs(owner))
+    }
+
+    @Test
+    fun `logged-out reader gets counts only`() = runTest {
         stubConversation(listOf(userMsg("u1", 1), assistantMsg("a1", 2, prev = "u1")))
         coEvery { shareRepo.getConversationShare(conv, "PUBLIC") } returns ShareRole.VIEW
-
-        val resp = fetchResponseAs("PUBLIC")
-
-        val step = memoryDoneStep(resp)
-        assertFalse("memories" in step)
-        assertFalse("items" in step)
-        assertEquals(
-            "Applied 2 core memori(es); recalled 1 related to this message",
-            step["detail"]?.jsonPrimitive?.content
-        )
-        assertNull(resp.learnedFacts)
-        // Non-MEMORY steps pass through untouched
-        val llmStep = resp.thinkingSteps!!.jsonArray.map { it.jsonObject }
-            .first { it["kind"]?.jsonPrimitive?.content == "LLM" }
-        assertEquals("Response generated", llmStep["detail"]?.jsonPrimitive?.content)
+        assertCountsOnly(fetchResponseAs("PUBLIC"))
     }
 
     @Test
-    fun `direct share recipient is redacted like any non-author`() = runTest {
+    fun `signed-in public-link visitor gets counts only`() = runTest {
+        stubConversation(listOf(userMsg("u1", 1), assistantMsg("a1", 2, prev = "u1")))
+        coEvery { shareRepo.getConversationShare(conv, "PUBLIC") } returns ShareRole.VIEW
+        assertCountsOnly(fetchResponseAs("cust-stranger"))
+    }
+
+    @Test
+    fun `direct share recipient gets counts only`() = runTest {
         stubConversation(listOf(userMsg("u1", 1), assistantMsg("a1", 2, prev = "u1")))
         coEvery { shareRepo.getConversationShare(conv, "cust-viewer") } returns ShareRole.EDIT
-
-        val resp = fetchResponseAs("cust-viewer")
-
-        val step = memoryDoneStep(resp)
-        assertFalse("memories" in step)
-        assertFalse("items" in step)
-        assertNull(resp.learnedFacts)
+        assertCountsOnly(fetchResponseAs("cust-viewer"))
     }
 
     @Test
-    fun `owner is redacted on a turn authored by a share recipient - memories follow the author`() = runTest {
-        // An EDIT recipient wrote this turn, so the MEMORY step loaded THEIR
-        // memories — the owner must not see those texts either.
+    fun `owner gets counts only on a turn a share recipient wrote - memories follow the author`() = runTest {
+        // An EDIT recipient wrote this turn, so the memory step loaded THEIR
+        // memories: the owner must not see those texts either.
         stubConversation(listOf(
             userMsg("u1", 1, author = "cust-editor"),
             assistantMsg("a1", 2, prev = "u1", author = "cust-editor")
         ))
         coEvery { shareRepo.getConversationShare(conv, "cust-editor") } returns ShareRole.EDIT
 
-        val ownerView = fetchResponseAs(owner)
-        assertFalse("memories" in memoryDoneStep(ownerView))
-        assertNull(ownerView.learnedFacts)
-
-        val authorView = fetchResponseAs("cust-editor")
-        assertTrue("memories" in memoryDoneStep(authorView))
-        assertNotNull(authorView.learnedFacts)
+        assertCountsOnly(fetchResponseAs(owner))
+        assertAuthorView(fetchResponseAs("cust-editor"))
     }
 
     @Test
-    fun `redactThinkingStepJson strips memory content, passes other steps, drops garbage`() {
-        val memoryStep = """{"node":"m1","kind":"MEMORY","status":"done","detail":"Applied 1 core memori(es)","memories":{"core":["secret"],"recalled":[]},"items":["secret"]}"""
-        val redacted = MemoryRedaction.redactThinkingStepJson(memoryStep)
-        assertNotNull(redacted)
-        assertFalse(redacted.contains("secret"))
-        assertTrue(redacted.contains("Applied 1 core memori(es)"))
+    fun `a live activity frame is redacted the same way, and garbage is dropped`() {
+        val log = Json.parseToJsonElement(activityJson).jsonArray
+        val memoryEnd = MemoryRedaction.redactActivityEventJson(log[2].toString())
+        assertNotNull(memoryEnd)
+        assertFalse(memoryEnd.contains("Acme"))
+        assertTrue(memoryEnd.contains("\"counts\":{\"core\":2,\"recalled\":1}"))
 
-        val llmStep = """{"node":"g1","kind":"LLM","status":"done","detail":"Response generated"}"""
-        val passedThrough = MemoryRedaction.redactThinkingStepJson(llmStep)
-        assertNotNull(passedThrough)
-        assertTrue(passedThrough.contains("Response generated"))
+        val llmEnd = MemoryRedaction.redactActivityEventJson(log[4].toString())!!
+        assertFalse(llmEnd.contains("developer"))
+        assertTrue(llmEnd.contains("Checking the menu."))
 
-        assertNull(MemoryRedaction.redactThinkingStepJson("not json {"))
+        val toolsEnd = MemoryRedaction.redactActivityEventJson(log[6].toString())!!
+        assertFalse(toolsEnd.contains("subagent_trace"))
+        assertTrue(toolsEnd.contains("https://cafe.example/menu"))
+
+        val start = """{"v":2,"at":0,"type":"turn.start"}"""
+        assertEquals(start, MemoryRedaction.redactActivityEventJson(start))
+        assertNull(MemoryRedaction.redactActivityEventJson("not json {"))
     }
 }

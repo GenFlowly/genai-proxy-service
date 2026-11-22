@@ -32,11 +32,11 @@ import com.genflowly.models.toProviderString
 import com.genflowly.observability.Metrics
 import com.genflowly.observability.metricVendor
 import org.slf4j.LoggerFactory
+import com.genflowly.utils.ActivityLog
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -581,12 +581,11 @@ class GenerationOrchestrator(
             var capturedUsage: StreamChunk.Usage? = null
             var capturedErrorMessage: String? = null
             var capturedErrorType: String? = null
-            var capturedThinkingDurationMs: Long? = null
             var capturedToolCallsJson: String? = null
             var capturedWebSourcesJson: String? = null
             var capturedGeneratedArtifactsJson: String? = null
             var capturedStopReason: String? = null
-            val capturedThinkingSteps = mutableListOf<String>()
+            val capturedActivity = mutableListOf<String>()
             var success = false
             var cancelled = false
             // The durable run this generation added to the conversation's pending
@@ -687,15 +686,14 @@ class GenerationOrchestrator(
                         // The round that just streamed ended in in-graph tool
                         // calls — its text was a preamble, not the answer.
                         // Drop it so the persisted message text holds only the
-                        // final round; the preamble is kept on the thinking
-                        // step (reasoning) inside capturedThinkingSteps.
+                        // final round; the preamble is kept in the activity
+                        // log (the llm step's reasoning) inside capturedActivity.
                         is StreamChunk.ContentReset -> sb.setLength(0)
                         // Last writer wins: only the terminal round emits this,
                         // and after a content_reset any earlier round's reason is
                         // moot — so the final value is the turn's real stop reason.
                         is StreamChunk.StopReason -> capturedStopReason = chunk.reason
-                        is StreamChunk.ThinkingStep -> capturedThinkingSteps.add(chunk.json)
-                        is StreamChunk.ThinkingDuration -> capturedThinkingDurationMs = chunk.millis
+                        is StreamChunk.Activity -> capturedActivity.add(chunk.json)
                         is StreamChunk.ToolCalls -> capturedToolCallsJson = chunk.json
                         is StreamChunk.WebSources -> capturedWebSourcesJson = chunk.json
                         is StreamChunk.GeneratedArtifacts ->
@@ -714,7 +712,6 @@ class GenerationOrchestrator(
                         }
                         is StreamChunk.AwaitingInput ->
                             logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
-                        is StreamChunk.Thinking -> {}
                     }
                     chunk.toNdjsonFrame()?.let { emit(it) }
                 }
@@ -742,7 +739,7 @@ class GenerationOrchestrator(
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
                 // A stopped reply is kept even with no text yet (stopped while
                 // thinking, or after a tool-call preamble was reset), so the
-                // vendor's card and its thinking steps survive a reload.
+                // vendor's card and its activity log survive a reload.
                 if (cancelled || (success && (responseText.isNotEmpty() || capturedToolCallsJson != null))) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
@@ -780,8 +777,7 @@ class GenerationOrchestrator(
                                 config.aiVendor, config.model, it.reasoningTokens
                             )
                         },
-                        thinkingDurationMs = capturedThinkingDurationMs,
-                        thinkingStepsJson = thinkingStepsToJson(capturedThinkingSteps),
+                        activityJson = ActivityLog.toPersistedJson(capturedActivity),
                         stopReason = capturedStopReason
                     )
                     conversationService.addMessageInConversation(responseMessage)
@@ -855,13 +851,6 @@ class GenerationOrchestrator(
 
 }
 
-/**
- * Persisted form of a turn's thinking-step events ("ks" chunks, each already a
- * JSON object). Guards the DDB 400KB item limit: an oversized run (deep graph
- * cycles) keeps every step but drops the bulky prompt/response excerpts.
- */
-private const val MAX_THINKING_STEPS_JSON_CHARS = 250_000
-
 /** Stop reason persisted on a reply the user stopped; the clients show a "you stopped" note. */
 private const val STOP_REASON_CANCELLED = "cancelled"
 
@@ -873,18 +862,6 @@ private fun mergeJsonArrays(existing: String?, incoming: String): String {
             Json.parseToJsonElement(existing).jsonArray + Json.parseToJsonElement(incoming).jsonArray
         ).toString()
     }.getOrElse { incoming }
-}
-
-private fun thinkingStepsToJson(steps: List<String>): String? {
-    if (steps.isEmpty()) return null
-    val full = steps.joinToString(",", "[", "]")
-    if (full.length <= MAX_THINKING_STEPS_JSON_CHARS) return full
-    return runCatching {
-        val stripped = Json.parseToJsonElement(full).jsonArray.map { el ->
-            JsonObject(el.jsonObject.filterKeys { it != "prompt" && it != "response" })
-        }
-        JsonArray(stripped).toString()
-    }.getOrNull()
 }
 
 private fun String.toJsonStringValue(): String = buildString {

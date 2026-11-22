@@ -31,7 +31,7 @@ class GenerationCancelTest {
 
     private val cust = "cust-1"
     private val aiConfig = listOf(AIConfig(aiVendor = AIVendor.OPENAI, model = "gpt-5.4-nano"))
-    private val thinkingStep = """{"node":"n1","name":"Response Generator","kind":"generator","status":"running"}"""
+    private val activityEvent = """{"v":2,"at":120,"type":"step.start","id":"n1:1","kind":"llm","node":"n1","name":"Response Generator"}"""
 
     private val conversationService = mockk<ConversationService>(relaxed = true)
     private val credentialsService = mockk<CustomerCredentialsService>(relaxed = true)
@@ -71,7 +71,7 @@ class GenerationCancelTest {
             )
         } returns "run_1"
         every { runsClient.streamRun("run_1", any()) } returns flow {
-            emit(StreamChunk.ThinkingStep(thinkingStep))
+            emit(StreamChunk.Activity(activityEvent))
             stepRelayed.complete(Unit)
             awaitCancellation()
         }
@@ -80,7 +80,7 @@ class GenerationCancelTest {
     }
 
     @Test
-    fun `a reply stopped while thinking is saved empty, marked cancelled, with its thinking steps`() = runBlocking {
+    fun `a reply stopped while thinking is saved empty, marked cancelled, with its activity log`() = runBlocking {
         coEvery { runsClient.cancelRun("run_1") } returns true
         val result = orchestrator.processTextGenerateStreamRequest(
             aiConfig, "", "", "hi", "conv-1", null, "REACT_APP", cust, clientGenerationId = "gen-1"
@@ -97,7 +97,7 @@ class GenerationCancelTest {
         assertEquals(result.responseMessageId, reply.messageId)
         assertEquals("", reply.text)
         assertEquals("cancelled", reply.stopReason)
-        assertTrue(reply.thinkingStepsJson.orEmpty().contains("Response Generator"))
+        assertEquals("[$activityEvent]", reply.activityJson)
         assertTrue(relayed.last().contains("\"cancelled\""), "terminal frame: ${relayed.last()}")
     }
 

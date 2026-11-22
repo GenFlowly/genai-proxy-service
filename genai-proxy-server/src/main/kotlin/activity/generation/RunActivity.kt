@@ -71,8 +71,8 @@ fun Route.registerRunRoutes(
                 call.respond(HttpStatusCode.NotFound, mapOf("error" to "run is not active for this conversation"))
                 return@get
             }
-            // Memory privacy: the MEMORY step's "ks" frames carry the turn
-            // author's memory texts. The in-flight turn's author is the
+            // Memory privacy: the activity log's memory step and developer
+            // excerpts carry the turn author's memory texts. The in-flight turn's author is the
             // customerId of the conversation's latest persisted message (the
             // turn's user message lands before generation starts, and any
             // already-persisted sibling response inherits the same author).
@@ -80,7 +80,7 @@ fun Route.registerRunRoutes(
             // an unresolvable author redacts rather than leaks.
             val turnAuthor = conversationService.getLatestMessageId(conversationId)
                 ?.let { conversationService.getMessage(conversationId, it)?.customerId }
-            val redactMemorySteps = turnAuthor != customerId
+            val redactForViewer = turnAuthor != customerId
             call.response.header(HttpHeaders.CacheControl, "no-cache, no-transform")
             call.response.header(HttpHeaders.Connection, "keep-alive")
             call.response.header(ResponseHeaders.ACCEL_BUFFERING, "no")
@@ -89,8 +89,8 @@ fun Route.registerRunRoutes(
                     write(" ")  // heartbeat so the client sees TTFB immediately
                     flush()
                     runsClient.streamRun(runId, fromSeq).collect { chunk ->
-                        val safeChunk = if (redactMemorySteps && chunk is StreamChunk.ThinkingStep) {
-                            MemoryRedaction.redactThinkingStepJson(chunk.json)?.let { StreamChunk.ThinkingStep(it) }
+                        val safeChunk = if (redactForViewer && chunk is StreamChunk.Activity) {
+                            MemoryRedaction.redactActivityEventJson(chunk.json)?.let { StreamChunk.Activity(it) }
                         } else chunk
                         safeChunk?.toNdjsonFrame()?.let { write(it); flush() }
                     }

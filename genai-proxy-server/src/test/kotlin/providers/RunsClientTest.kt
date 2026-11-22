@@ -86,7 +86,7 @@ class RunsClientTest {
     @Test
     fun `streamRun parses SSE into StreamChunks and stops at DONE`() = runTest {
         val sse = buildString {
-            append("data: {\"thinking_step\":{\"node\":\"n\"}}\n\n")
+            append("data: {\"activity\":{\"v\":2,\"at\":0,\"type\":\"turn.start\"}}\n\n")
             append("data: {\"content\":\"Hello\"}\n\n")
             append("data: {\"content\":\" world\"}\n\n")
             append("data: {\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"total_tokens\":3}}\n\n")
@@ -104,7 +104,7 @@ class RunsClientTest {
         assertEquals("/runs/run_abc/stream", captured.single().url.encodedPath)
         assertEquals("5", captured.single().url.parameters["from_seq"])
         assertEquals(4, chunks.size)
-        assertTrue(chunks[0] is StreamChunk.ThinkingStep)
+        assertTrue(chunks[0] is StreamChunk.Activity)
         assertEquals(StreamChunk.Content("Hello"), chunks[1])
         assertEquals(StreamChunk.Content(" world"), chunks[2])
         assertEquals(StreamChunk.Usage(1, 2, 3, 0, 0), chunks[3])

@@ -41,8 +41,6 @@ data class GenerateTextResponse(
     val costUsd: Double? = null,
     /** USD spent on the reasoning subset — already included in costUsd, never add the two. */
     val reasoningCostUsd: Double? = null,
-    /** Retrieval-server thinking time (request receipt → first generated token), ms */
-    val thinkingDurationMs: Long? = null,
     /**
      * The vendor's raw finish reason for this turn (end_turn / stop /
      * max_tokens / refusal / content_filter / …). Lets a reloaded conversation
@@ -51,12 +49,11 @@ data class GenerateTextResponse(
      */
     val stopReason: String? = null,
     /**
-     * The agent graph's thinking-step events for this turn, as streamed ("ks"
-     * chunks): [{"node","name","kind","status",...}]. Raw running+done events —
-     * clients fold them into the per-node step list. Null for records
-     * predating the feature.
+     * The turn's activity log (contract v2): the `activity` events as streamed
+     * in `ac` frames. Memory texts and developer data are present only for
+     * the turn's author. Null for records without one.
      */
-    val thinkingSteps: kotlinx.serialization.json.JsonElement? = null,
+    val activity: kotlinx.serialization.json.JsonElement? = null,
     /**
      * Tool calls the model made: [{"id","name","args"}]. Execute them and send the
      * results back via toolResults on the next generate request (with
