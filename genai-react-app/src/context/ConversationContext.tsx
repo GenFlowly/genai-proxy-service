@@ -17,10 +17,9 @@ import {
     IConversationContext,
     IConversationUIContext,
     Message,
-    ThinkingStep,
     WebSource,
 } from '../models/conversation.models'
-import { applyThinkingStep } from '../utils/thinkingStepUtils'
+import { ActivityEvent, appendActivity } from '@genflowly/component-library'
 import { customerKey, StorageSuffix } from '../utils/storageKeys'
 import { AttachmentRef } from '../models/attachment.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
@@ -40,13 +39,12 @@ const newGenerationId = (): string =>
 // waiting for them, before giving up on the conversation id they carry.
 const STOP_HEADERS_TIMEOUT_MS = 30_000
 
-/** A reply frozen by Stop: no longer loading, marked stopped, no step left pulsing. */
+/** A reply frozen by Stop: no longer loading, marked stopped. The activity
+ * panel reads its open steps as stopped from that alone. */
 const markStopped = (m: Message): Message => ({
     ...m,
     isLoading: false,
     stopReason: STOP_REASON_CANCELLED,
-    thinkingStepList: m.thinkingStepList?.map(s =>
-        s.status === 'running' ? { ...s, status: 'done' as const } : s),
 })
 
 /**
@@ -367,12 +365,10 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         onMetadata?: (metadata: StreamMetadata) => void,
         // Added idOverride to support explicit conversation targeting (parallel streams)
         idOverride?: string,
-        onThinking?: (step: string) => void,
+        onActivity?: (event: ActivityEvent) => void,
         signal?: AbortSignal,
-        onThinkingDuration?: (millis: number) => void,
         attachments: AttachmentRef[] = [],
         onWebSources?: (sources: WebSource[]) => void,
-        onThinkingStep?: (step: ThinkingStep) => void,
         onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
         onAwaitingInput?: (payload: AwaitingInput) => void,
         onContentReset?: () => void,
@@ -396,7 +392,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             projectId: (idOverride || conversationIdRef.current) ? undefined : pendingProjectIdRef.current,
             regenerateMessageId,
             generationId,
-        }, onDelta, onMetadata, onThinking, signal, onThinkingDuration, onWebSources, onThinkingStep, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
+        }, onDelta, onMetadata, onActivity, signal, onWebSources, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -492,8 +488,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             onDelta: (c) => { acc += c; gotContent = true; patch(m => ({ ...m, text: acc })) },
                             onContentReset: () => { acc = ''; patch(m => ({ ...m, text: '' })) },
                             onStopReason: (reason) => patch(m => ({ ...m, stopReason: reason })),
-                            onThinkingStep: (s) => { gotContent = true; patch(m => ({ ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], s) })) },
-                            onThinkingDuration: (ms) => patch(m => ({ ...m, thinkingDurationMs: ms })),
+                            onActivity: (event) => { gotContent = true; patch(m => ({ ...m, activity: appendActivity(m.activity, event) })) },
                             onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
                             onGeneratedAttachments: (ga) => patch(m => ({ ...m, generatedAttachments: [...(m.generatedAttachments ?? []), ...ga] })),
                             onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
@@ -864,34 +859,12 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 const instructionVersion = instruction ? instruction.version.toString() : ""
                 const instructionId = selectedInstructionId || ""
 
-                const handleThinking = (step: string) => {
+                const handleActivity = (event: ActivityEvent) => {
                     setConversationBlockList(prev => prev.map(block => {
                         if (block.conversationBlockId !== id) return block
                         const msgs = block.responseMessages.map(m => {
                             if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
-                            return { ...m, thinkingSteps: [...(m.thinkingSteps ?? []), step] }
-                        })
-                        return { ...block, responseMessages: msgs }
-                    }))
-                }
-
-                const handleThinkingStep = (step: ThinkingStep) => {
-                    setConversationBlockList(prev => prev.map(block => {
-                        if (block.conversationBlockId !== id) return block
-                        const msgs = block.responseMessages.map(m => {
-                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
-                            return { ...m, thinkingStepList: applyThinkingStep(m.thinkingStepList ?? [], step) }
-                        })
-                        return { ...block, responseMessages: msgs }
-                    }))
-                }
-
-                const handleThinkingDuration = (millis: number) => {
-                    setConversationBlockList(prev => prev.map(block => {
-                        if (block.conversationBlockId !== id) return block
-                        const msgs = block.responseMessages.map(m => {
-                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
-                            return { ...m, thinkingDurationMs: millis }
+                            return { ...m, activity: appendActivity(m.activity, event) }
                         })
                         return { ...block, responseMessages: msgs }
                     }))
@@ -934,7 +907,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 // The round that just streamed ended in in-graph tool calls —
                 // its text was a preamble, not the answer. Clear it so the
                 // next round starts from empty; the narration stays visible in
-                // the thinking flow (the generator step's `reasoning`).
+                // the activity panel (the round's `reasoning`).
                 const handleContentReset = () => {
                     accumulatedText = ""
                     setConversationBlockList(prev => prev.map(block => {
@@ -978,9 +951,6 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             return {
                                 ...m,
                                 isLoading: false,
-                                // A finished reply's interrupted step must not pulse on.
-                                thinkingStepList: m.thinkingStepList?.map(s =>
-                                    s.status === 'running' ? { ...s, status: 'done' as const } : s),
                                 ...(errorReason ? { error: errorReason } : {}),
                                 ...(stopReason ? { stopReason } : {}),
                             }
@@ -1079,12 +1049,10 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             if (stopRequested.current.has(streamKey)) turnControllers.get(streamKey)?.abort()
                         },
                         idToUse,
-                        handleThinking,
+                        handleActivity,
                         turnControllers.get(streamKey)?.signal,
-                        handleThinkingDuration,
                         attachmentsToUse,
                         handleWebSources,
-                        handleThinkingStep,
                         handleGeneratedAttachments,
                         handleAwaitingInput,
                         handleContentReset,

@@ -1,7 +1,8 @@
 import { HttpMethod } from "../constants/http";
 import { endpoints } from "../config/endpoints";
 import { GenerateTextStreamRequest } from "../models/generateText.models";
-import { ThinkingStep, WebSource } from "../models/conversation.models";
+import { WebSource } from "../models/conversation.models";
+import { ActivityEvent, isActivityEvent } from "@genflowly/component-library";
 import { AttachmentRef } from "../models/attachment.models";
 import { fetchWithRetry } from "../utils/apiUtils";
 
@@ -53,8 +54,8 @@ export interface StreamCallbacks {
      * The generation round that just streamed ended in tool calls executed
      * in-graph — its streamed text was a tool-call preamble ("Let me look
      * up…"), not the answer, and a fresh round follows. Discard the text
-     * accumulated so far; the preamble stays visible in the thinking flow as
-     * the generator step's `reasoning`.
+     * accumulated so far; the preamble stays visible in the activity panel as
+     * the round's `reasoning`.
      */
     onContentReset?: () => void;
     /**
@@ -64,9 +65,8 @@ export interface StreamCallbacks {
      * a silent blank.
      */
     onStopReason?: (reason: string) => void;
-    onThinking?: (step: string) => void;
-    onThinkingStep?: (step: ThinkingStep) => void;
-    onThinkingDuration?: (millis: number) => void;
+    /** One event of the turn's activity log ({"t":"ac"} frame), for the thinking panel. */
+    onActivity?: (event: ActivityEvent) => void;
     onWebSources?: (sources: WebSource[]) => void;
     onGeneratedAttachments?: (attachments: AttachmentRef[]) => void;
     /** A durable run paused for human/client input — render a prompt + reply box. */
@@ -74,7 +74,7 @@ export interface StreamCallbacks {
 }
 
 /**
- * Reads an NDJSON chat stream body ({"t":"c"|"k"|"ks"|"kd"|"ws"|"ga"|"ai"|"err"})
+ * Reads an NDJSON chat stream body ({"t":"c"|"cr"|"sr"|"ac"|"ws"|"ga"|"ai"|"err"|"done"})
  * and dispatches each frame to [cb]. Shared by the live generate-text-stream and
  * the durable-run reattach stream so the frame vocabulary lives in one place.
  */
@@ -98,17 +98,8 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
             else if (msg.t === "sr") {
                 if (typeof msg.v === "string" && msg.v) cb.onStopReason?.(msg.v);
             }
-            else if (msg.t === "k") cb.onThinking?.(msg.v);
-            else if (msg.t === "ks") {
-                // Structured per-node thinking step from the agent graph
-                const step = msg.v;
-                if (step && typeof step === "object" && typeof step.node === "string") {
-                    cb.onThinkingStep?.(step as ThinkingStep);
-                }
-            }
-            else if (msg.t === "kd") {
-                const millis = Number(msg.v);
-                if (Number.isFinite(millis)) cb.onThinkingDuration?.(millis);
+            else if (msg.t === "ac") {
+                if (isActivityEvent(msg.v)) cb.onActivity?.(msg.v);
             }
             else if (msg.t === "ws") {
                 if (Array.isArray(msg.v) && msg.v.length > 0) cb.onWebSources?.(msg.v);
@@ -203,11 +194,9 @@ export async function generateTextStream(
     request: GenerateTextStreamRequest,
     onDelta: (chunk: string) => void,
     onMetadata?: (metadata: StreamMetadata) => void,
-    onThinking?: (step: string) => void,
+    onActivity?: (event: ActivityEvent) => void,
     signal?: AbortSignal,
-    onThinkingDuration?: (millis: number) => void,
     onWebSources?: (sources: WebSource[]) => void,
-    onThinkingStep?: (step: ThinkingStep) => void,
     onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
     onAwaitingInput?: (payload: AwaitingInput) => void,
     onContentReset?: () => void,
@@ -281,9 +270,7 @@ export async function generateTextStream(
         onDelta,
         onContentReset,
         onStopReason,
-        onThinking,
-        onThinkingStep,
-        onThinkingDuration,
+        onActivity,
         onWebSources,
         onGeneratedAttachments,
         onAwaitingInput,

@@ -76,7 +76,7 @@ describe('ConversationContext durable-run HITL', () => {
         const { generateTextStream } = require('../../services/generateTextStreamService');
         generateTextStream.mockImplementation((...args: any[]) => {
             const onMetadata = args[3];
-            const onAwaitingInput = args[10];
+            const onAwaitingInput = args[8];
             onMetadata?.({ conversationId: 'c1', messageId: 'm1', responseMessageId: 'rm1' });
             onAwaitingInput?.({ type: 'human_input', prompt: 'Approve?', run_id: 'run-1' });
             // The run is paused awaiting input — the live stream stays open.
@@ -271,7 +271,7 @@ describe('ConversationContext durable-run HITL', () => {
         expect(reattachRun).not.toHaveBeenCalled();
     });
 
-    test('reattach applies thinking / web-source / attachment / awaiting-input frames', async () => {
+    test('reattach applies activity / web-source / attachment / awaiting-input frames', async () => {
         const { getConversation } = require('../../services/conversationService');
         getConversation.mockResolvedValue({
             conversationId: 'c1',
@@ -281,8 +281,7 @@ describe('ConversationContext durable-run HITL', () => {
         const { reattachRun } = require('../../services/reattachRunService');
         reattachRun.mockImplementation((_t: any, _r: any, _c: any, cb: any) => {
             cb.onDelta('a');
-            cb.onThinkingStep?.({ node: 'n', name: 'N', kind: 'LLM', status: 'running' });
-            cb.onThinkingDuration?.(123);
+            cb.onActivity?.({ v: 2, at: 0, type: 'turn.start' });
             cb.onWebSources?.([{ index: 1, title: 't', url: 'u' }]);
             cb.onGeneratedAttachments?.([{ attachmentId: 'x', s3Key: 'k', mediaType: 'application/pdf' }]);
             cb.onAwaitingInput?.({ prompt: 'P' });
@@ -313,7 +312,7 @@ describe('ConversationContext durable-run HITL', () => {
         // Case 1: awaiting frame WITHOUT a run_id -> submitRunReply returns early.
         generateTextStream.mockImplementation((...args: any[]) => {
             args[3]?.({ conversationId: 'c1', responseMessageId: 'rm1' });
-            args[10]?.({ prompt: 'need input' }); // no run_id
+            args[8]?.({ prompt: 'need input' }); // no run_id
             return new Promise(() => {});
         });
         const { getByTestId, unmount } = render(
@@ -329,7 +328,7 @@ describe('ConversationContext durable-run HITL', () => {
         jest.clearAllMocks();
         generateTextStream.mockImplementation((...args: any[]) => {
             args[3]?.({ conversationId: 'c2', responseMessageId: 'rm2' });
-            args[10]?.({ prompt: 'need input', run_id: 'run-2' });
+            args[8]?.({ prompt: 'need input', run_id: 'run-2' });
             return new Promise(() => {});
         });
         resumeRun.mockResolvedValue(false);
@@ -369,14 +368,11 @@ describe('ConversationContext durable-run HITL', () => {
         generateTextStream.mockImplementation((...args: any[]) => {
             const onDelta = args[2];
             const onMetadata = args[3];
-            const onThinking = args[4];
-            const onThinkingDuration = args[6];
-            const onWebSources = args[7];
-            const onThinkingStep = args[8];
-            const onGeneratedAttachments = args[9];
-            onThinking?.('thinking...');
-            onThinkingStep?.({ node: 'n', name: 'N', kind: 'LLM', status: 'running' });
-            onThinkingDuration?.(50);
+            const onActivity = args[4];
+            const onWebSources = args[6];
+            const onGeneratedAttachments = args[7];
+            onActivity?.({ v: 2, at: 0, type: 'turn.start' });
+            onActivity?.({ v: 2, at: 10, type: 'step.start', id: 'n:1', kind: 'llm', node: 'n', name: 'N' });
             onWebSources?.([{ index: 1, title: 't', url: 'u' }]);
             onGeneratedAttachments?.([{ attachmentId: 'a', s3Key: 'k', mediaType: 'application/pdf' }]);
             onDelta('hello');

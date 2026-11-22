@@ -90,31 +90,20 @@ describe('generateTextStreamService', () => {
 
 
 
-    test('generateTextStream parses "ks" structured thinking steps and still supports legacy "k" strings', async () => {
+    test('generateTextStream relays "ac" activity events in order and never into the text', async () => {
         const encoder = new TextEncoder();
-        const runningStep = {
-            node: 'query_analyzer',
-            name: 'Query Analyzer',
-            kind: 'LLM',
-            status: 'running',
-            label: 'Query Analyzer: thinking…'
-        };
-        const doneStep = {
-            node: 'query_analyzer',
-            name: 'Query Analyzer',
-            kind: 'LLM',
-            status: 'done',
-            detail: 'Intent: lookup (needs rewrite: no)',
-            items: ['Doc A', 'Doc B'],
-            prompt: 'rendered prompt',
-            response: 'raw model response'
+        const start = { v: 2, at: 0, type: 'turn.start' };
+        const stepStart = { v: 2, at: 120, type: 'step.start', id: 'g:1', kind: 'llm', node: 'g', name: 'Agent' };
+        const stepEnd = {
+            v: 2, at: 900, type: 'step.end', id: 'g:1', kind: 'llm', node: 'g', name: 'Agent',
+            duration_ms: 780, outcome: 'answer',
         };
         const mockReader = {
             read: jest.fn()
-                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ks","v":${JSON.stringify(runningStep)}}\n`) })
-                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"k","v":"legacy flat step"}\n') })
-                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ks","v":${JSON.stringify(doneStep)}}\n`) })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ac","v":${JSON.stringify(start)}}\n`) })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ac","v":${JSON.stringify(stepStart)}}\n`) })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"c","v":"Answer"}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode(`{"t":"ac","v":${JSON.stringify(stepEnd)}}\n`) })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn()
@@ -127,37 +116,27 @@ describe('generateTextStreamService', () => {
         });
 
         const onDelta = jest.fn();
-        const onThinking = jest.fn();
-        const onThinkingStep = jest.fn();
+        const onActivity = jest.fn();
 
         await generateTextStream(
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
             onDelta,
             undefined,
-            onThinking,
-            undefined,
-            undefined,
-            undefined,
-            onThinkingStep
+            onActivity
         );
 
-        expect(onThinkingStep).toHaveBeenCalledTimes(2);
-        expect(onThinkingStep).toHaveBeenNthCalledWith(1, runningStep);
-        expect(onThinkingStep).toHaveBeenNthCalledWith(2, doneStep);
-        // Legacy flat strings keep flowing through onThinking, not onThinkingStep
-        expect(onThinking).toHaveBeenCalledTimes(1);
-        expect(onThinking).toHaveBeenCalledWith('legacy flat step');
-        // Steps never leak into the answer text
+        expect(onActivity.mock.calls.map(c => c[0])).toEqual([start, stepStart, stepEnd]);
         expect(onDelta).toHaveBeenCalledTimes(1);
         expect(onDelta).toHaveBeenCalledWith('Answer');
     });
 
-    test('generateTextStream ignores malformed "ks" payloads', async () => {
+    test('generateTextStream ignores malformed and retired thinking frames', async () => {
         const encoder = new TextEncoder();
         const mockReader = {
             read: jest.fn()
-                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"ks","v":"not an object"}\n{"t":"ks","v":{"name":"missing node id"}}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"ac","v":"not an object"}\n{"t":"ac","v":{"v":1,"type":"turn.start"}}\n') })
+                .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"ks","v":{"node":"n","status":"running"}}\n{"t":"k","v":"flat"}\n{"t":"kd","v":1200}\n') })
                 .mockResolvedValueOnce({ done: false, value: encoder.encode('{"t":"done","status":"ok"}\n') })
                 .mockResolvedValueOnce({ done: true }),
             releaseLock: jest.fn()
@@ -169,20 +148,18 @@ describe('generateTextStreamService', () => {
             body: { getReader: () => mockReader }
         });
 
-        const onThinkingStep = jest.fn();
+        const onDelta = jest.fn();
+        const onActivity = jest.fn();
         await generateTextStream(
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
-            jest.fn(),
+            onDelta,
             undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            onThinkingStep
+            onActivity
         );
 
-        expect(onThinkingStep).not.toHaveBeenCalled();
+        expect(onActivity).not.toHaveBeenCalled();
+        expect(onDelta).not.toHaveBeenCalled();
     });
 
     test('generateTextStream normalizes "ga" generated-attachment chunks into AttachmentRefs', async () => {
@@ -218,8 +195,6 @@ describe('generateTextStreamService', () => {
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
             onDelta,
-            undefined,
-            undefined,
             undefined,
             undefined,
             undefined,
@@ -419,7 +394,7 @@ describe('generateTextStreamService', () => {
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
             onDelta,
-            undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, undefined, undefined, undefined,
             onAwaitingInput
         );
 
@@ -451,7 +426,7 @@ describe('generateTextStreamService', () => {
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
             onDelta,
-            undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, undefined, undefined, undefined,
             undefined,
             onContentReset
         );
@@ -498,7 +473,7 @@ describe('generateTextStreamService', () => {
             mockToken,
             mockGenerateTextStreamRequest as GenerateTextStreamRequest,
             jest.fn(),
-            undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+            undefined, undefined, undefined, undefined, undefined,
             undefined, undefined,
             onStopReason
         );
