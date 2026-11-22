@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import mu.KLogger
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException
 import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
@@ -87,6 +88,32 @@ class SystemApiKeyRepository(
 
             val response = dynamoDbClient.getItem(request)
             if (response.hasItem()) response.item() else null
+        }
+
+    /**
+     * Sets isAPIKeyValid = false, conditional on [encryptedKey] still being the
+     * stored key. Returns false when it was replaced in the meantime.
+     */
+    suspend fun markSystemApiKeyInvalid(aiVendor: String, encryptedKey: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                dynamoDbClient.updateItem(
+                    UpdateItemRequest.builder()
+                        .tableName(DynamoDBConstants.SYSTEM_VENDOR_API_KEY_TABLE)
+                        .key(mapOf(AI_VENDOR_KEY to AttributeValue.builder().s(aiVendor).build()))
+                        .updateExpression("SET isAPIKeyValid = :invalid")
+                        .conditionExpression("apiKey = :key")
+                        .expressionAttributeValues(mapOf(
+                            ":invalid" to AttributeValue.builder().bool(false).build(),
+                            ":key" to AttributeValue.builder().s(encryptedKey).build()
+                        ))
+                        .build()
+                )
+                logger.info("Marked system API key for vendor $aiVendor invalid")
+                true
+            } catch (e: ConditionalCheckFailedException) {
+                false
+            }
         }
 
     suspend fun deleteSystemApiKey(aiVendor: String) = withContext(Dispatchers.IO) {

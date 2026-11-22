@@ -72,6 +72,9 @@ class VendorModelMetadata(BaseModel):
     provider: str
     models: list[ModelMetadata]
     error: Optional[str] = None
+    # The vendor rejected the key itself (HTTP 401/403), as opposed to an
+    # outage or timeout — the caller can flag its stored key invalid
+    auth_failed: bool = False
 
 
 class ModelMetadataResponse(BaseModel):
@@ -193,12 +196,15 @@ async def _fetch_gemini(
 ) -> list[ModelMetadata]:
     models: list[ModelMetadata] = []
     page_token: Optional[str] = None
+    # Header, not ?key= — URLs end up in httpx's request log and in errors
+    headers = {"x-goog-api-key": api_key}
     while True:
-        params: dict = {"key": api_key, "pageSize": 200}
+        params: dict = {"pageSize": 200}
         if page_token:
             params["pageToken"] = page_token
         resp = await client.get(
-            "https://generativelanguage.googleapis.com/v1beta/models", params=params
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            headers=headers, params=params,
         )
         resp.raise_for_status()
         body = resp.json()
@@ -263,6 +269,31 @@ _FETCHERS = {
 }
 
 
+def _describe_failure(e: Exception) -> tuple[str, bool]:
+    """(error message, auth_failed) for a failed vendor fetch.
+
+    str(HTTPStatusError) is unusable here: it drops the vendor's reason
+    ("invalid x-api-key", "Incorrect API key provided", missing scopes), the
+    one detail that says why a key is rejected, and embeds the full request
+    URL — query string included, where a credential must never surface.
+    """
+    if not isinstance(e, httpx.HTTPStatusError):
+        return str(e), False
+    resp = e.response
+    reason = None
+    try:
+        err = resp.json().get("error")
+        # OpenAI, Anthropic and Gemini all nest it as {"error": {"message": ...}}
+        reason = err.get("message") if isinstance(err, dict) else err
+    except (ValueError, AttributeError):
+        pass
+    url = e.request.url.copy_with(query=None)
+    message = f"{resp.status_code} {resp.reason_phrase} from {url}"
+    if reason:
+        message += f": {str(reason)[:300]}"
+    return message, resp.status_code in (401, 403)
+
+
 async def _fetch_for_vendor(
     client: httpx.AsyncClient, vendor: VendorKey, price_map: dict
 ) -> VendorModelMetadata:
@@ -282,8 +313,11 @@ async def _fetch_for_vendor(
         )
         return VendorModelMetadata(provider=vendor.provider, models=models)
     except Exception as e:
-        logger.warning("Failed to fetch model metadata for provider=%s: %s", vendor.provider, e)
-        return VendorModelMetadata(provider=vendor.provider, models=[], error=str(e))
+        error, auth_failed = _describe_failure(e)
+        logger.warning("Failed to fetch model metadata for provider=%s: %s", vendor.provider, error)
+        return VendorModelMetadata(
+            provider=vendor.provider, models=[], error=error, auth_failed=auth_failed
+        )
 
 
 @router.post("/models/metadata")

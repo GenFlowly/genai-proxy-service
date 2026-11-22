@@ -288,7 +288,8 @@ private data class ModelMetadataEntry(
 private data class WireVendorModelMetadata(
     val provider: String,
     val models: List<ModelMetadataEntry>,
-    val error: String? = null
+    val error: String? = null,
+    val auth_failed: Boolean = false
 )
 
 @Serializable
@@ -996,7 +997,8 @@ class RetrievalServerClient(
                         cacheReadAudioCostPerMTok = it.cache_read_audio_cost_per_mtok
                     )
                 },
-                error = vendorMetadata.error
+                error = vendorMetadata.error,
+                authFailed = vendorMetadata.auth_failed
             )
         }
     }
