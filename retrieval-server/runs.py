@@ -127,7 +127,6 @@ def _resolve_durable_graph(customer_id: str, graph_id, checkpointer):
     cache_key = f"graph#{graph_id}" if graph_id else customer_id
     graph, max_iterations = get_or_build_durable_graph(cache_key, graph_record, nodes, checkpointer)
     node_type_map, node_configs, streaming_nodes = _build_node_configs(nodes)
-    streaming_nodes = streaming_nodes or answer_nodes(graph_record, nodes)
     node_name_map = {n["nodeId"]: n.get("name") or n["nodeType"] for n in nodes}
     return graph, node_type_map, node_name_map, node_configs, streaming_nodes, max_iterations
 
