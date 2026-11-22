@@ -18,9 +18,55 @@ enum MathRenderer {
             labelMode: display ? .display : .text,
             textAlignment: .left
         )
-        let (error, image, _) = math.asImage()
-        guard error == nil, let image else { return nil }
+        let (error, parsed, _) = math.asImage()
+        guard let image = error == nil ? parsed : stackedImage(latex: latex, fontSize: fontSize, display: display, color: color) else { return nil }
         cache.setObject(image, forKey: key)
+        return image
+    }
+
+    /// LaTeX that only parses once `MathStacking` has rewritten it. MTMathUILabel is
+    /// the one SwiftMath entry point that typesets a list built in code, so it lays
+    /// the list out and this draws it the way `MathImage` does. When the labels sit
+    /// on one side only, the image carries the formula row's baseline so inline math
+    /// stays on the text's baseline instead of being centred with its labels.
+    private static func stackedImage(latex: String, fontSize: CGFloat, display: Bool, color: UIColor) -> UIImage? {
+        guard let prepared = MathStacking.prepare(latex) else { return nil }
+        var error: NSError?
+        guard let list = MTMathListBuilder.build(fromString: prepared, error: &error), error == nil else { return nil }
+        let font = MathFont.latinModernFont.mtfont(size: fontSize)
+        let ruler = MTMathUILabel()
+        ruler.font = font
+        let outcome = MathStacking.restructure(list, style: display ? .display : .text) { measured in
+            ruler.mathList = measured
+            return ruler.intrinsicContentSize.width
+        }
+        guard let outcome else { return nil }
+        let label = MTMathUILabel()
+        label.font = font
+        label.labelMode = display ? .display : .text
+        label.textAlignment = .left
+        label.textColor = color
+        label.mathList = list
+        let fitted = label.intrinsicContentSize
+        let size = CGSize(width: ceil(fitted.width), height: ceil(fitted.height))
+        guard size.width > 0, size.height > 0 else { return nil }
+        label.frame = CGRect(origin: .zero, size: size)
+        label.layoutSubviews()
+        guard let displayList = label.displayList else { return nil }
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            context.cgContext.concatenate(CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: size.height))
+            displayList.draw(context.cgContext)
+        }
+        // The line's baseline sits where MTMathUILabel centres it; its one display is
+        // the table, whose first or last row is the formula when labels are one-sided.
+        let rows = (displayList.subDisplays.first as? MTMathListDisplay)?.subDisplays ?? []
+        let lineBaseline = (size.height - max(displayList.ascent + displayList.descent, fontSize / 2)) / 2 + displayList.descent
+        if outcome.rowsAbove == 0, outcome.rowsBelow > 0, let first = rows.first {
+            return image.withBaselineOffset(fromBottom: lineBaseline + displayList.ascent - first.ascent)
+        }
+        if outcome.rowsBelow == 0, outcome.rowsAbove > 0, let last = rows.last {
+            return image.withBaselineOffset(fromBottom: lineBaseline - displayList.descent + last.descent)
+        }
         return image
     }
 
@@ -33,7 +79,7 @@ enum MathRenderer {
         }
         let attachment = NSTextAttachment()
         attachment.image = image
-        let descent = max(0, (image.size.height - fontSize) / 2)
+        let descent = image.baselineOffsetFromBottom ?? max(0, (image.size.height - fontSize) / 2)
         attachment.bounds = CGRect(x: 0, y: -descent, width: image.size.width, height: image.size.height)
         return NSAttributedString(attachment: attachment)
     }
