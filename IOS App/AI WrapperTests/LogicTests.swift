@@ -13,9 +13,7 @@ struct StreamFrameTests {
         var deltas: [String] = []
         var resets = 0
         var stopReasons: [String] = []
-        var thinking: [String] = []
-        var steps: [ThinkingStep] = []
-        var durations: [Int] = []
+        var activity: [ActivityEvent] = []
         var sources: [[WebSource]] = []
         var attachments: [[AttachmentRef]] = []
         var awaiting: [AwaitingInput] = []
@@ -25,9 +23,7 @@ struct StreamFrameTests {
                 onDelta: { self.deltas.append($0) },
                 onContentReset: { self.resets += 1 },
                 onStopReason: { self.stopReasons.append($0) },
-                onThinking: { self.thinking.append($0) },
-                onThinkingStep: { self.steps.append($0) },
-                onThinkingDuration: { self.durations.append($0) },
+                onActivity: { self.activity.append($0) },
                 onWebSources: { self.sources.append($0) },
                 onGeneratedAttachments: { self.attachments.append($0) },
                 onAwaitingInput: { self.awaiting.append($0) }
@@ -65,15 +61,17 @@ struct StreamFrameTests {
         #expect(recorder.stopReasons == [StopReasonNote.cancelled])
     }
 
-    @Test func legacyAndStructuredThinkingBothArrive() throws {
+    @Test func activityEventsArriveAndRetiredThinkingFramesAreIgnored() throws {
         let recorder = Recorder()
-        _ = try feed(#"{"t":"k","v":"Looking"}"#, into: recorder)
+        _ = try feed(#"{"t":"ac","v":{"v":2,"at":0,"type":"turn.start"}}"#, into: recorder)
+        _ = try feed(#"{"t":"ac","v":{"v":2,"at":120,"type":"step.start","id":"N1:1","kind":"memory","node":"N1","name":"Memory"}}"#, into: recorder)
+        _ = try feed(#"{"t":"ac","v":{"v":1,"type":"turn.start"}}"#, into: recorder)
         _ = try feed(#"{"t":"ks","v":{"node":"N1","name":"Memory","status":"running","kind":"MEMORY"}}"#, into: recorder)
         _ = try feed(#"{"t":"kd","v":1500}"#, into: recorder)
-        #expect(recorder.thinking == ["Looking"])
-        #expect(recorder.steps.first?.node == "N1")
-        #expect(recorder.steps.first?.status == "running")
-        #expect(recorder.durations == [1500])
+        #expect(recorder.activity.map(\.type) == [.turnStart, .stepStart])
+        #expect(recorder.activity.last?.id == "N1:1")
+        #expect(recorder.activity.last?.at == 120)
+        #expect(recorder.deltas.isEmpty)
     }
 
     @Test func webSourcesDecodeAndEmptyListsAreDropped() throws {
@@ -123,35 +121,6 @@ struct StreamFrameTests {
         let recorder = Recorder()
         _ = try feed("plain words", into: recorder)
         #expect(recorder.deltas == ["plain words"])
-    }
-}
-
-// MARK: - Thinking fold
-
-struct ThinkingFoldTests {
-    private func step(_ node: String, _ status: String, label: String? = nil) -> ThinkingStep {
-        var step = ThinkingStep(node: node, name: node, status: status)
-        step.label = label
-        return step
-    }
-
-    @Test func runningStepIsUpdatedInPlaceAndKeepsEarlierFields() {
-        let first = applyThinkingStep([], step("A", "running", label: "Loading"))
-        let second = applyThinkingStep(first, step("A", "done"))
-        #expect(second.count == 1)
-        #expect(second[0].status == "done")
-        #expect(second[0].label == "Loading")
-    }
-
-    @Test func aNodeRunningAgainAfterFinishingStartsANewStep() {
-        let done = applyThinkingStep(applyThinkingStep([], step("A", "running")), step("A", "done"))
-        let again = applyThinkingStep(done, step("A", "running"))
-        #expect(again.map(\.status) == ["done", "running"])
-    }
-
-    @Test func differentNodesKeepArrivalOrder() {
-        let steps = applyThinkingStep(applyThinkingStep([], step("A", "running")), step("B", "running"))
-        #expect(steps.map(\.node) == ["A", "B"])
     }
 }
 

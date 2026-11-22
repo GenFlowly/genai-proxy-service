@@ -1,0 +1,200 @@
+{
+  "name": "error_turn",
+  "description": "A call fails, then the provider fails the next round; the turn ends in error.",
+  "live": false,
+  "stop_reason": null,
+  "events": [
+    {
+      "v": 2,
+      "at": 0,
+      "type": "turn.start"
+    },
+    {
+      "v": 2,
+      "at": 0,
+      "type": "step.start",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory"
+    },
+    {
+      "v": 2,
+      "at": 300,
+      "type": "step.end",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory",
+      "duration_ms": 300,
+      "counts": {
+        "core": 0,
+        "recalled": 0
+      },
+      "memories": {
+        "core": [],
+        "recalled": []
+      }
+    },
+    {
+      "v": 2,
+      "at": 300,
+      "type": "step.start",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 1900,
+      "type": "step.end",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 1600,
+      "outcome": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_e1",
+          "name": "web_search",
+          "args": {
+            "purpose": "Count eligible practices.",
+            "query": "Medicare CCM eligible practices count 2025"
+          }
+        },
+        {
+          "id": "call_e2",
+          "name": "web_search",
+          "args": {
+            "purpose": "Check the current payment rate.",
+            "query": "CCM billing code 99490 rate 2026"
+          }
+        }
+      ],
+      "reasoning": "Two numbers decide this: eligible practices and the rate.",
+      "developer": {
+        "prompt_excerpt": "How many practices could bill CCM today?"
+      }
+    },
+    {
+      "v": 2,
+      "at": 1900,
+      "type": "step.start",
+      "id": "NODTOOLS001:1",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools"
+    },
+    {
+      "v": 2,
+      "at": 2800,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_e2",
+        "seq": 2,
+        "name": "web_search",
+        "mode": "run",
+        "duration_ms": 900,
+        "error": "TimeoutError: search provider did not answer within 30s"
+      }
+    },
+    {
+      "v": 2,
+      "at": 3400,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_e1",
+        "seq": 1,
+        "name": "web_search",
+        "mode": "run",
+        "duration_ms": 1500,
+        "result_count": 1
+      }
+    },
+    {
+      "v": 2,
+      "at": 3500,
+      "type": "step.end",
+      "id": "NODTOOLS001:1",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools",
+      "duration_ms": 1600,
+      "calls": [
+        {
+          "id": "call_e1",
+          "seq": 1,
+          "name": "web_search",
+          "args": {
+            "purpose": "Count eligible practices.",
+            "query": "Medicare CCM eligible practices count 2025"
+          },
+          "mode": "run",
+          "duration_ms": 1500,
+          "result_count": 1,
+          "result_excerpt": "Web search results for 'Medicare CCM eligible practices count 2025'.",
+          "sources": [
+            {
+              "index": 1,
+              "title": "CCM eligibility",
+              "url": "https://www.cms.gov/ccm-eligibility",
+              "favicon": "https://www.cms.gov/favicon.ico",
+              "published_date": "2025-05-01"
+            }
+          ],
+          "artifacts": [],
+          "error": null
+        },
+        {
+          "id": "call_e2",
+          "seq": 2,
+          "name": "web_search",
+          "args": {
+            "purpose": "Check the current payment rate.",
+            "query": "CCM billing code 99490 rate 2026"
+          },
+          "mode": "run",
+          "duration_ms": 900,
+          "result_count": null,
+          "result_excerpt": null,
+          "sources": [],
+          "artifacts": [],
+          "error": "TimeoutError: search provider did not answer within 30s"
+        }
+      ],
+      "budget": {
+        "used": 2,
+        "max": 5
+      }
+    },
+    {
+      "v": 2,
+      "at": 3500,
+      "type": "step.start",
+      "id": "NODAGENT001:2",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 4200,
+      "type": "turn.end",
+      "duration_ms": 4200,
+      "outcome": "error"
+    }
+  ],
+  "web_sources": [
+    {
+      "index": 1,
+      "title": "CCM eligibility",
+      "url": "https://www.cms.gov/ccm-eligibility",
+      "favicon": "https://www.cms.gov/favicon.ico",
+      "published_date": "2025-05-01"
+    }
+  ]
+}

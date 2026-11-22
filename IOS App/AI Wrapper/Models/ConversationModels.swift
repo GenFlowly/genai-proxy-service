@@ -7,11 +7,17 @@ struct WebSource: Codable, Equatable, Hashable {
     var index: Int
     var title: String
     var url: String
+    /// The site's icon URL, when the search provider returned one.
+    var favicon: String?
+    /// Publish date as the provider sent it; a calendar date.
+    var publishedDate: String?
 
-    init(index: Int, title: String, url: String) {
+    init(index: Int, title: String, url: String, favicon: String? = nil, publishedDate: String? = nil) {
         self.index = index
         self.title = title
         self.url = url
+        self.favicon = favicon
+        self.publishedDate = publishedDate
     }
 
     init?(json: JSONValue) {
@@ -19,6 +25,8 @@ struct WebSource: Codable, Equatable, Hashable {
         self.index = index
         title = json["title"]?.string ?? ""
         url = json["url"]?.string ?? ""
+        favicon = json["favicon"]?.string
+        publishedDate = json["published_date"]?.string
     }
 }
 
@@ -72,129 +80,6 @@ struct TodoItem: Equatable {
     var status: String   // pending | in_progress | completed
 }
 
-struct ThinkingStepToolCall: Equatable {
-    var name: String
-    var args: [(String, JSONValue)] = []
-    var sources: [WebSource] = []
-    var error: String?
-
-    static func == (lhs: ThinkingStepToolCall, rhs: ThinkingStepToolCall) -> Bool {
-        lhs.signature == rhs.signature && lhs.sources == rhs.sources && lhs.error == rhs.error
-    }
-
-    /// `web_search(query="...", topic="news")` — strings quoted raw, everything else
-    /// `JSON.stringify`'d; the same format the web prints.
-    var signature: String {
-        guard !args.isEmpty else { return name }
-        let parts = args.map { key, value -> String in
-            if case .string(let s) = value { return "\(key)=\"\(s)\"" }
-            return "\(key)=\(value.jsonString)"
-        }
-        return "\(name)(\(parts.joined(separator: ", ")))"
-    }
-
-    init(name: String, args: [(String, JSONValue)] = [], sources: [WebSource] = [], error: String? = nil) {
-        self.name = name
-        self.args = args
-        self.sources = sources
-        self.error = error
-    }
-
-    init?(json: JSONValue) {
-        guard let name = json["name"]?.string else { return nil }
-        self.name = name
-        args = json["args"]?.pairs ?? []
-        sources = json["sources"]?.array?.compactMap(WebSource.init(json:)) ?? []
-        error = json["error"]?.string
-    }
-}
-
-/// One structured per-node step of the agent graph's thinking phase (the `ks` frame,
-/// also persisted with the message). A node can appear more than once (graph cycles).
-struct ThinkingStep: Equatable {
-    var node: String
-    var name: String
-    var kind: String?          // LLM | MEMORY | RETRIEVAL | WEB_SEARCH | REFLECTION | TOOL
-    var status: String         // running | done
-    var label: String?
-    var detail: String?
-    var items: [String]?
-    var prompt: String?
-    var response: String?
-    var sources: [WebSource]?
-    var memoriesCore: [String]?
-    var memoriesRecalled: [String]?
-    var calls: [ThinkingStepToolCall]?
-    var toolCalls: [ThinkingStepToolCall]?
-    var reasoning: String?
-    var todos: [TodoItem]?
-
-    init(node: String, name: String, kind: String? = nil, status: String = "done") {
-        self.node = node
-        self.name = name
-        self.kind = kind
-        self.status = status
-    }
-
-    init?(json: JSONValue) {
-        guard let node = json["node"]?.string, !node.isEmpty else { return nil }
-        self.node = node
-        name = json["name"]?.string ?? node
-        kind = json["kind"]?.string
-        status = json["status"]?.string ?? "running"
-        label = json["label"]?.string
-        detail = json["detail"]?.string
-        items = json["items"]?.array?.compactMap(\.string)
-        prompt = json["prompt"]?.string
-        response = json["response"]?.string
-        sources = json["sources"]?.array?.compactMap(WebSource.init(json:))
-        if let memories = json["memories"] {
-            memoriesCore = memories["core"]?.array?.compactMap(\.string) ?? []
-            memoriesRecalled = memories["recalled"]?.array?.compactMap(\.string) ?? []
-        }
-        calls = json["calls"]?.array?.compactMap(ThinkingStepToolCall.init(json:))
-        toolCalls = json["tool_calls"]?.array?.compactMap(ThinkingStepToolCall.init(json:))
-        reasoning = json["reasoning"]?.string
-        todos = json["todos"]?.array?.compactMap { item in
-            guard let content = item["content"]?.string else { return nil }
-            return TodoItem(content: content, status: item["status"]?.string ?? "pending")
-        }
-    }
-
-    /// `{ ...existing, ...incoming }` for the fields a later event carries.
-    func merging(_ incoming: ThinkingStep) -> ThinkingStep {
-        var merged = self
-        merged.name = incoming.name
-        merged.kind = incoming.kind ?? kind
-        merged.status = incoming.status
-        merged.label = incoming.label ?? label
-        merged.detail = incoming.detail ?? detail
-        merged.items = incoming.items ?? items
-        merged.prompt = incoming.prompt ?? prompt
-        merged.response = incoming.response ?? response
-        merged.sources = incoming.sources ?? sources
-        merged.memoriesCore = incoming.memoriesCore ?? memoriesCore
-        merged.memoriesRecalled = incoming.memoriesRecalled ?? memoriesRecalled
-        merged.calls = incoming.calls ?? calls
-        merged.toolCalls = incoming.toolCalls ?? toolCalls
-        merged.reasoning = incoming.reasoning ?? reasoning
-        merged.todos = incoming.todos ?? todos
-        return merged
-    }
-}
-
-/// Fold one `ks` event into the accumulated list (port of applyThinkingStep): an event
-/// updates the latest entry for that node while it is still running; otherwise it
-/// appends (first appearance, or a new graph cycle).
-func applyThinkingStep(_ steps: [ThinkingStep], _ incoming: ThinkingStep) -> [ThinkingStep] {
-    if let latest = steps.lastIndex(where: { $0.node == incoming.node }), steps[latest].status == "running" {
-        var next = steps
-        next[latest] = steps[latest].merging(incoming)
-        return next
-    }
-    return steps + [incoming]
-}
-
 /// Display identity of the user who sent a prompt (matters in shared conversations).
 struct MessageSender: Codable, Equatable {
     var customerId: String
@@ -209,11 +94,8 @@ struct Message: Identifiable, Equatable {
     var messageId: String
     var previousMessageId: String?
     var isLoading: Bool = false
-    /// Legacy flat thinking lines (the `k` frame).
-    var thinkingSteps: [String] = []
-    /// Structured per-node thinking steps (the `ks` frame), in arrival order.
-    var thinkingStepList: [ThinkingStep] = []
-    var thinkingDurationMs: Int?
+    /// The turn's activity log (the `ac` frames, and as persisted), in stream order.
+    var activity: [ActivityEvent] = []
     var stopReason: String?
     var webSources: [WebSource]?
     var generatedAttachments: [AttachmentRef]?

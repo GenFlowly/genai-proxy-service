@@ -179,6 +179,16 @@ struct AI_WrapperApp: App {
                         conversation.conversationId = "mock"
                         conversation.blocks = DebugFixtures.conversation
                     }
+                    // Headless capture: one response card built from a shared activity
+                    // fixture file (retrieval-server/tests/fixtures/activity/*.json).
+                    if let path = UserDefaults.standard.string(forKey: "mockActivityFile"),
+                       let data = FileManager.default.contents(atPath: path),
+                       let fixture = JSONValue.parse(data) {
+                        router.navigate(.chat)
+                        conversation.conversationTitle = "Activity fixture"
+                        conversation.conversationId = "mock"
+                        conversation.blocks = [DebugFixtures.activityFixtureBlock(fixture)]
+                    }
                     if CommandLine.arguments.contains("--mock-short-conversation") {
                         router.navigate(.chat)
                         conversation.conversationTitle = "Sorting algorithms compared"

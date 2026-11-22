@@ -1,0 +1,154 @@
+{
+  "name": "stopped_turn",
+  "description": "The user pressed Stop while the first search round ran; no turn.end.",
+  "live": false,
+  "stop_reason": "cancelled",
+  "events": [
+    {
+      "v": 2,
+      "at": 0,
+      "type": "turn.start"
+    },
+    {
+      "v": 2,
+      "at": 0,
+      "type": "step.start",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory"
+    },
+    {
+      "v": 2,
+      "at": 400,
+      "type": "step.end",
+      "id": "NODMEMORY01:1",
+      "kind": "memory",
+      "node": "NODMEMORY01",
+      "name": "Memory",
+      "duration_ms": 400,
+      "counts": {
+        "core": 14,
+        "recalled": 2
+      },
+      "memories": {
+        "core": [
+          "Works as a software engineer.",
+          "Prefers free and open-source tools.",
+          "Asked not to treat past topics as a chosen direction.",
+          "Wants claims backed by measured data, not inference.",
+          "Prefers short answers with the evidence linked.",
+          "Is exploring ideas for a small software business.",
+          "Has no interest in consumer social apps.",
+          "Prefers bootstrapping over raising venture money.",
+          "Can build web and iOS apps alone.",
+          "Has limited time on weekday evenings.",
+          "Prefers markets where buyers already pay for software.",
+          "Distrusts vendor-funded market reports.",
+          "Likes comparisons laid out as tables.",
+          "Writes in US English."
+        ],
+        "recalled": [
+          "Rejected three earlier wedge ideas for lacking buyer data.",
+          "Asked last week which industries underuse their software budgets."
+        ]
+      }
+    },
+    {
+      "v": 2,
+      "at": 400,
+      "type": "step.start",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 1200,
+      "type": "step.progress",
+      "id": "NODAGENT001:1",
+      "first_token_ms": 800
+    },
+    {
+      "v": 2,
+      "at": 3500,
+      "type": "step.end",
+      "id": "NODAGENT001:1",
+      "kind": "llm",
+      "node": "NODAGENT001",
+      "name": "Agent",
+      "duration_ms": 3100,
+      "outcome": "tool_calls",
+      "tool_calls": [
+        {
+          "id": "call_a1",
+          "name": "web_search",
+          "args": {
+            "purpose": "Find measured technology adoption by industry for small firms.",
+            "query": "US small business technology adoption by industry, Census ABS 2024-2025"
+          }
+        },
+        {
+          "id": "call_a2",
+          "name": "web_search",
+          "args": {
+            "purpose": "Find industries that spend little on software but a lot on labor.",
+            "query": "industries lowest software spend highest labor cost small firms NAICS data"
+          }
+        },
+        {
+          "id": "call_a3",
+          "name": "web_search",
+          "args": {
+            "purpose": "Check which investors fund this kind of small software business.",
+            "query": "best pre-seed funds for technology-driven startups 2026"
+          }
+        }
+      ],
+      "reasoning": "Those three wedges were inferences, not measured markets. I'm pulling actual adoption and funding data before naming anything.",
+      "developer": {
+        "prompt_excerpt": "Those three wedges were guesses. Which of them actually have buyer data?"
+      },
+      "first_token_ms": 800
+    },
+    {
+      "v": 2,
+      "at": 3500,
+      "type": "step.start",
+      "id": "NODTOOLS001:1",
+      "kind": "tools",
+      "node": "NODTOOLS001",
+      "name": "Tools"
+    },
+    {
+      "v": 2,
+      "at": 7600,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_a2",
+        "seq": 2,
+        "name": "web_search",
+        "mode": "run",
+        "duration_ms": 3900,
+        "result_count": 8
+      }
+    },
+    {
+      "v": 2,
+      "at": 7900,
+      "type": "step.call",
+      "id": "NODTOOLS001:1",
+      "call": {
+        "id": "call_a3",
+        "seq": 3,
+        "name": "web_search",
+        "mode": "run",
+        "duration_ms": 4200,
+        "result_count": 8
+      }
+    }
+  ],
+  "web_sources": []
+}

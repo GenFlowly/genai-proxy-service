@@ -226,9 +226,9 @@ struct BackendGetConversationResponse {
         var totalTokens: Int?
         var tokensReadFromCache: Int?
         var costUsd: Double?
-        var thinkingDurationMs: Int?
         var stopReason: String?
-        var thinkingSteps: [ThinkingStep]
+        /// The turn's activity log (the `ac` events), as persisted with the message.
+        var activity: [ActivityEvent]
         var webSources: [WebSource]?
         var generatedAttachments: [AttachmentRef]?
         var learnedFacts: [LearnedFact]?
@@ -271,9 +271,8 @@ struct BackendGetConversationResponse {
                         totalTokens: r["totalTokens"]?.int,
                         tokensReadFromCache: r["tokensReadFromCache"]?.int,
                         costUsd: r["costUsd"]?.double,
-                        thinkingDurationMs: r["thinkingDurationMs"]?.int,
                         stopReason: r["stopReason"]?.string,
-                        thinkingSteps: r["thinkingSteps"]?.array?.compactMap(ThinkingStep.init(json:)) ?? [],
+                        activity: r["activity"]?.array?.compactMap(ActivityEvent.init(json:)) ?? [],
                         webSources: r["webSources"]?.array?.compactMap(WebSource.init(json:)),
                         generatedAttachments: r["generatedAttachments"]?.array?.compactMap(Self.attachment),
                         learnedFacts: r["learnedFacts"]?.array?.compactMap { fact in

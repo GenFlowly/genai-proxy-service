@@ -317,6 +317,8 @@ struct InstructionPickerModal: View {
 /// Minimal wrapping layout (rows that wrap left-to-right).
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
+    /// Gap between rows; the item spacing when nil.
+    var lineSpacing: CGFloat?
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
@@ -325,7 +327,7 @@ struct FlowLayout: Layout {
             let size = fitted(subview, maxWidth: maxWidth)
             if x + size.width > maxWidth, x > 0 {
                 x = 0
-                y += rowHeight + spacing
+                y += rowHeight + (lineSpacing ?? spacing)
                 rowHeight = 0
             }
             x += size.width + spacing
@@ -341,7 +343,7 @@ struct FlowLayout: Layout {
             let size = fitted(subview, maxWidth: bounds.width)
             if x + size.width > bounds.maxX, x > bounds.minX {
                 x = bounds.minX
-                y += rowHeight + spacing
+                y += rowHeight + (lineSpacing ?? spacing)
                 rowHeight = 0
             }
             subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))

@@ -299,7 +299,9 @@ struct ResponseCardView: View {
     private var endsConversation: Bool { conversation.blocks.last?.conversationBlockId == block.conversationBlockId }
 
     private var hasAnyValidApiKey: Bool { auth.aiVendorAPIKeyStatusList.contains { $0.isAPIKeyValid == true } }
-    private var isThinkingPhase: Bool { message.isLoading && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// The answer area's own placeholder: loading with no text yet. The activity panel
+    /// never looks at the text (see ActivityPanel).
+    private var isAwaitingText: Bool { message.isLoading && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var isSelected: Bool { conversation.getSelectedResponse(for: block.conversationBlockId) == message.messageId }
 
     /// Fork needs a real persisted response; unlike regenerate, it shows on EVERY block.
@@ -316,15 +318,15 @@ struct ResponseCardView: View {
             header
                 .padding(.bottom, 6)
 
-            ThinkingSection(
-                steps: message.thinkingSteps,
-                stepList: message.thinkingStepList,
-                isThinking: isThinkingPhase,
-                durationMs: message.thinkingDurationMs,
-                text: message.text
+            ActivityPanel(
+                events: message.activity,
+                isLive: message.isLoading,
+                citedSources: message.webSources,
+                stopReason: message.stopReason
             )
+            .padding(.bottom, message.activity.isEmpty && !message.isLoading ? 0 : 14)
 
-            if !isThinkingPhase {
+            if !isAwaitingText {
                 MarkdownView(
                     text: Self.linkifyCitations(message.text, sources: message.webSources),
                     options: .init(turnTextSize: 16),
