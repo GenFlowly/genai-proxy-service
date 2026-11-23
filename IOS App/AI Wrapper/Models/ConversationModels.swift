@@ -63,6 +63,10 @@ struct GetAttachmentUrlResponse: Codable {
 struct LearnedFact: Codable, Equatable, Hashable, Identifiable {
     var memoryId: String
     var text: String
+    /// CORE or EPISODIC; absent on facts learned before kinds were sent.
+    var kind: String? = nil
+    /// The extraction run that learned it, for "How it was inferred".
+    var runId: String? = nil
     var id: String { memoryId }
 }
 

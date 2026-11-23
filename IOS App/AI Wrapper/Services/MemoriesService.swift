@@ -26,6 +26,11 @@ enum MemoriesService {
         try await APIClient.requestJSON(url(memoryId), token: token, as: MemoryDetail.self)
     }
 
+    /// How run [runId] inferred the memory: the story and facts of one extraction run.
+    static func inference(token: String, memoryId: String, runId: String) async throws -> MemoryInference {
+        try await APIClient.requestJSON(url(memoryId, "inference/\(runId)"), token: token, as: MemoryInference.self)
+    }
+
     static func usage(token: String, memoryId: String, cursor: String? = nil, limit: Int = 25) async throws -> MemoryUsagePage {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
         if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }

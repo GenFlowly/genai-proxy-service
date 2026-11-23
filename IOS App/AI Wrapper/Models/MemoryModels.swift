@@ -88,6 +88,8 @@ struct MemoryChange: Codable, Identifiable, Equatable {
     var reason: String?
     var from: [MemoryPlacement]?
     var to: [MemoryPlacement]?
+    /// The extraction run behind this change, for "How it was inferred".
+    var runId: String?
     var conversationTitle: String?
     var conversationAvailable: Bool?
     var youSaid: String?
@@ -173,4 +175,74 @@ func memoryCounts(_ memories: [CustomerMemory]) -> [String: Int] {
         }
     }
     return counts
+}
+
+// MARK: - How a memory was inferred (GET /memories/{memoryId}/inference/{runId})
+
+struct MemoryRunResponse: Codable, Equatable {
+    var messageId: String
+    var vendor: String
+    var model: String?
+}
+
+struct MemoryRunOperation: Codable, Equatable {
+    var op: String
+    var memoryId: String?
+    var text: String?
+    var reason: String?
+    var messageIndex: Int?
+    /// applied, noop or error
+    var outcome: String
+    /// The memory this operation made has since been deleted.
+    var memoryDeleted: Bool?
+}
+
+struct MemoryRun: Codable, Equatable {
+    var runId: String
+    var source: String
+    var conversationId: String?
+    var projectId: String?
+    var turnMessageId: String?
+    var messageIds: [String] = []
+    var responsesRead: [MemoryRunResponse] = []
+    var existingShown: Int = 0
+    var agentId: String?
+    var vendor: String?
+    var model: String?
+    var startedAt: String
+    var durationMs: Int
+    var inputTokens: Int?
+    var outputTokens: Int?
+    var costUsd: Double?
+    var operations: [MemoryRunOperation] = []
+    var truncated: Bool?
+}
+
+struct MemoryInferenceExcerpt: Codable, Equatable, Identifiable {
+    var messageId: String
+    var role: String
+    var vendor: String?
+    var index: Int
+    var text: String
+    var taken: Bool
+    var id: String { messageId }
+}
+
+struct MemoryInferenceChange: Codable, Equatable {
+    var changeId: String
+    var type: String
+    var createdAt: String
+    var version: Int?
+    var reason: String?
+    var messageId: String?
+    var runId: String?
+}
+
+struct MemoryInference: Codable, Equatable {
+    var memory: CustomerMemory
+    var change: MemoryInferenceChange?
+    var run: MemoryRun
+    var excerpts: [MemoryInferenceExcerpt] = []
+    var conversationTitle: String?
+    var conversationDeleted: Bool
 }

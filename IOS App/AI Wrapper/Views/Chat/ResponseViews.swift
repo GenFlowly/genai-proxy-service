@@ -18,6 +18,8 @@ struct ResponseGroupView: View {
     @State private var width: CGFloat = 0
     /// Each vendor is auto-selected at most once, or toggles would be undone mid-stream.
     @State private var autoSelected: Set<String> = []
+    /// What this turn added to memory: one state for every vendor's card.
+    @State private var learnedMemory = TurnLearnedMemory()
 
     private var maxVendors: Int { width >= 900 ? 2 : 1 }
 
@@ -88,7 +90,7 @@ struct ResponseGroupView: View {
                             block: block,
                             message: message,
                             isLastResponseBlock: isLastResponseBlock,
-                            hasUsage: message.hasOwnUsage,
+                            learnedMemory: showsMemory(for: message) ? learnedMemory : nil,
                             onSelectionChange: onSelectionChange,
                             swipe: swipe,
                             isSwipeNeighbor: isNeighbor
@@ -144,6 +146,9 @@ struct ResponseGroupView: View {
         }
         .frame(maxWidth: .infinity)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .task(id: TurnLearnedMemory.key(for: block.responseMessages)) {
+            await learnedMemory.update(conversationId: conversation.conversationId, messages: block.responseMessages, auth: auth)
+        }
         .onAppear(perform: autoSelectNewVendors)
         .onChange(of: availableVendors) { _, _ in autoSelectNewVendors() }
     }
@@ -153,6 +158,12 @@ struct ResponseGroupView: View {
     })
 
     private var isPaged: Bool { maxVendors == 1 }
+
+    /// Paged (phones), every card carries the turn's memory line, so it stays while swiping;
+    /// side by side, only the first does.
+    private func showsMemory(for message: Message) -> Bool {
+        isPaged || message.messageId == filteredMessages.first?.messageId
+    }
 
     /// The current response, then the one a swipe is bringing in.
     private var pagerMessages: [Message] {
@@ -288,8 +299,8 @@ struct ResponseCardView: View {
     let block: ConversationBlock
     let message: Message
     let isLastResponseBlock: Bool
-    /// The response went through the whole pipeline, so memory extraction ran for it.
-    let hasUsage: Bool
+    /// The turn's "added to memory" state, shown above the actions; nil hides it.
+    let learnedMemory: TurnLearnedMemory?
     let onSelectionChange: (AskSelection?) -> Void
     let swipe: ResponseSwipeModel
     let isSwipeNeighbor: Bool
@@ -346,8 +357,8 @@ struct ResponseCardView: View {
             if !message.isLoading, let stopReason = message.stopReason {
                 StopReasonNote(reason: stopReason)
             }
-            if !message.isLoading, hasUsage {
-                statsRow
+            if let learnedMemory, !isSwipeNeighbor {
+                LearnedMemoryLine(memory: learnedMemory)
             }
             if !isSwipeNeighbor, message.isLoading || isLastResponseBlock || canFork {
                 actionBar
@@ -403,21 +414,6 @@ struct ResponseCardView: View {
             .padding(.vertical, 8)
     }
 
-    /// `.statsRow`: the learned-facts brain. Tokens and cost live in the AI Settings Tokens card.
-    private var statsRow: some View {
-        HStack(spacing: 12) {
-            LearnedFactsStat(
-                conversationId: conversation.conversationId,
-                message: message
-            )
-        }
-        .webText(12, lineHeight: 16.8)
-        .monospacedDigit()
-        .kerning(0.12)
-        .foregroundStyle(AppTheme.textMuted)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 14)
-    }
 
     /// `.responseActionButtonsWrapper`: spans the screen edge to edge at the end of the response.
     private var actionBar: some View {
@@ -631,126 +627,7 @@ struct StopReasonNote: View {
     }
 }
 
-// MARK: - Learned facts (LearnedFactsStat + useLearnedFacts)
-
-struct LearnedFactsStat: View {
-    @EnvironmentObject var auth: AuthStore
-    let conversationId: String
-    let message: Message
-
-    @State private var facts: [LearnedFact] = []
-    @State private var isPending = false
-    @State private var showList = false
-    @State private var pollId = ""
-
-    private static let pollInterval: UInt64 = 4_000_000_000
-    private static let pollTimeout: TimeInterval = 60
-
-    /// Only a response generated in THIS session, with a real id and no error, has an
-    /// async extraction worth polling for.
-    private var isFresh: Bool {
-        if case .fresh = message.learnedFacts {
-            return message.error == nil && !conversationId.isEmpty && message.hasRealId
-        }
-        return false
-    }
-
-    var body: some View {
-        Group {
-            if isPending {
-                HStack(spacing: 4) {
-                    WebIcon(name: "brain", size: 12, color: AppTheme.textMuted)
-                    PulseDot(size: 6, color: AppTheme.textMuted)
-                }
-                .opacity(0.7)
-                .accessibilityLabel(L("conversation.response.learningFacts"))
-                .webTooltip(L("conversation.response.learningFacts"))
-            } else if facts.isEmpty {
-                HStack(spacing: 4) {
-                    WebIcon(name: "brain", size: 12, color: AppTheme.textMuted)
-                    Text("0")
-                }
-                .opacity(0.7)
-                .accessibilityLabel(L("conversation.response.noNewFacts"))
-                .webTooltip(L("conversation.response.noNewFacts"))
-            } else {
-                Button { showList = true } label: {
-                    HStack(spacing: 4) {
-                        WebIcon(name: "brain", size: 12, color: AppTheme.textMuted)
-                        Text("\(facts.count)")
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L("conversation.response.factsAddedToMemory", ["count": facts.count]))
-                .popover(isPresented: $showList) { factsList.presentationCompactAdaptation(.popover) }
-            }
-        }
-        .task(id: message.messageId) { await load() }
-    }
-
-    /// Interactive tooltip content: the wording plus a list with ✗ to delete each fact.
-    private var factsList: some View {
-        VStack(alignment: .leading, spacing: 5.6) {
-            Text(L("conversation.response.factsAddedToMemory", ["count": facts.count])).webText(13.6, 600)
-            ForEach(facts) { fact in
-                HStack(alignment: .top, spacing: 8) {
-                    Text(fact.text).webText(13.6).frame(maxWidth: .infinity, alignment: .leading)
-                    Button("✗") { Task { await remove(fact) } }
-                        .font(DSFont.arial(12.8))
-                        .foregroundStyle(AppTheme.error)
-                        .opacity(0.75)
-                        .accessibilityLabel(L("conversation.response.deleteFact", ["fact": fact.text]))
-                }
-            }
-        }
-        .foregroundStyle(AppTheme.navbarText)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 300)
-        .presentationBackground(AppTheme.navbarBackground)
-    }
-
-    private func load() async {
-        switch message.learnedFacts {
-        case .known(let known):
-            facts = known
-            isPending = false
-        case .unknown:
-            isPending = false
-        case .fresh:
-            guard isFresh else { return }
-            isPending = true
-            let started = Date()
-            while !Task.isCancelled {
-                if let token = try? await auth.getAccessTokenSilently(),
-                   let result = try? await LearnedFactsService.get(token: token, conversationId: conversationId, messageId: message.messageId),
-                   !result.isPending {
-                    facts = result.facts ?? []
-                    isPending = false
-                    return
-                }
-                // Extraction that slow counts as "no new facts".
-                if Date().timeIntervalSince(started) >= Self.pollTimeout {
-                    isPending = false
-                    return
-                }
-                try? await Task.sleep(nanoseconds: Self.pollInterval)
-            }
-        }
-    }
-
-    /// A real failure keeps the fact listed so the user can retry.
-    private func remove(_ fact: LearnedFact) async {
-        guard let token = try? await auth.getAccessTokenSilently() else { return }
-        do {
-            try await LearnedFactsService.delete(token: token, memoryId: fact.memoryId)
-            facts.removeAll { $0.memoryId == fact.memoryId }
-            if facts.isEmpty { showList = false }
-        } catch {
-            AppObservability.capture(error, context: ["where": "deleteMemoryFact"])
-        }
-    }
-}
+// MARK: - Learned memory lives in LearnedMemoryViews.swift
 
 /// `@keyframes pulse`: scales to 0.75 and fades to 0.35 over 1.2s.
 struct PulseDot: View {

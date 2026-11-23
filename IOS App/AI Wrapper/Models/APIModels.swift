@@ -277,7 +277,7 @@ struct BackendGetConversationResponse {
                         generatedAttachments: r["generatedAttachments"]?.array?.compactMap(Self.attachment),
                         learnedFacts: r["learnedFacts"]?.array?.compactMap { fact in
                             guard let id = fact["memoryId"]?.string else { return nil }
-                            return LearnedFact(memoryId: id, text: fact["text"]?.string ?? "")
+                            return LearnedFact(memoryId: id, text: fact["text"]?.string ?? "", kind: fact["kind"]?.string, runId: fact["runId"]?.string)
                         }
                     )
                 }

@@ -161,7 +161,7 @@ struct ContentView: View {
             ) {
                 ChatMenuContent(onClose: close)
             }
-        case .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory:
+        case .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .memoryInference, .newMemory:
             MobileMenu(
                 action: MobileMenuAction(label: L("memoryPage.list.addMemory"), icon: "add-icon") {
                     router.navigate(.newMemory)
@@ -201,6 +201,9 @@ struct ContentView: View {
             MemoryHistoryView(memoryId: id)
         case .memoryUsage(let id):
             MemoryUsedInView(memoryId: id)
+        case .memoryInference(let id, let runId):
+            MemoryInferenceView(memoryId: id, runId: runId)
+                .id("\(id)#\(runId)")
         case .newMemory:
             NewMemoryView(scope: router.memoryScope)
         case .agents:

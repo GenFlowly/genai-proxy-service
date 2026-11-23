@@ -515,7 +515,8 @@ final class ConversationStore: ObservableObject {
                     prompt: prep.prompt, selectedResponseId: prep.selectedResponseId,
                     instructionId: instructionId, instructionVersion: instructionVersion,
                     attachments: attachmentsToUse, regenerateMessageId: regenerateMessageId,
-                    explicitConversationId: explicitId, onIdResolved: onIdResolved
+                    explicitConversationId: explicitId, turnResponseCount: prep.aiConfigs.count,
+                    onIdResolved: onIdResolved
                 )
             }
 
@@ -677,6 +678,7 @@ final class ConversationStore: ObservableObject {
         attachments: [AttachmentRef],
         regenerateMessageId: String?,
         explicitConversationId: String?,
+        turnResponseCount: Int? = nil,
         onIdResolved: ((String) -> Void)?
     ) async throws {
         let key = "\(blockId)-\(config.aiVendor.rawValue)"
@@ -695,7 +697,8 @@ final class ConversationStore: ObservableObject {
             // Starting fresh inside a project: the new conversation is born in it.
             projectId: idToUse.isEmpty ? pendingProjectId : nil,
             regenerateMessageId: regenerateMessageId,
-            generationId: generationIds[key]
+            generationId: generationIds[key],
+            turnResponseCount: turnResponseCount
         )
 
         func update(_ transform: (inout Message) -> Void) {

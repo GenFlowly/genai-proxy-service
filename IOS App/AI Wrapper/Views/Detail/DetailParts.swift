@@ -372,6 +372,8 @@ struct TimelineEntryItem: Identifiable {
     var facts: [TimelineFact] = []
     var move: (from: String, to: String)?
     var view: (label: String, action: () -> Void)?
+    /// "How it was inferred" for a change an extraction run made.
+    var inference: (label: String, action: () -> Void)?
 }
 
 /// A vertical history, newest first.
@@ -466,6 +468,17 @@ struct TimelineView: View {
                     Text("→").webText(13).foregroundStyle(AppTheme.textMuted)
                     DetailChip(text: move.to, accent: true)
                 }
+            }
+            if let inference = entry.inference {
+                Button(action: inference.action) {
+                    HStack(spacing: 4) {
+                        Text(inference.label).webText(14.5, 500).foregroundStyle(AppTheme.textSecondary)
+                        WebIcon(name: "alt-arrow-right", size: 14, color: AppTheme.textMuted)
+                    }
+                    .frame(minHeight: 40)
+                }
+                .buttonStyle(WebPressStyle())
+                .accessibilityIdentifier("timeline-inference-\(entry.id)")
             }
             if let view = entry.view {
                 Button(action: view.action) {
