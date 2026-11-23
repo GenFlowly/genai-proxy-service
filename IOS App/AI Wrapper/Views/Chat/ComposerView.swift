@@ -16,8 +16,8 @@ struct PendingAttachment: Identifiable {
 
 /// The web's docked prompt editor (Request.tsx below isNarrow): a small box glued to the
 /// bottom — `clamp(12rem, 32svh, 16rem)` of text plus a 64pt strip for the floating
-/// attach/generate buttons — holding a CodeMirror markdown editor. A follow-up editor nobody
-/// is using rests at two lines (`.idleFollowUp`).
+/// attach/generate buttons — holding a CodeMirror markdown editor. A follow-up editor rests at
+/// two lines whenever it isn't focused (`.idleFollowUp`), showing a draft's first line.
 struct ComposerView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
@@ -59,7 +59,10 @@ struct ComposerView: View {
     /// Every block after the first is a follow-up; the first is a new chat's editor.
     private var isFollowUp: Bool { conversation.blocks.first?.conversationBlockId != blockId }
 
-    private var isIdle: Bool { isFollowUp && !isFocused && draft.isEmpty && pending.isEmpty }
+    private var isIdle: Bool { isFollowUp && !isFocused }
+
+    /// The text view's 4pt inset above the first line, and that line.
+    private static var firstLineHeight: CGFloat { 4 + ComposerStyle.lineHeight }
 
     private var totalHeight: CGFloat {
         if isIdle { return Self.idleTextAreaHeight + Self.buttonStripHeight }
@@ -105,6 +108,16 @@ struct ComposerView: View {
         .background(AppTheme.background)
         .onAppear(perform: restoreDraft)
         .onChange(of: conversation.focusDraftRequest) { _, _ in takeDraftFocus() }
+        .onChange(of: conversation.putAwayDraftRequest) { _, _ in
+            guard isFocused else { return }
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
+        .onChange(of: isFocused) { _, focused in
+            // Blank lines alone are no draft, and would hide the placeholder
+            guard !focused, !draft.isEmpty, draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            draft = ""
+            handleChange(draft)
+        }
         .onChange(of: conversation.pendingAsks) { _, asks in absorbAsks(asks) }
         .onChange(of: photoItems) { _, items in handlePhotos(items) }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoItems, matching: .images)
@@ -125,10 +138,14 @@ struct ComposerView: View {
             focusEndRequest: focusEndRequest,
             editorInsets: UIEdgeInsets(top: 1, left: 1, bottom: 1 - Self.buttonStripHeight, right: 1),
             showsActiveLine: false,
+            showsStartOnly: isIdle,
             onChange: handleChange,
             onPasteImages: handlePastedImages,
             onContentHeightChange: { textHeight = $0 }
         )
+        .mask(alignment: .top) {
+            Rectangle().frame(height: isIdle ? Self.firstLineHeight : nil)
+        }
         .overlay(alignment: .topLeading) {
             if draft.isEmpty {
                 // CodeMirror's placeholder: where the first line's text would start
@@ -443,6 +460,8 @@ struct ComposerTextView: UIViewRepresentable {
     var editorMinHeight: CGFloat = 0
     /// The current line's tint; the chat composer draws none, as it read as an empty toolbar.
     var showsActiveLine = true
+    /// A put-away composer: the start of its text shows, and a drag on it moves the page.
+    var showsStartOnly = false
     var onChange: (String) -> Void
     var onPasteImages: ([UIImage]) -> Void
     /// The text's height, for a host that sizes the editor by it.
@@ -482,6 +501,7 @@ struct ComposerTextView: UIViewRepresentable {
         view.editorInsets = editorInsets
         view.editorMinHeight = editorMinHeight
         view.showsActiveLine = showsActiveLine
+        view.showsStartOnly = showsStartOnly
         if view.text != text {
             view.text = text
             // A document loaded into an editor nobody is typing in has its caret at the start.
@@ -625,6 +645,13 @@ final class ComposerUITextView: UITextView {
     var showsActiveLine = true {
         didSet { activeLine.isHidden = !showsActiveLine }
     }
+    var showsStartOnly = false {
+        didSet {
+            guard showsStartOnly != oldValue else { return }
+            panGestureRecognizer.isEnabled = !showsStartOnly
+            setNeedsLayout()
+        }
+    }
     private var bracketMarks: [ComposerLayoutManager.Mark] = []
 
     private var decorationLayout: ComposerLayoutManager? { layoutManager as? ComposerLayoutManager }
@@ -659,8 +686,8 @@ final class ComposerUITextView: UITextView {
     override func layoutSubviews() {
         super.layoutSubviews()
         // The line that outgrew the old height scrolled the text; once the host has grown the
-        // view to fit, its first line belongs back at the top
-        if isScrollEnabled, contentSize.height <= bounds.height, contentOffset.y != 0 {
+        // view to fit, or put it away, its first line belongs back at the top
+        if isScrollEnabled, showsStartOnly || contentSize.height <= bounds.height, contentOffset.y != 0 {
             contentOffset.y = 0
         }
         updateActiveLine()

@@ -27,6 +27,8 @@ final class ConversationStore: ObservableObject {
     /// Last request a composer acted on. Following up creates the composer that must take focus,
     /// and a view created after the change never sees it through `onChange`.
     var handledFocusDraftRequest = 0
+    /// Bumped when the conversation is dragged back up: a draft editor in use is put away.
+    @Published var putAwayDraftRequest = 0
     /// A turn whose responses should be read from their top: another vendor's response took
     /// their place while the page was scrolled into them.
     @Published var responseTopRequest: String?

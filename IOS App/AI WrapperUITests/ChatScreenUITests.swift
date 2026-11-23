@@ -182,6 +182,74 @@ final class ChatScreenUITests: XCTestCase {
         XCTAssertLessThanOrEqual(send.frame.maxY, keyboard.frame.minY)
     }
 
+    /// Typing in the follow-up editor at the end of the conversation; returns it at its full size.
+    @MainActor
+    private func typeFollowUp(_ text: String, in app: XCUIApplication) -> (editor: XCUIElement, inUse: CGFloat) {
+        XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
+        for _ in 0..<4 { app.swipeUp() }
+        let editor = element(app.textViews, labelled: "Generate")
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.tap()
+        editor.typeText(text)
+        settle { editor.frame.height > 100 }
+        return (editor, editor.frame.height)
+    }
+
+    private func settle(_ done: () -> Bool) {
+        let deadline = Date().addingTimeInterval(3)
+        while !done(), Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+    }
+
+    /// On the response, between the header and the editor in use above the keyboard.
+    @MainActor
+    private func tapTheConversation(in app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18)).tap()
+    }
+
+    /// A tap outside puts the editor away with its draft: back to the small box, the draft kept.
+    @MainActor
+    func testATapOutsidePutsAFollowUpWithADraftAway() throws {
+        let app = launchMockConversation()
+        let (editor, inUse) = typeFollowUp("First line\nSecond line", in: app)
+
+        tapTheConversation(in: app)
+        settle { editor.frame.height < inUse }
+        let putAway = XCTAttachment(screenshot: app.screenshot())
+        putAway.name = "follow-up-put-away-by-a-tap"
+        putAway.lifetime = .keepAlways
+        add(putAway)
+        XCTAssertLessThan(editor.frame.height, 60)
+        XCTAssertEqual(editor.value as? String, "First line\nSecond line")
+
+        editor.tap()
+        settle { editor.frame.height >= inUse }
+        XCTAssertEqual(editor.frame.height, inUse, accuracy: 1)
+    }
+
+    /// Dragging the conversation back up puts the editor away too, even short of the keyboard.
+    @MainActor
+    func testDraggingTheConversationBackUpPutsTheEditorAway() throws {
+        let app = launchMockConversation()
+        let (editor, inUse) = typeFollowUp("Make it shorter", in: app)
+
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.32)))
+        settle { editor.frame.height < inUse }
+        XCTAssertLessThan(editor.frame.height, 60)
+        XCTAssertEqual(editor.value as? String, "Make it shorter")
+    }
+
+    /// Blank lines alone aren't kept: the put-away editor shows its placeholder again.
+    @MainActor
+    func testBlankLinesAloneAreDroppedWhenTheEditorIsPutAway() throws {
+        let app = launchMockConversation()
+        let (editor, _) = typeFollowUp(" \n\n ", in: app)
+
+        tapTheConversation(in: app)
+        settle { (editor.value as? String ?? "").isEmpty }
+        XCTAssertEqual(editor.value as? String ?? "", "")
+    }
+
     @MainActor
     func testALongFollowUpGrowsTheEditorUpToTheHeaderThenScrolls() throws {
         let app = launchMockConversation()

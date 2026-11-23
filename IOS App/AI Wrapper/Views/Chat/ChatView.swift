@@ -19,6 +19,8 @@ struct ChatView: View {
     @State private var viewedBlockId: String?
     /// Where each block starts in the scroll content; read while scrolling, so not @State.
     @State private var blockTops = BlockTops()
+    /// Where the finger's drag of the conversation started; read while scrolling, so not @State.
+    @State private var drag = ConversationDrag()
     @ObservedObject private var catalog = ProviderCatalog.shared
     @State private var scrollViewHeight: CGFloat = 0
     /// Docked "Ask" pill (`.selectionAskDocked`): the selection and where it came from.
@@ -173,6 +175,15 @@ struct ChatView: View {
             }
             .contentMargins(.top, mobileHeaderHeight, for: .scrollContent)
             .scrollDismissesKeyboard(.interactively)
+            // Dragging the conversation back up puts the draft editor away, as on the web
+            .onScrollPhaseChange { _, phase, context in
+                drag.startOffset = phase == .interacting ? context.geometry.contentOffset.y : nil
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, offset in
+                guard let start = drag.startOffset, start - offset >= Self.scrollBackUpDistance else { return }
+                drag.startOffset = nil
+                conversation.putAwayDraftRequest += 1
+            }
             .background(alignment: .bottom) { homeIndicatorBand }
             .onScrollGeometryChange(for: Bool.self) { geometry in
                 geometry.contentSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom >= geometry.containerSize.height
@@ -240,6 +251,8 @@ struct ChatView: View {
     }
 
     static let contentSpace = "chat-content"
+    /// How far a finger drags the conversation down before it counts as scrolling back up.
+    static let scrollBackUpDistance: CGFloat = 24
     static func turnAnchor(_ blockId: String) -> String { "turn-\(blockId)" }
 
     /// Touch selection: the pill docks above the idle follow-up editor stuck to the bottom of
@@ -268,6 +281,10 @@ struct ChatView: View {
 /// scrolling doesn't redraw the page.
 final class BlockTops {
     var values: [String: CGFloat] = [:]
+}
+
+final class ConversationDrag {
+    var startOffset: CGFloat?
 }
 
 struct AskSelection {
