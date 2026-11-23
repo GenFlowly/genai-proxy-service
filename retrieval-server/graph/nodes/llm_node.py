@@ -1,6 +1,8 @@
+import asyncio
 import json
 import logging
 import os
+import random
 import re
 import time
 from dataclasses import dataclass
@@ -101,12 +103,70 @@ _LLM_NONRETRIABLE_MARKERS = (
     "model_not_found", "does not exist", "not found", "404",
     "insufficient balance", "exceeded_current_quota", "billing", "suspended",
 )
+_LLM_RATE_LIMIT_MARKERS = ("rate limit", "ratelimit", "429", "too many requests", "resource_exhausted")
 # Transient markers: brief spikes worth a backed-off retry.
 _LLM_TRANSIENT_MARKERS = (
-    "rate limit", "ratelimit", "429", "too many requests", "resource_exhausted",
+    *_LLM_RATE_LIMIT_MARKERS,
     "timeout", "timed out", "connection", "econnreset", "connection reset",
     "temporarily unavailable", "overloaded", "unavailable", "503", "502", "500 internal",
 )
+
+# A vendor rate limit resets on the vendor's clock, not on our backoff: an
+# OpenAI TPM rejection says "Please try again in 13.319s", and the 1s/2s backoff
+# above re-sent into the same full minute until all 3 attempts were spent
+# (2026-11-23, gpt-6.2-sol at 50k TPM). So the step waits out the vendor's
+# stated time and re-sends, up to this total per step. 60s covers any
+# per-minute limit; the proxy allows 300s between streamed chunks.
+_LLM_RATE_LIMIT_WAIT_BUDGET_SEC = float(os.getenv("LLM_RATE_LIMIT_WAIT_BUDGET_SEC", "60"))
+# OpenAI states the wait as a Go duration: "441ms", "13.319s", "1m30s".
+_TRY_AGAIN_IN = re.compile(r"try again in ((?:\d+(?:\.\d+)?(?:ms|h|m|s))+)", re.IGNORECASE)
+_DURATION_PART = re.compile(r"(\d+(?:\.\d+)?)(ms|h|m|s)")
+_DURATION_UNIT_SEC = {"h": 3600.0, "m": 60.0, "s": 1.0, "ms": 0.001}
+
+
+def _vendor_retry_after_sec(e: BaseException) -> float | None:
+    """Seconds the vendor said to wait before re-sending a rate-limited call, or
+    None when e isn't a rate limit or states no wait. OpenAI's in-stream errors
+    carry it only in the message; HTTP 429s in retry-after(-ms) headers."""
+    low = f"{type(e).__name__}: {e}".lower()
+    if any(m in low for m in _LLM_NONRETRIABLE_MARKERS) or not any(m in low for m in _LLM_RATE_LIMIT_MARKERS):
+        return None
+    match = _TRY_AGAIN_IN.search(str(e))
+    if match:
+        return sum(float(n) * _DURATION_UNIT_SEC[u] for n, u in _DURATION_PART.findall(match.group(1)))
+    headers = getattr(getattr(e, "response", None), "headers", None) or {}
+    for name, scale in (("retry-after-ms", 0.001), ("retry-after", 1.0)):
+        try:
+            return float(headers[name]) * scale
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+async def _invoke_llm_waiting_out_rate_limits(llm, structured_llm, messages, provider):
+    """_invoke_llm, re-sent after each vendor-stated rate-limit wait that fits
+    _LLM_RATE_LIMIT_WAIT_BUDGET_SEC. Jitter keeps concurrent turns on the same
+    key from re-sending in lockstep. A Stop cancels the sleep like the call."""
+    waited = 0.0
+    while True:
+        try:
+            return await _invoke_llm(llm, structured_llm, messages)
+        except Exception as e:
+            retry_after = _vendor_retry_after_sec(e)
+            if retry_after is None:
+                raise
+            wait = retry_after + random.uniform(0.25, 1.0)
+            if waited + wait > _LLM_RATE_LIMIT_WAIT_BUDGET_SEC:
+                logger.warning(
+                    "Durable LLM step: rate limited, vendor asks %.1fs — past the %.0fs wait budget (%.1fs waited), failing",
+                    retry_after, _LLM_RATE_LIMIT_WAIT_BUDGET_SEC, waited,
+                )
+                count("llm_rate_limit_wait_total", vendor=provider, status="over_budget")
+                raise
+            logger.warning("Durable LLM step: rate limited — waiting %.1fs as the vendor asked, then re-sending", wait)
+            count("llm_rate_limit_wait_total", vendor=provider, status="waited")
+            await asyncio.sleep(wait)
+            waited += wait
 
 
 def _is_transient_llm_error(e: BaseException) -> bool:
@@ -115,6 +175,11 @@ def _is_transient_llm_error(e: BaseException) -> bool:
     unknown errors are treated as non-transient (conservative)."""
     low = f"{type(e).__name__}: {e}".lower()
     if any(m in low for m in _LLM_NONRETRIABLE_MARKERS):
+        return False
+    if _vendor_retry_after_sec(e) is not None:
+        # The step already waited out every vendor-stated wait that fit its
+        # budget (_invoke_llm_waiting_out_rate_limits): a backoff retry now
+        # re-sends into the window the vendor just said is still full.
         return False
     transient = any(m in low for m in _LLM_TRANSIENT_MARKERS)
     if transient:
@@ -155,7 +220,9 @@ if durable_runtime.dbos_constructed():
             tools_bound, tool_specs, tool_choice, response_schema,
             allow_thinking=allow_thinking, thinking_level=thinking_level,
         )
-        response, parsed, parsing_error = await _invoke_llm(llm, structured_llm, messages)
+        response, parsed, parsing_error = await _invoke_llm_waiting_out_rate_limits(
+            llm, structured_llm, messages, provider,
+        )
         return {"response": response, "parsed": parsed, "parsing_error": parsing_error}
 else:
     _durable_llm_invoke = None
