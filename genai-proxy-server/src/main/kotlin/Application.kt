@@ -2,6 +2,7 @@ package com.genflowly
 
 
 import com.auth0.jwk.JwkProviderBuilder
+import com.genflowly.config.configureCors
 import com.genflowly.di.AppScope
 import com.genflowly.di.appModule
 import com.genflowly.observability.Metrics
@@ -23,7 +24,6 @@ import io.github.smiley4.ktoropenapi.config.AuthScheme
 import io.github.smiley4.ktoropenapi.config.AuthType
 import com.genflowly.service.ConversationService
 import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
 import io.ktor.http.auth.HttpAuthHeader
 import io.ktor.server.auth.parseAuthorizationHeader
 import io.ktor.serialization.kotlinx.json.*
@@ -33,7 +33,6 @@ import io.ktor.server.auth.jwt.JWTCredential
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.plugins.cors.routing.CORS
 import java.util.concurrent.TimeUnit
 import org.koin.core.context.startKoin
 import org.koin.ktor.ext.get
@@ -372,36 +371,7 @@ fun Application.module() {
         }
     }
 
-    install(CORS) {
-        // Allow all origins for development
-        anyHost()
-        
-        allowMethod(HttpMethod.Options)
-        allowMethod(HttpMethod.Get)
-        allowMethod(HttpMethod.Post)
-        allowMethod(HttpMethod.Put)
-        allowMethod(HttpMethod.Delete)
-        allowMethod(HttpMethod.Patch)
-        
-        allowHeader(HttpHeaders.ContentType)
-        allowHeader(HttpHeaders.Authorization)
-        allowHeader(HttpHeaders.AccessControlAllowOrigin)
-        allowHeader(HttpHeaders.AccessControlAllowHeaders)
-        allowHeader(HttpHeaders.AccessControlAllowMethods)
-        exposeHeader(ResponseHeaders.CONVERSATION_ID)
-        exposeHeader(ResponseHeaders.MESSAGE_ID)
-        exposeHeader(ResponseHeaders.RESPONSE_MESSAGE_ID)
-        exposeHeader(ResponseHeaders.AI_VENDOR)
-        exposeHeader(ResponseHeaders.INSTRUCTION_ID)
-        exposeHeader(ResponseHeaders.INSTRUCTION_VERSION)
-        
-        allowCredentials = true
-        allowNonSimpleContentTypes = true
-        
-        // For production, replace anyHost() with specific hosts:
-        // allowHost("localhost:3000", schemes = listOf("http"))
-        // allowHost("your-frontend-domain.com", schemes = listOf("https"))
-    }
+    configureCors()
 
 
     // Cancel supervised background work (embedding sync, backfills, usage
