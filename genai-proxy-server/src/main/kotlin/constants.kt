@@ -202,6 +202,8 @@ object DynamoDBConstants {
     // matches "MEM#", so memory listings never see them.
     const val MEMORY_CHANGE_PREFIX = "MEMCHG#"
     const val MEMORY_USAGE_PREFIX = "MEMUSE#"
+    /** One row per extraction run: what the memory agent read, decided and cost. */
+    const val MEMORY_RUN_PREFIX = "MEMRUN#"
     // hitCount always equals the memory's number of usage rows: each row is
     // written and deleted in one transaction with its hit. lastUsedAt is the
     // newest row's usedAt.

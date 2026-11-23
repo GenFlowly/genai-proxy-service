@@ -1,6 +1,8 @@
 package com.genflowly.service
 
 import com.genflowly.di.AppScope
+import com.genflowly.models.AIConfig
+import com.genflowly.models.AIVendor
 import com.genflowly.models.AgentOutputFormat
 import com.genflowly.models.Message
 import com.genflowly.models.RequestType
@@ -9,6 +11,7 @@ import com.genflowly.models.api.CustomerMemory
 import com.genflowly.models.api.MemoryChangeType
 import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemoryPlacement
+import com.genflowly.models.api.MemoryRun
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.MemoryChangeCause
@@ -50,10 +53,16 @@ class MemoryExtractionLifecycleTest {
     private val profiles = mockk<CustomerProfileRepository>(relaxed = true)
     private val retrievalClient = mockk<com.genflowly.providers.RetrievalServerClient>(relaxed = true)
     private val vectorPending = mockk<VectorSyncPendingRepository>(relaxed = true)
+    private val costs = mockk<CostCalculationService>(relaxed = true)
 
     private val service = MemoryExtractionService(
         resolution, executor, memoryRepo, memoryService, conversationService,
-        MemoryVectorService(memoryRepo, profiles, retrievalClient, vectorPending, entitlementServiceWith()), AppScope(), logContent = false
+        MemoryVectorService(memoryRepo, profiles, retrievalClient, vectorPending, entitlementServiceWith()), AppScope(),
+        costs, logContent = false
+    )
+
+    private fun <T> outcome(value: T) = GenerationAgentExecutor.FailoverOutcome(
+        value, AIVendor.OPENAI, "gpt-5", inputTokens = 3180, outputTokens = 212, tokensReadFromCache = null
     )
 
     private val agent = ResolvedAgent(
@@ -95,13 +104,13 @@ class MemoryExtractionLifecycleTest {
     /** Stub the executor to run the REAL parse lambda on [output]. */
     private fun executorReturns(output: String) {
         coEvery {
-            executor.executeWithCustomerFailover<List<Any?>>(
+            executor.executeWithCustomerFailoverDetailed<List<Any?>>(
                 any(), any(), any(), any(), any(), any(), any()
             )
         } answers {
             // arg(6) is the parse lambda (lastArg would be the suspend continuation)
             @Suppress("UNCHECKED_CAST")
-            (arg<Any?>(6) as (String) -> List<Any?>).invoke(output)
+            outcome((arg<Any?>(6) as (String) -> List<Any?>).invoke(output))
         }
     }
 
@@ -169,7 +178,7 @@ class MemoryExtractionLifecycleTest {
     fun `retryable failure - rolls back, keeps the row, writes no marker`() = runTest {
         baseline()
         coEvery {
-            executor.executeWithCustomerFailover<List<Any?>>(any(), any(), any(), any(), any(), any(), any())
+            executor.executeWithCustomerFailoverDetailed<List<Any?>>(any(), any(), any(), any(), any(), any(), any())
         } throws CustomerAIFailoverException("all failed", listOf("OPENAI/gpt-5: cap"))
 
         service.processDuePendingExtractions()
@@ -264,12 +273,12 @@ class MemoryExtractionLifecycleTest {
     private fun executorCapturing(output: String): io.mockk.CapturingSlot<Map<String, String>> {
         val variables = slot<Map<String, String>>()
         coEvery {
-            executor.executeWithCustomerFailover<List<Any?>>(
+            executor.executeWithCustomerFailoverDetailed<List<Any?>>(
                 any(), capture(variables), any(), any(), any(), any(), any()
             )
         } answers {
             @Suppress("UNCHECKED_CAST")
-            (arg<Any?>(6) as (String) -> List<Any?>).invoke(output)
+            outcome((arg<Any?>(6) as (String) -> List<Any?>).invoke(output))
         }
         return variables
     }
@@ -290,10 +299,12 @@ class MemoryExtractionLifecycleTest {
             memoryRepo.createMemory(
                 "CU1", "Is named Alex.", listOf(MemoryPlacement(null, MemoryKind.CORE)), any(),
                 MemorySourceType.CONVERSATION, "CONV1",
-                MemoryChangeCause(
-                    type = MemoryChangeType.LEARNED, sourceType = MemorySourceType.CONVERSATION,
-                    conversationId = "CONV1", messageId = "M2", reason = "States their name"
-                )
+                match<MemoryChangeCause> {
+                    it.copy(runId = null) == MemoryChangeCause(
+                        type = MemoryChangeType.LEARNED, sourceType = MemorySourceType.CONVERSATION,
+                        conversationId = "CONV1", messageId = "M2", reason = "States their name"
+                    ) && it.runId != null
+                }
             )
         }
     }
@@ -390,5 +401,125 @@ class MemoryExtractionLifecycleTest {
         val schema = MemoryExtractionService.OPERATIONS_SCHEMA.toString()
         assertTrue(schema.contains("\"reason\""))
         assertTrue(schema.contains("\"messageIndex\":{\"type\":\"integer\""))
+    }
+
+    // ── Once per turn, from every vendor's response ─────────────────────────
+
+    private fun turnMessage(
+        id: String, role: String, text: String, previous: String?, vendor: AIVendor? = null, facts: String? = null
+    ) = Message(
+        messageId = id, conversationId = "CONV1", text = text, client = "test", role = role, customerId = "CU1",
+        systemPrompt = "", aiConfig = listOfNotNull(vendor?.let { AIConfig(it, "m-${it.name.lowercase()}") }),
+        previousMessageId = previous, learnedFactsJson = facts
+    )
+
+    private fun turnBaseline(processed: Int?, responses: List<Message>) {
+        baseline(processed = processed)
+        coEvery { memoryRepo.duePendingExtractions(any(), any()) } returns listOf(
+            pending.copy(turnMessageId = "U5", responseMessageId = responses.first().messageId)
+        )
+        coEvery { conversationService.getMessageThread("CONV1", "U5") } returns listOf(
+            turnMessage("U1", "user", "I build a multi-model AI workspace.", null),
+            turnMessage("A2", "assistant", "Noted.", "U1", AIVendor.OPENAI),
+            turnMessage("U5", "user", "We're a TypingMind alternative.", "A2"),
+        )
+        coEvery { conversationService.getTurnResponses("CONV1", "U5") } returns responses
+    }
+
+    @Test
+    fun `a turn is learned once, reading every vendor's response, and every response shows the same facts`() = runTest {
+        val responses = listOf(
+            turnMessage("R-openai", "assistant", "Answer from OpenAI", "U5", AIVendor.OPENAI),
+            turnMessage("R-claude", "assistant", "Answer from Claude", "U5", AIVendor.CLAUDE),
+        )
+        turnBaseline(processed = 2, responses = responses)
+        coEvery { memoryRepo.claimConversationExtraction("CU1", "CONV1", 2, 4) } returns true
+        val variables = executorCapturing(
+            """{"operations":[{"op":"ADD","text":"Is named Alex.","kind":"CORE","reason":"Says so","messageIndex":3}]}"""
+        )
+        val run = slot<MemoryRun>()
+        coEvery { memoryRepo.putRun("CU1", capture(run)) } returns Unit
+
+        service.processDuePendingExtractions()
+
+        val content = variables.captured.getValue("content")
+        assertTrue(content.contains("[3] User: We're a TypingMind alternative."), content)
+        assertTrue(content.contains("[4] Assistant (OPENAI): Answer from OpenAI"), content)
+        assertTrue(content.contains("[5] Assistant (CLAUDE): Answer from Claude"), content)
+        coVerify(exactly = 1) { memoryRepo.claimConversationExtraction("CU1", "CONV1", 2, 4) }
+        coVerify {
+            conversationService.setMessageLearnedFacts(
+                "CONV1", "R-openai", match { it.contains("Is named Alex.") && it.contains(run.captured.runId) }
+            )
+        }
+        coVerify { conversationService.setMessageLearnedFacts("CONV1", "R-claude", match { it.contains("Is named Alex.") }) }
+        assertEquals(listOf("OPENAI", "CLAUDE"), run.captured.responsesRead.map { it.vendor })
+        assertEquals("U5", run.captured.turnMessageId)
+        assertEquals(listOf("applied"), run.captured.operations.map { it.outcome })
+        assertEquals(3180, run.captured.inputTokens)
+        coVerify {
+            memoryRepo.createMemory(
+                any(), any(), any(), any(), any(), any(),
+                match { it.messageId == "U5" && it.runId == run.captured.runId }
+            )
+        }
+        coVerify { memoryRepo.finalizeConversationExtraction("CU1", "CONV1", 4) }
+    }
+
+    @Test
+    fun `a response whose turn another response already learned copies the outcome without running`() = runTest {
+        val facts = """[{"memoryId":"MEM#x","text":"Is named Alex.","runId":"RUN1"}]"""
+        turnBaseline(
+            processed = 4,
+            responses = listOf(
+                turnMessage("R-openai", "assistant", "A", "U5", AIVendor.OPENAI, facts = facts),
+                turnMessage("R-claude", "assistant", "B", "U5", AIVendor.CLAUDE),
+            )
+        )
+        coEvery { memoryRepo.duePendingExtractions(any(), any()) } returns listOf(
+            pending.copy(turnMessageId = "U5", responseMessageId = "R-claude")
+        )
+
+        service.processDuePendingExtractions()
+
+        coVerify { conversationService.setMessageLearnedFacts("CONV1", "R-claude", facts) }
+        coVerify(exactly = 0) { conversationService.setMessageLearnedFacts("CONV1", "R-openai", any()) }
+        coVerify(exactly = 0) { memoryRepo.claimConversationExtraction(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepo.deletePendingExtraction(any(), any()) }
+    }
+
+    @Test
+    fun `nothing learned from a turn marks every response, so no card keeps polling`() = runTest {
+        turnBaseline(
+            processed = 2,
+            responses = listOf(
+                turnMessage("R-openai", "assistant", "A", "U5", AIVendor.OPENAI),
+                turnMessage("R-claude", "assistant", "B", "U5", AIVendor.CLAUDE),
+            )
+        )
+        coEvery { memoryRepo.claimConversationExtraction("CU1", "CONV1", 2, 4) } returns true
+        executorReturns("""{"operations":[]}""")
+
+        service.processDuePendingExtractions()
+
+        coVerify { conversationService.setMessageLearnedFacts("CONV1", "R-openai", "[]") }
+        coVerify { conversationService.setMessageLearnedFacts("CONV1", "R-claude", "[]") }
+        coVerify { memoryRepo.putRun("CU1", match { it.operations.isEmpty() }) }
+    }
+
+    @Test
+    fun `long learned text is cut at a boundary, never mid-word`() {
+        val sentence = "Works as a dermatologist in Austin and runs a clinic. " + "x".repeat(400)
+        assertEquals("Works as a dermatologist in Austin and runs a clinic.", fitMemoryText(sentence, max = 80))
+        val clauses = "Is exploring city government software as a startup market; noted slow exits and small contracts; public sector"
+        assertEquals(
+            "Is exploring city government software as a startup market; noted slow exits and small contracts…",
+            fitMemoryText(clauses, max = 104)
+        )
+        val words = "Prefers answers that lead with the verdict and keep every number in a table"
+        val cut = fitMemoryText(words, max = 40)
+        assertTrue(cut.endsWith("…") && cut.length <= 40 && words.startsWith(cut.dropLast(1)), cut)
+        assertEquals(' ', words[cut.length - 1], "cut at a word break: $cut")
+        assertEquals("Short fact.", fitMemoryText("Short fact.", max = 40))
     }
 }

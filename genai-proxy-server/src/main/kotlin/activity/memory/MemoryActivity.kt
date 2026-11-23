@@ -12,6 +12,7 @@ import com.genflowly.models.api.GetMemoriesResponse
 import com.genflowly.models.api.LearnedFactView
 import com.genflowly.models.api.LearnedFactsResponse
 import com.genflowly.models.api.MemoryDetailResponse
+import com.genflowly.models.api.MemoryInferenceResponse
 import com.genflowly.models.api.MemoryResponse
 import com.genflowly.models.api.MemoryUsagePage
 import com.genflowly.models.api.MoveMemoryRequest
@@ -339,6 +340,34 @@ fun Route.registerMemoryRoutes(
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_USAGE_PAGE
                 val cursor = call.request.queryParameters["cursor"]?.takeIf { it.isNotBlank() }
                 call.respond(HttpStatusCode.OK, memoryService.getUsagePage(customerId, call.memoryId(), limit, cursor))
+            }
+        }
+
+        get(Routes.MEMORY_INFERENCE, {
+            tags("Memories")
+            summary = "How a memory was inferred"
+            description = "The extraction run that learned or changed the memory: what triggered it, " +
+                    "the lines it read (the caller's own messages and the replies to them, quoted live), " +
+                    "every operation it proposed with its reason and outcome, the provider that answered " +
+                    "and what the run cost. Runs are stored per customer, so only the turn's author can " +
+                    "read them. $WEB_APP_ONLY"
+            request {
+                memoryIdParameter()
+                pathParameter<String>("runId") { description = "Run id from the learned fact or the change log" }
+            }
+            response {
+                code(HttpStatusCode.OK) {
+                    description = "The run and this memory's part in it"
+                    body<MemoryInferenceResponse>()
+                }
+                notFound()
+            }
+        }) {
+            call.handleMemoryErrors("read how a memory was inferred") {
+                val customerId = call.requireAuthenticatedCustomerId(customerProfileService)
+                val runId = call.parameters["runId"]?.takeIf { it.isNotBlank() }
+                    ?: throw MemoryNotFoundException(call.memoryId())
+                call.respond(HttpStatusCode.OK, memoryService.getInference(customerId, call.memoryId(), runId))
             }
         }
     }
