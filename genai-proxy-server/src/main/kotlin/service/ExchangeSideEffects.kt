@@ -22,11 +22,17 @@ class ExchangeSideEffects(
         responseMessageId: String,
         bearerToken: String?,
         learnFromConversation: Boolean,
+        /** The user message of the turn; memory learns once per turn from all of its responses. */
+        turnMessageId: String? = null,
+        /** How many responses the turn has, when the caller knows. */
+        expectedResponses: Int? = null,
     ) {
         if (learnFromConversation) {
             memoryExtractionService.enqueueConversationExtraction(
                 customerId, conversationId,
-                responseMessageId = responseMessageId
+                responseMessageId = responseMessageId,
+                turnMessageId = turnMessageId,
+                expectedResponses = expectedResponses,
             )
         }
         conversationIndexingService.indexExchangeAsync(

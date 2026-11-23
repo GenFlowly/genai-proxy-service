@@ -144,7 +144,11 @@ fun Route.registerGenerateTextRoutes(
                         userText = request.prompt.prompt,
                         responseMessageId = message.messageId,
                         bearerToken = call.bearerToken(),
-                        learnFromConversation = request.learnFromConversation
+                        learnFromConversation = request.learnFromConversation,
+                        // Every vendor's response is saved before this point, so
+                        // the turn is complete
+                        turnMessageId = message.previousMessageId,
+                        expectedResponses = 1,
                     )
                 }
 

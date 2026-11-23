@@ -13,6 +13,7 @@ import com.genflowly.models.api.MemoryChange
 import com.genflowly.models.api.MemoryChangeType
 import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemoryPlacement
+import com.genflowly.models.api.MemoryRun
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.models.api.MemoryUsage
 import java.time.Instant
@@ -42,6 +43,8 @@ data class MemoryChangeCause(
     val messageId: String? = null,
     val noteKey: String? = null,
     val reason: String? = null,
+    /** The extraction run that proposed it, when one is recorded. */
+    val runId: String? = null,
 )
 
 /**
@@ -465,6 +468,12 @@ class MemoryRepository(
         val dueAt: String,
         val attempts: Int,
         val responseMessageId: String?,
+        /** The user message the pending turn started from; null on rows written before turns were tracked. */
+        val turnMessageId: String? = null,
+        /** How many responses the client said the turn has; null when it didn't say. */
+        val expectedResponses: Int? = null,
+        /** The turn's responses that have finished so far. */
+        val responseMessageIds: List<String> = emptyList(),
     )
 
     /**
@@ -577,9 +586,118 @@ class MemoryRepository(
                     dueAt = item[DynamoDBConstants.MEMORY_PENDING_DUE_AT_KEY]?.s() ?: "",
                     attempts = item["attempts"]?.n()?.toIntOrNull() ?: 0,
                     responseMessageId = item["responseMessageId"]?.s()?.takeIf { it.isNotBlank() },
+                    turnMessageId = item["turnMessageId"]?.s()?.takeIf { it.isNotBlank() },
+                    expectedResponses = item["expectedResponses"]?.n()?.toIntOrNull(),
+                    responseMessageIds = item["responseMessageIds"]?.ss().orEmpty().sorted(),
                 )
             }
         }
+
+    /**
+     * Records one finished response of a turn on the conversation's pending
+     * row and returns the row as it now stands. The row belongs to ONE turn:
+     * a response of a newer turn replaces it (its attempts start over), a
+     * response of the same turn joins the set. [dueAt] is the reconciler's
+     * backstop for this response's run.
+     */
+    suspend fun recordTurnResponse(
+        customerId: String,
+        conversationId: String,
+        turnMessageId: String,
+        responseMessageId: String,
+        expectedResponses: Int?,
+        dueAt: Instant,
+    ): PendingExtraction = withContext(Dispatchers.IO) {
+        val key = memoryKey(customerId, "${DynamoDBConstants.MEMORY_PENDING_PREFIX}$conversationId")
+        val now = Instant.now().toString()
+        val common = mutableMapOf(
+            ":shard" to AttributeValue.builder().s(DynamoDBConstants.MEMORY_PENDING_SHARD_VALUE).build(),
+            ":due" to AttributeValue.builder().s(dueAt.toString()).build(),
+            ":turn" to AttributeValue.builder().s(turnMessageId).build(),
+            ":rmid" to AttributeValue.builder().s(responseMessageId).build(),
+            ":ids" to AttributeValue.builder().ss(responseMessageId).build(),
+            ":now" to AttributeValue.builder().s(now).build(),
+            ":zero" to AttributeValue.builder().n("0").build(),
+        )
+        val expectedSet = if (expectedResponses != null) {
+            common[":exp"] = AttributeValue.builder().n(expectedResponses.toString()).build()
+            ", expectedResponses = :exp"
+        } else ""
+        val joined = try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                    .key(key)
+                    .updateExpression(
+                        "SET ${DynamoDBConstants.MEMORY_PENDING_SHARD_KEY} = :shard, " +
+                                "${DynamoDBConstants.MEMORY_PENDING_DUE_AT_KEY} = :due, turnMessageId = :turn, " +
+                                "responseMessageId = :rmid, updatedAt = :now, attempts = if_not_exists(attempts, :zero)" +
+                                "$expectedSet ADD responseMessageIds :ids"
+                    )
+                    .conditionExpression("attribute_not_exists(turnMessageId) OR turnMessageId = :turn")
+                    .expressionAttributeValues(common)
+                    .returnValues(software.amazon.awssdk.services.dynamodb.model.ReturnValue.ALL_NEW)
+                    .build()
+            ).attributes()
+        } catch (e: ConditionalCheckFailedException) {
+            null
+        }
+        val attrs = joined ?: dynamoDbClient.updateItem(
+            UpdateItemRequest.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                .key(key)
+                .updateExpression(
+                    "SET ${DynamoDBConstants.MEMORY_PENDING_SHARD_KEY} = :shard, " +
+                            "${DynamoDBConstants.MEMORY_PENDING_DUE_AT_KEY} = :due, turnMessageId = :turn, " +
+                            "responseMessageId = :rmid, updatedAt = :now, attempts = :zero, " +
+                            "responseMessageIds = :ids$expectedSet" +
+                            (if (expectedResponses == null) " REMOVE expectedResponses" else "")
+                )
+                .expressionAttributeValues(common)
+                .returnValues(software.amazon.awssdk.services.dynamodb.model.ReturnValue.ALL_NEW)
+                .build()
+        ).attributes()
+        PendingExtraction(
+            customerId = customerId,
+            conversationId = conversationId,
+            dueAt = attrs[DynamoDBConstants.MEMORY_PENDING_DUE_AT_KEY]?.s() ?: dueAt.toString(),
+            attempts = attrs["attempts"]?.n()?.toIntOrNull() ?: 0,
+            responseMessageId = responseMessageId,
+            turnMessageId = turnMessageId,
+            expectedResponses = attrs["expectedResponses"]?.n()?.toIntOrNull(),
+            responseMessageIds = attrs["responseMessageIds"]?.ss().orEmpty().sorted(),
+        )
+    }
+
+    /** Stores what one extraction run read, decided and cost. Overwrites nothing: run ids are unique. */
+    suspend fun putRun(customerId: String, run: MemoryRun): Unit = withContext(Dispatchers.IO) {
+        dynamoDbClient.putItem(
+            software.amazon.awssdk.services.dynamodb.model.PutItemRequest.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                .item(
+                    mapOf(
+                        CUSTOMER_ID_KEY to s(customerId),
+                        MEMORY_ID_KEY to s("${DynamoDBConstants.MEMORY_RUN_PREFIX}${run.runId}"),
+                        "createdAt" to s(run.startedAt),
+                        "conversationId" to s(run.conversationId ?: ""),
+                        "runJson" to s(runJson.encodeToString(MemoryRun.serializer(), run)),
+                    )
+                )
+                .build()
+        )
+        Unit
+    }
+
+    suspend fun getRun(customerId: String, runId: String): MemoryRun? = withContext(Dispatchers.IO) {
+        val item = dynamoDbClient.getItem(
+            GetItemRequest.builder()
+                .tableName(DynamoDBConstants.CUSTOMER_MEMORY_TABLE)
+                .key(memoryKey(customerId, "${DynamoDBConstants.MEMORY_RUN_PREFIX}$runId"))
+                .build()
+        ).item()
+        val raw = item?.get("runJson")?.s() ?: return@withContext null
+        runCatching { runJson.decodeFromString(MemoryRun.serializer(), raw) }.getOrNull()
+    }
 
     private fun memoryKey(customerId: String, memoryId: String) = mapOf(
         CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
@@ -625,6 +743,7 @@ class MemoryRepository(
         cause.messageId?.let { item["messageId"] = s(it) }
         cause.noteKey?.let { item["noteKey"] = s(it) }
         cause.reason?.takeIf { it.isNotBlank() }?.let { item["reason"] = s(it) }
+        cause.runId?.let { item["runId"] = s(it) }
         from?.let { item[FROM_PLACEMENTS] = placementsValue(it) }
         to?.let { item[TO_PLACEMENTS] = placementsValue(it) }
         return TransactWriteItem.builder().put(
@@ -707,6 +826,7 @@ class MemoryRepository(
             messageId = item["messageId"]?.s(),
             noteKey = item["noteKey"]?.s(),
             reason = item["reason"]?.s(),
+            runId = item["runId"]?.s(),
             from = item[FROM_PLACEMENTS]?.m()?.let { parsePlacements(it) },
             to = item[TO_PLACEMENTS]?.m()?.let { parsePlacements(it) },
         )
@@ -736,6 +856,8 @@ class MemoryRepository(
         AttributeValue.builder().m(
             placements.associate { (it.projectId ?: MEMORY_PROFILE_PLACEMENT) to s(it.kind.name) }
         ).build()
+
+    private val runJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private fun s(value: String): AttributeValue = AttributeValue.builder().s(value).build()
 

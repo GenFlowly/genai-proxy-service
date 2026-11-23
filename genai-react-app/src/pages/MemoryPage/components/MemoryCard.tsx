@@ -1,11 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { Icon } from '@genflowly/component-library'
+import React from 'react'
+import { MemoryCard as LibraryMemoryCard } from '@genflowly/component-library'
 import { ICONS } from '../../../constants/icons'
 import { CustomerMemory, MemoryPlacement } from '../../../models/memory.models'
 import { formatServerDateOnly } from '../../../utils/timeUtils'
 import { kindLabel } from '../memoryLabels'
-import styles from '../MemoryPage.module.scss'
 
 export interface MemoryAction {
     id: 'edit' | 'move' | 'copy' | 'delete'
@@ -13,16 +11,6 @@ export interface MemoryAction {
     icon: string
     danger?: boolean
     onSelect: () => void
-}
-
-export function KebabIcon(): React.ReactElement {
-    return (
-        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-            <circle cx="5" cy="12" r="1.7" />
-            <circle cx="12" cy="12" r="1.7" />
-            <circle cx="19" cy="12" r="1.7" />
-        </svg>
-    )
 }
 
 interface MemoryCardProps {
@@ -38,89 +26,27 @@ interface MemoryCardProps {
     onShowActions?: () => void
 }
 
-/** One memory in a list: tag, text, how often it was used, version and date. */
+/** One memory in a list: tag, text, how often it was used, version and date (the library card). */
 export default function MemoryCard({ memory, placement, actions, onOpen, onShowActions }: MemoryCardProps): React.ReactElement {
-    const { t } = useTranslation()
-    const [menuOpen, setMenuOpen] = useState(false)
-    const menuRef = useRef<HTMLDivElement>(null)
-
-    useEffect(() => {
-        if (!menuOpen) return
-        const close = (event: MouseEvent | KeyboardEvent) => {
-            if (event instanceof KeyboardEvent) {
-                if (event.key === 'Escape') setMenuOpen(false)
-                return
-            }
-            if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false)
-        }
-        document.addEventListener('mousedown', close)
-        document.addEventListener('keydown', close)
-        return () => {
-            document.removeEventListener('mousedown', close)
-            document.removeEventListener('keydown', close)
-        }
-    }, [menuOpen])
-
-    const date = formatServerDateOnly(memory.updatedAt || memory.createdAt)
-
+    const tags = [
+        ...(memory.category ? [{ label: memory.category }] : []),
+        ...(placement.projectId ? [{ label: kindLabel(placement.kind), variant: 'kind' as const }] : []),
+    ]
     return (
-        <article
-            className={`${styles.card} ${menuOpen ? styles.cardMenuOpen : ''}`}
-            data-testid={`memory-card-${memory.memoryId}`}
-        >
-            <div className={styles.cardHead}>
-                {memory.category && <span className={styles.tag}>{memory.category}</span>}
-                {placement.projectId && (
-                    <span className={`${styles.tag} ${styles.tagKind}`}>{kindLabel(placement.kind)}</span>
-                )}
-                <span className={styles.spacer} />
-                <div className={styles.menuAnchor} ref={menuRef}>
-                    <button
-                        type="button"
-                        className={styles.kebab}
-                        aria-label={t('memoryPage.list.actions')}
-                        aria-haspopup="menu"
-                        aria-expanded={menuOpen}
-                        onClick={() => (onShowActions ? onShowActions() : setMenuOpen(open => !open))}
-                        data-testid={`memory-card-actions-${memory.memoryId}`}
-                    >
-                        <KebabIcon />
-                    </button>
-                    {menuOpen && (
-                        <div className={styles.menu} role="menu" aria-label={t('memoryPage.list.actions')}>
-                            {actions.map(action => (
-                                <button
-                                    key={action.id}
-                                    type="button"
-                                    role="menuitem"
-                                    className={`${styles.menuItem} ${action.danger ? styles.menuItemDanger : ''}`}
-                                    onClick={() => {
-                                        setMenuOpen(false)
-                                        action.onSelect()
-                                    }}
-                                    data-testid={`memory-action-${action.id}`}
-                                >
-                                    <Icon src={action.icon} size={15} aria-hidden={true} />
-                                    {action.label}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-            <button type="button" className={styles.cardText} onClick={onOpen} data-testid={`memory-card-open-${memory.memoryId}`}>
-                {memory.text}
-            </button>
-            <div className={styles.cardFoot}>
-                <span>
-                    {t('memoryPage.list.used')}{' '}
-                    <strong className={styles.count}>{t('memoryPage.list.times', { count: memory.hitCount })}</strong>
-                </span>
-                <span className={styles.versionBadge}>{t('memoryPage.list.version', { version: memory.version })}</span>
-                <span className={styles.spacer} />
-                <span>{date}</span>
-            </div>
-        </article>
+        <LibraryMemoryCard
+            text={memory.text}
+            tags={tags}
+            actions={actions}
+            onOpen={onOpen}
+            onShowActions={onShowActions}
+            showUsage
+            usageCount={memory.hitCount}
+            version={memory.version}
+            date={formatServerDateOnly(memory.updatedAt || memory.createdAt)}
+            testId={`memory-card-${memory.memoryId}`}
+            actionsTestId={`memory-card-actions-${memory.memoryId}`}
+            openTestId={`memory-card-open-${memory.memoryId}`}
+        />
     )
 }
 

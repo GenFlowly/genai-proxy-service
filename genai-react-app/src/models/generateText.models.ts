@@ -44,6 +44,11 @@ export interface GenerateTextStreamRequest {
      * the model is still "thinking".
      */
     generationId?: string
+    /**
+     * How many vendor responses this turn has (one stream request each).
+     * Memory learns once per turn, from all of them, after the last one.
+     */
+    turnResponseCount?: number
 }
 
 export interface GenerateTextResponse {

@@ -3,6 +3,7 @@ package com.genflowly.service
 import com.genflowly.EmbeddingConstants
 import com.genflowly.config.AppConfig
 import com.genflowly.models.AIGenerateResult
+import com.genflowly.models.AIVendor
 import com.genflowly.models.CustomerAIProviderConfig
 import com.genflowly.models.ResolvedAgent
 import com.genflowly.models.toCredentialKey
@@ -73,7 +74,7 @@ class GenerationAgentExecutor(
         conversationId: String
     ): AIGenerateResult {
         return try {
-            runWithFailover(agent, variables, customerId, agent.requestType.name) { it }
+            runWithFailover(agent, variables, customerId, agent.requestType.name) { result, _ -> result }
         } catch (e: NoCustomerAIKeyException) {
             logger.warn { "${agent.requestType}: skipped for customer $customerId — ${e.message}" }
             emptyResult()
@@ -104,7 +105,33 @@ class GenerationAgentExecutor(
         /** JSON Schema for vendor-enforced structured output — makes [parse] failures near-impossible */
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
         parse: (String) -> T
-    ): T = runWithFailover(agent, variables, customerId, operationName, responseSchema) { parse(it.text) }
+    ): T = runWithFailover(agent, variables, customerId, operationName, responseSchema) { result, _ -> parse(result.text) }
+
+    /** The provider that answered and what the call used, beside the parsed value. */
+    data class FailoverOutcome<T>(
+        val value: T,
+        val vendor: AIVendor,
+        val model: String,
+        val inputTokens: Int?,
+        val outputTokens: Int?,
+        val tokensReadFromCache: Int?,
+    )
+
+    /** [executeWithCustomerFailover] that also reports the provider and usage of the successful call. */
+    suspend fun <T> executeWithCustomerFailoverDetailed(
+        agent: ResolvedAgent,
+        variables: Map<String, String>,
+        customerId: String,
+        conversationId: String,
+        operationName: String,
+        responseSchema: kotlinx.serialization.json.JsonObject? = null,
+        parse: (String) -> T
+    ): FailoverOutcome<T> = runWithFailover(agent, variables, customerId, operationName, responseSchema) { result, candidate ->
+        FailoverOutcome(
+            parse(result.text), candidate.aiVendor, candidate.model,
+            result.inputTokens, result.outputTokens, result.tokensReadFromCache
+        )
+    }
 
     private suspend fun <T> runWithFailover(
         agent: ResolvedAgent,
@@ -112,7 +139,7 @@ class GenerationAgentExecutor(
         customerId: String,
         operationName: String,
         responseSchema: kotlinx.serialization.json.JsonObject? = null,
-        transform: (AIGenerateResult) -> T
+        transform: (AIGenerateResult, CustomerAIProviderConfig) -> T
     ): T {
         val candidates = buildCandidates(agent, customerId)
         if (candidates.isEmpty()) {
@@ -129,7 +156,7 @@ class GenerationAgentExecutor(
                             "(priority ${candidate.priority}, graph=${agent.graphId}, systemKey=${candidate.systemKey})"
                 }
                 val result = executeGraph(agent, variables, customerId, candidate, responseSchema)
-                return transform(result)
+                return transform(result, candidate)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

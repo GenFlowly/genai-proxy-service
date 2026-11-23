@@ -246,10 +246,16 @@ class PurgeRepository(
         deleteMemoryRows(customerId, memoryId.removePrefix(DynamoDBConstants.MEMORY_ITEM_PREFIX) + "#")
 
     /** Deletes the change logs and usage logs of every memory the customer has. */
-    suspend fun deleteAllMemoryHistory(customerId: String): Int = deleteMemoryRows(customerId, "")
+    suspend fun deleteAllMemoryHistory(customerId: String): Int =
+        deleteMemoryRows(customerId, "") + deleteMemoryRows(customerId, "", listOf(DynamoDBConstants.MEMORY_RUN_PREFIX))
 
-    private suspend fun deleteMemoryRows(customerId: String, suffix: String): Int =
-        listOf(DynamoDBConstants.MEMORY_CHANGE_PREFIX, DynamoDBConstants.MEMORY_USAGE_PREFIX).sumOf { prefix ->
+    /** Runs are kept when one memory goes: they explain the other memories of the same run too. */
+    private suspend fun deleteMemoryRows(
+        customerId: String,
+        suffix: String,
+        prefixes: List<String> = listOf(DynamoDBConstants.MEMORY_CHANGE_PREFIX, DynamoDBConstants.MEMORY_USAGE_PREFIX),
+    ): Int =
+        prefixes.sumOf { prefix ->
             deleteKeys(
                 DynamoDBConstants.CUSTOMER_MEMORY_TABLE,
                 keys(

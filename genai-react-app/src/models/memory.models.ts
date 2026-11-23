@@ -47,6 +47,8 @@ export interface MemoryChange {
     messageId?: string | null
     noteKey?: string | null
     reason?: string | null
+    /** The extraction run behind this change, for "How it was inferred". */
+    runId?: string | null
     from?: MemoryPlacement[] | null
     to?: MemoryPlacement[] | null
     conversationTitle?: string | null

@@ -81,6 +81,12 @@ export function memoryHistory(
                     <span className={`${detailStyles.chip} ${detailStyles.chipAccent}`}>{placementsLabel(change.to, names)}</span>
                 </div>
             ) : undefined,
+            inference: change.runId
+                ? {
+                    label: i18n.t('conversation.learnedMemory.howInferred'),
+                    to: memorySubPath(memory.memoryId, `/inference/${encodeURIComponent(change.runId)}`, scope),
+                }
+                : undefined,
             view: change.version != null && !current
                 ? {
                     label: i18n.t('memoryPage.page.viewVersion', { version: change.version }),

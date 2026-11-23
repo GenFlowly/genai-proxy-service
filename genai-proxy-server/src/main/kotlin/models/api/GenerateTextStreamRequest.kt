@@ -59,6 +59,13 @@ data class GenerateTextStreamRequest(
     val regenerateMessageId: String? = null,
 
     /**
+     * How many vendor responses the client is generating for this turn (one
+     * stream request each). Memory learns once per turn, after the last of
+     * them; without this the turn is learned after a short debounce instead.
+     */
+    val turnResponseCount: Int? = null,
+
+    /**
      * Client-generated id for this generation, usable with the cancel endpoint
      * from the moment the request is sent. The server-assigned
      * responseMessageId only reaches the client in the response headers, so a

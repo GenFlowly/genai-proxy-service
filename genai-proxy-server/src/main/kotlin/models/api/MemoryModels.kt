@@ -84,6 +84,8 @@ data class MemoryChange(
     val reason: String? = null,
     val from: List<MemoryPlacement>? = null,
     val to: List<MemoryPlacement>? = null,
+    /** The extraction run that made this change, when one was recorded. */
+    val runId: String? = null,
     val conversationTitle: String? = null,
     val conversationAvailable: Boolean? = null,
     val youSaid: String? = null,
@@ -140,7 +142,15 @@ data class DeleteAllMemoriesResponse(val status: String, val deleted: Int)
 
 /** One fact learned about the user from an exchange (a created memory). */
 @Serializable
-data class LearnedFactView(val memoryId: String, val text: String)
+data class LearnedFactView(
+    val memoryId: String,
+    val text: String,
+    /** CORE or EPISODIC; absent on facts stored before kinds were recorded here. */
+    val kind: String? = null,
+    val changeId: String? = null,
+    /** The run that learned it, for the "how it was inferred" page. */
+    val runId: String? = null,
+)
 
 /**
  * Async memory-extraction outcome for a message. status "pending" while
@@ -151,4 +161,74 @@ data class LearnedFactView(val memoryId: String, val text: String)
 data class LearnedFactsResponse(
     val status: String,
     val facts: List<LearnedFactView> = emptyList(),
+)
+
+/** One assistant response the memory agent read during a run. */
+@Serializable
+data class MemoryRunResponse(val messageId: String, val vendor: String, val model: String? = null)
+
+/** One operation the memory agent proposed, and what became of it. */
+@Serializable
+data class MemoryRunOperation(
+    val op: String,
+    val memoryId: String? = null,
+    val text: String? = null,
+    val reason: String? = null,
+    val messageIndex: Int? = null,
+    /** applied, noop or error */
+    val outcome: String,
+    /** Set when serving: the memory this operation made has since been deleted. Never stored. */
+    val memoryDeleted: Boolean = false,
+)
+
+/**
+ * What one extraction run read, decided and cost. Stored under MEMRUN#<runId>
+ * when the run completes; the "how it was inferred" page tells its story.
+ */
+@Serializable
+data class MemoryRun(
+    val runId: String,
+    val source: String,
+    val conversationId: String? = null,
+    val projectId: String? = null,
+    /** The user message the turn started from. */
+    val turnMessageId: String? = null,
+    /** Every message line the agent read, in transcript order. */
+    val messageIds: List<String> = emptyList(),
+    val responsesRead: List<MemoryRunResponse> = emptyList(),
+    val existingShown: Int = 0,
+    val agentId: String? = null,
+    val agentVersion: Int? = null,
+    val vendor: String? = null,
+    val model: String? = null,
+    val startedAt: String,
+    val durationMs: Long,
+    val inputTokens: Int? = null,
+    val outputTokens: Int? = null,
+    val costUsd: Double? = null,
+    val operations: List<MemoryRunOperation> = emptyList(),
+    val truncated: Boolean = false,
+)
+
+/** One message the agent read, quoted for the inference page. */
+@Serializable
+data class MemoryInferenceExcerpt(
+    val messageId: String,
+    val role: String,
+    val vendor: String? = null,
+    /** Transcript line number the agent saw. */
+    val index: Int,
+    val text: String,
+    /** True on the line the memory's change points at. */
+    val taken: Boolean = false,
+)
+
+@Serializable
+data class MemoryInferenceResponse(
+    val memory: CustomerMemory,
+    val change: MemoryChange? = null,
+    val run: MemoryRun,
+    val excerpts: List<MemoryInferenceExcerpt> = emptyList(),
+    val conversationTitle: String? = null,
+    val conversationDeleted: Boolean = false,
 )

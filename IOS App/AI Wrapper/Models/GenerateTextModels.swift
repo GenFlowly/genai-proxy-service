@@ -75,6 +75,9 @@ struct GenerateTextStreamRequest: Codable {
     /// Client-minted id usable with the cancel endpoint from the moment the
     /// request is sent — the server's responseMessageId only arrives in headers.
     var generationId: String?
+    /// How many vendor responses the turn has (one stream request each). Memory learns
+    /// once per turn, from all of them, after the last one.
+    var turnResponseCount: Int?
 }
 
 struct GenerateTextResponse: Codable {

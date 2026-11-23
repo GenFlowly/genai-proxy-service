@@ -9,6 +9,8 @@ import com.genflowly.models.api.GetMemoriesResponse
 import com.genflowly.models.api.MemoryChange
 import com.genflowly.models.api.MemoryChangeType
 import com.genflowly.models.api.MemoryDetailResponse
+import com.genflowly.models.api.MemoryInferenceExcerpt
+import com.genflowly.models.api.MemoryInferenceResponse
 import com.genflowly.models.api.MemoryPlacement
 import com.genflowly.models.api.MemorySourceType
 import com.genflowly.models.api.MemoryUsagePage
@@ -288,6 +290,60 @@ class MemoryService(
         )
     }
 
+    /**
+     * How [memoryId] was inferred by run [runId]: the memory, its change from
+     * that run, the run as recorded, and the lines the agent read, quoted
+     * live. Only the caller's own messages (and the replies to them) are
+     * quoted; a deleted conversation leaves the run without excerpts.
+     */
+    suspend fun getInference(customerId: String, memoryId: String, runId: String): MemoryInferenceResponse {
+        val memory = getMemory(customerId, memoryId)
+        val run = memoryRepository.getRun(customerId, runId) ?: throw MemoryNotFoundException(memoryId)
+        val change = memoryRepository.getChanges(customerId, memoryId).lastOrNull { it.runId == runId }
+        if (change == null && run.operations.none { it.memoryId == memoryId }) throw MemoryNotFoundException(memoryId)
+        val existing = memoryRepository.getMemories(customerId).map { it.memoryId }.toSet()
+        val operations = run.operations.map { op ->
+            if (op.op != "DELETE" && op.memoryId != null && op.memoryId !in existing) {
+                op.copy(text = null, reason = null, memoryDeleted = true)
+            } else op
+        }
+        val conversationId = run.conversationId
+        val info = conversationId?.let { conversationInfo(customerId, listOf(it))[it] }
+        val available = info?.available == true
+        val excerpts = if (conversationId == null || !available) emptyList() else coroutineScope {
+            run.messageIds.withIndex().map { (i, messageId) ->
+                async {
+                    val message = try {
+                        conversationService.getMessage(conversationId, messageId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        null
+                    }
+                    message?.takeIf { it.customerId == customerId }?.let {
+                        val text = plainQuote(it.text)
+                        MemoryInferenceExcerpt(
+                            messageId = it.messageId,
+                            role = it.role,
+                            vendor = it.aiConfig.firstOrNull()?.aiVendor?.name?.takeIf { _ -> it.role == "assistant" },
+                            index = i + 1,
+                            text = if (text.length <= MAX_QUOTE_CHARS) text else text.take(MAX_QUOTE_CHARS).trimEnd() + "…",
+                            taken = it.messageId == change?.messageId,
+                        )
+                    }
+                }
+            }.awaitAll().filterNotNull()
+        }
+        return MemoryInferenceResponse(
+            memory = memory,
+            change = change,
+            run = run.copy(operations = operations),
+            excerpts = excerpts,
+            conversationTitle = info?.title,
+            conversationDeleted = conversationId != null && !available,
+        )
+    }
+
     /** One page of the replies the memory was used in, newest first. */
     suspend fun getUsagePage(customerId: String, memoryId: String, limit: Int, cursor: String?): MemoryUsagePage {
         val memory = getMemory(customerId, memoryId)
@@ -304,7 +360,41 @@ class MemoryService(
     }
 
     private suspend fun deleteEverywhere(customerId: String, memoryId: String) {
+        // The conversations that learned it and the runs that wrote it, read before its change log goes
+        val changes = try {
+            memoryRepository.getChanges(customerId, memoryId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val conversationIds = changes.mapNotNull { it.conversationId }.distinct()
+        val runIds = changes.mapNotNull { it.runId }.distinct()
         if (!memoryRepository.deleteMemory(customerId, memoryId)) throw MemoryNotFoundException(memoryId)
+        // Off the request path, like the history purge: the replies that listed
+        // it stop showing it
+        appScope.launch {
+            conversationIds.forEach { conversationId ->
+                try {
+                    conversationService.removeLearnedFact(conversationId, memoryId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.warn("Could not remove memory $memoryId from the replies of $conversationId: ${e.message}")
+                }
+            }
+        }
+        appScope.launch {
+            runIds.forEach { runId ->
+                try {
+                    forgetInRun(customerId, runId, memoryId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.warn("Could not remove memory $memoryId from run $runId: ${e.message}")
+                }
+            }
+        }
         appScope.launch {
             try {
                 purgeRepository.deleteMemoryHistory(customerId, memoryId)
@@ -315,6 +405,16 @@ class MemoryService(
             }
             memoryVectorService.delete(customerId, memoryId)
         }
+    }
+
+    /** Runs outlive a memory because they explain its siblings, so they keep only that it existed. */
+    private suspend fun forgetInRun(customerId: String, runId: String, memoryId: String) {
+        val run = memoryRepository.getRun(customerId, runId) ?: return
+        if (run.operations.none { it.memoryId == memoryId && (it.text != null || it.reason != null) }) return
+        memoryRepository.putRun(
+            customerId,
+            run.copy(operations = run.operations.map { if (it.memoryId == memoryId) it.copy(text = null, reason = null) else it })
+        )
     }
 
     /** Why a conditional write was refused: the memory is gone, or it changed. */
@@ -387,3 +487,20 @@ class MemoryService(
         const val LEGACY_CHANGE_ID = "legacy"
     }
 }
+
+/**
+ * A message as a one-paragraph quote: markdown marks, code fences, links and
+ * list bullets removed, whitespace collapsed. Replies are markdown; a quote
+ * of "**learn Rive next** ### Why" reads as noise.
+ */
+internal fun plainQuote(markdown: String): String = markdown
+    .replace(Regex("```[\\s\\S]*?```"), " ")
+    .replace(Regex("`([^`]*)`"), "$1")
+    .replace(Regex("!?\\[([^\\]]*)]\\([^)]*\\)"), "$1")
+    .replace(Regex("(?m)^\\s{0,3}#{1,6}\\s+"), "")
+    .replace(Regex("(?m)^\\s*>\\s?"), "")
+    .replace(Regex("(?m)^\\s*(?:[-*+]|\\d+[.)])\\s+"), "")
+    .replace(Regex("(\\*\\*|__)(.+?)\\1"), "$2")
+    .replace(Regex("(?<![\\w*])\\*(?!\\s)(.+?)(?<!\\s)\\*(?![\\w*])"), "$1")
+    .replace(Regex("\\s+"), " ")
+    .trim()

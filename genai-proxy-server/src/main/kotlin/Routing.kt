@@ -230,6 +230,7 @@ object Routes {
     const val MOVE_MEMORY = "$API_V1/memories/{memoryId}/move"
     const val COPY_MEMORY = "$API_V1/memories/{memoryId}/copy"
     const val MEMORY_USAGE = "$API_V1/memories/{memoryId}/usage"
+    const val MEMORY_INFERENCE = "$API_V1/memories/{memoryId}/inference/{runId}"
     const val GET_LEARNED_FACTS = "$API_V1/conversation/learned-facts"
 }
 

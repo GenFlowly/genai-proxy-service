@@ -21,6 +21,7 @@ import com.genflowly.repository.PurgeRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -362,5 +363,157 @@ class MemoryServiceTest {
         assertEquals(listOf("Weekly Report Format", "Weekly Report Format", null), page.items.map { it.conversationTitle })
         assertFalse(page.items.last().conversationAvailable)
         coVerify(exactly = 1) { conversations.getConversationTitle("CONV1", "CU1") }
+    }
+
+    // ── How a memory was inferred ───────────────────────────────────────────
+
+    private fun inferenceMessage(id: String, customer: String, role: String, text: String, vendor: String? = null) = Message(
+        messageId = id, conversationId = "CONV1", text = text, client = "test", role = role, customerId = customer,
+        systemPrompt = "", previousMessageId = null,
+        aiConfig = listOfNotNull(vendor?.let { com.genflowly.models.AIConfig(com.genflowly.models.AIVendor(it), "m") })
+    )
+
+    private fun inferenceRun() = com.genflowly.models.api.MemoryRun(
+        runId = "RUN1", source = "conversation", conversationId = "CONV1", turnMessageId = "U3",
+        messageIds = listOf("U1", "U3", "R-openai", "R-claude"),
+        responsesRead = listOf(
+            com.genflowly.models.api.MemoryRunResponse("R-openai", "OPENAI", "gpt-5.4"),
+            com.genflowly.models.api.MemoryRunResponse("R-claude", "CLAUDE", "claude-fable-5-1"),
+        ),
+        existingShown = 12, vendor = "OPENAI", model = "gpt-5.4", startedAt = "2026-11-22T14:32:00Z", durationMs = 4200,
+        operations = listOf(
+            com.genflowly.models.api.MemoryRunOperation("ADD", "MEM#1", "Prefers short answers.", "Says so", 2, "applied")
+        ),
+    )
+
+    @Test
+    fun `the inference quotes what the agent read, marks the line it took, and leaves out other people's words`() = runTest {
+        stored(memory(profileCore))
+        coEvery { memoryRepo.getRun("CU1", "RUN1") } returns inferenceRun()
+        coEvery { memoryRepo.getChanges("CU1", "MEM#1") } returns listOf(
+            MemoryChange(
+                changeId = "MEMCHG#1", type = MemoryChangeType.LEARNED, createdAt = "t", version = 1,
+                text = "Prefers short answers.", conversationId = "CONV1", messageId = "U3", reason = "Says so", runId = "RUN1"
+            )
+        )
+        coEvery { conversations.getConversationTitle("CONV1", "CU1") } returns "Weekly Report Format"
+        coEvery { conversations.getMessage("CONV1", "U1") } returns inferenceMessage("U1", "CU-other", "user", "Someone else.")
+        coEvery { conversations.getMessage("CONV1", "U3") } returns inferenceMessage("U3", "CU1", "user", "Keep answers short.")
+        coEvery { conversations.getMessage("CONV1", "R-openai") } returns inferenceMessage("R-openai", "CU1", "assistant", "Sure.", "OPENAI")
+        coEvery { conversations.getMessage("CONV1", "R-claude") } returns inferenceMessage("R-claude", "CU1", "assistant", "Got it.", "CLAUDE")
+
+        coEvery { memoryRepo.getMemories("CU1") } returns listOf(memory(profileCore))
+
+        val inference = service.getInference("CU1", "MEM#1", "RUN1")
+
+        assertEquals("RUN1", inference.change?.runId)
+        assertFalse(inference.run.operations.single().memoryDeleted)
+        assertEquals(listOf("U3", "R-openai", "R-claude"), inference.excerpts.map { it.messageId })
+        assertEquals(listOf(true, false, false), inference.excerpts.map { it.taken })
+        assertEquals(listOf(null, "OPENAI", "CLAUDE"), inference.excerpts.map { it.vendor })
+        assertEquals(2, inference.excerpts.first().index)
+        assertEquals("Weekly Report Format", inference.conversationTitle)
+        assertFalse(inference.conversationDeleted)
+    }
+
+    @Test
+    fun `a deleted conversation leaves the run without excerpts`() = runTest {
+        stored(memory(profileCore))
+        coEvery { memoryRepo.getRun("CU1", "RUN1") } returns inferenceRun()
+        coEvery { memoryRepo.getChanges("CU1", "MEM#1") } returns emptyList()
+        coEvery { conversations.getConversationTitle("CONV1", "CU1") } throws ConversationAccessDeniedException("not found")
+        coEvery { memoryRepo.getMemories("CU1") } returns listOf(memory(profileCore))
+
+        val inference = service.getInference("CU1", "MEM#1", "RUN1")
+
+        assertTrue(inference.conversationDeleted)
+        assertTrue(inference.excerpts.isEmpty())
+        assertEquals(4200, inference.run.durationMs)
+    }
+
+    @Test
+    fun `an unknown run, or a run that never touched the memory, is not found`() = runTest {
+        stored(memory(profileCore))
+        coEvery { memoryRepo.getRun("CU1", "NOPE") } returns null
+        coEvery { memoryRepo.getRun("CU1", "OTHER") } returns inferenceRun().copy(operations = emptyList())
+        coEvery { memoryRepo.getChanges("CU1", "MEM#1") } returns emptyList()
+
+        assertFailsWith<MemoryNotFoundException> { service.getInference("CU1", "MEM#1", "NOPE") }
+        assertFailsWith<MemoryNotFoundException> { service.getInference("CU1", "MEM#1", "OTHER") }
+    }
+
+    @Test
+    fun `quotes are plain text, never markdown`() {
+        val reply = "My recommendation: **learn Rive next** (and keep *Lottie*).\n\n### Why Rive first\n- **Interactive**: states\n1. Ship `rive-ios` [docs](https://rive.app)\n> quoted"
+        assertEquals(
+            "My recommendation: learn Rive next (and keep Lottie). Why Rive first Interactive: states Ship rive-ios docs quoted",
+            plainQuote(reply)
+        )
+        assertEquals("2 * 3 = 6", plainQuote("2 * 3 = 6"))
+    }
+
+    @Test
+    fun `deleting a memory takes it out of the replies that listed it`() = runTest {
+        stored(memory(profileCore))
+        coEvery { memoryRepo.getChanges("CU1", "MEM#1") } returns listOf(
+            MemoryChange(changeId = "c1", type = MemoryChangeType.LEARNED, createdAt = "t", conversationId = "CONV1"),
+            MemoryChange(changeId = "c2", type = MemoryChangeType.UPDATED, createdAt = "t", conversationId = "CONV1"),
+            MemoryChange(changeId = "c3", type = MemoryChangeType.EDITED_BY_YOU, createdAt = "t"),
+        )
+        coEvery { memoryRepo.deleteMemory("CU1", "MEM#1") } returns true
+        coEvery { conversations.removeLearnedFact("CONV1", "MEM#1") } returns 2
+
+        assertTrue(service.deleteMemory("CU1", "MEM#1"))
+
+        coVerify(timeout = 2000, exactly = 1) { conversations.removeLearnedFact("CONV1", "MEM#1") }
+    }
+
+    @Test
+    fun `deleting a memory keeps its runs but drops its words from them`() = runTest {
+        stored(memory(profileCore))
+        coEvery { memoryRepo.getChanges("CU1", "MEM#1") } returns listOf(
+            MemoryChange(changeId = "c1", type = MemoryChangeType.LEARNED, createdAt = "t", conversationId = "CONV1", runId = "RUN1"),
+        )
+        coEvery { memoryRepo.deleteMemory("CU1", "MEM#1") } returns true
+        coEvery { conversations.removeLearnedFact("CONV1", "MEM#1") } returns 1
+        coEvery { memoryRepo.getRun("CU1", "RUN1") } returns inferenceRun().copy(
+            operations = listOf(
+                com.genflowly.models.api.MemoryRunOperation("ADD", "MEM#1", "Prefers short answers.", "Says so", 2, "applied"),
+                com.genflowly.models.api.MemoryRunOperation("ADD", "MEM#2", "Uses a MacBook.", "Mentions it", 2, "applied"),
+            )
+        )
+        val written = slot<com.genflowly.models.api.MemoryRun>()
+        coEvery { memoryRepo.putRun("CU1", capture(written)) } returns Unit
+
+        assertTrue(service.deleteMemory("CU1", "MEM#1"))
+
+        coVerify(timeout = 2000, exactly = 1) { memoryRepo.putRun("CU1", any()) }
+        val (gone, kept) = written.captured.operations
+        assertEquals(null, gone.text)
+        assertEquals(null, gone.reason)
+        assertEquals("MEM#1", gone.memoryId)
+        assertEquals("Uses a MacBook.", kept.text)
+        assertEquals("Mentions it", kept.reason)
+    }
+
+    @Test
+    fun `operations whose memory was deleted since say so`() = runTest {
+        stored(memory(profileCore))
+        coEvery { memoryRepo.getRun("CU1", "RUN1") } returns inferenceRun().copy(
+            operations = listOf(
+                com.genflowly.models.api.MemoryRunOperation("ADD", "MEM#1", "Prefers short answers.", "Says so", 2, "applied"),
+                com.genflowly.models.api.MemoryRunOperation("ADD", "MEM#gone", "Uses a MacBook.", "Says so", 2, "applied"),
+                com.genflowly.models.api.MemoryRunOperation("DELETE", "MEM#old", null, "Obsolete", 2, "applied"),
+            )
+        )
+        coEvery { memoryRepo.getChanges("CU1", "MEM#1") } returns emptyList()
+        coEvery { memoryRepo.getMemories("CU1") } returns listOf(memory(profileCore))
+        coEvery { conversations.getConversationTitle("CONV1", "CU1") } throws ConversationAccessDeniedException("not found")
+
+        val ops = service.getInference("CU1", "MEM#1", "RUN1").run.operations
+
+        assertEquals(listOf(false, true, false), ops.map { it.memoryDeleted })
+        assertEquals(listOf("Prefers short answers.", null, null), ops.map { it.text })
+        assertEquals(listOf("Says so", null, "Obsolete"), ops.map { it.reason })
     }
 }

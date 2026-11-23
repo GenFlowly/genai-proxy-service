@@ -28,6 +28,7 @@ final class AppRouter: ObservableObject {
         case memoryEdit(String, version: Int? = nil)   // "/memory/:memoryId/edit?version="
         case memoryHistory(String)     // "/memory/:memoryId/history"
         case memoryUsage(String)       // "/memory/:memoryId/usage"
+        case memoryInference(String, runId: String) // "/memory/:memoryId/inference/:runId"
         case newMemory                 // "/memory/new"
         case agents                    // "/agents"
         case editAgent(Agent)          // "/agents/:graphId"
@@ -94,7 +95,7 @@ final class AppRouter: ObservableObject {
     /// What the hamburger on a page opens: its L2 Menu, or the L1 Menu when it has none.
     var pageMenu: MenuLayer {
         switch route {
-        case .chat, .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory, .agents, .settings: return .l2
+        case .chat, .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .memoryInference, .newMemory, .agents, .settings: return .l2
         case .editAgent, .newAgent, .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage, .privacyPolicy, .support: return .l1
         }
     }
@@ -114,7 +115,7 @@ final class AppRouter: ObservableObject {
     var activeNavItem: String {
         switch route {
         case .chat: return "Chat"
-        case .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .newMemory: return "Memory"
+        case .memory, .memoryDetail, .memoryEdit, .memoryHistory, .memoryUsage, .memoryInference, .newMemory: return "Memory"
         case .agents, .editAgent, .newAgent: return "Agents"
         case .instructions, .instructionDetail, .instructionEdit, .instructionHistory, .instructionUsage: return "Instructions"
         case .settings, .privacyPolicy, .support: return ""

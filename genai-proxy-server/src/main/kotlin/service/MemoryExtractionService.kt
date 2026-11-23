@@ -4,6 +4,9 @@ import com.genflowly.di.AppScope
 import com.genflowly.models.RequestType
 import com.genflowly.models.api.CustomerMemory
 import com.genflowly.models.api.LearnedFactView
+import com.genflowly.models.api.MemoryRun
+import com.genflowly.models.api.MemoryRunOperation
+import com.genflowly.models.api.MemoryRunResponse
 import com.genflowly.models.api.MemoryChangeType
 import com.genflowly.models.api.MemoryKind
 import com.genflowly.models.api.MemoryPlacement
@@ -13,6 +16,7 @@ import com.genflowly.repository.MemoryChangeCause
 import com.genflowly.repository.MemoryRepository
 import java.time.Duration
 import java.time.Instant
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -58,7 +62,14 @@ private data class ExtractionSource(
     val projectId: String?,
     /** Transcript line number to message id, for attributing each change. */
     val messageIds: Map<Int, String> = emptyMap(),
+    /** The user message the turn started from, for the run record. */
+    val turnMessageId: String? = null,
+    /** The turn's responses the transcript includes, for the run record. */
+    val responsesRead: List<MemoryRunResponse> = emptyList(),
 )
+
+/** What a run produced: the memories it added and the record describing it. */
+private data class ExtractionOutcome(val added: List<CustomerMemory>, val runId: String)
 
 /**
  * Learns durable facts about a customer from their conversations and notes via
@@ -90,6 +101,7 @@ class MemoryExtractionService(
     private val conversationService: ConversationService,
     private val memoryVectorService: MemoryVectorService,
     private val appScope: AppScope,
+    private val costCalculationService: CostCalculationService,
     /**
      * When true (development and lower environments), log lines may include
      * conversation/memory content; in production only ids and counts are
@@ -119,7 +131,19 @@ class MemoryExtractionService(
          * the client's polling window can still land real facts.
          */
         responseMessageId: String? = null,
+        /**
+         * The user message the turn started from. With it, memory learns ONCE
+         * per turn from every response of the turn; without it (older
+         * callers) each response is its own trigger, as before.
+         */
+        turnMessageId: String? = null,
+        /** How many responses the client is generating for the turn, when it said. */
+        expectedResponses: Int? = null,
     ) {
+        if (turnMessageId != null && responseMessageId != null) {
+            enqueueTurnResponse(customerId, conversationId, turnMessageId, responseMessageId, expectedResponses)
+            return
+        }
         try {
             memoryRepository.putPendingExtraction(
                 customerId, conversationId,
@@ -134,6 +158,61 @@ class MemoryExtractionService(
         }
         appScope.launch {
             runConversationExtraction(customerId, conversationId, responseMessageId, deferred = false)
+        }
+    }
+
+    /**
+     * One response of a turn finished. A turn whose outcome is already known
+     * (a response that finished after the run) just copies it; otherwise the
+     * response joins the turn's pending row and the run starts when the last
+     * expected response is in — or after [TURN_SETTLE_DELAY_MS] when the
+     * client never said how many to expect.
+     */
+    private suspend fun enqueueTurnResponse(
+        customerId: String,
+        conversationId: String,
+        turnMessageId: String,
+        responseMessageId: String,
+        expectedResponses: Int?,
+    ) {
+        val settled = try {
+            conversationService.getTurnResponses(conversationId, turnMessageId)
+                .firstOrNull { it.messageId != responseMessageId && it.learnedFactsJson != null }
+        } catch (e: Exception) {
+            null
+        }
+        if (settled != null) {
+            Metrics.count(
+                "memory_extraction_skipped_total", 1.0,
+                "status" to "turn_settled", "source" to SOURCE_CONVERSATION
+            )
+            writeLearnedFacts(conversationId, responseMessageId, settled.learnedFactsJson!!)
+            return
+        }
+        val pending = try {
+            memoryRepository.recordTurnResponse(
+                customerId, conversationId, turnMessageId, responseMessageId, expectedResponses,
+                dueAt = Instant.now().plusSeconds(PENDING_BACKSTOP_SECONDS),
+            )
+        } catch (e: Exception) {
+            Metrics.count("memory_pending_write_failure_total")
+            logger.warn("Failed to persist pending extraction for $conversationId: ${e.message}")
+            null
+        }
+        val finished = pending?.responseMessageIds?.size ?: 1
+        val expected = pending?.expectedResponses ?: expectedResponses
+        val ready = expected != null && finished >= expected
+        appScope.launch {
+            if (!ready) {
+                logger.info(
+                    "Memory extraction for {} waits for the turn to settle ({} of {} responses)",
+                    conversationId, finished, expected ?: "?"
+                )
+                delay(TURN_SETTLE_DELAY_MS)
+            }
+            runConversationExtraction(
+                customerId, conversationId, responseMessageId, deferred = !ready, turnMessageId = turnMessageId
+            )
         }
     }
 
@@ -180,12 +259,13 @@ class MemoryExtractionService(
                     "Giving up on extraction for conversation {} after {} attempt(s)",
                     pending.conversationId, attempts - 1
                 )
-                finishConversation(pending.customerId, pending.conversationId, pending.responseMessageId)
+                finishConversation(pending.customerId, pending.conversationId, pending.responseMessageId, pending.turnMessageId)
                 continue
             }
             recoverStaleClaim(pending.customerId, pending.conversationId)
             runConversationExtraction(
-                pending.customerId, pending.conversationId, pending.responseMessageId, deferred = true
+                pending.customerId, pending.conversationId, pending.responseMessageId, deferred = true,
+                turnMessageId = pending.turnMessageId
             )
         }
     }
@@ -218,16 +298,12 @@ class MemoryExtractionService(
         responseMessageId: String?,
         /** True on the delayed flush / reconciler pass — the message-count threshold no longer applies. */
         deferred: Boolean,
+        /** The turn being learned; null for callers that still trigger per response. */
+        turnMessageId: String? = null,
     ) {
-        suspend fun markNothingLearned() {
-            if (responseMessageId == null) return
-            try {
-                conversationService.setMessageLearnedFacts(conversationId, responseMessageId, "[]")
-            } catch (e: Exception) {
-                Metrics.count("memory_learned_facts_write_failure_total")
-                logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
-            }
-        }
+        // Nothing learned: every response of the turn gets the marker, except
+        // ones a sibling already settled with real facts
+        suspend fun markNothingLearned() = settleTurn(conversationId, turnMessageId, responseMessageId, factsJson = null)
         // Terminal skip: the outcome is settled — stop client polling and
         // drain the pending row so the reconciler never retries it.
         suspend fun terminalSkip(reason: String, detail: String = "") {
@@ -248,14 +324,33 @@ class MemoryExtractionService(
                 terminalSkip("disabled"); return
             }
 
-            val latestMessageId = conversationService.getLatestMessageId(conversationId)
-            if (latestMessageId == null) { terminalSkip("empty"); return }
-            val thread = conversationService.getMessageThread(conversationId, latestMessageId)
+            // Per turn: the chain up to the turn's user message plus every
+            // response of the turn, which count as one message for the
+            // threshold. Per response (older callers): the chain from the
+            // latest message, as before.
+            val turnResponses = if (turnMessageId != null) {
+                conversationService.getTurnResponses(conversationId, turnMessageId)
+            } else emptyList()
+            val threadHead = turnMessageId ?: conversationService.getLatestMessageId(conversationId)
+            if (threadHead == null) { terminalSkip("empty"); return }
+            val thread = conversationService.getMessageThread(conversationId, threadHead)
+            if (thread.isEmpty()) { terminalSkip("empty"); return }
+            val messageCount = thread.size + (if (turnResponses.isEmpty()) 0 else 1)
             val processed = memoryRepository.getExtractionMark(customerId, conversationId)?.processed
-            val newMessages = thread.size - (processed ?: 0)
+            val newMessages = messageCount - (processed ?: 0)
             if (newMessages < 1) {
-                // Nothing unprocessed (e.g. a parallel-vendor duplicate trigger,
-                // or an interim run beat the flush to it) — terminal.
+                if (turnMessageId != null) {
+                    // Another response of this turn already ran (or is running)
+                    // the turn's extraction: its owner settles every response,
+                    // so this one only fills in what the owner missed
+                    Metrics.count(
+                        "memory_extraction_skipped_total", 1.0,
+                        "status" to "turn_owned", "source" to SOURCE_CONVERSATION
+                    )
+                    settleAfterOwner(customerId, conversationId, turnMessageId, responseMessageId)
+                    return
+                }
+                // Nothing unprocessed (an interim run beat the flush to it) — terminal.
                 terminalSkip(if (deferred) "flush_noop" else "debounced", " (0 new messages)"); return
             }
             val threshold = if (processed == null) FIRST_EXTRACTION_MIN_MESSAGES else MESSAGES_PER_EXTRACTION
@@ -275,29 +370,38 @@ class MemoryExtractionService(
                     conversationId, newMessages, threshold, DEBOUNCE_FLUSH_DELAY_MS
                 )
                 delay(DEBOUNCE_FLUSH_DELAY_MS)
-                runConversationExtraction(customerId, conversationId, responseMessageId, deferred = true)
+                runConversationExtraction(
+                    customerId, conversationId, responseMessageId, deferred = true, turnMessageId = turnMessageId
+                )
                 return
             }
 
             // Claim the window before the LLM call so concurrent completions of
             // parallel turns don't double-extract. The loser settles its own
             // message marker but leaves the pending row to the claim's owner.
-            if (!memoryRepository.claimConversationExtraction(customerId, conversationId, processed, thread.size)) {
+            if (!memoryRepository.claimConversationExtraction(customerId, conversationId, processed, messageCount)) {
                 Metrics.count(
                     "memory_extraction_skipped_total", 1.0,
                     "status" to "claim_lost", "source" to SOURCE_CONVERSATION
                 )
                 logger.info("Extraction window for {} claimed by a concurrent run", conversationId)
-                markNothingLearned()
+                // The owner settles the whole turn; a per-response caller
+                // settles only itself
+                if (turnMessageId == null) markNothingLearned()
                 return
             }
 
             try {
                 Metrics.tracked("memory_extraction", "source" to SOURCE_CONVERSATION) {
                     val recent = thread.takeLast(MAX_TRANSCRIPT_MESSAGES)
-                    val transcript = recent.withIndex().joinToString("\n") { (i, message) ->
+                    val lines = recent.map { message ->
                         val speaker = if (message.role == "assistant") "Assistant" else "User"
-                        "[${i + 1}] $speaker: ${message.text.take(MAX_MESSAGE_CHARS)}"
+                        message to speaker
+                    } + turnResponses.map { response ->
+                        response to "Assistant (${response.aiConfig.firstOrNull()?.aiVendor?.name ?: "assistant"})"
+                    }
+                    val transcript = lines.withIndex().joinToString("\n") { (i, line) ->
+                        "[${i + 1}] ${line.second}: ${line.first.text.take(MAX_MESSAGE_CHARS)}"
                     }
                     if (logContent) {
                         logger.info("Memory extraction transcript for conversation {}:\n{}", conversationId, transcript)
@@ -306,15 +410,20 @@ class MemoryExtractionService(
                         type = MemorySourceType.CONVERSATION,
                         sourceId = conversationId,
                         projectId = conversationService.getOwnedConversationProjectId(conversationId, customerId),
-                        messageIds = recent.withIndex().associate { (i, message) -> i + 1 to message.messageId },
+                        messageIds = lines.withIndex().associate { (i, line) -> i + 1 to line.first.messageId },
+                        turnMessageId = turnMessageId,
+                        responsesRead = turnResponses.map { response ->
+                            val config = response.aiConfig.firstOrNull()
+                            MemoryRunResponse(response.messageId, config?.aiVendor?.name ?: "", config?.model)
+                        },
                     )
-                    val added = extract(customerId, transcript, source)
-                    if (responseMessageId != null) {
-                        val factsJson = json.encodeToString(added.map { LearnedFactView(it.memoryId, it.text) })
-                        conversationService.setMessageLearnedFacts(conversationId, responseMessageId, factsJson)
-                    }
+                    val outcome = extract(customerId, transcript, source)
+                    val factsJson = json.encodeToString(outcome.added.map {
+                        LearnedFactView(it.memoryId, it.text, kind = it.kind.name, runId = outcome.runId)
+                    })
+                    settleTurn(conversationId, turnMessageId, responseMessageId, factsJson)
                 }
-                memoryRepository.finalizeConversationExtraction(customerId, conversationId, thread.size)
+                memoryRepository.finalizeConversationExtraction(customerId, conversationId, messageCount)
                 deletePending(customerId, conversationId)
             } catch (e: CancellationException) {
                 // Shutdown mid-run: the stale-claim recovery releases the
@@ -324,7 +433,7 @@ class MemoryExtractionService(
                 // The claimed window is released on EVERY failure so a retry
                 // (or the next exchange) can re-extract it.
                 memoryRepository.rollbackConversationExtractionMark(
-                    customerId, conversationId, processed, thread.size
+                    customerId, conversationId, processed, messageCount
                 )
                 when (e) {
                     is RequestAgentUnresolvedException ->
@@ -363,16 +472,78 @@ class MemoryExtractionService(
     }
 
     /** Terminal settle used by the reconciler's give-up path. */
-    private suspend fun finishConversation(customerId: String, conversationId: String, responseMessageId: String?) {
-        if (responseMessageId != null) {
-            try {
-                conversationService.setMessageLearnedFacts(conversationId, responseMessageId, "[]")
-            } catch (e: Exception) {
-                Metrics.count("memory_learned_facts_write_failure_total")
-                logger.warn("Failed to write learned-facts marker for $responseMessageId: ${e.message}")
-            }
-        }
+    private suspend fun finishConversation(
+        customerId: String,
+        conversationId: String,
+        responseMessageId: String?,
+        turnMessageId: String? = null,
+    ) {
+        settleTurn(conversationId, turnMessageId, responseMessageId, factsJson = null)
         deletePending(customerId, conversationId)
+    }
+
+    /**
+     * Writes the turn's outcome onto every response of the turn (and the
+     * triggering response, for callers without a turn). [factsJson] null
+     * means nothing was learned: responses a sibling already settled with
+     * real facts keep them, the rest get "[]" — or the sibling's facts, so a
+     * response that finished after the run shows the same list.
+     */
+    private suspend fun settleTurn(
+        conversationId: String,
+        turnMessageId: String?,
+        responseMessageId: String?,
+        factsJson: String?,
+    ) {
+        val responses = if (turnMessageId != null) {
+            try {
+                conversationService.getTurnResponses(conversationId, turnMessageId)
+            } catch (e: Exception) {
+                logger.warn("Could not list the responses of turn $turnMessageId: ${e.message}")
+                emptyList()
+            }
+        } else emptyList()
+        val targets = (responses.map { it.messageId } + listOfNotNull(responseMessageId)).distinct()
+        val known = factsJson
+            ?: responses.firstNotNullOfOrNull { it.learnedFactsJson?.takeIf { facts -> facts != "[]" } }
+        for (messageId in targets) {
+            val existing = responses.firstOrNull { it.messageId == messageId }?.learnedFactsJson
+            if (factsJson == null && existing != null) continue
+            writeLearnedFacts(conversationId, messageId, known ?: "[]")
+        }
+    }
+
+    /**
+     * A response of a turn whose extraction another response owns: wait while
+     * the owner's claim is in flight, then copy the turn's outcome onto this
+     * response if the owner's settle missed it (it finished after the owner
+     * listed the turn).
+     */
+    private suspend fun settleAfterOwner(
+        customerId: String,
+        conversationId: String,
+        turnMessageId: String,
+        responseMessageId: String?,
+    ) {
+        repeat(OWNER_WAIT_CHECKS) {
+            val inFlight = try {
+                memoryRepository.getExtractionMark(customerId, conversationId)?.claimedAt != null
+            } catch (e: Exception) {
+                false
+            }
+            if (!inFlight) return@repeat
+            delay(OWNER_WAIT_INTERVAL_MS)
+        }
+        settleTurn(conversationId, turnMessageId, responseMessageId, factsJson = null)
+    }
+
+    private suspend fun writeLearnedFacts(conversationId: String, messageId: String, factsJson: String) {
+        try {
+            conversationService.setMessageLearnedFacts(conversationId, messageId, factsJson)
+        } catch (e: Exception) {
+            Metrics.count("memory_learned_facts_write_failure_total")
+            logger.warn("Failed to write learned-facts marker for $messageId: ${e.message}")
+        }
     }
 
     /** Note trigger, called on the final (encode=true) save of an editing session. */
@@ -391,7 +562,7 @@ class MemoryExtractionService(
                 val noteText = listOfNotNull(title?.takeIf { it.isNotBlank() && it != "Untitled" }, content)
                     .joinToString("\n").take(MAX_NOTE_CHARS)
                 Metrics.tracked("memory_extraction", "source" to SOURCE_NOTE) {
-                    extract(customerId, noteText, ExtractionSource(MemorySourceType.NOTE, noteKey, projectId = null))
+                    extract(customerId, noteText, ExtractionSource(MemorySourceType.NOTE, noteKey, projectId = null)).added
                 }
             } catch (e: Exception) {
                 logger.warn("Memory extraction from note $noteKey failed: ${e.message}")
@@ -402,14 +573,19 @@ class MemoryExtractionService(
     /**
      * Runs the published extraction agent with vendor-enforced structured
      * output and customer-key failover — blank/unparseable output advances to
-     * the next provider — and returns the memories ADDed by this run. Throws
-     * when resolution or every provider fails; callers own the retry story.
+     * the next provider — applies its operations, and records the run (what
+     * it read, what it decided and why, which provider answered, what it
+     * cost) for the "how it was inferred" page. Returns the memories ADDed.
+     * Throws when resolution or every provider fails; callers own the retry
+     * story, and no run is recorded.
      */
     private suspend fun extract(
         customerId: String,
         content: String,
         extractionSource: ExtractionSource,
-    ): List<CustomerMemory> {
+    ): ExtractionOutcome {
+        val runId = UUID.randomUUID().toString()
+        val startedAt = Instant.now()
         val projectId = extractionSource.projectId
         val sourceId = extractionSource.sourceId
         // Profile memories plus this project's: other projects' are siloed and
@@ -430,7 +606,7 @@ class MemoryExtractionService(
 
         val source = extractionSource.type.name.lowercase()
         val agent = agentResolutionService.resolve(RequestType.MEMORY_EXTRACTION, customerId)
-        val operations = generationAgentExecutor.executeWithCustomerFailover(
+        val answer = generationAgentExecutor.executeWithCustomerFailoverDetailed(
             agent = agent,
             variables = mapOf(
                 "existingMemories" to existingJson,
@@ -442,38 +618,91 @@ class MemoryExtractionService(
             operationName = "memory_extraction",
             responseSchema = OPERATIONS_SCHEMA,
         ) { text -> parseOperationsOrThrow(text, source) }
+        val operations = answer.value
 
         if (logContent) {
             logger.info("Memory-extraction operations for {} {}: {}", source, sourceId, operations)
         }
-        if (operations.isEmpty()) {
-            logger.info("Memory extraction returned no operations for {} {}", source, sourceId)
-            return emptyList()
-        }
 
         val existingById = existing.associate { (memory, _) -> memory.memoryId to memory }
         val addedMemories = mutableListOf<CustomerMemory>()
+        val recorded = mutableListOf<MemoryRunOperation>()
         var applied = 0
         operations.forEach { op ->
             val opName = op.op.lowercase().takeIf { it in KNOWN_OPERATIONS } ?: "unknown"
-            try {
-                val changed = applyOperation(customerId, op, existingById, extractionSource, addedMemories)
+            val before = addedMemories.size
+            val outcome = try {
+                val changed = applyOperation(customerId, op, existingById, extractionSource, runId, addedMemories)
                 if (changed) applied++
                 Metrics.count(
                     "memory_operation_total", 1.0,
                     "operation" to opName, "status" to if (changed) "ok" else "noop"
                 )
+                if (changed) "applied" else "noop"
             } catch (e: Exception) {
                 Metrics.count("memory_operation_total", 1.0, "operation" to opName, "status" to "error")
                 logger.warn("Failed to apply memory operation ${op.op} for $customerId: ${e.message}")
+                "error"
             }
+            recorded += MemoryRunOperation(
+                op = op.op.uppercase(),
+                memoryId = addedMemories.getOrNull(before)?.memoryId ?: op.memoryId,
+                text = op.text?.trim()?.let(::fitMemoryText),
+                reason = op.reason?.trim()?.take(MAX_REASON_CHARS)?.takeIf { it.isNotEmpty() },
+                messageIndex = op.messageIndex,
+                outcome = outcome,
+            )
         }
-        if (applied > 0) {
-            logger.info("Applied $applied memory operation(s) for customer $customerId from $source $sourceId")
-        } else {
-            logger.info("No memory operation changed stored state for $source $sourceId (${operations.size} proposed)")
+        when {
+            operations.isEmpty() -> logger.info("Memory extraction returned no operations for {} {}", source, sourceId)
+            applied > 0 -> logger.info("Applied $applied memory operation(s) for customer $customerId from $source $sourceId")
+            else -> logger.info("No memory operation changed stored state for $source $sourceId (${operations.size} proposed)")
         }
-        return addedMemories
+
+        val cost = try {
+            costCalculationService.computeCostUsd(
+                answer.vendor, answer.model,
+                TokenUsageBreakdown(
+                    inputTokens = answer.inputTokens,
+                    outputTokens = answer.outputTokens,
+                    cacheReadTokens = answer.tokensReadFromCache,
+                )
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        val run = MemoryRun(
+            runId = runId,
+            source = source,
+            conversationId = sourceId.takeIf { extractionSource.type == MemorySourceType.CONVERSATION },
+            projectId = projectId,
+            turnMessageId = extractionSource.turnMessageId,
+            messageIds = extractionSource.messageIds.toSortedMap().values.toList(),
+            responsesRead = extractionSource.responsesRead,
+            existingShown = existing.size,
+            agentId = agent.graphId,
+            vendor = answer.vendor.name,
+            model = answer.model,
+            startedAt = startedAt.toString(),
+            durationMs = Duration.between(startedAt, Instant.now()).toMillis(),
+            inputTokens = answer.inputTokens,
+            outputTokens = answer.outputTokens,
+            costUsd = cost,
+            operations = recorded.take(MAX_RUN_OPERATIONS),
+            truncated = recorded.size > MAX_RUN_OPERATIONS,
+        )
+        try {
+            memoryRepository.putRun(customerId, run)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The memories stand without their story; the page says so
+            Metrics.count("memory_run_write_failure_total")
+            logger.warn("Failed to record memory run $runId for $source $sourceId: ${e.message}")
+        }
+        return ExtractionOutcome(addedMemories, runId)
     }
 
     /** Returns true when the operation changed stored state. */
@@ -482,10 +711,11 @@ class MemoryExtractionService(
         op: MemoryOperation,
         existingById: Map<String, CustomerMemory>,
         source: ExtractionSource,
+        runId: String,
         addedMemories: MutableList<CustomerMemory> = mutableListOf()
     ): Boolean = when (op.op.uppercase()) {
         "ADD" -> {
-            val text = op.text?.trim()?.take(MAX_MEMORY_CHARS)
+            val text = op.text?.trim()?.let(::fitMemoryText)
             if (text.isNullOrBlank()) false else {
                 val kind = op.kind?.uppercase()
                     ?.let { runCatching { MemoryKind.valueOf(it) }.getOrNull() } ?: MemoryKind.EPISODIC
@@ -496,7 +726,7 @@ class MemoryExtractionService(
                     category = op.category?.take(50),
                     sourceType = source.type,
                     sourceId = source.sourceId,
-                    cause = cause(MemoryChangeType.LEARNED, op, source),
+                    cause = cause(MemoryChangeType.LEARNED, op, source, runId),
                 )
                 memoryVectorService.encode(customerId, memory)
                 addedMemories.add(memory)
@@ -505,9 +735,9 @@ class MemoryExtractionService(
         }
         "UPDATE" -> {
             val target = op.memoryId?.let { existingById[it] }
-            val text = op.text?.trim()?.take(MAX_MEMORY_CHARS)
+            val text = op.text?.trim()?.let(::fitMemoryText)
             if (target == null || text.isNullOrBlank() || text == target.text) false
-            else if (memoryRepository.updateMemoryText(customerId, target, text, cause(MemoryChangeType.UPDATED, op, source))) {
+            else if (memoryRepository.updateMemoryText(customerId, target, text, cause(MemoryChangeType.UPDATED, op, source, runId))) {
                 // /encode-memory deletes the memory_key's prior vectors before
                 // inserting, so the re-encode replaces rather than duplicates.
                 memoryVectorService.encode(customerId, target.copy(text = text))
@@ -523,7 +753,7 @@ class MemoryExtractionService(
                 try {
                     memoryService.deleteMemory(
                         customerId, target.memoryId, inThisProject,
-                        cause = cause(MemoryChangeType.REMOVED_FROM_PROJECT, op, source),
+                        cause = cause(MemoryChangeType.REMOVED_FROM_PROJECT, op, source, runId),
                     )
                     true
                 } catch (e: MemoryNotFoundException) {
@@ -539,14 +769,16 @@ class MemoryExtractionService(
         }
     }
 
-    private fun cause(type: MemoryChangeType, op: MemoryOperation, source: ExtractionSource) = MemoryChangeCause(
-        type = type,
-        sourceType = source.type,
-        conversationId = source.sourceId.takeIf { source.type == MemorySourceType.CONVERSATION },
-        messageId = op.messageIndex?.let { source.messageIds[it] },
-        noteKey = source.sourceId.takeIf { source.type == MemorySourceType.NOTE },
-        reason = op.reason?.trim()?.take(MAX_REASON_CHARS)?.takeIf { it.isNotEmpty() },
-    )
+    private fun cause(type: MemoryChangeType, op: MemoryOperation, source: ExtractionSource, runId: String) =
+        MemoryChangeCause(
+            type = type,
+            sourceType = source.type,
+            conversationId = source.sourceId.takeIf { source.type == MemorySourceType.CONVERSATION },
+            messageId = op.messageIndex?.let { source.messageIds[it] },
+            noteKey = source.sourceId.takeIf { source.type == MemorySourceType.NOTE },
+            reason = op.reason?.trim()?.take(MAX_REASON_CHARS)?.takeIf { it.isNotEmpty() },
+            runId = runId,
+        )
 
     /**
      * Re-embeds a memory's current text. Returns false when the memory no
@@ -593,11 +825,21 @@ class MemoryExtractionService(
          * settles with the real outcome instead of timing out.
          */
         private const val DEBOUNCE_FLUSH_DELAY_MS = 30_000L
+
+        /**
+         * How long a turn's first finished response waits for the others when
+         * the client did not say how many to expect. A vendor that never
+         * reports (crash) is covered by the same wait.
+         */
+        private const val TURN_SETTLE_DELAY_MS = 30_000L
+        private const val OWNER_WAIT_CHECKS = 6
+        private const val OWNER_WAIT_INTERVAL_MS = 5_000L
         private const val MAX_TRANSCRIPT_MESSAGES = 12
         private const val MAX_MESSAGE_CHARS = 2000
         private const val MIN_NOTE_CHARS = 30
         private const val MAX_NOTE_CHARS = 8000
-        private const val MAX_MEMORY_CHARS = 300
+        internal const val MAX_MEMORY_CHARS = 300
+        private const val MAX_RUN_OPERATIONS = 50
         private const val MAX_REASON_CHARS = 300
 
         /**
@@ -665,4 +907,22 @@ class MemoryExtractionService(
             putJsonArray("required") { add("operations") }
         }
     }
+}
+
+/**
+ * Fits learned text into [MemoryExtractionService.MAX_MEMORY_CHARS] without
+ * cutting a word: at the last sentence end when one falls in the second half
+ * (a whole sentence needs no ellipsis), otherwise at the last clause or word
+ * break, marked with "…".
+ */
+internal fun fitMemoryText(text: String, max: Int = MemoryExtractionService.MAX_MEMORY_CHARS): String {
+    if (text.length <= max) return text
+    val window = text.take(max)
+    val sentenceEnd = Regex("[.!?](?=\\s)").findAll(window).lastOrNull()?.range?.last
+    if (sentenceEnd != null && sentenceEnd >= max / 2) return window.take(sentenceEnd + 1).trimEnd()
+    val room = window.take(max - 1)
+    val clause = room.lastIndexOf("; ").takeIf { it >= max / 2 }
+    val word = room.lastIndexOf(' ').takeIf { it > 0 }
+    val cut = clause ?: word ?: room.length
+    return room.take(cut).trimEnd(' ', ',', ';', ':', '-') + "…"
 }

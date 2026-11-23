@@ -1,0 +1,110 @@
+{
+  "memory": {
+    "memoryId": "MEM#5b2b7c1e-6f0e-4a50-9a40-0d8f6a2a7c11",
+    "text": "Competes with TypingMind in the multi-model AI workspace category.",
+    "kind": "CORE",
+    "category": "work",
+    "version": 1,
+    "placements": [{ "projectId": null, "kind": "CORE" }],
+    "createdAt": "2026-11-22T14:32:05Z",
+    "updatedAt": "2026-11-22T14:32:05Z"
+  },
+  "change": {
+    "changeId": "MEMCHG#5b2b7c1e#2026-11-22T14:32:05Z#a1b2c3d4",
+    "type": "LEARNED",
+    "createdAt": "2026-11-22T14:32:05Z",
+    "version": 1,
+    "reason": "The user named TypingMind as the product they are an alternative to.",
+    "messageId": "U5",
+    "runId": "0d6f1c2a-9b1e-4c8e-8a6f-3f2e1d0c9b8a"
+  },
+  "run": {
+    "runId": "0d6f1c2a-9b1e-4c8e-8a6f-3f2e1d0c9b8a",
+    "source": "conversation",
+    "conversationId": "29adc62a-8370-41b8-8b63-9d979bab4702",
+    "projectId": null,
+    "turnMessageId": "U5",
+    "messageIds": ["U3", "A4", "U5", "R-openai", "R-claude"],
+    "responsesRead": [
+      { "messageId": "R-openai", "vendor": "OPENAI", "model": "gpt-5.4" },
+      {
+        "messageId": "R-claude",
+        "vendor": "CLAUDE",
+        "model": "claude-fable-5-1"
+      }
+    ],
+    "existingShown": 12,
+    "agentId": "GRP-memory-extraction",
+    "agentVersion": null,
+    "vendor": "OPENAI",
+    "model": "gpt-5.4",
+    "startedAt": "2026-11-22T14:32:00Z",
+    "durationMs": 4200,
+    "inputTokens": 3180,
+    "outputTokens": 212,
+    "costUsd": 0.0041,
+    "operations": [
+      {
+        "op": "ADD",
+        "memoryId": "MEM#5b2b7c1e-6f0e-4a50-9a40-0d8f6a2a7c11",
+        "text": "Competes with TypingMind in the multi-model AI workspace category.",
+        "reason": "The user named TypingMind as the product they are an alternative to.",
+        "messageIndex": 3,
+        "outcome": "applied"
+      },
+      {
+        "op": "ADD",
+        "memoryId": "MEM#77aa",
+        "text": "Is preparing a seed round with early-stage AI/tech VCs.",
+        "reason": "A dated commitment the user is working toward.",
+        "messageIndex": 3,
+        "outcome": "applied"
+      },
+      {
+        "op": "UPDATE",
+        "memoryId": "MEM#88bb",
+        "text": "Building a multi-model AI workspace with shared memory, custom system prompts and remixable agent graphs.",
+        "reason": "The user listed what the workspace contains.",
+        "messageIndex": 1,
+        "outcome": "applied"
+      }
+    ],
+    "truncated": false
+  },
+  "excerpts": [
+    {
+      "messageId": "U3",
+      "role": "user",
+      "vendor": null,
+      "index": 1,
+      "text": "Which of these assumptions would a seed-stage VC push back on first?",
+      "taken": false
+    },
+    {
+      "messageId": "U5",
+      "role": "user",
+      "vendor": null,
+      "index": 3,
+      "text": "We're basically a TypingMind alternative but with memory that actually carries across models, plus agent graphs you can remix.",
+      "taken": true
+    },
+    {
+      "messageId": "R-openai",
+      "role": "assistant",
+      "vendor": "OPENAI",
+      "index": 4,
+      "text": "Two of the four positions depend on numbers you don't have yet.",
+      "taken": false
+    },
+    {
+      "messageId": "R-claude",
+      "role": "assistant",
+      "vendor": "CLAUDE",
+      "index": 5,
+      "text": "A seed investor will go after the retention claim first.",
+      "taken": false
+    }
+  ],
+  "conversationTitle": "iOS App Growth Strategy for Paygo",
+  "conversationDeleted": false
+}

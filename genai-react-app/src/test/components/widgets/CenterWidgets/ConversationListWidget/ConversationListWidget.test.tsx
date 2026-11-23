@@ -1,6 +1,7 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import '@testing-library/jest-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import ConversationListWidget from '../../../../../components/widgets/CenterWidgets/ConversationListWidget/ConversationListWidget'
 
 let mockWidgetValue: any = null
@@ -48,6 +49,19 @@ jest.mock('../../../../../context/LayoutContext', () => ({
 jest.mock('../../../../../context/ToastContext', () => ({ useToast: () => ({ showToast: jest.fn() }) }))
 jest.mock('../../../../../hooks/useVendorDisplayNames', () => ({ useVendorDisplayNames: () => (id: string) => id }))
 
+function Location(): React.ReactElement {
+    return <div data-testid="location">{useLocation().pathname}</div>
+}
+
+const renderWidget = () => render(
+    <MemoryRouter initialEntries={['/chat']}>
+        <Routes>
+            <Route path="/chat" element={<ConversationListWidget />} />
+            <Route path="*" element={<Location />} />
+        </Routes>
+    </MemoryRouter>
+)
+
 describe('ConversationListWidget', () => {
     beforeEach(() => {
         jest.clearAllMocks()
@@ -55,7 +69,7 @@ describe('ConversationListWidget', () => {
     })
 
     test('puts the instruction chip in the editor; it opens the picker, which loads the pick', () => {
-        render(<ConversationListWidget />)
+        renderWidget()
 
         expect(mockWidgetValue.composer.canCompose).toBe(true)
         expect(mockWidgetValue.layout).toEqual({ isLeftSidebarExpanded: true, isRightSidebarExpanded: false })
@@ -73,7 +87,25 @@ describe('ConversationListWidget', () => {
 
     test('a view-only viewer gets no editor', () => {
         mockConversation.mockReturnValue({ conversationBlockList: [], conversationRole: 'VIEW' })
-        render(<ConversationListWidget />)
+        renderWidget()
         expect(mockWidgetValue.composer.canCompose).toBe(false)
+    })
+
+    test('How it was inferred opens the run\'s page for the memory', () => {
+        renderWidget()
+        act(() => mockWidgetValue.services.openMemoryInference('MEM#a1', 'run-1'))
+        expect(screen.getByTestId('location')).toHaveTextContent('/memory/MEM%23a1/inference/run-1')
+    })
+
+    test('Open in Memory opens the memory', () => {
+        renderWidget()
+        act(() => mockWidgetValue.services.openMemory('MEM#a1'))
+        expect(screen.getByTestId('location')).toHaveTextContent('/memory/MEM%23a1')
+    })
+
+    test('Manage in Memory opens the list', () => {
+        renderWidget()
+        act(() => mockWidgetValue.services.openMemoryPage())
+        expect(screen.getByTestId('location')).toHaveTextContent('/memory')
     })
 })

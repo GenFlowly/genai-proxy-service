@@ -100,6 +100,8 @@ export const endpoints = {
     moveMemory: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/move`,
     copyMemory: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/copy`,
     memoryUsage: (memoryId: string) => `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/usage`,
+    memoryInference: (memoryId: string, runId: string) =>
+        `${BASE}${API_PREFIX}/memories/${encodeURIComponent(memoryId)}/inference/${encodeURIComponent(runId)}`,
     deleteAccount: `${BASE}${API_PREFIX}/account`,
     deleteAllCredentials: `${BASE}${API_PREFIX}/credentials`,
     indexedChats: `${BASE}${API_PREFIX}/indexing/chats`,

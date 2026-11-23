@@ -25,7 +25,7 @@ extension MemoryLabels {
     }
 
     /// A memory's changes as a timeline, newest first.
-    static func history(_ changes: [MemoryChange], memory: CustomerMemory, store: MemoriesStore, onView: @escaping (Int) -> Void) -> [TimelineEntryItem] {
+    static func history(_ changes: [MemoryChange], memory: CustomerMemory, store: MemoriesStore, onView: @escaping (Int) -> Void, onInference: ((String) -> Void)? = nil) -> [TimelineEntryItem] {
         changes.map { change in
             var facts: [TimelineFact] = []
             if change.type == "LEGACY" {
@@ -56,6 +56,9 @@ extension MemoryLabels {
             }
             if let version = change.version, !current {
                 entry.view = (label: L("memoryPage.page.viewVersion", ["version": version]), action: { onView(version) })
+            }
+            if let runId = change.runId, let onInference {
+                entry.inference = (label: L("conversation.learnedMemory.howInferred"), action: { onInference(runId) })
             }
             return entry
         }
@@ -366,9 +369,11 @@ struct MemoryHistoryView: View {
             if let detail = loader.detail {
                 DetailIntro(text: L("memoryPage.page.historyIntro"))
                 TimelineView(
-                    entries: MemoryLabels.history(detail.changes, memory: detail.memory, store: memories) { version in
+                    entries: MemoryLabels.history(detail.changes, memory: detail.memory, store: memories, onView: { version in
                         router.navigate(.memoryDetail(memoryId, version: version))
-                    },
+                    }, onInference: { runId in
+                        router.navigate(.memoryInference(memoryId, runId: runId))
+                    }),
                     untitled: L("memoryPage.changes.untitledConversation"),
                     deleted: L("memoryPage.changes.deletedConversation"),
                     onOpenConversation: { id in

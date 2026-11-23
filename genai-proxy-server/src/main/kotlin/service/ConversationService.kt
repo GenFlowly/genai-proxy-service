@@ -343,6 +343,42 @@ class ConversationService(
 
     // ─── Messages ─────────────────────────────────────────────────────────────
 
+    /**
+     * The assistant responses that answer [turnMessageId] (one per vendor,
+     * plus regenerations), oldest first.
+     */
+    suspend fun getTurnResponses(conversationId: String, turnMessageId: String): List<Message> =
+        conversationRepository.getMessagesForConversation(conversationId)
+            .filter { it.role == "assistant" && it.previousMessageId == turnMessageId }
+            .sortedBy { it.sequence ?: 0 }
+
+    /**
+     * Takes [memoryId] out of every learned-facts list in the conversation, so
+     * a deleted memory doesn't come back under its reply. Returns how many
+     * messages changed.
+     */
+    suspend fun removeLearnedFact(conversationId: String, memoryId: String): Int {
+        var changed = 0
+        conversationRepository.getMessagesForConversation(conversationId)
+            .filter { it.learnedFactsJson?.contains(memoryId) == true }
+            .forEach { message ->
+                val facts = runCatching {
+                    webSourcesJsonParser.parseToJsonElement(message.learnedFactsJson!!) as? kotlinx.serialization.json.JsonArray
+                }.getOrNull() ?: return@forEach
+                val kept = facts.filterNot {
+                    (it as? kotlinx.serialization.json.JsonObject)?.get("memoryId")
+                        ?.let { id -> (id as? kotlinx.serialization.json.JsonPrimitive)?.content } == memoryId
+                }
+                if (kept.size != facts.size) {
+                    conversationRepository.setMessageLearnedFacts(
+                        conversationId, message.messageId, kotlinx.serialization.json.JsonArray(kept).toString()
+                    )
+                    changed++
+                }
+            }
+        return changed
+    }
+
     suspend fun getMessage(
         conversationId: String,
         previousMessageId: String

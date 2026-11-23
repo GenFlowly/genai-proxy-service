@@ -161,7 +161,9 @@ fun Route.registerGenerateTextStreamRoutes(
                     userText = request.prompt.prompt,
                     responseMessageId = streamResult.responseMessageId,
                     bearerToken = call.bearerToken(),
-                    learnFromConversation = request.learnFromConversation
+                    learnFromConversation = request.learnFromConversation,
+                    turnMessageId = streamResult.messageId.takeIf { it.isNotBlank() },
+                    expectedResponses = request.turnResponseCount?.takeIf { it > 0 },
                 )
             }
         }
