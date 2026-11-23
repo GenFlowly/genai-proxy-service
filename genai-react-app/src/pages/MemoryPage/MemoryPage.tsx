@@ -26,6 +26,7 @@ import {
     scopeFromParam,
     scopeToParam,
 } from '../../models/memory.models'
+import { memoryPath } from './memoryPaths'
 import MemoryScopePanels from './components/MemoryScopePanels'
 import MemoryMenuContent from './components/MemoryMenuContent'
 import MemoryCard, { memoryActions } from './components/MemoryCard'
@@ -43,10 +44,7 @@ type Dialog = {
     from: MemoryPlacement
 }
 
-export function memoryPath(memoryId: string, scope?: MemoryScope): string {
-    const path = `/memory/${encodeURIComponent(memoryId)}`
-    return scope ? `${path}?scope=${encodeURIComponent(scopeToParam(scope))}` : path
-}
+export { memoryPath }
 
 /**
  * The Memory page: one list at a time — Profile Core, Profile Episodic or a

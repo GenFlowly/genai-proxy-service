@@ -12,6 +12,7 @@ import MemoryDetailPage from './pages/MemoryPage/MemoryDetailPage'
 import MemoryEditPage from './pages/MemoryPage/MemoryEditPage'
 import MemoryHistoryPage from './pages/MemoryPage/MemoryHistoryPage'
 import MemoryUsedInPage from './pages/MemoryPage/MemoryUsedInPage'
+import MemoryInferencePage from './pages/MemoryPage/MemoryInferencePage'
 import NewMemoryPage from './pages/MemoryPage/NewMemoryPage'
 import AgentsPage from './pages/AgentsPage/AgentsPage'
 import GraphAgentEditorPage from './pages/AgentsPage/GraphAgentEditorPage/GraphAgentEditorPage'
@@ -110,6 +111,7 @@ export default function AppContent(): React.ReactElement | null {
                                 <Route path="/memory/:memoryId/edit" element={<ProtectedRoute><MemoryEditPage /></ProtectedRoute>} />
                                 <Route path="/memory/:memoryId/history" element={<ProtectedRoute><MemoryHistoryPage /></ProtectedRoute>} />
                                 <Route path="/memory/:memoryId/usage" element={<ProtectedRoute><MemoryUsedInPage /></ProtectedRoute>} />
+                                <Route path="/memory/:memoryId/inference/:runId" element={<ProtectedRoute><MemoryInferencePage /></ProtectedRoute>} />
                                 <Route path="/agents" element={<ProtectedRoute><AgentsPage /></ProtectedRoute>} />
                                 <Route path="/agents/new" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />
                                 <Route path="/agents/:graphId" element={<ProtectedRoute><GraphAgentEditorPage /></ProtectedRoute>} />

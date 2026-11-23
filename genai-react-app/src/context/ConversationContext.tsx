@@ -374,7 +374,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         onContentReset?: () => void,
         onStopReason?: (reason: string) => void,
         regenerateMessageId?: string,
-        generationId?: string
+        generationId?: string,
+        turnResponseCount?: number
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -392,6 +393,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             projectId: (idOverride || conversationIdRef.current) ? undefined : pendingProjectIdRef.current,
             regenerateMessageId,
             generationId,
+            turnResponseCount,
         }, onDelta, onMetadata, onActivity, signal, onWebSources, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
     }
 
@@ -1058,7 +1060,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         handleContentReset,
                         handleStopReason,
                         regenerateMessageId,
-                        generationIds.current.get(streamKey)
+                        generationIds.current.get(streamKey),
+                        aiConfigs.length
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer

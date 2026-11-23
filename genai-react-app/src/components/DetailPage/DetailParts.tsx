@@ -199,6 +199,8 @@ export interface TimelineEntry {
     facts: { label: string; value: React.ReactNode }[]
     extra?: React.ReactNode
     view?: { label: string; to: string }
+    /** "How it was inferred" for a change an extraction run made. */
+    inference?: { label: string; to: string }
 }
 
 /** A vertical history, newest first. */
@@ -243,6 +245,12 @@ export function Timeline({ entries, label, untitled, deleted }: {
                             </dl>
                         )}
                         {entry.extra}
+                        {entry.inference && (
+                            <Link className={styles.viewLink} to={entry.inference.to} data-testid={`timeline-inference-${entry.key}`}>
+                                {entry.inference.label}
+                                <Icon src={ICONS.ALT_ARROW_RIGHT} size={14} aria-hidden={true} />
+                            </Link>
+                        )}
                         {entry.view && (
                             <Link className={styles.viewLink} to={entry.view.to}>
                                 {entry.view.label}

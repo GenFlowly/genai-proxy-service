@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
 import {
     ConversationWidget,
     ConversationWidgetProvider,
@@ -16,6 +17,7 @@ import InstructionPickerModal from '../../../common/InstructionPickerModal/Instr
 import { RunHitlBanner } from './RunHitlBanner'
 import NewChatProjectHint from './NewChatProjectHint'
 import InstructionChip from './InstructionChip'
+import { memoryPath, memoryInferencePath } from '../../../../pages/MemoryPage/memoryPaths'
 
 /**
  * Adapter between the app's contexts/services and the shared
@@ -41,6 +43,14 @@ export default function ConversationListWidget() {
     const getVendorDisplayName = useVendorDisplayNames()
     const [isPickerOpen, setPickerOpen] = useState(false)
     const canCompose = conversation.conversationRole !== 'VIEW'
+    const navigate = useNavigate()
+
+    const memoryNavigation = useMemo(() => ({
+        openMemory: (memoryId: string) => navigate(memoryPath(memoryId)),
+        openMemoryInference: (memoryId: string, runId: string) =>
+            navigate(memoryInferencePath(memoryId, runId)),
+        openMemoryPage: () => navigate('/memory'),
+    }), [navigate])
 
     const composer = useMemo(() => ({
         controls: <InstructionChip onClick={() => setPickerOpen(true)} />,
@@ -64,7 +74,8 @@ export default function ConversationListWidget() {
             getAttachmentViewUrl,
             getLearnedFacts,
             deleteMemoryFact,
-            getVendorDisplayName
+            getVendorDisplayName,
+            ...memoryNavigation,
         },
         layout: { isLeftSidebarExpanded: isChatSidebarExpanded, isRightSidebarExpanded: isAiDockExpanded },
         showToast,
@@ -80,6 +91,7 @@ export default function ConversationListWidget() {
         aiVendorAPIKeyStatusList,
         getAccessTokenSilently,
         getVendorDisplayName,
+        memoryNavigation,
         isChatSidebarExpanded,
         isAiDockExpanded,
         showToast,

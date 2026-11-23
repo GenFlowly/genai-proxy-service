@@ -1,3 +1,4 @@
+import type { MemoryInferenceData } from '@genflowly/component-library'
 import { HttpMethod } from '../constants/http'
 import { endpoints } from '../config/endpoints'
 import { fetchWithRetry } from '../utils/apiUtils'
@@ -89,6 +90,11 @@ export async function getMemories(token: string): Promise<CustomerMemory[]> {
 
 export async function getMemoryDetail(token: string, memoryId: string): Promise<MemoryDetailResponse> {
     return request<MemoryDetailResponse>(token, endpoints.memory(memoryId), HttpMethod.GET)
+}
+
+/** How run [runId] inferred the memory: the story and facts of one extraction run. */
+export async function getMemoryInference(token: string, memoryId: string, runId: string): Promise<MemoryInferenceData> {
+    return request<MemoryInferenceData>(token, endpoints.memoryInference(memoryId, runId), HttpMethod.GET)
 }
 
 export async function getMemoryUsage(

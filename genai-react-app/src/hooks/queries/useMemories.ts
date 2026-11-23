@@ -1,11 +1,12 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useAuth } from '../../context/AuthContext'
-import { getMemories, getMemoryDetail, getMemoryUsage, memoriesCache } from '../../services/memoriesService'
+import type { MemoryInferenceData } from '@genflowly/component-library'
+import { getMemories, getMemoryDetail, getMemoryInference, getMemoryUsage, memoriesCache } from '../../services/memoriesService'
 import { getProjects } from '../../services/conversationHistoryService'
 import { loadHistoryCache } from '../../components/widgets/ConversationHistoryWidget/historyCache'
 import { CustomerMemory, MemoryDetailResponse } from '../../models/memory.models'
 import { Project } from '../../models/conversationHistory.models'
-import { MEMORIES_QUERY_KEY, MEMORY_DETAIL_QUERY_KEY, MEMORY_USAGE_QUERY_KEY, PROJECTS_QUERY_KEY } from './queryKeys'
+import { MEMORIES_QUERY_KEY, MEMORY_DETAIL_QUERY_KEY, MEMORY_INFERENCE_QUERY_KEY, MEMORY_USAGE_QUERY_KEY, PROJECTS_QUERY_KEY } from './queryKeys'
 
 /**
  * Every memory the customer has. The last session's list paints at once and
@@ -38,6 +39,19 @@ export function useMemoryDetail(memoryId: string | undefined) {
         refetchOnMount: 'always',
         enabled: isAuthenticated && !!memoryId,
         retry: false,
+    })
+}
+
+/** How one extraction run inferred the memory. A run never changes, so it is fetched once. */
+export function useMemoryInference(memoryId: string | undefined, runId: string | undefined) {
+    const { isAuthenticated, getAccessTokenSilently } = useAuth()
+
+    return useQuery<MemoryInferenceData>({
+        queryKey: [MEMORY_INFERENCE_QUERY_KEY, memoryId, runId],
+        queryFn: async () => getMemoryInference(await getAccessTokenSilently(), memoryId!, runId!),
+        enabled: isAuthenticated && !!memoryId && !!runId,
+        retry: false,
+        staleTime: Infinity,
     })
 }
 
