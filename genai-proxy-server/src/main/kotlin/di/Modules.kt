@@ -257,7 +257,7 @@ fun appModule(): Module = module {
             get()
         )
     }
-    single { com.genflowly.service.ExchangeSideEffects(get(), get()) }
+    single { com.genflowly.service.ExchangeSideEffects(get(), get(), get()) }
     single { com.genflowly.service.UnifiedSearchService(get(), get(), get(), get(), get(), get()) }
     single { GenerationOrchestrator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { com.genflowly.service.AttachmentService(get()) }

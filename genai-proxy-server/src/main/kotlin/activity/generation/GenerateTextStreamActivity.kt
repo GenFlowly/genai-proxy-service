@@ -13,6 +13,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.response.header
+import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
 import io.ktor.server.routing.Route
 import io.github.smiley4.ktoropenapi.post
@@ -23,6 +24,9 @@ import com.genflowly.service.ExchangeSideEffects
 import com.genflowly.service.GenerationOrchestrator
 
 private val logger = LoggerFactory.getLogger("GenerateTextStreamRoute")
+
+/** nginx's status for a client that went away before the response finished. */
+private val CLIENT_CLOSED_REQUEST = HttpStatusCode(499, "Client Closed Request")
 
 fun Route.registerGenerateTextStreamRoutes(
     generationOrchestrator: GenerationOrchestrator,
@@ -136,22 +140,35 @@ fun Route.registerGenerateTextStreamRoutes(
                     }
                 }
 
-                call.respondTextWriter(contentType = ContentType.Text.Plain) {
-                    try {
-                        // Force flush headers and send a heartbeat byte (space) immediately
-                        // to prevent client timeout (TTFB) while waiting for AI vendor
-                        write(" ")
-                        flush()
-                        
-                        streamResult.flow.collect { chunk ->
-                            write(chunk)
+                // A client disconnect (mobile browsers drop the stream when the
+                // app is backgrounded) ends only this relay: generation runs on
+                // and persists the reply. It surfaces as an IOException — from a
+                // write/flush below, and again from Ktor closing the writer after
+                // the block (the close flushes into the dead connection), which
+                // escapes the inner catch.
+                var clientDisconnected = false
+                try {
+                    call.respondTextWriter(contentType = ContentType.Text.Plain) {
+                        try {
+                            // Force flush headers and send a heartbeat byte (space) immediately
+                            // to prevent client timeout (TTFB) while waiting for AI vendor
+                            write(" ")
                             flush()
+
+                            streamResult.flow.collect { chunk ->
+                                write(chunk)
+                                flush()
+                            }
+                        } catch (e: java.io.IOException) {
+                            clientDisconnected = true
+                            logger.warn("Stream closed by client: {}", e.message)
+                        } catch (e: Exception) {
+                            logger.error("Error during streaming response", e)
                         }
-                    } catch (e: java.io.IOException) {
-                        logger.warn("Stream closed by client: {}", e.message)
-                    } catch (e: Exception) {
-                        logger.error("Error during streaming response", e)
                     }
+                } catch (e: java.io.IOException) {
+                    if (!clientDisconnected) logger.warn("Stream closed by client: {}", e.message)
+                    clientDisconnected = true
                 }
 
                 exchangeSideEffects.launchAsync(
@@ -161,8 +178,18 @@ fun Route.registerGenerateTextStreamRoutes(
                     userText = request.prompt.prompt,
                     responseMessageId = streamResult.responseMessageId,
                     bearerToken = call.bearerToken(),
-                    learnFromConversation = request.learnFromConversation
+                    learnFromConversation = request.learnFromConversation,
+                    afterStream = streamResult.flow.takeIf { clientDisconnected }
                 )
+                if (clientDisconnected) {
+                    // The failed send never completed the response pipeline, so
+                    // the request metrics (and their active-requests gauge) would
+                    // never see this call. Responding again sends nothing — the
+                    // engine skips an already-committed response — but completes
+                    // the pipeline, recorded as a client-closed request rather
+                    // than a 200 or a 500.
+                    call.respond(CLIENT_CLOSED_REQUEST, "")
+                }
             }
         }
     }
