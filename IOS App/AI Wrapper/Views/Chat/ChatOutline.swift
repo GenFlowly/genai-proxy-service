@@ -29,11 +29,35 @@ enum ChatOutline {
                 return OutlineItem(
                     id: block.conversationBlockId,
                     number: index + 1,
-                    prompt: block.prompt,
+                    prompt: plainPrompt(block.prompt),
                     meta: parts.filter { !$0.isEmpty }.joined(separator: " · "),
                     isGenerating: block.isLoading
                 )
             }
+    }
+
+    /// A prompt as one plain line, for the places that name a turn (the Outline, the header):
+    /// markdown's emphasis, strikethrough, code, heading, quote, fence and link marks dropped,
+    /// whitespace runs collapsed. Word-internal underscores and asterisks (snake_case, 2*3) stay.
+    /// The web's `plainPrompt`.
+    static func plainPrompt(_ prompt: String) -> String {
+        let rules: [(String, String, NSRegularExpression.Options)] = [
+            (#"^\s*```.*$"#, "", .anchorsMatchLines),
+            (#"^\s{0,3}(#{1,6}\s+|>\s?)"#, "", .anchorsMatchLines),
+            (#"!?\[([^\]]*)\]\([^)]*\)"#, "$1", []),
+            (#"(\*\*|__)(?=\S)(.+?)(?<=\S)\1"#, "$2", []),
+            (#"(?<![\w*])\*(?=\S)(.+?)(?<=\S)\*(?![\w*])"#, "$1", []),
+            (#"(?<![\w_])_(?=\S)(.+?)(?<=\S)_(?![\w_])"#, "$1", []),
+            (#"~~(?=\S)(.+?)(?<=\S)~~"#, "$1", []),
+            (#"`([^`]+)`"#, "$1", []),
+            (#"\s+"#, " ", []),
+        ]
+        var text = prompt
+        for (pattern, template, options) in rules {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { continue }
+            text = regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: template)
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// The turn in view, or the last turn when the view isn't on one.

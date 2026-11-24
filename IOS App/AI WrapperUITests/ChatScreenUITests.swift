@@ -25,7 +25,7 @@ final class ChatScreenUITests: XCTestCase {
     @MainActor
     func testTheTitleOpensTheOutlineAndPickingATurnClosesIt() throws {
         let app = launchMockConversation()
-        let title = app.buttons["mobile-header-title"]
+        let title = app.buttons["mobile-header-pill"]
         XCTAssertTrue(title.waitForExistence(timeout: 10))
         XCTAssertEqual(title.label, "Outline: Sorting algorithms compared")
         title.tap()
@@ -44,7 +44,7 @@ final class ChatScreenUITests: XCTestCase {
     @MainActor
     func testTheCloseButtonDismissesTheOutline() throws {
         let app = launchMockConversation()
-        let title = app.buttons["mobile-header-title"]
+        let title = app.buttons["mobile-header-pill"]
         XCTAssertTrue(title.waitForExistence(timeout: 10))
         title.tap()
 
@@ -139,7 +139,7 @@ final class ChatScreenUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
         for _ in 0..<8 { app.swipeUp() }
-        let header = app.buttons["mobile-header-title"]
+        let header = app.buttons["mobile-header-pill"]
         let model = app.staticTexts.matching(NSPredicate(format: "label == %@", "gpt-5.6-sol")).allElementsBoundByIndex.last
         XCTAssertLessThan(try XCTUnwrap(model).frame.minY, header.frame.maxY)
 
@@ -191,7 +191,9 @@ final class ChatScreenUITests: XCTestCase {
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         editor.tap()
         editor.typeText(text)
-        settle { editor.frame.height > 100 }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        let lines = CGFloat(text.split(separator: "\n", omittingEmptySubsequences: false).count)
+        settle { editor.frame.height > 33.6 * (lines - 0.5) }
         return (editor, editor.frame.height)
     }
 
@@ -206,7 +208,7 @@ final class ChatScreenUITests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.18)).tap()
     }
 
-    /// A tap outside puts the editor away with its draft: back to the small box, the draft kept.
+    /// A tap outside puts the editor away with its draft: back to one line, the draft kept.
     @MainActor
     func testATapOutsidePutsAFollowUpWithADraftAway() throws {
         let app = launchMockConversation()
@@ -218,7 +220,7 @@ final class ChatScreenUITests: XCTestCase {
         putAway.name = "follow-up-put-away-by-a-tap"
         putAway.lifetime = .keepAlways
         add(putAway)
-        XCTAssertLessThan(editor.frame.height, 60)
+        XCTAssertEqual(editor.frame.height, 33.6, accuracy: 1)
         XCTAssertEqual(editor.value as? String, "First line\nSecond line")
 
         editor.tap()
@@ -230,13 +232,13 @@ final class ChatScreenUITests: XCTestCase {
     @MainActor
     func testDraggingTheConversationBackUpPutsTheEditorAway() throws {
         let app = launchMockConversation()
-        let (editor, inUse) = typeFollowUp("Make it shorter", in: app)
+        let (editor, inUse) = typeFollowUp("Make it\nshorter\nplease", in: app)
 
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.32)))
         settle { editor.frame.height < inUse }
-        XCTAssertLessThan(editor.frame.height, 60)
-        XCTAssertEqual(editor.value as? String, "Make it shorter")
+        XCTAssertEqual(editor.frame.height, 33.6, accuracy: 1)
+        XCTAssertEqual(editor.value as? String, "Make it\nshorter\nplease")
     }
 
     /// Blank lines alone aren't kept: the put-away editor shows its placeholder again.
@@ -250,10 +252,12 @@ final class ChatScreenUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String ?? "", "")
     }
 
+    /// The box grows with its text up to half the space between the header and the keyboard, then
+    /// the text scrolls inside it and the conversation keeps the other half.
     @MainActor
-    func testALongFollowUpGrowsTheEditorUpToTheHeaderThenScrolls() throws {
+    func testALongFollowUpGrowsTheEditorToHalfTheSpaceThenScrolls() throws {
         let app = launchMockConversation()
-        let title = app.buttons["mobile-header-title"]
+        let title = app.buttons["mobile-header-pill"]
         XCTAssertTrue(title.waitForExistence(timeout: 10))
         for _ in 0..<4 { app.swipeUp() }
 
@@ -279,7 +283,13 @@ final class ChatScreenUITests: XCTestCase {
         editor.typeText(String(repeating: "\nMore", count: 30))
         Thread.sleep(forTimeInterval: 1)
         let tallest = editor.frame.height
-        XCTAssertGreaterThanOrEqual(editor.frame.minY, title.frame.maxY)
+        // The box reaches 11 above its text and 61 below it (the gap and the controls row); the
+        // conversation between the header and the box keeps at least as much room as the box.
+        // (The keyboard element's frame starts below its suggestion strip, so it can't be the
+        // reference.)
+        let boxTop = editor.frame.minY - 11
+        let boxHeight = editor.frame.maxY + 61 - boxTop
+        XCTAssertGreaterThanOrEqual(boxTop - title.frame.maxY, boxHeight - 8)
         XCTAssertLessThanOrEqual(editor.frame.maxY, keyboard.frame.minY)
         let atTheCap = XCTAttachment(screenshot: app.screenshot())
         atTheCap.name = "long-follow-up-at-the-cap"
@@ -324,7 +334,7 @@ final class ChatScreenUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--mock-project-chat", "--ui-testing"]
         app.launch()
-        let header = app.buttons["mobile-header-project"]
+        let header = app.descendants(matching: .any)["mobile-header-project"]
         let hint = app.staticTexts["new-chat-project-hint"]
         XCTAssertTrue(hint.waitForExistence(timeout: 10))
 

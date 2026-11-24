@@ -11,16 +11,14 @@ export type { MobileHeaderMenuItem }
 
 interface MobileHeaderProps {
     title: string
-    /** Second line under the title (e.g. the loaded instruction persona). */
+    /** Second line under the title (e.g. the turn in view). */
     subtitle?: React.ReactNode
-    /** Makes the subtitle tappable (e.g. to open the instruction picker). */
-    onSubtitleClick?: () => void
-    /** Makes the title tappable, with a chevron (e.g. to open the Outline). */
-    onTitleClick?: () => void
-    /** Accessible name of the tappable title. */
-    titleActionLabel?: string
-    /** What the title opens is showing: its chevron turns up. */
-    titleExpanded?: boolean
+    /** Makes the whole pill tappable, with a chevron ending its last line (e.g. to open the Outline). */
+    onPillClick?: () => void
+    /** Accessible name of the tappable pill. */
+    pillActionLabel?: string
+    /** What the pill opens is showing: its chevron turns up. */
+    pillExpanded?: boolean
     /** Entries of the kebab (3-dot) menu on the right; omit to hide the kebab. */
     menuItems?: MobileHeaderMenuItem[]
     /** A round icon button on the right (e.g. a settings page's info button), shown when there are no menuItems. */
@@ -48,10 +46,9 @@ interface MobileHeaderProps {
 export default function MobileHeader({
     title,
     subtitle,
-    onSubtitleClick,
-    onTitleClick,
-    titleActionLabel,
-    titleExpanded,
+    onPillClick,
+    pillActionLabel,
+    pillExpanded,
     menuItems,
     trailingAction,
     menuTitle,
@@ -74,10 +71,9 @@ export default function MobileHeader({
             <BaseMobileHeader
                 title={title}
                 subtitle={subtitle}
-                onSubtitleClick={onSubtitleClick}
-                onTitleClick={onTitleClick}
-                titleActionLabel={titleActionLabel}
-                titleExpanded={titleExpanded}
+                onPillClick={onPillClick}
+                pillActionLabel={pillActionLabel}
+                pillExpanded={pillExpanded}
                 menuItems={menuItems}
                 trailingAction={trailingAction}
                 onMenuClick={hasL2Menu ? toggleLeftSidebar : openAppMenu}

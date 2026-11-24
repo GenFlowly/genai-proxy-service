@@ -42,6 +42,14 @@ struct ChatView: View {
         ChatOutline.items(blocks: conversation.blocks, vendorName: catalog.displayName(for:))
     }
 
+    /// The turn in view, for the header's second line.
+    private var headerTurn: HeaderTurn? {
+        let items = outlineItems
+        guard let currentId = ChatOutline.currentId(items: items, viewedId: viewedBlockId),
+              let index = items.firstIndex(where: { $0.id == currentId }) else { return nil }
+        return HeaderTurn(number: items[index].number, prompt: items[index].prompt, position: index + 1, count: items.count)
+    }
+
     /// Changes whenever the last block finishes or a conversation loads.
     private var trailingDraftKey: String {
         guard let last = conversation.blocks.last else { return "" }
@@ -76,7 +84,7 @@ struct ChatView: View {
 
             ChatHeader(
                 showShare: $showShare,
-                showPicker: $showPicker,
+                turn: headerTurn,
                 isOutlineOpen: showOutline,
                 onOpenOutline: outlineItems.isEmpty ? nil : { showOutline = true }
             )
@@ -293,17 +301,17 @@ struct AskSelection {
     let message: Message
 }
 
-/// ConversationHeader below isNarrow: title (tappable → Outline), loaded instruction
-/// (tappable → picker) and the New Chat / Share / AI Settings kebab; the hamburger opens the
-/// Chats and Projects menu.
+/// ConversationHeader below isNarrow: the title over the turn in view (the pill opens the
+/// Outline) and the New Chat / Share / AI Settings kebab; the hamburger opens the Chats and
+/// Projects menu. The instruction is picked on the editor's chip.
 struct ChatHeader: View {
     @EnvironmentObject var router: AppRouter
     @EnvironmentObject var auth: AuthStore
-    @EnvironmentObject var ai: AIStore
     @EnvironmentObject var conversation: ConversationStore
     @EnvironmentObject var history: HistoryStore
     @Binding var showShare: Bool
-    @Binding var showPicker: Bool
+    /// The turn in view; nil while there are no turns yet.
+    var turn: HeaderTurn?
     var isOutlineOpen = false
     /// Opens the Outline; nil while there are no turns yet.
     var onOpenOutline: (() -> Void)?
@@ -334,12 +342,6 @@ struct ChatHeader: View {
         auth.canShare && !conversation.conversationId.isEmpty && conversation.conversationRole != .view
     }
 
-    /// Latest version of the instruction loaded into this conversation.
-    private var loadedInstruction: InstructionResponse? {
-        guard let id = ai.selectedInstructionId else { return nil }
-        return auth.customerInstructions.filter { $0.id == id }.max { $0.version < $1.version }
-    }
-
     private var menuItems: [MobileHeaderMenuItem] {
         var items = [MobileHeaderMenuItem(label: L("conversation.conversationHeader.newChat")) { conversation.resetConversation() }]
         if showShareItem {
@@ -347,18 +349,6 @@ struct ChatHeader: View {
         }
         items.append(MobileHeaderMenuItem(label: L("layout.mobileFullPageModal.aiSettings")) { router.isRightSidebarOpen = true })
         return items + moderation.menuItems
-    }
-
-    @ViewBuilder
-    private var instructionLabel: some View {
-        if let instruction = loadedInstruction {
-            if let icon = instruction.icon, !icon.isEmpty {
-                EmojiIcon(text: icon, size: 12, advance: 15, lineHeight: 20)
-            }
-            Text(instruction.name)
-        } else {
-            Text(L("conversation.conversationHeader.chooseInstruction"))
-        }
     }
 
     var body: some View {
@@ -377,33 +367,73 @@ struct ChatHeader: View {
                     .allowsHitTesting(false)
                     .accessibilityIdentifier("shared-by")
             }
-            MobileHeader(
-                title: displayTitle,
-                menuItems: menuItems,
-                onSubtitleClick: { showPicker = true },
-                onTitleClick: onOpenOutline,
-                titleActionLabel: L("conversation.outline.openFor", ["title": displayTitle]),
-                titleExpanded: isOutlineOpen,
-                onMenuClick: { router.isMobileMenuOpen = true }
-            ) {
-                if let projectName = conversation.pendingProjectName(in: history.projects) {
-                    ProjectSubtitleLayout {
-                        HStack(spacing: 4) {
-                            WebIcon(name: "folder", size: 12, color: AppTheme.textMuted)
-                            Text(L("conversation.conversationHeader.inProject", ["name": projectName]))
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("mobile-header-project")
-                        Text("·").accessibilityHidden(true)
-                        HStack(spacing: 4.8) { instructionLabel }
-                    }
-                } else {
-                    instructionLabel
-                }
-            }
+            header
         }
         .task(id: sharedItem) { await moderation.load(item: sharedItem, auth: auth) }
         .sharedItemModerationDialogs(moderation) { conversation.resetConversation() }
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if let turn {
+            MobileHeader(
+                title: displayTitle,
+                menuItems: menuItems,
+                onPillClick: onOpenOutline,
+                pillActionLabel: L("conversation.outline.openFor", ["title": displayTitle]),
+                pillExpanded: isOutlineOpen,
+                onMenuClick: { router.isMobileMenuOpen = true }
+            ) {
+                TurnCrumb(turn: turn)
+            }
+        } else if let projectName = conversation.pendingProjectName(in: history.projects) {
+            MobileHeader(title: displayTitle, menuItems: menuItems, onMenuClick: { router.isMobileMenuOpen = true }) {
+                HStack(spacing: 4) {
+                    WebIcon(name: "folder", size: 12, color: AppTheme.textMuted)
+                    WebTruncatedLine(L("conversation.conversationHeader.inProject", ["name": projectName]))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("mobile-header-project")
+            }
+        } else {
+            MobileHeader(title: displayTitle, menuItems: menuItems, onMenuClick: { router.isMobileMenuOpen = true })
+        }
+    }
+}
+
+/// Where the header's turn line is: the turn in view and its place among the turns.
+struct HeaderTurn: Equatable {
+    let number: Int
+    let prompt: String
+    let position: Int
+    let count: Int
+}
+
+/// The header's second line in a conversation, as the desktop sub-bar shows the turn in view:
+/// its Q-badge and prompt, then where it is among the turns. The prompt gives way first.
+struct TurnCrumb: View {
+    let turn: HeaderTurn
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text("Q\(turn.number)")
+                .webText(10.5, 700)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .frame(height: 16)
+                .background(AppTheme.buttonPrimary)
+                .clipShape(Capsule())
+                .fixedSize()
+            WebTruncatedLine(turn.prompt)
+                .webText(12)
+                .layoutPriority(-1)
+            Text("\(turn.position) / \(turn.count)")
+                .webText(12)
+                .foregroundStyle(AppTheme.textMuted)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("mobile-header-turn")
     }
 }
 
@@ -647,34 +677,4 @@ struct NewChatHintLayout: Layout {
     }
 }
 
-/// The header's subtitle while a new chat waits to start in a project: "in Startup", a dot, then
-/// the instruction. The instruction gives way first; the project keeps at most 60% of the line
-/// and at least 40pt, as the web's `.projectContext` does.
-struct ProjectSubtitleLayout: Layout {
-    var spacing: CGFloat = 4.8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let widths = Self.widths(available: proposal.width, ideal: subviews.map { $0.sizeThatFits(.unspecified).width }, spacing: spacing)
-        let height = zip(subviews, widths).map { $0.sizeThatFits(ProposedViewSize(width: $1, height: proposal.height)).height }.max() ?? 0
-        return CGSize(width: widths.reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1)), height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let widths = Self.widths(available: bounds.width, ideal: subviews.map { $0.sizeThatFits(.unspecified).width }, spacing: spacing)
-        var x = bounds.minX
-        for (subview, width) in zip(subviews, widths) {
-            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
-            x += width + spacing
-        }
-    }
-
-    /// Widths for [project, separator, instruction] within `available`.
-    static func widths(available: CGFloat?, ideal: [CGFloat], spacing: CGFloat) -> [CGFloat] {
-        guard let available, ideal.count == 3 else { return ideal }
-        let room = max(0, available - ideal[1] - spacing * 2)
-        guard ideal[0] + ideal[2] > room else { return ideal }
-        let project = min(ideal[0], max(40, room * 0.6), room)
-        return [project, ideal[1], max(0, min(ideal[2], room - project))]
-    }
-}
 

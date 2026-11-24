@@ -4,6 +4,7 @@ import { formatServerDateTime, formatServerTime, parseServerDate } from '@genflo
 import type { OutlineItem } from '@genflowly/component-library'
 import { useConversation, useConversationUI } from '../context/ConversationContext'
 import { useVendorDisplayNames } from './useVendorDisplayNames'
+import { plainPrompt } from '../utils/plainPrompt'
 
 const isToday = (date: Date): boolean => {
     const now = new Date()
@@ -46,7 +47,7 @@ export function useConversationOutline(): {
                 return {
                     id: block.conversationBlockId,
                     number: index + 1,
-                    prompt: block.prompt,
+                    prompt: plainPrompt(block.prompt),
                     meta: parts.filter(Boolean).join(' · '),
                     isGenerating: block.isLoading,
                 }

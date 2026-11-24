@@ -197,7 +197,7 @@ struct TapOutsideEndsEditing: UIViewRepresentable {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             var view = touch.view
             while let current = view {
-                if current is UITextField || (current as? UITextView)?.isEditable == true || current is ComposerCompletionPopup {
+                if current is UITextField || (current as? UITextView)?.isEditable == true || current is ComposerCompletionPopup || current is ComposerTapArea.AreaView {
                     return false
                 }
                 view = current.superview

@@ -1,21 +1,51 @@
-.instructionName {
+// 📱 The turn in view, as the desktop sub-bar shows it: Q-badge, prompt, and
+// where it is among the turns; the prompt gives way first
+.turn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+// The sub-bar's badge, one step smaller to fit the pill's second line
+.turnBadge {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 16px;
+    padding: 0 5px;
+    border-radius: 8px;
+    background-color: var(--color-button-primary);
+    color: #ffffff;
+    font-size: 0.65625rem;
+    font-weight: 700;
+}
+
+.turnPrompt {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-// 📱 "in Startup" before the instruction while a new chat waits to be born in
-// a project; the instruction's name gives way first
+.turnCounter {
+    flex: none;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+// 📱 "in Startup" while a new chat waits to be born in a project
 .projectContext {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    flex: 0 1 auto;
-    min-width: 2.5rem;
-    max-width: 60%;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .projectIcon {
+    flex: none;
     color: var(--color-text-muted);
 }
 

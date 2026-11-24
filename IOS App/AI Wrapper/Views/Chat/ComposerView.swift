@@ -14,15 +14,16 @@ struct PendingAttachment: Identifiable {
     var isPDF: Bool { mediaType == AttachmentRef.pdfMediaType }
 }
 
-/// The web's docked prompt editor (Request.tsx below isNarrow): a small box glued to the
-/// bottom — `clamp(12rem, 32svh, 16rem)` of text plus a 64pt strip for the floating
-/// attach/generate buttons — holding a CodeMirror markdown editor. A follow-up editor rests at
-/// two lines whenever it isn't focused (`.idleFollowUp`), showing a draft's first line.
+/// The web's docked phone editor (Request.tsx below isNarrow): one rounded box glued to the
+/// bottom, as tall as its text, up to half the space between the header and where it rests,
+/// after which the text scrolls inside. The instruction chip, attach and send sit in a row under
+/// the text. A follow-up editor nobody is using shows one line, a draft's first.
 struct ComposerView: View {
     @EnvironmentObject var auth: AuthStore
+    @EnvironmentObject var ai: AIStore
+    @EnvironmentObject var router: AppRouter
     @EnvironmentObject var conversation: ConversationStore
     @EnvironmentObject var toasts: ToastCenter
-    @Environment(\.windowHeight) private var windowHeight
     @Environment(\.chatScreenHeight) private var chatScreenHeight
 
     let blockId: String
@@ -47,64 +48,63 @@ struct ComposerView: View {
     /// The editor shows while the turn above it generates, but its prompt can only go once that
     /// answer is in the conversation.
     private var canGenerate: Bool { hasAnyValidApiKey && !conversation.blocks.contains(where: \.isLoading) }
-
-    /// `--editor-height` without the strip.
-    static func textAreaHeight(windowHeight: CGFloat) -> CGFloat {
-        min(max(192, windowHeight * 0.32), 256)
+    /// Send also waits for something to send.
+    private var canSend: Bool {
+        canGenerate && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pending.isEmpty)
     }
-
-    /// `.idleFollowUp`'s 3.75rem of text above the strip.
-    static let idleTextAreaHeight: CGFloat = 60
 
     /// Every block after the first is a follow-up; the first is a new chat's editor.
     private var isFollowUp: Bool { conversation.blocks.first?.conversationBlockId != blockId }
 
     private var isIdle: Bool { isFollowUp && !isFocused }
 
-    /// The text view's 4pt inset above the first line, and that line.
-    private static var firstLineHeight: CGFloat { 4 + ComposerStyle.lineHeight }
+    /// `.cm-line`'s padding around the text: none above or below, 6 on each side.
+    static let textInsets = UIEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
 
-    private var totalHeight: CGFloat {
-        if isIdle { return Self.idleTextAreaHeight + Self.buttonStripHeight }
-        // `--editor-max-height`: from where it rests up to just under the header
-        let tallest = chatScreenHeight - mobileHeaderHeight - 8 - (pending.isEmpty ? 0 : Self.stripHeight)
-        return Self.grownHeight(
-            textHeight: textHeight,
-            resting: Self.textAreaHeight(windowHeight: windowHeight) + Self.buttonStripHeight,
-            tallest: tallest
-        )
+    /// The row of the instruction chip, attach and send.
+    static let controlsHeight: CGFloat = 44
+
+    /// Around the text: the box's padding and borders, the gap and the controls row.
+    static let boxFrame: CGFloat = 2 * 10 + 2 + 6 + controlsHeight
+
+    /// `.phoneText`: as tall as its text, from one line up to half the space between the header
+    /// and where the editor rests, less the box around the text; the text scrolls after that.
+    static func textViewHeight(textHeight: CGFloat, lineHeight: CGFloat, screenHeight: CGFloat) -> CGFloat {
+        let tallestBox = (screenHeight - mobileHeaderHeight - 8) / 2
+        return max(lineHeight, min(textHeight, tallestBox - boxFrame))
     }
 
-    /// `.cm-editor`'s min-height and max-height: its text grows the editor from its resting height
-    /// to the tallest it may be, and scrolls after that. A resting height above that limit still wins.
-    static func grownHeight(textHeight: CGFloat, resting: CGFloat, tallest: CGFloat) -> CGFloat {
-        max(resting, min(textHeight + textFrame, tallest))
+    private var textViewHeight: CGFloat {
+        if isIdle { return ComposerStyle.lineHeight }
+        return Self.textViewHeight(textHeight: textHeight, lineHeight: ComposerStyle.lineHeight, screenHeight: chatScreenHeight)
     }
 
-    /// Between the editor's edge and its text: the padding above and below the box, and the button strip.
-    private static let textFrame: CGFloat = 16 + 8 + buttonStripHeight
-
-    /// The strip of floating buttons below the text, which a completion popup can hang into.
-    private static let buttonStripHeight: CGFloat = 64
+    /// `.composerFocused`'s 3px glow around the box.
+    private static let focusRing = Color(.sRGB, red: 10 / 255, green: 132 / 255, blue: 1, opacity: 0.18)
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: 0) {
-                editor
-                    .padding(.horizontal, 8)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-                if !pending.isEmpty { previewStrip }
-            }
-
-            HStack(spacing: 8) {
-                attachButton
-                sendButton
-            }
-            .padding(.trailing, 20)
-            .padding(.bottom, 20 + (pending.isEmpty ? 0 : Self.stripHeight))
+        VStack(spacing: 6) {
+            editor
+            if !pending.isEmpty { previewStrip }
+            controls
         }
-        .frame(height: totalHeight + (pending.isEmpty ? 0 : Self.stripHeight))
+        .padding(10)
+        .background { ComposerTapArea { focusEndRequest += 1 } }
+        .background(AppTheme.backgroundSecondary)
+        .clipShape(RoundedRectangle(cornerRadius: DSRadius.lg))
+        .overlay(
+            RoundedRectangle(cornerRadius: DSRadius.lg)
+                .strokeBorder(isFocused ? AppTheme.primary : AppTheme.border, lineWidth: 1)
+        )
+        .overlay {
+            if isFocused {
+                RoundedRectangle(cornerRadius: DSRadius.lg + 1.5)
+                    .stroke(Self.focusRing, lineWidth: 3)
+                    .padding(-1.5)
+                    .allowsHitTesting(false)
+            }
+        }
+        .padding(8)
         .background(AppTheme.background)
         .onAppear(perform: restoreDraft)
         .onChange(of: conversation.focusDraftRequest) { _, _ in takeDraftFocus() }
@@ -130,51 +130,87 @@ struct ComposerView: View {
     }
 
     private var editor: some View {
-        // `.cm-scroller` ends above the button strip so no line sits under the buttons.
         ComposerTextView(
             text: $draft,
             isFocused: $isFocused,
             focusRequest: focusRequest,
             focusEndRequest: focusEndRequest,
-            editorInsets: UIEdgeInsets(top: 1, left: 1, bottom: 1 - Self.buttonStripHeight, right: 1),
+            textInsets: Self.textInsets,
             showsActiveLine: false,
             showsStartOnly: isIdle,
             onChange: handleChange,
             onPasteImages: handlePastedImages,
             onContentHeightChange: { textHeight = $0 }
         )
-        .mask(alignment: .top) {
-            Rectangle().frame(height: isIdle ? Self.firstLineHeight : nil)
-        }
+        .frame(height: textViewHeight)
         .overlay(alignment: .topLeading) {
             if draft.isEmpty {
                 // CodeMirror's placeholder: where the first line's text would start
                 Text(L(isFollowUp ? "conversation.request.placeholderFollowUp" : "conversation.request.placeholderNewChat"))
                     .webText(mono: ComposerStyle.size, lineHeight: 33.6)
                     .foregroundStyle(AppTheme.textMuted)
-                    .padding(.leading, 6)
-                    .padding(.top, 4)
+                    .padding(.leading, Self.textInsets.left)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
         }
-        .padding(.bottom, Self.buttonStripHeight)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppTheme.composerEditorBackground)
-        .clipShape(RoundedRectangle(cornerRadius: DSRadius.md))
-        .overlay(
-            RoundedRectangle(cornerRadius: DSRadius.md)
-                .strokeBorder(isFocused ? Color(hex: "#2563EB") : AppTheme.legacyBorder, lineWidth: 1)
-        )
+    }
+
+    private var controls: some View {
+        HStack(spacing: 8) {
+            instructionChip
+            Spacer(minLength: 0)
+            attachButton
+            sendButton
+        }
+        .frame(height: Self.controlsHeight)
+    }
+
+    /// Latest version of the instruction loaded into this conversation.
+    private var loadedInstruction: InstructionResponse? {
+        guard let id = ai.selectedInstructionId else { return nil }
+        return auth.customerInstructions.filter { $0.id == id }.max { $0.version < $1.version }
+    }
+
+    /// InstructionChip.tsx at its phone size: the loaded instruction's icon and name, opening the
+    /// picker; dashed and muted while none is loaded.
+    private var instructionChip: some View {
+        let instruction = loadedInstruction
+        let color = instruction == nil ? AppTheme.textMuted : AppTheme.textSecondary
+        return Button { router.showInstructionPicker = true } label: {
+            HStack(spacing: 6) {
+                if let icon = instruction?.icon, !icon.isEmpty {
+                    EmojiIcon(text: icon, size: 13, advance: 16, lineHeight: 20)
+                }
+                WebTruncatedLine(instruction?.name ?? L("conversation.conversationHeader.chooseInstruction"))
+                    .webText(13, 500)
+                WebIcon(name: "alt-arrow-right", size: 12, color: color)
+                    .rotationEffect(.degrees(90))
+            }
+            .foregroundStyle(color)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(instruction == nil ? Color.clear : AppTheme.backgroundTertiary)
+            .clipShape(Capsule())
+            .overlay {
+                if instruction == nil {
+                    WebDashedBorder(color: AppTheme.border, cornerRadius: 18)
+                } else {
+                    Capsule().strokeBorder(AppTheme.border, lineWidth: 1)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(WebPressStyle())
+        .accessibilityLabel(L("conversation.conversationHeader.chooseInstruction"))
+        .accessibilityIdentifier("instruction-chip")
     }
 
     private var attachButton: some View {
-        WebIcon(name: "attachment", size: 22, color: AppTheme.textPrimary)
+        WebIcon(name: "attachment", size: 20, color: AppTheme.textPrimary)
             .frame(width: 44, height: 44)
-            .background(AppTheme.composerAttachButton)
+            .background(AppTheme.backgroundTertiary)
             .clipShape(Circle())
-            .overlay(Circle().strokeBorder(AppTheme.border, lineWidth: 1))
-            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
             .overlay {
                 AttachMenuButton(
                     onPhotoLibrary: { showPhotoPicker = true },
@@ -186,15 +222,13 @@ struct ComposerView: View {
 
     private var sendButton: some View {
         Button(action: generate) {
-            WebIcon(name: "send-icon", size: 22, color: .white)
+            WebIcon(name: "send-icon", size: 20, color: canSend ? .white : AppTheme.textMuted)
                 .frame(width: 44, height: 44)
-                .background(canGenerate ? AppTheme.buttonPrimary : AppTheme.disabled)
+                .background(canSend ? AppTheme.buttonPrimary : AppTheme.backgroundTertiary)
                 .clipShape(Circle())
-                .shadow(color: canGenerate ? .black.opacity(0.25) : .clear, radius: 4, y: 2)
-                .opacity(canGenerate ? 1 : 0.5)
         }
         .buttonStyle(WebPressStyle())
-        .disabled(!canGenerate)
+        .disabled(!canSend)
         .accessibilityLabel(L("conversation.request.generate"))
     }
 
@@ -209,7 +243,6 @@ struct ComposerView: View {
                     if attachment.isPDF { docChip(attachment) } else { thumbnail(attachment) }
                 }
             }
-            .padding(.horizontal, 8)
             .padding(.vertical, 8)
         }
         .frame(height: Self.stripHeight)
@@ -440,6 +473,29 @@ struct ComposerView: View {
     }
 }
 
+/// The composer box around its text and buttons: a tap there puts the caret at the end of the
+/// text, as a press on the web's box does, and isn't a tap outside the text.
+struct ComposerTapArea: UIViewRepresentable {
+    let onTap: () -> Void
+
+    final class AreaView: UIView {
+        var onTap: (() -> Void)?
+
+        @objc func tapped() { onTap?() }
+    }
+
+    func makeUIView(context: Context) -> AreaView {
+        let view = AreaView()
+        view.backgroundColor = .clear
+        view.addGestureRecognizer(UITapGestureRecognizer(target: view, action: #selector(AreaView.tapped)))
+        return view
+    }
+
+    func updateUIView(_ view: AreaView, context: Context) {
+        view.onTap = onTap
+    }
+}
+
 // MARK: - Editor
 
 /// CodeMirror look: monospace 24/33.6, GitHub theme colors, 6pt line padding, the active logical
@@ -458,6 +514,8 @@ struct ComposerTextView: UIViewRepresentable {
     var editorInsets = UIEdgeInsets.zero
     /// `.cm-editor`'s min-height, for a view that only spans its lines.
     var editorMinHeight: CGFloat = 0
+    /// Between the view's edges and its text.
+    var textInsets = UIEdgeInsets(top: 4, left: 6, bottom: 4, right: 2)
     /// The current line's tint; the chat composer draws none, as it read as an empty toolbar.
     var showsActiveLine = true
     /// A put-away composer: the start of its text shows, and a drag on it moves the page.
@@ -473,7 +531,7 @@ struct ComposerTextView: UIViewRepresentable {
         let view = ComposerUITextView(usingTextLayoutManager: false)
         view.delegate = context.coordinator
         view.backgroundColor = .clear
-        view.textContainerInset = UIEdgeInsets(top: 4, left: 6, bottom: 4, right: 2)
+        view.textContainerInset = textInsets
         view.textContainer.lineFragmentPadding = 0
         // Laid out lazily, a restyle measures only the lines around the edit for one pass, and an
         // editor sized by its text drops to that height and springs back.
