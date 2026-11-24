@@ -35,6 +35,14 @@ _DEFAULT_SEARCH_DEPTH = "basic"
 # Cost and Usage's Web Search page prices on these exact counts (see
 # record_web_search_usage).
 _CREDITS_PER_SEARCH_DEPTH = {"basic": 1, "advanced": 2}
+# Tavily answers a longer query with 400 "Query is too long. Max query length
+# is 400 characters." (help.tavily.com, "Optimizing Your Query"). Only steers
+# the model via the schema: the API is the authority on the limit, and its
+# reason reaches the model when it rejects a request (see _provider_reason).
+_QUERY_CHAR_GUIDE = 400
+# Statuses Tavily uses for a request it refuses as malformed. Re-sending the
+# same request cannot succeed; changing what the reason names can.
+_INVALID_REQUEST_STATUSES = (400, 422)
 
 
 def _count_search(status: str, elapsed: float | None = None) -> None:
@@ -72,6 +80,39 @@ def _https_url(value) -> str:
     Transport Security) or downgrades the page (mixed content on the web)."""
     url = value.strip() if isinstance(value, str) else ""
     return url if url.startswith("https://") else ""
+
+
+def _provider_reason(exc: Exception) -> str:
+    """Tavily's own explanation of a failed call, from its error body —
+    {"detail": {"error": "..."}}, or FastAPI's {"detail": [{"loc", "msg"}]} on
+    a 422 (the rejected input values are left out). "" when there is none: a
+    transport error, an empty or non-JSON body. httpx's exception text only
+    names the status and URL, so without this the reason is lost."""
+    try:
+        detail = exc.response.json().get("detail")
+    except Exception:
+        return ""
+    if isinstance(detail, dict):
+        reason = detail.get("error")
+    elif isinstance(detail, list):
+        reason = "; ".join(
+            f"{'.'.join(str(p) for p in (d.get('loc') or [])[1:])}: {d.get('msg')}"
+            for d in detail if isinstance(d, dict)
+        )
+    else:
+        reason = detail
+    return str(reason or "").strip()[:300]
+
+
+def _payload_shape(payload: dict) -> str:
+    """What was sent, for the FAILED log line: sizes and settings only, never
+    the query text — production logs carry no user content (content_logging)."""
+    return (
+        f"query_chars={len(payload['query'])} topic={payload['topic']} "
+        f"search_depth={payload['search_depth']} days={payload.get('days', '-')} "
+        f"include_domains={len(payload.get('include_domains') or [])} "
+        f"exclude_domains={len(payload.get('exclude_domains') or [])}"
+    )
 
 
 def _sources_from_data(data: dict) -> list[Source]:
@@ -128,7 +169,9 @@ class WebSearchTool(GraphTool):
                 "type": "string",
                 "description": (
                     "The search query. Make it specific and keyword-focused rather "
-                    "than a full sentence, e.g. 'Anthropic Claude latest model release'."
+                    "than a full sentence, e.g. 'Anthropic Claude latest model release'. "
+                    f"Keep it under {_QUERY_CHAR_GUIDE} characters — it is a search "
+                    "query, not the task description."
                 ),
             },
             "topic": {
@@ -247,13 +290,18 @@ class WebSearchTool(GraphTool):
             _count_search("ok", time.perf_counter() - started)
         except Exception as e:
             _count_search("error", time.perf_counter() - started)
-            logger.error("web_search: FAILED — %s", e, exc_info=True)
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            reason = _provider_reason(e)
+            logger.error(
+                "web_search: FAILED — %s%s [%s]",
+                e, f" — provider says: {reason}" if reason else "",
+                _payload_shape(payload), exc_info=True,
+            )
             # Tavily's auth/quota statuses are terminal for the whole turn —
             # retrying with a new query cannot succeed, so say that outright
             # instead of inviting the retry loop the generic message allows.
             # 432 = key/plan limit exceeded, 433 = pay-as-you-go cap, per
             # https://docs.tavily.com (401 = invalid key).
-            status = getattr(getattr(e, "response", None), "status_code", None)
             if status in (432, 433):
                 return ToolResult(
                     content=(
@@ -272,6 +320,23 @@ class WebSearchTool(GraphTool):
                         "Retrying will not help. Answer from your own knowledge, "
                         "note it may not be current, and tell the user their "
                         "web-search API key needs to be corrected in settings."
+                    )
+                )
+            # A malformed request (e.g. an over-long query) fails the same way
+            # however often it is re-sent, and "try a different query" alone
+            # had the model re-sending near-copies of it — so pass Tavily's
+            # reason through for the model to fix the request.
+            if status in _INVALID_REQUEST_STATUSES:
+                return ToolResult(
+                    content=(
+                        "Web search rejected the request as invalid"
+                        + (f": {reason.rstrip('.')}." if reason else f" (HTTP {status}).")
+                        + " Sending the same request again will fail the same way. "
+                        "Fix what it names — e.g. shorten the query to a few "
+                        f"keywords (under {_QUERY_CHAR_GUIDE} characters), or drop "
+                        "or simplify include_domains/exclude_domains — and search "
+                        "again, or answer from your own knowledge and note that it "
+                        "may not be current."
                     )
                 )
             return ToolResult(
