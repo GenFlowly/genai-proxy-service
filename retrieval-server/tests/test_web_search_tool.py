@@ -1,6 +1,7 @@
 """Unit tests for the web_search built-in tool — no live Tavily call.
 
-The HTTP call (WebSearchTool._search) is patched, so these exercise the pure
+The HTTP call (WebSearchTool._search) is patched — or, where Tavily's error
+body matters, run against a stub httpx transport — so these exercise the pure
 logic: payload assembly (topic/days/max_results), result formatting with
 publish dates, and graceful degradation on a missing key or upstream failure.
 
@@ -12,6 +13,8 @@ Run with:
 """
 import unittest
 from unittest.mock import AsyncMock, patch
+
+import httpx
 
 from graph_tools import default_registry
 from graph_tools.base import ToolContext
@@ -232,6 +235,90 @@ class WebSearchToolTest(unittest.IsolatedAsyncioTestCase):
             result = await tool.run({"query": "x"}, _keyed_ctx("bad"))
         self.assertIn("invalid", result.content.lower())
         self.assertNotIn("try again", result.content.lower())
+
+
+def _tavily_replying(status: int, body):
+    """Run the real _search against a stub transport, so the tool sees the
+    genuine httpx.HTTPStatusError raise_for_status() raises, with Tavily's
+    error body on it."""
+    real_client = httpx.AsyncClient
+
+    def reply(request):
+        if isinstance(body, str):
+            return httpx.Response(status, text=body)
+        return httpx.Response(status, json=body)
+
+    transport = httpx.MockTransport(reply)
+    return patch("httpx.AsyncClient", lambda **kw: real_client(transport=transport, **kw))
+
+
+# A query written like a task description rather than keywords: over
+# Tavily's 400-character limit.
+_LONG_QUERY = (
+    "compare the pricing, free tiers, rate limits and enterprise features of every "
+    "major hosted vector database vendor in 2026 including Pinecone Weaviate Qdrant "
+    "Milvus Zilliz Chroma and pgvector based offerings, and list which of them support "
+    "hybrid sparse dense search, multi tenancy, role based access control, SOC 2, HIPAA, "
+    "bring your own cloud deployment and per namespace backups, with sources and dates"
+)
+_TOO_LONG = {"detail": {"error": "Query is too long. Max query length is 400 characters."}}
+
+
+class WebSearchProviderRejectionTest(unittest.IsolatedAsyncioTestCase):
+    """Tavily 400/422 mean the request itself is malformed. The model must
+    learn why (so it can fix the request instead of re-sending near-copies),
+    and the FAILED log must name the reason without logging the query."""
+
+    async def test_rejection_reason_reaches_the_model(self):
+        with _tavily_replying(400, _TOO_LONG):
+            result = await WebSearchTool().run({"query": _LONG_QUERY}, _keyed_ctx())
+        self.assertIn("Query is too long. Max query length is 400 characters.", result.content)
+        self.assertIn("will fail the same way", result.content)
+        self.assertNotIn("try again with a different query", result.content.lower())
+        self.assertEqual(result.sources, [])
+
+    async def test_failed_log_names_the_reason_and_shape_but_not_the_query(self):
+        with _tavily_replying(400, _TOO_LONG), \
+             self.assertLogs("graph_tools.tools.web_search", "ERROR") as logs:
+            await WebSearchTool().run(
+                {"query": _LONG_QUERY, "topic": "news", "include_domains": ["a.com", "b.com"]},
+                _keyed_ctx(),
+            )
+        line = logs.output[0]
+        self.assertIn("400 Bad Request", line)
+        self.assertIn("provider says: Query is too long", line)
+        self.assertIn(f"query_chars={len(_LONG_QUERY)} topic=news", line)
+        self.assertIn("days=7 include_domains=2 exclude_domains=0", line)
+        self.assertNotIn("vector database", line)
+
+    async def test_validation_error_detail_is_summarised_without_inputs(self):
+        body = {"detail": [{"type": "string_type", "loc": ["body", "query"],
+                            "msg": "Input should be a valid string", "input": 12345}]}
+        with _tavily_replying(422, body):
+            result = await WebSearchTool().run({"query": "x"}, _keyed_ctx())
+        self.assertIn("invalid: query: Input should be a valid string.", result.content)
+        self.assertNotIn("12345", result.content)
+
+    async def test_rejection_without_a_readable_body_names_the_status(self):
+        with _tavily_replying(400, "<html>Bad Request</html>"):
+            result = await WebSearchTool().run({"query": "x"}, _keyed_ctx())
+        self.assertIn("rejected the request as invalid (HTTP 400).", result.content)
+
+    async def test_server_error_stays_retryable_and_logs_the_reason(self):
+        with _tavily_replying(500, {"detail": {"error": "Internal Server Error"}}), \
+             self.assertLogs("graph_tools.tools.web_search", "ERROR") as logs:
+            result = await WebSearchTool().run({"query": "x"}, _keyed_ctx())
+        self.assertIn("Try again with a different query", result.content)
+        self.assertIn("provider says: Internal Server Error", logs.output[0])
+
+    async def test_short_query_still_succeeds_through_the_real_client(self):
+        with _tavily_replying(200, _SAMPLE):
+            result = await WebSearchTool().run({"query": "vector database pricing"}, _keyed_ctx())
+        self.assertEqual(len(result.sources), 2)
+
+    def test_schema_steers_the_model_to_a_short_query(self):
+        description = WebSearchTool.parameters["properties"]["query"]["description"]
+        self.assertIn("under 400 characters", description)
 
 
 class WebSearchCredentialTest(unittest.IsolatedAsyncioTestCase):
