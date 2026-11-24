@@ -14,9 +14,20 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.writeStringUtf8
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import mu.KLogger
 import mu.KotlinLogging
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -108,6 +119,32 @@ class RunsClientTest {
         assertEquals(StreamChunk.Content("Hello"), chunks[1])
         assertEquals(StreamChunk.Content(" world"), chunks[2])
         assertEquals(StreamChunk.Usage(1, 2, 3, 0, 0), chunks[3])
+    }
+
+    // runBlocking, not runTest: the SSE read runs on Dispatchers.IO (flowOn), and
+    // runTest's virtual-time withTimeout would fire before the real threads get there.
+    @Test
+    fun `a stream cut off by the user's Stop is a cancellation, not a failed run`() = runBlocking {
+        val logger = mockk<KLogger>(relaxed = true)
+        val body = ByteChannel(autoFlush = true)
+        val runs = RunsClient(logger, json, HttpClient(MockEngine {
+            respond(content = body, status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"))
+        }) { install(HttpTimeout) }, "http://retrieval-server:5001")
+        val firstChunk = CompletableDeferred<StreamChunk>()
+        // The durable run is still generating: one chunk, then the stream stays open.
+        body.writeStringUtf8("data: {\"content\":\"Partial\"}\n\n")
+
+        val generation = launch(Dispatchers.Default) {
+            runs.streamRun("run_abc").collect { firstChunk.complete(it) }
+        }
+        assertEquals(StreamChunk.Content("Partial"), withTimeout(5_000) { firstChunk.await() })
+        // What GenerationOrchestrator.cancelGeneration does on Stop.
+        generation.cancel(CancellationException("Cancelled by user"))
+        withTimeout(5_000) { generation.join() }
+
+        assertTrue(generation.isCancelled)
+        verify(exactly = 0) { logger.error(any<Throwable>(), any<() -> Any?>()) }
     }
 
     @Test

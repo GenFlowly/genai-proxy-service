@@ -5,17 +5,19 @@ Unit tests for durable-run cleanup (run_cleanup) and DBOS idle-polling tuning
 Covers: checkpoints dropped when a workflow ends but kept when its task is
 cancelled for recovery, the sweep deleting ended runs then orphans, unused
 queue deletion, the DBOS internals _quiet_idle_polling sets still existing
-on the pinned version, the connection caps fitting the Supabase pooler, and
-startup giving up promptly on an unreachable database. Run with:
+on the pinned version, a stopped run not logged as a DBOS ERROR, the
+connection caps fitting the Supabase pooler, and startup giving up promptly
+on an unreachable database. Run with:
     .venv/bin/python -m unittest tests.test_run_cleanup
 """
 import asyncio
+import logging
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from dbos import DBOS
-from dbos._error import DBOSWorkflowCancelledError
+from dbos._error import DBOSAwaitedWorkflowCancelledError, DBOSWorkflowCancelledError
 
 import durable_runtime
 import run_cleanup
@@ -200,6 +202,29 @@ class QuietIdlePollingTest(unittest.TestCase):
 
         self.assertEqual(self.commands._BACKGROUND_JOBS_INTERVAL_SEC, before)
         self.assertIs(self.system_db.list_queues, self.list_queues)
+
+
+class QuietCancelledRunErrorsTest(unittest.TestCase):
+    def setUp(self):
+        self.dbos_logger = logging.getLogger("dbos")
+        saved = list(self.dbos_logger.filters)
+        self.addCleanup(setattr, self.dbos_logger, "filters", saved)
+        durable_runtime._quiet_cancelled_run_errors()
+
+    def _workflow_raised(self, error):
+        # What DBOS 3.4's _execute_workflow_async logs when an async workflow raises.
+        try:
+            raise error
+        except Exception as e:
+            self.dbos_logger.error("Exception encountered in asynchronous workflow:", exc_info=e)
+
+    def test_a_stopped_run_is_not_an_error(self):
+        with self.assertNoLogs(self.dbos_logger, level="ERROR"):
+            self._workflow_raised(DBOSAwaitedWorkflowCancelledError("run_x"))
+
+    def test_a_failed_run_is_still_an_error(self):
+        with self.assertLogs(self.dbos_logger, level="ERROR"):
+            self._workflow_raised(RuntimeError("llm step failed"))
 
 
 class ConnectionBudgetTest(unittest.TestCase):
