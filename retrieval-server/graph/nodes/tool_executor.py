@@ -28,6 +28,9 @@ import logging
 import re
 import time
 import uuid
+from contextlib import asynccontextmanager
+from dataclasses import replace
+from functools import partial
 
 from activity.facts import report_call
 from encoding_library.observability import count, observe
@@ -131,6 +134,71 @@ _USAGE_KEYS = (
 
 def _add_usage(total: dict | None, inc: dict | None) -> dict:
     return {k: (total or {}).get(k, 0) + (inc or {}).get(k, 0) for k in _USAGE_KEYS}
+
+
+_SPAWN_TOOL = "spawn_agent"
+
+
+class _ChildWorkflowOrder:
+    """Durable /runs only: orders what a round's spawn_agent children record
+    on the PARENT workflow.
+
+    Each child runs as a DBOS child workflow (graph/subagent.py), so its LLM
+    steps are memoized against the child and the children run concurrently.
+    But DBOS records each child's start, and later its result, under the
+    parent's next step number (the start also derives the child's workflow id
+    from it). A crash/redeploy replays the round, and every replayed record
+    must get the same number, or a call would reattach to a sibling's child
+    and the parent's next LLM step would land on another record. So, in the
+    model's call order: all starts first, then the results — the children
+    still run side by side; only the bookkeeping is ordered. A spawn call
+    that ends without a child (a rejected prompt, an unknown profile) is
+    released when it finishes, so it never holds up the later ones."""
+
+    def __init__(self, seqs):
+        seqs = sorted(seqs)
+        self._started = {seq: asyncio.Event() for seq in seqs}
+        self._collected = {seq: asyncio.Event() for seq in seqs}
+
+    def slot(self, seq: int) -> "_ChildWorkflowSlot":
+        return _ChildWorkflowSlot(self, seq)
+
+    def release(self, seq: int) -> None:
+        for events in (self._started, self._collected):
+            if seq in events:
+                events[seq].set()
+
+    @staticmethod
+    async def _wait(events: dict, before: int | None = None) -> None:
+        for seq, event in events.items():
+            if before is not None and seq >= before:
+                break
+            await event.wait()
+
+
+class _ChildWorkflowSlot:
+    """One spawn call's turns: `async with slot.start():` around starting its
+    child, `async with slot.result():` around taking the child's result."""
+
+    def __init__(self, order: _ChildWorkflowOrder, seq: int):
+        self._order, self._seq = order, seq
+
+    @asynccontextmanager
+    async def start(self):
+        await self._order._wait(self._order._started, before=self._seq)
+        try:
+            yield
+        finally:
+            self._order._started[self._seq].set()
+
+    @asynccontextmanager
+    async def result(self):
+        await self._order._wait(self._order._started)
+        await self._order._wait(self._order._collected, before=self._seq)
+        try:
+            yield
+        finally:
+            self._order._collected[self._seq].set()
 
 
 def _truncate_for_context(content: str, max_chars: int, note: str) -> str:
@@ -357,12 +425,30 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
 
     context = make_tool_context(customer_id, secrets=secrets_accessor(resolved))
 
-    async def _spawn(profile: dict, prompt: str) -> dict:
+    # Durable /runs path: spawned children run as DBOS child workflows whose
+    # starts and results this run records in call order (_ChildWorkflowOrder).
+    try:
+        from graph.nodes.llm_node import _dbos_active
+
+        durable = _dbos_active()
+    except Exception:
+        durable = False
+    child_order = (
+        _ChildWorkflowOrder(
+            seq for seq, call in enumerate(builtin_calls, start=1)
+            if call.get("name") == _SPAWN_TOOL
+        )
+        if durable else None
+    )
+
+    async def _spawn(profile: dict, prompt: str, child_slot=None) -> dict:
         # Imported lazily: subagent builds a child graph from llm_node + THIS
         # module, so a module-level import would be a cycle.
         from graph.subagent import run_subagent
 
-        return await run_subagent(state, profile, prompt, agent_depth + 1)
+        return await run_subagent(
+            state, profile, prompt, agent_depth + 1, child_slot=child_slot
+        )
 
     context.runtime.update({
         "fs_namespace": fs_namespace,
@@ -404,7 +490,13 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         failing tool can neither stop the others nor abort the turn. mode
         "skip" short-circuits a budget-exhausted web_search without touching
         the search API; "note" executes but appends the consolidation note."""
-        result, error, duration_ms = await _execute_one(call, mode)
+        try:
+            result, error, duration_ms = await _execute_one(seq, call, mode)
+        finally:
+            # A spawn call that ended without starting a child (a rejected
+            # prompt, an unknown profile) must not hold up the later ones.
+            if child_order is not None:
+                child_order.release(seq)
         await report_call({
             "id": call.get("id", ""),
             "seq": seq,
@@ -416,7 +508,7 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         })
         return result, error, duration_ms
 
-    async def _execute_one(call: dict, mode: str):
+    async def _execute_one(seq: int, call: dict, mode: str):
         name = call.get("name", "")
         if mode == "exhausted":
             count("tool_execution_total", status="budget_exhausted", tool=name)
@@ -427,14 +519,20 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
         start = time.perf_counter()
         tool = by_name[name]
         args = call.get("args") or {}
+        call_context = context
+        if child_order is not None and name == _SPAWN_TOOL:
+            call_context = replace(context, runtime={
+                **context.runtime,
+                "spawn": partial(_spawn, child_slot=child_order.slot(seq)),
+            })
         try:
             if getattr(tool, "shareable", False):
                 result, outcome = await lookup_pool.execute(
-                    turn_id, name, fs_namespace, args, lambda: tool.run(args, context)
+                    turn_id, name, fs_namespace, args, lambda: tool.run(args, call_context)
                 )
                 status = "pooled" if outcome in _POOLED_OUTCOMES else "ok"
             else:
-                result = await tool.run(args, context)
+                result = await tool.run(args, call_context)
                 status = "ok"
             count("tool_execution_total", status=status, tool=name)
             if mode == "note":
@@ -450,25 +548,14 @@ async def _execute(state: RetrievalState, node_id: str | None) -> dict:
     # All of a turn's calls run CONCURRENTLY — three web searches (or three
     # spawned subagents) take one round-trip, not three. Post-processing below
     # stays sequential in the model's call order, which is what keeps citation
-    # numbering and loop_messages deterministic. EXCEPT on the durable /runs
-    # path: DBOS memoizes steps by execution order, and concurrent children
-    # make LLM-step order nondeterministic across a crash/resume — so durable
-    # runs execute the calls sequentially (correctness over latency there).
-    try:
-        from graph.nodes.llm_node import _dbos_active
-
-        durable = _dbos_active()
-    except Exception:
-        durable = False
-    if durable:
-        outcomes = [
-            await _run_one(i, c, m)
-            for i, (c, m) in enumerate(zip(builtin_calls, call_modes), start=1)
-        ]
-    else:
-        outcomes = await asyncio.gather(
-            *(_run_one(i, c, m) for i, (c, m) in enumerate(zip(builtin_calls, call_modes), start=1))
-        )
+    # numbering and loop_messages deterministic. The durable /runs path is no
+    # exception: no tool records anything on the run except spawn_agent, whose
+    # children run as child workflows with ordered bookkeeping. (Running them inline
+    # here, one after another, made a 5-way fan-out take 5 children's time
+    # before the parent could answer — 7+ minutes in production.)
+    outcomes = await asyncio.gather(
+        *(_run_one(i, c, m) for i, (c, m) in enumerate(zip(builtin_calls, call_modes), start=1))
+    )
 
     # Accumulated across the round, merged into the update once at the end.
     round_scratch: dict = {}

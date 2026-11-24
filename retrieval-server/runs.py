@@ -330,6 +330,10 @@ async def _request_agent_run(run_id: str, run_input: dict) -> dict:
 if durable_runtime.dbos_constructed():
     from dbos import DBOS
 
+    # Registers subagent_run (spawn_agent's child workflow) before launch, so
+    # recovery can resume a child that a crash/redeploy interrupted.
+    import graph.subagent  # noqa: F401
+
     @DBOS.workflow(name="agent_run")
     async def agent_run(run_id: str, run_input: dict) -> dict:
         async with run_cleanup.checkpoints_dropped_at_end(run_id):
