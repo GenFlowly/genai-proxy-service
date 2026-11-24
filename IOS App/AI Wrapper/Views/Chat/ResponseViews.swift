@@ -111,7 +111,7 @@ struct ResponseGroupView: View {
                     }
                 }
                 .padding(.top, 18)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, ReaderFriendlyMarkdownView.readingInset)
                 .padding(.bottom, 8)
                 // Scrolling to an id stops at the content margin, so this lands the responses
                 // just below the overlay header, like the web row's scroll margin.
@@ -329,17 +329,26 @@ struct ResponseCardView: View {
             header
                 .padding(.bottom, 6)
 
+            // Ruled off from the text below it like a byline (`.activityPanel`)
+            let showsActivity = !(message.activity.isEmpty && !message.isLoading)
             ActivityPanel(
                 events: message.activity,
                 isLive: message.isLoading,
                 citedSources: message.webSources,
                 stopReason: message.stopReason
             )
-            .padding(.bottom, message.activity.isEmpty && !message.isLoading ? 0 : 14)
+            .padding(.bottom, showsActivity ? 14 : 0)
+            .overlay(alignment: .bottom) {
+                if showsActivity {
+                    Rectangle().fill(Color(uiColor: AppTheme.UI.textPrimary.withAlphaComponent(0.12))).frame(height: 1)
+                }
+            }
+            .padding(.bottom, showsActivity ? 18 : 0)
 
             if !isAwaitingText {
-                MarkdownView(
-                    text: Self.linkifyCitations(message.text, sources: message.webSources),
+                ReaderFriendlyMarkdownView(
+                    text: message.text,
+                    sources: message.webSources,
                     options: .init(turnTextSize: 16),
                     onSelectionChange: selectionHandler
                 )
@@ -451,31 +460,9 @@ struct ResponseCardView: View {
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
         .modifier(ResponseSwipeOffset(model: swipe, factor: -1))
-        .padding(.horizontal, -8)
+        .padding(.horizontal, -ReaderFriendlyMarkdownView.readingInset)
         .padding(.bottom, endsConversation ? -8 : 0)
         .zIndex(10)
-    }
-
-    /// `[n]` → a markdown link to its web source; a stray marker stays plain text, and
-    /// markers already followed by "(" are part of an existing link.
-    static func linkifyCitations(_ text: String, sources: [WebSource]?) -> String {
-        guard !text.isEmpty, let sources, !sources.isEmpty else { return text }
-        let urls = Dictionary(sources.map { ($0.index, $0.url) }, uniquingKeysWith: { first, _ in first })
-        let regex = try! NSRegularExpression(pattern: "\\[(\\d{1,3})\\](?!\\()")
-        let ns = text as NSString
-        var out = ""
-        var cursor = 0
-        for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
-            out += ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
-            let marker = ns.substring(with: match.range)
-            if let index = Int(ns.substring(with: match.range(at: 1))), let url = urls[index] {
-                out += "[\(marker)](\(url))"
-            } else {
-                out += marker
-            }
-            cursor = match.range.location + match.range.length
-        }
-        return out + ns.substring(from: cursor)
     }
 
     /// "$1.23" / "$0.0421" — sub-dollar amounts keep enough decimals for sub-cent turns.

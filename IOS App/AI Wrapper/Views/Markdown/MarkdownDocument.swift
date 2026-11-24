@@ -7,6 +7,7 @@ extension NSAttributedString.Key {
     static let mdQuoteBars = NSAttributedString.Key("md.quoteBars")
     static let mdRule = NSAttributedString.Key("md.rule")
     static let mdMarker = NSAttributedString.Key("md.marker")
+    static let mdCitation = NSAttributedString.Key("md.citation")
 }
 
 /// A list marker drawn in the hanging gutter left of the text (CSS
@@ -57,6 +58,11 @@ struct MarkdownTable {
     private static let floorlessColumnCount = 7
 
     let alignments: [Alignment]
+    /// The reading setting's table: rules between rows only (2pt under the header), no fills,
+    /// cells padded 9 by 10.
+    let ruled: Bool
+    let paddingX: CGFloat
+    let paddingY: CGFloat
     let header: [NSAttributedString]
     let rows: [[NSAttributedString]]
     /// `data-label`: each column's header as plain text, beside its value once a row restacks.
@@ -102,8 +108,11 @@ struct MarkdownTable {
         return !filled.isEmpty && filled.allSatisfy { $0.wholeMatch(of: numericCell) != nil }
     }
 
-    init(alignments: [Alignment], numericColumns: Set<Int> = [], header: [NSAttributedString], rows: [[NSAttributedString]], labels: [NSAttributedString]) {
+    init(alignments: [Alignment], numericColumns: Set<Int> = [], header: [NSAttributedString], rows: [[NSAttributedString]], labels: [NSAttributedString], ruled: Bool = false) {
         self.alignments = alignments
+        self.ruled = ruled
+        paddingX = ruled ? 10 : Self.cellPaddingX
+        paddingY = ruled ? 9 : Self.cellPaddingY
         self.header = header
         self.rows = rows
         self.labels = labels
@@ -124,7 +133,7 @@ struct MarkdownTable {
         let floor = header.count < Self.floorlessColumnCount ? Self.wrapAnywhereFloor : 0
         for row in [header] + rows {
             for (column, cell) in row.enumerated() where column < header.count {
-                let widths = Self.intrinsicWidths(of: cell, wrapAnywhereFloor: floor)
+                let widths = Self.intrinsicWidths(of: cell, wrapAnywhereFloor: floor, paddingX: ruled ? 10 : Self.cellPaddingX)
                 minWidths[column] = max(minWidths[column], widths.min)
                 maxWidths[column] = max(maxWidths[column], widths.max)
             }
@@ -145,15 +154,16 @@ struct MarkdownTable {
         return zip(minWidths, maxWidths).map { $0 + (target - totalMin) * ($1 - $0) / (totalMax - totalMin) }
     }
 
-    private static func intrinsicWidths(of cell: NSAttributedString, wrapAnywhereFloor: CGFloat) -> (min: CGFloat, max: CGFloat) {
-        let chrome = (cellPaddingX + collapsedBorder / 2) * 2
+    private static func intrinsicWidths(of cell: NSAttributedString, wrapAnywhereFloor: CGFloat, paddingX: CGFloat) -> (min: CGFloat, max: CGFloat) {
+        let chrome = (paddingX + collapsedBorder / 2) * 2
         guard cell.length > 0 else { return (chrome, chrome) }
 
         let wrapAnywhere = wrapAnywhereRanges(in: cell)
         let text = cell.string as NSString
         var widest: CGFloat = 0
         func measure(_ range: NSRange) {
-            widest = max(widest, LayoutUnit.ceiling(cell.attributedSubstring(from: range).size().width))
+            let piece = cell.attributedSubstring(from: range)
+            widest = max(widest, LayoutUnit.ceiling(CitationChipBox.layoutWidth(of: piece) ?? piece.size().width))
         }
         var cursor = 0
         for range in wrapAnywhere.rangeView.map({ NSRange(location: $0.lowerBound, length: $0.count) }) + [NSRange(location: text.length, length: 0)] {
@@ -167,7 +177,8 @@ struct MarkdownTable {
 
         let floor = wrapAnywhere.isEmpty ? 0 : wrapAnywhereFloor
         let minimum = max(widest + chrome, floor)
-        let full = cell.boundingRect(with: CGSize(width: 1_000_000, height: 1_000_000), options: [.usesLineFragmentOrigin], context: nil).width
+        let full = CitationChipBox.layoutWidth(of: cell)
+            ?? cell.boundingRect(with: CGSize(width: 1_000_000, height: 1_000_000), options: [.usesLineFragmentOrigin], context: nil).width
         return (minimum, max(LayoutUnit.ceiling(full) + chrome, minimum))
     }
 
@@ -250,6 +261,11 @@ enum MarkdownParser {
         /// line height 1.55, 12pt between blocks, lists indented 22pt a level with 4pt between
         /// items, and no margin before the first block or after the last.
         var turnTextSize: CGFloat?
+        /// The reading setting (the web's ReaderFriendlyTextContainer, phone metrics): text in
+        /// Source Serif 4 at 17/28 (a prompt 18/30, weight 500), 24pt between blocks, headings
+        /// in Roboto 600 with 36 above and 10 below, tables ruled between rows only, display
+        /// math on a band, and `cite://` links drawn as citation chips.
+        var reader = false
     }
 
     /// The metrics a document is laid out with: the card's (the rules above) or a turn's.
@@ -267,8 +283,35 @@ enum MarkdownParser {
         /// A nested list adds its own indent (a turn's `padding-left` per list).
         let nestsListIndent: Bool
         let trimsEdges: Bool
+        /// See `Options.reader`.
+        let reader: Bool
+        let bodyWeight: CGFloat
+        /// A blockquote's own margins (`margin: 1.2rem 0`; the reading setting's `0 0 gap`).
+        let quoteMarginTop: CGFloat
+        let quoteMarginBottom: CGFloat
 
         init(_ options: Options) {
+            reader = options.reader
+            if options.reader {
+                let prompt = (options.turnTextSize ?? 0) >= 17
+                paragraphSize = prompt ? 18 : 17
+                listItemSize = paragraphSize
+                headingBase = paragraphSize
+                lineHeight = prompt ? 30.0 / 18 : 28.0 / 17
+                bodyWeight = prompt ? 500 : 400
+                blockGap = 24
+                listItemGap = 6
+                listGap = 24
+                listIndent = 22
+                nestsListIndent = true
+                trimsEdges = true
+                quoteMarginTop = 0
+                quoteMarginBottom = 24
+                return
+            }
+            bodyWeight = 400
+            quoteMarginTop = LayoutUnit.truncating(19.2)
+            quoteMarginBottom = LayoutUnit.truncating(19.2)
             if let size = options.turnTextSize {
                 paragraphSize = size
                 listItemSize = size
@@ -311,7 +354,7 @@ enum MarkdownParser {
     }
 
     static func segments(for markdown: String, options: Options = Options()) -> [MarkdownSegment] {
-        let key = "\(options.capitalizeFirstLetter ? 1 : 0)\(options.tightFirstHeading ? 1 : 0)\(options.listIndent)|\(options.turnTextSize ?? 0)|\(markdown)" as NSString
+        let key = "\(options.capitalizeFirstLetter ? 1 : 0)\(options.tightFirstHeading ? 1 : 0)\(options.reader ? 1 : 0)\(options.listIndent)|\(options.turnTextSize ?? 0)|\(markdown)" as NSString
         if let hit = cache.object(forKey: key) { return hit.segments }
         let result = build(markdown, options: options)
         cache.setObject(Box(result), forKey: key)
@@ -516,12 +559,15 @@ enum MarkdownParser {
             let leaf = leaves[i]
             let quoteDepth = leaf.containers.filter { if case .blockQuote = $0.kind { return true }; return false }.count
             let inList = leaf.containers.contains { if case .listItem = $0.kind { return true }; return false }
-            let quoteMargin: CGFloat = quoteDepth > 0 && isFirstInQuote(leaves, i) ? LayoutUnit.truncating(19.2) : 0
-            let quoteBottom: CGFloat = quoteDepth > 0 && isLastInQuote(leaves, i) ? LayoutUnit.truncating(19.2) : 0
+            let quoteMargin: CGFloat = quoteDepth > 0 && isFirstInQuote(leaves, i) ? typography.quoteMarginTop : 0
+            let quoteBottom: CGFloat = quoteDepth > 0 && isLastInQuote(leaves, i) ? typography.quoteMarginBottom : 0
 
             switch leaf.kind {
             case .tableCell(_, _, let tableId, let alignments):
                 var header: [Int: NSAttributedString] = [:]
+                /// A stacked row labels its values with the header as written (the reading
+                /// setting draws the header row itself in capitals).
+                var headerText: [Int: String] = [:]
                 var rows: [Int: [Int: NSAttributedString]] = [:]
                 let explicitLeft = explicitLeftColumns.indices.contains(tableIndex) ? explicitLeftColumns[tableIndex] : []
                 tableIndex += 1
@@ -545,7 +591,12 @@ enum MarkdownParser {
                         alignment: numericColumns.contains(col) ? .right : (col < alignments.count ? alignments[col] : .left),
                         fixedLineHeight: maths.isEmpty
                     )
-                    if row == 0 { header[col] = cell } else { rows[row, default: [:]][col] = cell }
+                    if row == 0 {
+                        header[col] = cell
+                        headerText[col] = MarkdownUITextView.withoutLayoutCharacters(String(leaves[j].runs.characters))
+                    } else {
+                        rows[row, default: [:]][col] = cell
+                    }
                     j += 1
                 }
                 i = j
@@ -557,15 +608,16 @@ enum MarkdownParser {
                     header: (0..<columns).map { header[$0] ?? blank },
                     rows: rows.keys.sorted().map { key in (0..<columns).map { rows[key]?[$0] ?? blank } },
                     labels: (0..<columns).map { column in
-                        let text = (header[column]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                        let text = (headerText[column] ?? header[column]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                         return tableBlock(
-                            NSAttributedString(string: text, attributes: [.font: DSFont.ui(15.2, weight: 600), .foregroundColor: AppTheme.UI.textSecondary]),
+                            NSAttributedString(string: text, attributes: [.font: DSFont.ui(typography.reader ? 14 : 15.2, weight: 600), .foregroundColor: AppTheme.UI.textSecondary]),
                             style: .tableHeader,
                             typography: typography,
                             alignment: column < alignments.count ? alignments[column] : .left,
                             fixedLineHeight: true
                         )
-                    }
+                    },
+                    ruled: typography.reader
                 )
                 let marginTop = typography.trimsEdges && !seenFirstBlock ? 0 : max(pendingMargin, quoteMargin)
                 pendingMargin = 24
@@ -615,7 +667,10 @@ enum MarkdownParser {
             switch leaf.kind {
             case .header(let level):
                 style = .heading(level)
-                if level <= 4 {
+                if typography.reader {
+                    marginTop = 36
+                    marginBottom = 10
+                } else if level <= 4 {
                     marginTop = 24
                     marginBottom = 12
                     if level == 1, options.tightFirstHeading { marginTop = 2 }
@@ -682,6 +737,7 @@ enum MarkdownParser {
             mutable.addAttribute(.paragraphStyle, value: paragraph, range: full)
             if case .rule = leaf.kind {} else {
                 mutable.addAttribute(.baselineOffset, value: metrics.baselineOffset, range: full)
+                CitationChipBox.raiseChips(in: mutable, baselineOffset: metrics.baselineOffset)
             }
             if quoteDepth > 0 {
                 mutable.addAttribute(.mdQuoteBars, value: quoteDepth, range: full)
@@ -751,6 +807,7 @@ enum MarkdownParser {
         let full = NSRange(location: 0, length: block.length)
         block.addAttribute(.paragraphStyle, value: paragraph, range: full)
         block.addAttribute(.baselineOffset, value: metrics.baselineOffset, range: full)
+        CitationChipBox.raiseChips(in: block, baselineOffset: metrics.baselineOffset)
         return block
     }
 
@@ -913,13 +970,20 @@ enum MarkdownParser {
 
         var base: InlineStyle { if case .quote(let inner) = self { return inner }; return self }
 
+        /// The reading setting's heading sizes and line heights, h1–h6.
+        private static let readerHeadings: [(size: CGFloat, lineHeight: CGFloat)] = [
+            (22, 30), (19, 26), (17, 24), (16, 22), (16, 22), (16, 22)
+        ]
+
         func size(_ typography: Typography) -> CGFloat {
             switch base {
             case .paragraph: return typography.paragraphSize
             case .listItem: return typography.listItemSize
             case .heading(let level):
+                if typography.reader { return Self.readerHeadings[max(0, min(5, level - 1))].size }
                 return typography.headingBase * [2, 1.5, 1.17, 1, 0.83, 0.67][max(0, min(5, level - 1))]
-            case .tableHeader, .tableCell: return 15.2
+            case .tableHeader: return typography.reader ? 12 : 15.2
+            case .tableCell: return typography.reader ? 14 : 15.2
             case .quote: return typography.paragraphSize
             }
         }
@@ -932,12 +996,53 @@ enum MarkdownParser {
             }
         }
 
+        func weight(_ typography: Typography) -> CGFloat {
+            guard typography.reader else { return weight }
+            switch base {
+            case .heading, .tableHeader: return 600
+            case .tableCell: return 400
+            default: return typography.bodyWeight
+            }
+        }
+
+        /// The reading setting sets running text in the serif; headings and tables stay in Roboto.
+        func usesSerif(_ typography: Typography) -> Bool {
+            guard typography.reader else { return false }
+            switch base {
+            case .paragraph, .listItem, .quote: return true
+            default: return false
+            }
+        }
+
+        func font(_ typography: Typography, weight: CGFloat? = nil, italic: Bool? = nil) -> UIFont {
+            let size = size(typography)
+            let resolvedWeight = weight ?? self.weight(typography)
+            let resolvedItalic = italic ?? isQuoted
+            return usesSerif(typography)
+                ? DSFont.serif(size, weight: resolvedWeight, italic: resolvedItalic)
+                : DSFont.ui(size, weight: resolvedWeight, italic: resolvedItalic)
+        }
+
         var color: UIColor { isQuoted ? AppTheme.UI.textSecondary : AppTheme.UI.textPrimary }
+
+        func color(_ typography: Typography) -> UIColor {
+            if typography.reader, case .tableHeader = base { return AppTheme.UI.textMuted }
+            return color
+        }
 
         func metrics(_ typography: Typography) -> Metrics {
             let size = size(typography)
-            let font = DSFont.ui(size, weight: weight, italic: isQuoted)
-            let box = WebLineBox(font: font, lineHeight: DSFont.scaledSize(size * typography.lineHeight))
+            let font = font(typography)
+            var lineHeight = size * typography.lineHeight
+            if typography.reader {
+                switch base {
+                case .heading(let level): lineHeight = Self.readerHeadings[max(0, min(5, level - 1))].lineHeight
+                case .tableHeader: lineHeight = 16
+                case .tableCell: lineHeight = 20
+                default: break
+                }
+            }
+            let box = WebLineBox(font: font, lineHeight: DSFont.scaledSize(lineHeight))
             // TextKit rests the descender on the bottom of a fixed line box.
             return Metrics(font: font, lineHeight: box.height, baselineOffset: box.height + font.descender - box.baseline, baselineFromTop: box.baseline)
         }
@@ -958,10 +1063,19 @@ enum MarkdownParser {
                 continue
             }
 
+            if let link = run.link, let chip = CitationChipBox.chip(for: link, markers: text, baselineFromTop: metrics.baselineFromTop) {
+                // The chip keeps its own gap from the word before it
+                while out.string.last == " " {
+                    out.deleteCharacters(in: NSRange(location: out.length - 1, length: 1))
+                }
+                out.append(chip)
+                continue
+            }
+
             var attributes: [NSAttributedString.Key: Any] = [:]
             let bold = intent.contains(.stronglyEmphasized)
             let italic = intent.contains(.emphasized) || base.isQuoted
-            attributes[.foregroundColor] = base.color
+            attributes[.foregroundColor] = base.color(typography)
 
             if intent.contains(.code) {
                 let codeFont = DSFont.uiMono(15.2)
@@ -980,14 +1094,23 @@ enum MarkdownParser {
                 continue
             }
 
-            attributes[.font] = DSFont.ui(base.size(typography), weight: bold ? max(700, base.weight) : base.weight, italic: italic)
+            let weight = base.weight(typography)
+            attributes[.font] = base.font(typography, weight: bold ? max(700, weight) : weight, italic: italic)
+            if typography.reader, case .tableHeader = base.base {
+                text = text.uppercased()
+                attributes[.kern] = 0.06 * base.size(typography)
+            }
             if intent.contains(.strikethrough) {
                 attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
                 attributes[.strikethroughColor] = base.color
             }
             if let link = run.link {
+                // The text view draws links with the string's own attributes (`linkTextAttributes`
+                // is empty), so a citation chip can differ from a link.
                 attributes[.link] = link
+                attributes[.foregroundColor] = AppTheme.UI.textPrimary
                 attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                attributes[.underlineColor] = AppTheme.UI.textPrimary
             }
             out.append(NSAttributedString(string: text.webHyphenBreakable, attributes: attributes))
         }
@@ -998,11 +1121,12 @@ enum MarkdownParser {
         let ns = text as NSString
         let regex = try! NSRegularExpression(pattern: "\(mathOpen)[DI](\\d+)\(mathClose)")
         var cursor = 0
-        let attributes: [NSAttributedString.Key: Any] = [.font: DSFont.ui(style.size(typography), weight: style.weight, italic: style.isQuoted), .foregroundColor: style.color]
+        let attributes: [NSAttributedString.Key: Any] = [.font: style.font(typography), .foregroundColor: style.color(typography)]
         for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             out.append(NSAttributedString(string: ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor)), attributes: attributes))
             if let index = Int(ns.substring(with: match.range(at: 1))), index < maths.count {
-                out.append(MathRenderer.inlineAttachment(latex: maths[index], fontSize: style.size(typography)))
+                // The reading setting's `.katex { font-size: 1.1em }`
+                out.append(MathRenderer.inlineAttachment(latex: maths[index], fontSize: style.size(typography) * (typography.reader ? 1.1 : 1)))
             }
             cursor = match.range.location + match.range.length
         }

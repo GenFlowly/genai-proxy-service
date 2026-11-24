@@ -198,6 +198,13 @@
             "copyPrompt": "Copy Prompt",
             "loadingContentRenderer": "Loading content renderer..."
         },
+        "citation": {
+            "label": "Source {{index}}: {{title}}",
+            "citedTimes_one": "Cited once in this answer",
+            "citedTimes_other": "Cited {{count}} times in this answer",
+            "more": "+{{count}}",
+            "moreLabel": "{{count}} more sources"
+        },
         "themeToggle": {
             "darkTheme": "Dark Theme",
             "lightTheme": "Light Theme",

@@ -15,13 +15,16 @@ struct TooltipLayout: Equatable {
 
     private static let gap: CGFloat = 8
 
-    static func place(anchor: CGRect, tooltip: CGSize, viewport: CGSize) -> TooltipLayout {
+    /// `placeTooltip`'s preference: `.side` tries beside the anchor first, `.vertical` only above or below it.
+    enum Preference { case side, vertical }
+
+    static func place(anchor: CGRect, tooltip: CGSize, viewport: CGSize, prefer: Preference = .side) -> TooltipLayout {
         let rightLeft = anchor.maxX + gap
         let leftLeft = anchor.minX - gap - tooltip.width
         let fitsRight = rightLeft + tooltip.width <= viewport.width - gap
         let fitsLeft = leftLeft >= gap
 
-        if fitsRight || fitsLeft {
+        if prefer == .side, fitsRight || fitsLeft {
             let halfHeight = tooltip.height / 2
             let top = max(halfHeight + gap, min(anchor.midY, viewport.height - halfHeight - gap))
             return fitsRight

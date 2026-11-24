@@ -128,21 +128,64 @@ struct StreamFrameTests {
 
 struct CitationLinkTests {
     private let sources = [WebSource(index: 2, title: "Two", url: "https://two.test"), WebSource(index: 21, title: "T", url: "https://21.test")]
+    private let many = (1...6).map { WebSource(index: $0, title: "S\($0)", url: "https://s\($0).test") }
 
     @Test func markersLinkByTheirOriginalIndex() {
-        #expect(ResponseCardView.linkifyCitations("See [2][21].", sources: sources) == "See [[2]](https://two.test)[[21]](https://21.test).")
+        #expect(CitationText.linkify("See [2][21].", sources: sources) == "See [[2]](cite://2)[[21]](cite://21).")
     }
 
     @Test func strayMarkersStayPlain() {
-        #expect(ResponseCardView.linkifyCitations("See [9].", sources: sources) == "See [9].")
+        #expect(CitationText.linkify("See [9].", sources: sources) == "See [9].")
+        #expect(CitationText.linkify("See [2][9].", sources: sources) == "See [[2]](cite://2)[9].")
     }
 
     @Test func existingLinksAreLeftAlone() {
-        #expect(ResponseCardView.linkifyCitations("[2](https://x.test)", sources: sources) == "[2](https://x.test)")
+        #expect(CitationText.linkify("[2](https://x.test)", sources: sources) == "[2](https://x.test)")
     }
 
     @Test func noSourcesMeansNoWork() {
-        #expect(ResponseCardView.linkifyCitations("See [2].", sources: nil) == "See [2].")
+        #expect(CitationText.linkify("See [2].", sources: nil) == "See [2].")
+    }
+
+    @Test func aLongRunFoldsIntoPlusN() {
+        #expect(CitationText.linkify("Claim [1][2][3][4][5][6].", sources: many)
+            == "Claim [[1]](cite://1)[[2]](cite://2)[[3]](cite://3)[[4][5][6]](cite://more/4,5,6).")
+        #expect(CitationText.linkify("Claim [1][2][3][4].", sources: many)
+            == "Claim [[1]](cite://1)[[2]](cite://2)[[3]](cite://3)[[4]](cite://4).")
+    }
+
+    @Test func countsEachMarker() {
+        #expect(CitationText.counts("a [2] b [2][21] [x](y)") == [2: 2, 21: 1])
+    }
+
+    @Test func readsTheSourcesOfALink() {
+        #expect(CitationText.indexes(of: URL(string: "cite://16")!) == [16])
+        #expect(CitationText.indexes(of: URL(string: "cite://more/4,5,6")!) == [4, 5, 6])
+        #expect(CitationText.indexes(of: URL(string: "https://two.test")!) == nil)
+    }
+}
+
+@MainActor
+struct CitationChipTests {
+    @Test func aChipCopiesAsItsMarker() throws {
+        let parsed = MarkdownParser.segments(for: CitationText.linkify("Shares [16].", sources: [WebSource(index: 16, title: "F", url: "https://f.test")]), options: .init(turnTextSize: 16, reader: true))
+        guard case .text(_, let text, _, _) = try #require(parsed.first) else { Issue.record("not text"); return }
+        #expect(text.string.contains("16"))
+        #expect(!text.string.contains("[16]"))
+        #expect(CitationChipBox.plainText(of: text, in: NSRange(location: 0, length: text.length)) == "Shares[16].")
+        var chips = 0
+        text.enumerateAttribute(.mdCitation, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+            if value is CitationChipBox { chips += 1 }
+        }
+        #expect(chips == 1)
+    }
+
+    @Test func theReadingSettingUsesTheSerif() throws {
+        let parsed = MarkdownParser.segments(for: "Text", options: .init(turnTextSize: 16, reader: true))
+        guard case .text(_, let text, _, _) = try #require(parsed.first) else { Issue.record("not text"); return }
+        let font = try #require(text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)
+        #expect(font.familyName == "Source Serif 4")
+        #expect(abs(font.pointSize - DSFont.scaledSize(17)) < 0.01)
     }
 }
 

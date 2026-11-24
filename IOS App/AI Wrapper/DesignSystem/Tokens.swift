@@ -54,6 +54,21 @@ nonisolated enum DSFont {
         }
     }
 
+    /// The reading face, Source Serif 4 (the web's ReaderFriendlyTextContainer), bundled beside
+    /// Roboto. Its `opsz` axis follows the size, as the web's `font-optical-sizing: auto` does.
+    static func serif(_ size: CGFloat, weight: CGFloat = 400, italic: Bool = false) -> UIFont {
+        let scaled = scaledSize(size)
+        return cached(Key(family: "serif", size: scaled, weight: weight, italic: italic)) {
+            let name = italic ? "SourceSerif4Italic-Italic" : "SourceSerif4Roman-Regular"
+            let base = UIFontDescriptor(name: name, size: scaled) as CTFontDescriptor
+            let wght = 0x77676874 as CFNumber
+            let opsz = 0x6F70737A as CFNumber
+            let weighted = CTFontDescriptorCreateCopyWithVariation(base, wght, weight)
+            let varied = CTFontDescriptorCreateCopyWithVariation(weighted, opsz, min(60, max(8, scaled))) as UIFontDescriptor
+            return UIFont(descriptor: varied, size: scaled)
+        }
+    }
+
     /// `font-family: monospace` — Menlo, the face Chrome and Safari resolve it to here.
     static func uiMono(_ size: CGFloat, weight: UIFont.Weight = .regular) -> UIFont {
         let scaled = scaledSize(size)

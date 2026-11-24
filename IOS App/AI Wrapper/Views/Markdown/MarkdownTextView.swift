@@ -4,6 +4,9 @@ import UIKit
 /// Draws what CSS paints but NSAttributedString can't: inline-code chips (rounded
 /// background with padding), blockquote bars, `hr` lines and hanging list markers.
 final class MarkdownLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
+    /// The citation chip whose tooltip is showing, drawn in its open state.
+    var openCitation: NSRange?
+
     override init() {
         super.init()
         delegate = self
@@ -44,6 +47,16 @@ final class MarkdownLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
         return true
     }
 
+    /// How far an inline `code` box pushed this line's baseline down.
+    private func lineGrowth(forGlyphRange lineGlyphs: NSRange) -> CGFloat {
+        guard let storage = textStorage else { return 0 }
+        var above: CGFloat = 0
+        storage.enumerateAttribute(.mdInlineCode, in: characterRange(forGlyphRange: lineGlyphs, actualGlyphRange: nil)) { value, _, _ in
+            if let box = value as? InlineCodeBox { above = max(above, box.growsLineAbove) }
+        }
+        return above
+    }
+
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
         guard let storage = textStorage, let context = UIGraphicsGetCurrentContext(), let container = textContainers.first else { return }
@@ -67,6 +80,28 @@ final class MarkdownLayoutManager: NSLayoutManager, NSLayoutManagerDelegate {
                 )
                 AppTheme.UI.codeSurface.setFill()
                 UIBezierPath(roundedRect: chip, cornerRadius: 4).fill()
+            }
+        }
+
+        storage.enumerateAttribute(.mdCitation, in: chars) { value, range, _ in
+            guard let box = value as? CitationChipBox else { return }
+            let isOpen = self.openCitation.map { NSIntersectionRange($0, range).length > 0 } ?? false
+            let glyphs = self.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            self.enumerateLineFragments(forGlyphRange: glyphs) { rect, _, _, lineGlyphs, _ in
+                let inLine = NSIntersectionRange(glyphs, lineGlyphs)
+                guard inLine.length > 0 else { return }
+                let bounds = self.boundingRect(forGlyphRange: inLine, in: container)
+                let top = rect.minY + self.lineGrowth(forGlyphRange: lineGlyphs) + box.baselineFromTop - box.raise - box.topAboveBaseline
+                // The box's own width: a chip that ends a line would otherwise run to the line's end
+                let chip = CGRect(x: bounds.minX + origin.x, y: top + origin.y, width: box.width, height: CitationChipBox.height)
+                let path = UIBezierPath(roundedRect: chip.insetBy(dx: 0.5, dy: 0.5), cornerRadius: CitationChipBox.cornerRadius)
+                (isOpen ? CitationChipBox.openFill : CitationChipBox.fill).setFill()
+                path.fill()
+                if isOpen {
+                    CitationChipBox.openBorder.setStroke()
+                    path.lineWidth = 1
+                    path.stroke()
+                }
             }
         }
 
@@ -142,8 +177,17 @@ final class MarkdownUITextView: UITextView {
     var onSelectionChange: ((String?) -> Void)?
 
     override func copy(_ sender: Any?) {
-        guard let range = selectedTextRange, let text = text(in: range) else { return }
-        UIPasteboard.general.string = Self.withoutLayoutCharacters(text)
+        guard let text = selectedPlainText else { return }
+        UIPasteboard.general.string = text
+    }
+
+    /// The selection as text: layout characters dropped, each citation chip as its markers.
+    var selectedPlainText: String? {
+        guard let range = selectedTextRange else { return nil }
+        let location = offset(from: beginningOfDocument, to: range.start)
+        let length = offset(from: range.start, to: range.end)
+        guard length > 0 else { return nil }
+        return CitationChipBox.plainText(of: attributedText, in: NSRange(location: location, length: length))
     }
 
     /// Attachments, the zero-width spaces that add Chrome's line breaks, and code's padding.
@@ -215,11 +259,9 @@ struct MarkdownTextView: UIViewRepresentable {
         view.textContainerInset = .zero
         view.clipsToBounds = false
         view.delegate = context.coordinator
-        view.linkTextAttributes = [
-            .foregroundColor: AppTheme.UI.textPrimary,
-            .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .underlineColor: AppTheme.UI.textPrimary
-        ]
+        // Links draw with the string's own attributes: an ordinary link is underlined text, a
+        // citation a chip (MarkdownParser.inlineString)
+        view.linkTextAttributes = [:]
         view.textDragInteraction?.isEnabled = false
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         view.tintColor = AppTheme.UI.primary
@@ -228,6 +270,7 @@ struct MarkdownTextView: UIViewRepresentable {
 
     func updateUIView(_ view: MarkdownUITextView, context: Context) {
         context.coordinator.onSelectionChange = onSelectionChange
+        context.coordinator.citations = context.environment.citationLookup
         if context.coordinator.current !== attributedText {
             context.coordinator.current = attributedText
             view.attributedText = attributedText
@@ -242,6 +285,7 @@ struct MarkdownTextView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var current: NSAttributedString?
         var onSelectionChange: ((String?) -> Void)?
+        var citations = CitationLookup()
         private var measured: (text: NSAttributedString, width: CGFloat, height: CGFloat)?
 
         /// `UITextView.sizeThatFits` rounds up to whole points, and CSS block heights don't.
@@ -254,8 +298,7 @@ struct MarkdownTextView: UIViewRepresentable {
 
         func textViewDidChangeSelection(_ textView: UITextView) {
             guard let onSelectionChange else { return }
-            guard let range = textView.selectedTextRange, !range.isEmpty,
-                  let text = textView.text(in: range).map(MarkdownUITextView.withoutLayoutCharacters),
+            guard let text = (textView as? MarkdownUITextView)?.selectedPlainText,
                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 onSelectionChange(nil)
                 return
@@ -265,7 +308,21 @@ struct MarkdownTextView: UIViewRepresentable {
 
         func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
             guard case .link(let url) = textItem.content else { return defaultAction }
+            if CitationText.indexes(of: url) != nil {
+                let range = textItem.range
+                let citations = citations
+                return UIAction { [weak textView] _ in
+                    guard let textView = textView as? MarkdownUITextView else { return }
+                    CitationTooltipPresenter.shared.toggle(url: url, range: range, in: textView, lookup: citations)
+                }
+            }
             return UIAction { _ in UIApplication.shared.open(url) }
+        }
+
+        /// A citation's long press has no link preview or menu: its tap opens the source.
+        func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
+            if case .link(let url) = textItem.content, CitationText.indexes(of: url) != nil { return nil }
+            return UITextItem.MenuConfiguration(menu: defaultMenu)
         }
     }
 }

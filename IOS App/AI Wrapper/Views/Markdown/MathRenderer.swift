@@ -97,17 +97,27 @@ private extension UIColor {
 /// card, otherwise centered, with 0.25rem vertical padding.
 struct MathBlockView: View {
     let latex: String
+    /// The reading setting: the formula on its own band (`.katex-display`: the hover surface,
+    /// 8pt corners, padded 18 by 16), at the text's 17pt × 1.15.
+    var onBand = false
     @Environment(\.colorScheme) private var colorScheme
+    /// `text-align: center` within the band, while a wider formula still scrolls.
+    @State private var bandWidth: CGFloat = 0
 
     var body: some View {
         let color = (colorScheme == .dark ? UIColor.white : UIColor(hex: "#2C2C2C"))
-        if let image = MathRenderer.image(latex: latex, fontSize: 19.2, display: true, color: color) {
+        if let image = MathRenderer.image(latex: latex, fontSize: onBand ? 19.55 : 19.2, display: true, color: color) {
             ScrollView(.horizontal, showsIndicators: false) {
                 Image(uiImage: image)
                     .padding(.vertical, 4)
-                    .frame(minWidth: 0)
+                    .frame(minWidth: onBand ? bandWidth : 0)
             }
             .frame(maxWidth: .infinity)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { bandWidth = $0 }
+            .padding(.vertical, onBand ? 14 : 0)
+            .padding(.horizontal, onBand ? 16 : 0)
+            .background(onBand ? AppTheme.backgroundHover : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: onBand ? 8 : 0))
             .accessibilityLabel(latex)
         } else {
             Text(latex)

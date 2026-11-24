@@ -788,6 +788,8 @@ struct SourceRow: View {
     let source: ActivitySourceView
     var variant: Variant = .compact
     var meta: String?
+    /// A ledger row without its own padding and top rule, for a list that spaces and rules its rows.
+    var plain = false
 
     var body: some View {
         let title = source.source.title.isEmpty ? source.source.url : source.source.title
@@ -828,8 +830,10 @@ struct SourceRow: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, 8)
-            .overlay(alignment: .top) { Rectangle().fill(AppTheme.borderLight).frame(height: 1) }
+            .padding(.vertical, plain ? 0 : 8)
+            .overlay(alignment: .top) {
+                if !plain { Rectangle().fill(AppTheme.borderLight).frame(height: 1) }
+            }
             .accessibilityIdentifier("activity-evidence-source")
         }
     }

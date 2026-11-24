@@ -46,6 +46,8 @@
 	<array>
 		<string>Roboto-Variable.ttf</string>
 		<string>Roboto-Italic-Variable.ttf</string>
+		<string>SourceSerif4-Variable.ttf</string>
+		<string>SourceSerif4-Italic-Variable.ttf</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
