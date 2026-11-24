@@ -209,6 +209,11 @@
 "common.textContainer.copyResponse" = "Copy Response";
 "common.textContainer.copyPrompt" = "Copy Prompt";
 "common.textContainer.loadingContentRenderer" = "Loading content renderer...";
+"common.citation.label" = "Source {{index}}: {{title}}";
+"common.citation.citedTimes_one" = "Cited once in this answer";
+"common.citation.citedTimes_other" = "Cited {{count}} times in this answer";
+"common.citation.more" = "+{{count}}";
+"common.citation.moreLabel" = "{{count}} more sources";
 "common.themeToggle.darkTheme" = "Dark Theme";
 "common.themeToggle.lightTheme" = "Light Theme";
 "common.themeToggle.systemTheme" = "System Theme";

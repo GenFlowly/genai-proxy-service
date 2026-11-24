@@ -29,7 +29,7 @@ struct MarkdownView: View {
                         .padding(.top, top)
                         .padding(.bottom, bottom)
                 case .math(_, let latex, let top, let bottom):
-                    MathBlockView(latex: latex)
+                    MathBlockView(latex: latex, onBand: typography.reader)
                         .padding(.top, top)
                         .padding(.bottom, bottom)
                 case .image(_, let url, let alt, let top, let bottom):
@@ -198,21 +198,21 @@ struct MarkdownTableView: View {
     /// The `::before` label cell is 38% of what the spacing leaves, its padding included.
     private func stackedCell(label: NSAttributedString, value: NSAttributedString) -> some View {
         let spacing = Self.spacing
-        let cardContent = containerWidth - spacing * 2 - 2 - MarkdownTable.cellPaddingX * 2
+        let cardContent = containerWidth - spacing * 2 - 2 - table.paddingX * 2
         let hasLabel = label.length > 0
         let cells = max(cardContent - spacing * (hasLabel ? 3 : 2), 0)
         let labelWidth = hasLabel ? cells * 0.38 : 0
         return HStack(alignment: .top, spacing: spacing) {
             if hasLabel {
                 MarkdownTextView(attributedText: label, onSelectionChange: onSelectionChange)
-                    .padding(.trailing, MarkdownTable.cellPaddingX)
+                    .padding(.trailing, table.paddingX)
                     .frame(width: labelWidth, alignment: .leading)
             }
             MarkdownTextView(attributedText: value, onSelectionChange: onSelectionChange)
                 .frame(width: cells - labelWidth, alignment: .leading)
         }
-        .padding(.horizontal, MarkdownTable.cellPaddingX + spacing)
-        .padding(.vertical, MarkdownTable.cellPaddingY + spacing)
+        .padding(.horizontal, table.paddingX + spacing)
+        .padding(.vertical, table.paddingY + spacing)
     }
 
     // MARK: Grid
@@ -228,7 +228,41 @@ struct MarkdownTableView: View {
 
     /// `border-collapse: collapse`: borders sit centered on the grid lines, so the table box
     /// holds half of the outer ones and each cell half of the ones around it.
-    private func gridBody(_ widths: [CGFloat]) -> some View {
+    @ViewBuilder private func gridBody(_ widths: [CGFloat]) -> some View {
+        if table.ruled { ruledBody(widths) } else { borderedBody(widths) }
+    }
+
+    /// The reading setting: a rule under each row, a heavier one under the header, no fills.
+    /// As wide as its columns (`width: max-content`), the rules included.
+    private func ruledBody(_ widths: [CGFloat]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ruledRow(table.header, widths: widths, rule: 2, ruleColor: Self.strongRule)
+            ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
+                ruledRow(row, widths: widths, rule: 1, ruleColor: Self.rule)
+            }
+        }
+    }
+
+    private static let rule = Color(uiColor: AppTheme.UI.textPrimary.withAlphaComponent(0.16))
+    private static let strongRule = Color(uiColor: AppTheme.UI.textPrimary.withAlphaComponent(0.32))
+
+    private func ruledRow(_ row: [NSAttributedString], widths: [CGFloat], rule: CGFloat, ruleColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .bottom, spacing: 0) {
+                ForEach(0..<table.columnCount, id: \.self) { column in
+                    MarkdownTextView(attributedText: row[column], onSelectionChange: onSelectionChange)
+                        .padding(.horizontal, table.paddingX)
+                        .padding(.vertical, table.paddingY)
+                        .frame(width: widths[column], alignment: .leading)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Rectangle().fill(ruleColor).frame(width: widths.reduce(0, +), height: rule)
+        }
+    }
+
+    private func borderedBody(_ widths: [CGFloat]) -> some View {
         VStack(spacing: 0) {
             gridRow(table.header, widths: widths, isHeader: true)
             ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in

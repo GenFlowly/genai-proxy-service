@@ -535,7 +535,7 @@ struct ResolvedRequestView: View {
             .frame(height: 32)
             .padding(.bottom, 8)
 
-            MarkdownView(text: block.prompt, options: .init(capitalizeFirstLetter: true, tightFirstHeading: false, turnTextSize: 17))
+            ReaderFriendlyMarkdownView(text: block.prompt, options: .init(capitalizeFirstLetter: true, tightFirstHeading: false, turnTextSize: 17))
 
             if !block.attachments.isEmpty {
                 ResolvedAttachmentThumbnails(attachments: block.attachments)
@@ -550,7 +550,7 @@ struct ResolvedRequestView: View {
             }
         }
         .padding(.top, 16)
-        .padding(.horizontal, 8)
+        .padding(.horizontal, ReaderFriendlyMarkdownView.readingInset)
         .frame(maxWidth: .infinity)
     }
 }

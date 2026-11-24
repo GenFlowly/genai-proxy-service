@@ -166,7 +166,7 @@ struct InstructionDetailView: View {
                     InstructionCardHead(instruction: shown)
                     InstructionChips(instruction: shown)
                     let long = shown.instruction.count > clipChars
-                    MarkdownView(text: shown.instruction, options: MarkdownParser.Options(listIndent: 24))
+                    ReaderFriendlyMarkdownView(text: shown.instruction, options: MarkdownParser.Options(listIndent: 24))
                         .frame(maxHeight: long && !showFull ? 288 : nil, alignment: .top)
                         .clipped()
                         .mask(alignment: .top) {

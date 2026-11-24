@@ -35,7 +35,7 @@ struct PrivacyPolicyContent: View {
                     .padding(.top, 40)
             case .loaded(let text):
                 DetailCard {
-                    MarkdownView(text: text, options: MarkdownParser.Options(listIndent: 24))
+                    ReaderFriendlyMarkdownView(text: text, options: MarkdownParser.Options(listIndent: 24))
                 }
             case .failed:
                 VStack(alignment: .leading, spacing: 12) {
