@@ -132,19 +132,6 @@ struct PendingProjectTests {
         #expect(conversation.pendingProjectName(in: projects) == nil)
     }
 
-    @Test func instructionGivesWayBeforeTheProject() {
-        // Everything fits: ideal widths
-        #expect(ProjectSubtitleLayout.widths(available: 300, ideal: [80, 4, 120], spacing: 4.8) == [80, 4, 120])
-        // A short project keeps its width; the instruction takes what is left
-        let short = ProjectSubtitleLayout.widths(available: 200, ideal: [80, 4, 200], spacing: 4.8)
-        #expect(short[0] == 80)
-        #expect(abs(short[2] - (200 - 4 - 9.6 - 80)) < 0.001)
-        // A long project stops at 60% of the room
-        let long = ProjectSubtitleLayout.widths(available: 200, ideal: [400, 4, 50], spacing: 4.8)
-        #expect(abs(long[0] - (200 - 4 - 9.6) * 0.6) < 0.001)
-        #expect(long[2] <= 50)
-    }
-
     @Test func hintStaysAboveTheComposer() {
         // Keyboard closed: a little above the page's middle, as on the web
         #expect(NewChatHintLayout.midY(pageMiddle: 418, top: 56, bottom: 516, hintHeight: 45) == 418 - 4.5)

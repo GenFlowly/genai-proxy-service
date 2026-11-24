@@ -1510,19 +1510,17 @@ struct StartupTests {
         #expect(intake.accepted.count == 1)
     }
 
-    @Test func composerHeightFollowsTheWindow() {
-        #expect(ComposerView.textAreaHeight(windowHeight: 874) == 256)
-        #expect(ComposerView.textAreaHeight(windowHeight: 700) == 224)
-        #expect(ComposerView.textAreaHeight(windowHeight: 400) == 192)
-    }
-
-    @Test func composerTextGrowsItUpToTheHeaderThenScrolls() {
-        // Its frame around the text is 88: 16 + 8 of padding and the 64 button strip
-        #expect(ComposerView.grownHeight(textHeight: 40, resting: 320, tallest: 700) == 320)
-        #expect(ComposerView.grownHeight(textHeight: 400, resting: 320, tallest: 700) == 488)
-        #expect(ComposerView.grownHeight(textHeight: 1600, resting: 320, tallest: 700) == 700)
-        // A resting height above the limit still wins, as min-height does over max-height
-        #expect(ComposerView.grownHeight(textHeight: 1600, resting: 320, tallest: 250) == 320)
+    @Test func composerTextGrowsItUpToHalfTheScreenThenScrolls() {
+        // The box takes 72 around its text: 10 of padding top and bottom, its 1pt borders, the
+        // 6 gap and the 44 controls row
+        #expect(ComposerView.boxFrame == 72)
+        let tallestText = (800 - mobileHeaderHeight - 8) / 2 - 72
+        // One line at least, its text's height up to the limit, then it scrolls
+        #expect(ComposerView.textViewHeight(textHeight: 0, lineHeight: 33.6, screenHeight: 800) == 33.6)
+        #expect(ComposerView.textViewHeight(textHeight: 100.8, lineHeight: 33.6, screenHeight: 800) == 100.8)
+        #expect(ComposerView.textViewHeight(textHeight: 2000, lineHeight: 33.6, screenHeight: 800) == tallestText)
+        // Before the screen is measured: one line
+        #expect(ComposerView.textViewHeight(textHeight: 2000, lineHeight: 33.6, screenHeight: 0) == 33.6)
     }
 
     /// The editor is as tall as the text it reports, so a height reported mid-restyle that counts

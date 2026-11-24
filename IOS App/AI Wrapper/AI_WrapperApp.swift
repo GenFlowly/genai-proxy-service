@@ -219,6 +219,17 @@ struct AI_WrapperApp: App {
                         history.projects = [Project(projectId: "mock-project", name: "Startup")]
                         conversation.startConversationInProject("mock-project")
                     }
+                    if CommandLine.arguments.contains("--mock-new-chat") {
+                        router.navigate(.chat)
+                    }
+                    // The editor as a signed-in user sees it: an instruction on its chip and a
+                    // valid key, so send lights up once there is a draft
+                    if CommandLine.arguments.contains("--mock-instruction") {
+                        let instruction = InstructionResponse(id: "mock-instruction", version: 1, name: "General Purpose Assistant", instruction: "", icon: "🔍📋")
+                        auth.customerInstructions = [instruction]
+                        ai.selectedInstructionId = instruction.id
+                        auth.aiVendorAPIKeyStatusList = [AIVendorAPIKeyStatus(aiVendor: "OPENAI", isAPIKeyValid: true)]
+                    }
                     #endif
                 }
                 .onChange(of: auth.customerId) { _, newValue in

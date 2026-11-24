@@ -19,6 +19,16 @@ struct ChatOutlineTests {
 
     private let names: (String) -> String = { ["OPENAI": "OpenAI", "CLAUDE": "Anthropic"][$0] ?? $0 }
 
+    @Test func aTurnsPromptIsOnePlainLine() {
+        #expect(ChatOutline.plainPrompt("explain **quicksort** vs *merge sort* and `heapq` ~~now~~") == "explain quicksort vs merge sort and heapq now")
+        #expect(ChatOutline.plainPrompt("__bold__ and _italic_") == "bold and italic")
+        // Marks inside words and lone ones stay
+        #expect(ChatOutline.plainPrompt("rename my_var_name and compute 2*3*4") == "rename my_var_name and compute 2*3*4")
+        #expect(ChatOutline.plainPrompt("a * b") == "a * b")
+        #expect(ChatOutline.plainPrompt("# Plan\n> quoted line\n\n```ts\nconst x = 1\n```\nsee [the docs](https://example.com)") == "Plan quoted line const x = 1 see the docs")
+        #expect(ChatOutline.plainPrompt("Add a day trip to Nara") == "Add a day trip to Nara")
+    }
+
     @Test func numbersTheSentTurnsAndLeavesOutTheEmptyEditor() {
         let now = Date()
         let items = ChatOutline.items(

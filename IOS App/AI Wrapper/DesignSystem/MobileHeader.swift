@@ -22,13 +22,13 @@ struct MobileHeaderMenuItem: Identifiable {
 struct MobileHeader<Subtitle: View>: View {
     let title: String
     var menuItems: [MobileHeaderMenuItem] = []
-    var onSubtitleClick: (() -> Void)?
-    /// Makes the title tappable, with a chevron (e.g. to open the Outline).
-    var onTitleClick: (() -> Void)? = nil
-    /// The tappable title's accessibility label.
-    var titleActionLabel: String? = nil
-    /// What the title opens is showing: the chevron turns up.
-    var titleExpanded = false
+    /// Makes the whole pill one button, with a chevron ending its last line (e.g. to open the
+    /// list of a conversation's turns).
+    var onPillClick: (() -> Void)? = nil
+    /// The tappable pill's accessibility label.
+    var pillActionLabel: String? = nil
+    /// What the pill opens is showing: the chevron turns up.
+    var pillExpanded = false
     /// When set, the left circle goes back instead of opening the menu; this is its label.
     var backLabel: String? = nil
     /// Shown on the right when there is no kebab menu.
@@ -81,35 +81,42 @@ struct MobileHeader<Subtitle: View>: View {
         .accessibilityLabel(label)
     }
 
+    @ViewBuilder
     private var centerPill: some View {
-        VStack(spacing: 1.6) {
-            if let onTitleClick {
-                Button(action: onTitleClick) {
-                    HStack(spacing: 4) {
-                        WebTruncatedLine(title)
-                            .webText(15.2, 600)
-                            .foregroundStyle(AppTheme.textPrimary)
-                        WebIcon(name: "alt-arrow-right", size: 12, color: AppTheme.textMuted)
-                            .rotationEffect(.degrees(titleExpanded ? 270 : 90))
-                    }
-                }
+        if let onPillClick {
+            Button(action: onPillClick) { pillLines }
                 .buttonStyle(WebPressStyle())
-                .accessibilityLabel(titleActionLabel ?? title)
-                .accessibilityIdentifier("mobile-header-title")
-            } else {
+                .accessibilityLabel(pillActionLabel ?? title)
+                .accessibilityIdentifier("mobile-header-pill")
+        } else {
+            pillLines
+        }
+    }
+
+    private var hasSubtitle: Bool { Subtitle.self != EmptyView.self }
+
+    private var chevron: some View {
+        WebIcon(name: "alt-arrow-right", size: 12, color: AppTheme.textMuted)
+            .rotationEffect(.degrees(pillExpanded ? 270 : 90))
+    }
+
+    private var pillLines: some View {
+        VStack(spacing: 1.6) {
+            HStack(spacing: 4) {
                 WebTruncatedLine(title)
                     .webText(15.2, 600)
                     .foregroundStyle(AppTheme.textPrimary)
+                    .accessibilityIdentifier("mobile-header-title")
+                if onPillClick != nil && !hasSubtitle { chevron }
             }
-            if Subtitle.self != EmptyView.self {
-                Button { onSubtitleClick?() } label: {
-                    HStack(spacing: 4.8) { subtitle }
-                        .webText(12)
-                        .foregroundStyle(AppTheme.textSecondary)
-                        .lineLimit(1)
+            if hasSubtitle {
+                HStack(spacing: 4.8) {
+                    subtitle
+                    if onPillClick != nil { chevron }
                 }
-                .buttonStyle(WebPressStyle())
-                .disabled(onSubtitleClick == nil)
+                .webText(12)
+                .foregroundStyle(AppTheme.textSecondary)
+                .lineLimit(1)
             }
         }
         .padding(.horizontal, 14.4)
@@ -155,7 +162,6 @@ extension MobileHeader where Subtitle == EmptyView {
     init(title: String, menuItems: [MobileHeaderMenuItem] = [], backLabel: String? = nil, onMenuClick: @escaping () -> Void) {
         self.title = title
         self.menuItems = menuItems
-        self.onSubtitleClick = nil
         self.backLabel = backLabel
         self.onMenuClick = onMenuClick
         self.subtitle = EmptyView()
