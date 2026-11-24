@@ -1,4 +1,5 @@
 @import '../../../../styles/themes.scss';
+@import '../../../../styles/mixins.scss';
 
 .chip {
     display: inline-flex;
@@ -24,6 +25,17 @@
     &:focus-visible {
         outline: 2px solid $color-primary;
         outline-offset: 1px;
+    }
+
+    // 📱 On the phone editor's controls row: a finger-sized pill that gives
+    // way to the attach and send buttons
+    @include respond-to-tablet {
+        min-width: 0;
+        max-width: 100%;
+        height: 36px;
+        padding: 0 12px;
+        border-radius: 18px;
+        font-size: 0.8125rem;
     }
 }
 

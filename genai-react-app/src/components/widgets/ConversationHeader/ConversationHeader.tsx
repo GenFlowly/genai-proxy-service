@@ -2,10 +2,8 @@ import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuth0 } from '@auth0/auth0-react'
 import ShareModal, { VisibilityMode } from '../../common/ShareModal/ShareModal'
-import InstructionPickerModal from '../../common/InstructionPickerModal/InstructionPickerModal'
 import { ConversationSubBar, Icon, IconButton, OutlineSheet } from '@genflowly/component-library'
 import { useAuth } from '../../../context/AuthContext'
-import { useAI } from '../../../context/AIContext'
 import { useConversation } from '../../../context/ConversationContext'
 import { useLayout } from '../../../context/LayoutContext'
 import { useResponsiveBreakpoints } from '../../../hooks/useResponsiveBreakpoints'
@@ -23,7 +21,6 @@ import { SearchUserResponse } from '../../../models/user.models'
 import { ICONS } from '../../../constants/icons'
 import { MoreMenu } from '../../DetailPage/DetailParts'
 import { useSharedItemModeration } from '../../../hooks/useSharedItemModeration'
-import { useLoadedInstruction } from '../../../hooks/useLoadedInstruction'
 import { useConversationOutline } from '../../../hooks/useConversationOutline'
 import { usePendingProjectName } from '../../../hooks/usePendingProjectName'
 import { ModerationError } from '../../../services/moderationService'
@@ -33,12 +30,9 @@ export default function ConversationHeader(): React.ReactElement | null {
     const { conversationId, conversationTitle, conversationRole, resetConversation } = useConversation()
     const { getAccessTokenSilently } = useAuth0()
     const { entitlements } = useAuth()
-    const { setSelectedInstructionId, setSystemPrompt } = useAI()
     const { toggleRightSidebar, setLeftSidebarExpanded } = useLayout()
     const { isNarrow } = useResponsiveBreakpoints()
-    const [isPickerOpen, setPickerOpen] = useState(false)
     const [isOutlineOpen, setOutlineOpen] = useState(false)
-    const loadedInstruction = useLoadedInstruction()
     const outline = useConversationOutline()
     const pendingProjectName = usePendingProjectName()
     const { showToast } = useToast()
@@ -99,15 +93,6 @@ export default function ConversationHeader(): React.ReactElement | null {
 
     const modals = (
         <>
-            <InstructionPickerModal
-                isOpen={isPickerOpen}
-                onClose={() => setPickerOpen(false)}
-                onSelect={(instruction) => {
-                    setSelectedInstructionId(instruction.id)
-                    setSystemPrompt(instruction.instruction)
-                    setPickerOpen(false)
-                }}
-            />
             <ShareModal
                 isOpen={isShareModalOpen}
                 onClose={() => setShareModalOpen(false)}
@@ -123,8 +108,11 @@ export default function ConversationHeader(): React.ReactElement | null {
     )
 
     // Below isNarrow: no navbar/header band — a transparent overlay on the
-    // full-screen content carries the title, instruction and page actions
+    // full-screen content carries the title, the turn in view and the page
+    // actions; the instruction is picked on the editor's chip
     if (isNarrow) {
+        const turnIndex = outline.items.findIndex(item => item.id === outline.currentId)
+        const turn = turnIndex >= 0 ? outline.items[turnIndex] : undefined
         const menuItems: MobileHeaderMenuItem[] = [
             {
                 label: t('conversation.conversationHeader.newChat'),
@@ -151,39 +139,24 @@ export default function ConversationHeader(): React.ReactElement | null {
         return (
             <MobileHeader
                 title={displayTitle}
-                onTitleClick={outline.items.length > 0 ? () => setOutlineOpen(true) : undefined}
-                titleActionLabel={t('conversation.outline.openFor', { title: displayTitle })}
-                titleExpanded={isOutlineOpen}
-                subtitle={(
-                    <>
-                        {pendingProjectName && (
-                            <>
-                                <span className={styles.projectContext} data-testid="mobile-header-project">
-                                    <Icon src={ICONS.FOLDER} size={12} aria-hidden={true} className={styles.projectIcon} />
-                                    <span className={styles.projectName}>
-                                        {t('conversation.conversationHeader.inProject', { name: pendingProjectName })}
-                                    </span>
-                                </span>
-                                <span aria-hidden="true">·</span>
-                            </>
-                        )}
-                        {loadedInstruction ? (
-                            <>
-                                {loadedInstruction.icon && (
-                                    <span aria-hidden="true">{loadedInstruction.icon}</span>
-                                )}
-                                <span className={styles.instructionName}>
-                                    {loadedInstruction.name}
-                                </span>
-                            </>
-                        ) : (
-                            <span className={styles.instructionName}>
-                                {t('conversation.conversationHeader.chooseInstruction')}
-                            </span>
-                        )}
-                    </>
-                )}
-                onSubtitleClick={() => setPickerOpen(true)}
+                subtitle={turn ? (
+                    // The desktop sub-bar's crumb and counter: the turn in view
+                    <span className={styles.turn} data-testid="mobile-header-turn">
+                        <span className={styles.turnBadge}>Q{turn.number}</span>
+                        <span className={styles.turnPrompt}>{turn.prompt}</span>
+                        <span className={styles.turnCounter}>{turnIndex + 1} / {outline.items.length}</span>
+                    </span>
+                ) : pendingProjectName ? (
+                    <span className={styles.projectContext} data-testid="mobile-header-project">
+                        <Icon src={ICONS.FOLDER} size={12} aria-hidden={true} className={styles.projectIcon} />
+                        <span className={styles.projectName}>
+                            {t('conversation.conversationHeader.inProject', { name: pendingProjectName })}
+                        </span>
+                    </span>
+                ) : undefined}
+                onPillClick={turn ? () => setOutlineOpen(true) : undefined}
+                pillActionLabel={t('conversation.outline.openFor', { title: displayTitle })}
+                pillExpanded={isOutlineOpen}
                 menuItems={menuItems}
                 // The menu heading names the page you're on — the same label
                 // as this page's navbar item, not the menu's content

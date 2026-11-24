@@ -35,21 +35,15 @@ const mockOutline = jest.fn()
 jest.mock('../../../../hooks/useConversationOutline', () => ({
     useConversationOutline: () => mockOutline(),
 }))
-jest.mock('../../../../components/common/InstructionPickerModal/InstructionPickerModal', () => ({
-    __esModule: true,
-    default: ({ isOpen }: { isOpen: boolean }) =>
-        isOpen ? <div data-testid="instruction-picker-modal" /> : null,
-}))
 jest.mock('../../../../components/widgets/MobileHeader/MobileHeader', () => ({
     __esModule: true,
-    default: ({ title, subtitle, onSubtitleClick, onTitleClick, titleActionLabel, titleExpanded, menuItems, menuTitle, menuAction, children }: any) => (
+    default: ({ title, subtitle, onPillClick, pillActionLabel, pillExpanded, menuItems, menuTitle, menuAction, children }: any) => (
         <div data-testid="mobile-header">
-            {onTitleClick
-                ? <button data-testid="mobile-title" aria-label={titleActionLabel} aria-expanded={titleExpanded} onClick={onTitleClick}>{title}</button>
-                : <span>{title}</span>}
+            {onPillClick
+                ? <button data-testid="mobile-pill" aria-label={pillActionLabel} aria-expanded={pillExpanded} onClick={onPillClick}>{title}<span data-testid="mobile-subtitle">{subtitle}</span></button>
+                : <span>{title}<span data-testid="mobile-subtitle">{subtitle}</span></span>}
             <span data-testid="mobile-menu-title">{menuTitle}</span>
             <button data-testid="mobile-menu-action" onClick={menuAction?.onClick}>{menuAction?.label}</button>
-            <button data-testid="mobile-subtitle" onClick={onSubtitleClick}>{subtitle}</button>
             <ul data-testid="mobile-kebab-items">
                 {(menuItems ?? []).map((item: any) => (
                     <li key={item.label}><button data-testid={item['data-testid']} onClick={item.onClick}>{item.label}</button></li>
@@ -364,7 +358,7 @@ describe('ConversationHeader', () => {
         expect(screen.queryByTestId('loaded-instruction')).not.toBeInTheDocument()
     })
 
-    test('mobile: the title opens the Outline sheet when there are turns', () => {
+    test('mobile: the pill opens the Outline sheet when there are turns', () => {
         mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
         mockUseConversation.mockReturnValue({
             conversationId: '123',
@@ -381,6 +375,7 @@ describe('ConversationHeader', () => {
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
         const title = screen.getByRole('button', { name: 'Outline: Water heater' })
+        expect(title).toContainElement(screen.getByTestId('mobile-header-turn'))
         expect(screen.queryByTestId('outline-sheet')).not.toBeInTheDocument()
         expect(title).toHaveAttribute('aria-expanded', 'false')
         fireEvent.click(title)
@@ -404,7 +399,8 @@ describe('ConversationHeader', () => {
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        expect(screen.queryByTestId('mobile-title')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('mobile-pill')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('mobile-header-turn')).not.toBeInTheDocument()
     })
 
     test('mobile: the kebab offers New Chat, Share and AI Settings', () => {
@@ -507,25 +503,33 @@ describe('ConversationHeader', () => {
         expect(resetConversation).toHaveBeenCalled()
     })
 
-    test('mobile: subtitle shows Choose instruction when none is loaded and opens the picker', () => {
+    test('mobile: the second line is the turn in view, Q-badge, prompt and counter', () => {
         mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
         mockUseConversation.mockReturnValue({
             conversationId: '123',
-            conversationTitle: 'Test',
+            conversationTitle: 'Kyoto trip',
             conversationRole: 'OWNER',
             resetConversation: jest.fn(),
+        })
+        mockOutline.mockReturnValue({
+            items: [
+                { id: 'b1', number: 1, prompt: 'Plan a week in Kyoto' },
+                { id: 'b2', number: 2, prompt: 'Add a day trip to Nara' },
+                { id: 'b3', number: 3, prompt: 'Make it cheaper' },
+            ],
+            currentId: 'b2',
+            scrollToTurn: mockScrollToTurn,
         })
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        const subtitle = screen.getByTestId('mobile-subtitle')
-        expect(subtitle).toHaveTextContent('Choose instruction')
-
-        fireEvent.click(subtitle)
-        expect(screen.getByTestId('instruction-picker-modal')).toBeInTheDocument()
+        const turn = screen.getByTestId('mobile-header-turn')
+        expect(turn).toHaveTextContent('Q2Add a day trip to Nara2 / 3')
+        expect(screen.queryByText('Choose instruction')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('instruction-picker-modal')).not.toBeInTheDocument()
     })
 
-    test('mobile: subtitle shows the loaded instruction name', () => {
+    test('mobile: the instruction is not in the header (it is the editor chip)', () => {
         mockUseWindowSize.mockReturnValue({ width: 500, height: 800 })
         mockUseConversation.mockReturnValue({
             conversationId: '123',
@@ -547,7 +551,8 @@ describe('ConversationHeader', () => {
 
         render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
-        expect(screen.getByTestId('mobile-subtitle')).toHaveTextContent('Smart Helper')
+        expect(screen.getByTestId('mobile-header')).not.toHaveTextContent('Smart Helper')
+        expect(screen.getByTestId('mobile-subtitle')).toBeEmptyDOMElement()
     })
 
     describe('a new chat started from a project', () => {
@@ -569,7 +574,7 @@ describe('ConversationHeader', () => {
 
         afterEach(() => clearHistoryCache())
 
-        test('phone: the subtitle says which project, then the instruction', () => {
+        test('phone: the subtitle says which project', () => {
             mockUseConversation.mockReturnValue({
                 conversationId: '',
                 conversationTitle: null,
@@ -580,7 +585,7 @@ describe('ConversationHeader', () => {
             render(<LayoutProvider><ConversationHeader /></LayoutProvider>)
 
             const subtitle = screen.getByTestId('mobile-subtitle')
-            expect(subtitle).toHaveTextContent('in Startup·Choose instruction')
+            expect(subtitle).toHaveTextContent(/^in Startup$/)
             expect(screen.getByTestId('mobile-header-project')).toHaveTextContent('in Startup')
         })
 

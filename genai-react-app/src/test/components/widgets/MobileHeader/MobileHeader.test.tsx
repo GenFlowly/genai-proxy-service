@@ -110,26 +110,19 @@ describe('MobileHeader', () => {
         expect(mockSetLeftSidebarExpanded).toHaveBeenCalledWith(false)
     })
 
-    test('a tappable title fires onTitleClick under its own name', () => {
-        const onTitleClick = jest.fn()
-        render(<MobileHeader title="My Chat" onTitleClick={onTitleClick} titleActionLabel="Outline: My Chat" />)
+    test('a tappable pill fires onPillClick under its own name, from either line', () => {
+        const onPillClick = jest.fn()
+        render(<MobileHeader title="My Chat" subtitle="Q1 Plan a trip" onPillClick={onPillClick} pillActionLabel="Outline: My Chat" />)
 
         fireEvent.click(screen.getByRole('button', { name: 'Outline: My Chat' }))
-        expect(onTitleClick).toHaveBeenCalledTimes(1)
+        fireEvent.click(screen.getByTestId('mobile-header-subtitle'))
+        expect(onPillClick).toHaveBeenCalledTimes(2)
     })
 
-    test('titleExpanded reaches the title while what it opens is showing', () => {
-        render(<MobileHeader title="My Chat" onTitleClick={jest.fn()} titleActionLabel="Outline: My Chat" titleExpanded />)
+    test('pillExpanded reaches the pill while what it opens is showing', () => {
+        render(<MobileHeader title="My Chat" onPillClick={jest.fn()} pillActionLabel="Outline: My Chat" pillExpanded />)
 
         expect(screen.getByRole('button', { name: 'Outline: My Chat' })).toHaveAttribute('aria-expanded', 'true')
-    })
-
-    test('renders a tappable subtitle that fires onSubtitleClick', () => {
-        const onSubtitleClick = jest.fn()
-        render(<MobileHeader title="My Chat" subtitle="Coding Buddy" onSubtitleClick={onSubtitleClick} />)
-
-        fireEvent.click(screen.getByTestId('mobile-header-subtitle'))
-        expect(onSubtitleClick).toHaveBeenCalledTimes(1)
     })
 
     test('renders a plain subtitle when there is no click handler', () => {
@@ -137,7 +130,7 @@ describe('MobileHeader', () => {
 
         const subtitle = screen.getByTestId('mobile-header-subtitle')
         expect(subtitle).toHaveTextContent('Saved at 10:00')
-        expect(subtitle.tagName).not.toBe('BUTTON')
+        expect(subtitle.closest('button')).toBeNull()
     })
 
     test('kebab opens the menu; picking an item fires it and closes the menu', () => {
