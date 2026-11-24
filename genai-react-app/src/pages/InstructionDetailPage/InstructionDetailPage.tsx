@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import { Icon, InputTextWithHint, PillButton, TextContainer, TextEditor, pageHeaderStyles } from '@genflowly/component-library'
+import { Icon, InputTextWithHint, PillButton, ReaderFriendlyTextContainer, TextEditor, pageHeaderStyles } from '@genflowly/component-library'
 import {
     ConversationList,
     DetailColumns,
@@ -206,7 +206,7 @@ export default function InstructionDetailPage(): React.ReactElement {
                     <InstructionHead instruction={shown} />
                     <InstructionChips instruction={shown} />
                     <div className={`${styles.markdown} ${clipped ? styles.clipped : ''}`} data-testid="instruction-text">
-                        <TextContainer content={shown.instruction} showCopyButton={false} />
+                        <ReaderFriendlyTextContainer content={shown.instruction} showCopyButton={false} />
                     </div>
                     {isNarrow && long && (
                         <button type="button" className={styles.textToggle} onClick={() => setShowFull(value => !value)} aria-expanded={showFull}>

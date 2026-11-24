@@ -29,7 +29,7 @@ jest.mock('../../../hooks/useResponsiveBreakpoints', () => ({ useResponsiveBreak
 // The library's markdown renderer and code editor don't run in JSDOM.
 jest.mock('@genflowly/component-library', () => ({
     ...jest.requireActual('@genflowly/component-library'),
-    TextContainer: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
+    ReaderFriendlyTextContainer: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
     TextEditor: ({ value, onChange, 'data-testid': testId }: { value: string; onChange: (v: string) => void; 'data-testid'?: string }) => (
         <textarea data-testid={testId ?? 'text-editor'} value={value} onChange={event => onChange(event.target.value)} />
     ),

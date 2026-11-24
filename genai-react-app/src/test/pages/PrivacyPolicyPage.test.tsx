@@ -23,7 +23,7 @@ jest.mock('../../hooks/useResponsiveBreakpoints', () => ({ useResponsiveBreakpoi
 // The library's markdown renderer doesn't run in JSDOM.
 jest.mock('@genflowly/component-library', () => ({
     ...jest.requireActual('@genflowly/component-library'),
-    TextContainer: ({ content, isLoading }: { content: string; isLoading?: boolean }) => (
+    ReaderFriendlyTextContainer: ({ content, isLoading }: { content: string; isLoading?: boolean }) => (
         <div data-testid="markdown" data-loading={isLoading ? 'true' : 'false'}>{content}</div>
     ),
 }))

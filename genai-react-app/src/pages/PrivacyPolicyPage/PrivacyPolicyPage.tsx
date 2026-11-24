@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { PillButton, TextContainer } from '@genflowly/component-library'
+import { PillButton, ReaderFriendlyTextContainer } from '@genflowly/component-library'
 import { DetailShell } from '../../components/DetailPage/DetailParts'
 import { useAuth } from '../../context/AuthContext'
 import { OPEN_L2_MENU_STATE } from '../../hooks/useAppMenu'
@@ -60,7 +60,7 @@ export default function PrivacyPolicyPage(): React.ReactElement {
                         />
                     </div>
                 ) : (
-                    <TextContainer
+                    <ReaderFriendlyTextContainer
                         content={state.status === 'loaded' ? state.markdown : ''}
                         isLoading={state.status === 'loading'}
                         showCopyButton={false}
