@@ -12,6 +12,7 @@ counts, and both are pinned here:
     only through ToolContext.secrets — never a process env var, never graph
     state (which the durable runtime checkpoints to Postgres).
 """
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -349,6 +350,121 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             {"index": 1, "title": "S", "url": "https://s"},
             {"index": 2, "title": "F", "url": "https://f"},
         ])
+
+
+class _Spawner(GraphTool):
+    """Stands in for spawn_agent: hands its prompt to the host's spawn
+    callable, or returns early (like a rejected prompt) without spawning."""
+
+    name = "spawn_agent"
+    description = "spawn"
+    parameters = {"type": "object", "properties": {}}
+    credential_ref = None
+
+    async def run(self, args, context):
+        if args.get("reject"):
+            return ToolResult(content="Error: prompt is empty")
+        out = await context.runtime["spawn"]({"name": "general"}, args["prompt"])
+        return ToolResult(content=out["content"])
+
+
+class DurableRoundTests(unittest.IsolatedAsyncioTestCase):
+    """On the durable /runs path a round runs concurrently too. Spawned
+    children run side by side as child workflows; what they record on the run
+    — every start, then every result — happens in the model's call order.
+    Inline sequential children made a 5-way fan-out take 7+ minutes."""
+
+    async def _run_durable(self, state, tools, fake_run_subagent):
+        import graph.nodes.llm_node as llm_node_module
+        import graph.subagent as subagent_module
+
+        with patch.object(llm_node_module, "_dbos_active", return_value=True), \
+                patch.object(subagent_module, "run_subagent", fake_run_subagent):
+            return await asyncio.wait_for(_run(state, tools), timeout=5)
+
+    async def test_calls_run_concurrently_on_the_durable_path(self):
+        started_a, started_b = asyncio.Event(), asyncio.Event()
+
+        class _Gate(_Recorder):
+            def __init__(self, name, mine, other):
+                super().__init__(name)
+                self._mine, self._other = mine, other
+
+            async def run(self, args, context):
+                self._mine.set()
+                await asyncio.wait_for(self._other.wait(), timeout=2)
+                return ToolResult(content=f"{self.name} ran")
+
+        out = await self._run_durable(
+            _state([{"id": "1", "name": "a"}, {"id": "2", "name": "b"}], ["a", "b"]),
+            [_Gate("a", started_a, started_b), _Gate("b", started_b, started_a)],
+            AsyncMock(side_effect=AssertionError("no spawn in this round")),
+        )
+
+        self.assertEqual([m["content"] for m in out["loop_messages"][1:]], ["a ran", "b ran"])
+
+    async def test_children_overlap_but_record_starts_then_results_in_call_order(self):
+        events = []
+        running, all_running = set(), asyncio.Event()
+
+        async def fake_run_subagent(parent_state, profile, prompt, depth, child_slot=None):
+            # The FIRST call is the slowest to reach its start AND the last
+            # child to finish; its records must still come first.
+            await asyncio.sleep({"p1": 0.05, "p2": 0, "p3": 0.01}[prompt])
+            async with child_slot.start():
+                events.append(f"start {prompt}")
+            running.add(prompt)  # the child workflow runs from its start on
+            if len(running) == 3:
+                all_running.set()
+            await asyncio.wait_for(all_running.wait(), timeout=2)  # children overlap
+            await asyncio.sleep({"p1": 0.05, "p2": 0, "p3": 0.01}[prompt])
+            async with child_slot.result():
+                events.append(f"result {prompt}")
+            return {"content": f"report {prompt}"}
+
+        calls = [{"id": str(i), "name": "spawn_agent", "args": {"prompt": f"p{i}"}} for i in (1, 2, 3)]
+        out = await self._run_durable(_state(calls, ["spawn_agent"]), [_Spawner()], fake_run_subagent)
+
+        self.assertEqual(events, [
+            "start p1", "start p2", "start p3", "result p1", "result p2", "result p3",
+        ])
+        self.assertEqual(
+            [m["content"] for m in out["loop_messages"][1:]], ["report p1", "report p2", "report p3"]
+        )
+
+    async def test_a_spawn_call_that_starts_no_child_does_not_block_later_ones(self):
+        events = []
+
+        async def fake_run_subagent(parent_state, profile, prompt, depth, child_slot=None):
+            async with child_slot.start():
+                events.append(f"start {prompt}")
+            async with child_slot.result():
+                events.append(f"result {prompt}")
+            return {"content": f"report {prompt}"}
+
+        calls = [
+            {"id": "1", "name": "spawn_agent", "args": {"reject": True}},
+            {"id": "2", "name": "spawn_agent", "args": {"prompt": "p2"}},
+        ]
+        out = await self._run_durable(_state(calls, ["spawn_agent"]), [_Spawner()], fake_run_subagent)
+
+        self.assertEqual(events, ["start p2", "result p2"])
+        self.assertEqual(out["loop_messages"][2]["content"], "report p2")
+
+    async def test_the_stateless_path_spawns_without_a_child_slot(self):
+        seen = {}
+
+        async def fake_run_subagent(parent_state, profile, prompt, depth, child_slot=None):
+            seen["slot"] = child_slot
+            return {"content": "report"}
+
+        import graph.subagent as subagent_module
+
+        with patch.object(subagent_module, "run_subagent", fake_run_subagent):
+            await _run(_state([{"id": "1", "name": "spawn_agent", "args": {"prompt": "p"}}],
+                              ["spawn_agent"]), [_Spawner()])
+
+        self.assertIsNone(seen["slot"])
 
 
 class HarnessStateTests(unittest.IsolatedAsyncioTestCase):

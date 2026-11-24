@@ -154,7 +154,9 @@ async def cancel_run(run_id: str):
         raise HTTPException(status_code=404, detail="run not found")
     try:
         # The sync cancel_workflow raises inside a running event loop.
-        await DBOS.cancel_workflow_async(run_id)
+        # cancel_children: spawn_agent's subagents run as child workflows;
+        # without it they would keep calling (and billing) the vendor.
+        await DBOS.cancel_workflow_async(run_id, cancel_children=True)
     except Exception as e:
         logger.exception("Failed to cancel run %s", run_id)
         raise HTTPException(status_code=500, detail=f"could not cancel run: {e}")

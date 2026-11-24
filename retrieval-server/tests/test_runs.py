@@ -196,7 +196,7 @@ class CancelRouteTest(unittest.IsolatedAsyncioTestCase):
         cancelled = []
 
         async def fake_cancel(run_id, **kwargs):
-            cancelled.append(run_id)
+            cancelled.append((run_id, kwargs))
 
         async def fake_status(run_id):
             return object()
@@ -215,7 +215,8 @@ class CancelRouteTest(unittest.IsolatedAsyncioTestCase):
              patch.object(runs, "signal_cancel") as signalled:
             body = await runs_route.cancel_run("run_x")
 
-        self.assertEqual(cancelled, ["run_x"])
+        # Subagents run as child workflows; Stop must cancel them too.
+        self.assertEqual(cancelled, [("run_x", {"cancel_children": True})])
         signalled.assert_called_once_with("run_x")
         self.assertEqual(body["status"], "cancelled")
 

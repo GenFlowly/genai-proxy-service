@@ -19,13 +19,23 @@ Code's agent definitions live in editable files, with GENERAL_PROFILE as the
 built-in default. The scratch filesystem namespace is shared down the tree, so
 a child can leave files the parent then reads.
 
+On the durable /runs path each child runs as its own DBOS child workflow
+(subagent_run), so a round's children run concurrently there too: every LLM
+step a child takes is memoized against the CHILD's workflow, never the
+parent's, so concurrent children cannot interleave the parent's step order.
+The parent records only the children's starts and results, in call order
+(tool_executor's _ChildWorkflowOrder).
+
 Import note: tool_executor imports this module lazily (inside the node
 function), so the module-level imports here never form an import cycle.
+runs.py imports it eagerly so subagent_run is registered before DBOS.launch()
+(recovery looks a pending child up by that name).
 """
 import logging
 
 from langgraph.graph import END, StateGraph
 
+import durable_runtime
 from content_logging import redact
 
 from graph.entitlements import entitled_tools
@@ -126,7 +136,8 @@ def _profile_persona(profile: dict) -> str | None:
 
 
 async def run_subagent(
-    parent_state: RetrievalState, profile: dict, prompt: str, depth: int
+    parent_state: RetrievalState, profile: dict, prompt: str, depth: int,
+    child_slot=None,
 ) -> dict:
     """Run one child loop to completion.
 
@@ -135,6 +146,10 @@ async def run_subagent(
     parent model rather than an aborted parent turn. "sources" is the child's
     accumulated tool_sources ({index, title, url} with CHILD-local indices);
     the spawn tool folds them into the parent's turn-global numbering.
+
+    child_slot is given only on the durable /runs path: the child then runs
+    as a DBOS child workflow, its start and its result taken in the turns the
+    slot gives (call order across the round's children).
     """
     tools = [t for t in (profile.get("tools") or DEFAULT_SUBAGENT_TOOLS) if t]
     if depth >= MAX_DEPTH:
@@ -225,26 +240,39 @@ async def run_subagent(
     }
 
     recursion_limit = int(profile.get("max_iterations") or _DEFAULT_CHILD_MAX_ITERATIONS)
+    name = profile.get("name")
     logger.info(
         "Subagent '%s' START — depth=%d tools=%s prompt='%s'",
-        profile.get("name"), depth, tools, redact(prompt, 120),
+        name, depth, tools, redact(prompt, 120),
     )
+    if child_slot is not None:
+        return await _run_as_child_workflow(child_state, recursion_limit, name, child_slot)
+    return await _run_child_loop(child_state, recursion_limit, name)
+
+
+def _failed(e: BaseException) -> dict:
+    return {
+        "content": "",
+        "usage": None,
+        "trace": [],
+        "artifacts": [],
+        "sources": [],
+        "error": f"{type(e).__name__}: {e}",
+    }
+
+
+async def _run_child_loop(child_state: dict, recursion_limit: int, name) -> dict:
+    """The child loop itself — inline on /retrieve, the body of the
+    subagent_run workflow on /runs."""
     try:
         result = await _get_child_graph().ainvoke(
             child_state, config={"recursion_limit": recursion_limit}
         )
     except Exception as e:
-        logger.error("Subagent '%s' FAILED — %s", profile.get("name"), e, exc_info=True)
-        return {
-            "content": "",
-            "usage": None,
-            "trace": [],
-            "artifacts": [],
-            "sources": [],
-            "error": f"{type(e).__name__}: {e}",
-        }
+        logger.error("Subagent '%s' FAILED — %s", name, e, exc_info=True)
+        return _failed(e)
     logger.info(
-        "Subagent '%s' END — usage=%s", profile.get("name"), result.get("usage"),
+        "Subagent '%s' END — usage=%s", name, result.get("usage"),
     )
     return {
         "content": result.get("generated_response") or "",
@@ -254,3 +282,40 @@ async def run_subagent(
         "sources": result.get("tool_sources") or [],
         "error": result.get("error"),
     }
+
+
+async def _run_as_child_workflow(child_state: dict, recursion_limit: int, name, child_slot) -> dict:
+    """Run the child as a DBOS child workflow of the current run.
+
+    The parent records the start and the result under its own step counter
+    (the child's workflow id derives from it), so both happen in the turns
+    the slot gives — the same order on every execution. A crash/redeploy
+    therefore replays the same child ids: a finished child returns its
+    recorded result, an unfinished one is resumed by DBOS recovery, and none
+    of its LLM calls is billed twice. Stop cancels the children with the run
+    (routes/runs.py cancel_children=True)."""
+    from dbos import DBOS
+
+    # The workflow input is persisted to Postgres: never a credential (§5.5).
+    # The child's LLM steps resolve credentials themselves, like the parent's.
+    child_input = {**child_state, "llm_credentials": {}}
+    try:
+        async with child_slot.start():
+            handle = await DBOS.start_workflow_async(
+                _subagent_workflow, child_input, recursion_limit, name
+            )
+        async with child_slot.result():
+            return await handle.get_result()
+    except Exception as e:
+        logger.error("Subagent '%s' FAILED — %s", name, e, exc_info=True)
+        return _failed(e)
+
+
+if durable_runtime.dbos_constructed():
+    from dbos import DBOS
+
+    @DBOS.workflow(name="subagent_run")
+    async def _subagent_workflow(child_state: dict, recursion_limit: int, name) -> dict:
+        return await _run_child_loop(child_state, recursion_limit, name)
+else:
+    _subagent_workflow = None
