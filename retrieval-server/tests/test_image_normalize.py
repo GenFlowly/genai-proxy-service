@@ -558,10 +558,51 @@ class RejectionTests(unittest.TestCase):
         # Comfortably within the static budget on its own...
         normalize_image(png, "image/png", max_edge=500, max_decode_bytes=50_000_000)
         # ...but refused once the machine itself reports too little headroom,
-        # even though the static budget alone would have allowed it.
+        # even though the static budget alone would have allowed it — and the
+        # user is told why, not to export a smaller copy that would fare no better.
         with patch.object(image_normalize, "_available_memory_bytes", return_value=10_000_000):
-            with self.assertRaises(ImageTooLargeError):
+            with self.assertRaises(ImageTooLargeError) as ctx:
                 normalize_image(png, "image/png", max_edge=500, max_decode_bytes=50_000_000)
+        self.assertIn("(1000x800) couldn't be processed because the server is short on memory", str(ctx.exception))
+        self.assertNotIn("smaller version", str(ctx.exception))
+
+    def test_phone_photos_decode_within_the_1gb_vms_usual_headroom(self):
+        # 2026-11-24 23:40Z: a 2412x1809 portrait phone JPEG (EXIF-rotated, so
+        # never passed through) refused with 178 MiB available, when the
+        # 200 MiB margin left no decode budget at all.
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        photo = _encode(_photo_like(2412, 1809), "JPEG", quality=92, exif=exif)
+        with patch.object(image_normalize, "_available_memory_bytes", return_value=178 * _MiB):
+            w, h = normalize_image(photo, "image/jpeg").output_size
+        self.assertLess(w, h)  # decoded and turned upright
+        # A 12 MP phone photo (87 MiB estimated) at the ~256 MiB the VM had
+        # free for most of that day.
+        with patch.object(image_normalize, "_available_memory_bytes", return_value=256 * _MiB):
+            image_normalize._check_decode_cost(
+                Image.new("RGB", (1, 1)), "JPEG", (4032, 3024), (4032, 3024), image_normalize.MAX_DECODE_BYTES)
+
+    def test_decoded_pixels_are_returned_to_the_os(self):
+        # Otherwise glibc keeps a decode's freed pixel blocks resident (~65 MiB
+        # after a 12 MP photo), MemAvailable stops counting them, and every
+        # decode shrinks the budget left for the next one.
+        if not sys.platform.startswith("linux") or platform.libc_ver()[0] != "glibc":
+            self.skipTest("glibc allocator behaviour: Linux/glibc only")
+        server_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        script = (
+            "import io, sys; from concurrent.futures import ThreadPoolExecutor\n"
+            f"sys.path.insert(0, {server_dir!r})\n"
+            "from PIL import Image\n"
+            "from graph.image_normalize import normalize_image\n"
+            "def rss(): return int([l for l in open('/proc/self/status') if l.startswith('VmRSS:')][0].split()[1]) * 1024\n"
+            "exif = Image.Exif(); exif[0x0112] = 6\n"
+            "buf = io.BytesIO(); Image.effect_noise((4032, 3024), 60).convert('RGB').save(buf, 'JPEG', exif=exif)\n"
+            "pool = ThreadPoolExecutor(max_workers=1); pool.submit(int).result()\n"  # like s3_images' worker
+            "before = rss()\n"
+            "pool.submit(normalize_image, buf.getvalue(), 'image/jpeg', max_decode_bytes=10**10).result()\n"
+            "print(rss() - before)\n"
+        )
+        self.assertLess(int(subprocess_run([sys.executable, "-I", "-c", script])), 24 * _MiB)
 
     def test_decode_budget_falls_back_to_the_static_limit_when_meminfo_is_unreadable(self):
         im = _photo_like(1000, 800)
