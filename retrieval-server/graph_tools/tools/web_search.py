@@ -16,6 +16,7 @@ Self-contained: imports only stdlib plus httpx (imported lazily in run(), like
 the other tools import their renderers), so the package stays extractable.
 """
 import logging
+import re
 import time
 
 from graph_tools.base import GraphTool, Source, ToolContext, ToolResult
@@ -43,6 +44,13 @@ _QUERY_CHAR_GUIDE = 400
 # Statuses Tavily uses for a request it refuses as malformed. Re-sending the
 # same request cannot succeed; changing what the reason names can.
 _INVALID_REQUEST_STATUSES = (400, 422)
+# The include/exclude_domains forms Tavily's 400 names as the only accepted
+# ones — 'example.com', 'api.example.com', '*.example.com',
+# 'example.com/blog/*' — matched per part by _clean_domains.
+_DOMAIN_HOST = re.compile(r"(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+", re.ASCII)
+_DOMAIN_PATH = re.compile(r"[A-Za-z0-9._~%*/-]+", re.ASCII)
+_DOMAIN_SEPARATORS = re.compile(r"[,;\s]+")
+_URL_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.IGNORECASE)
 
 
 def _count_search(status: str, elapsed: float | None = None) -> None:
@@ -59,20 +67,36 @@ def _count_search(status: str, elapsed: float | None = None) -> None:
         logger.debug("web_search: metrics unavailable", exc_info=True)
 
 
-def _clean_domains(value) -> list[str]:
-    """Normalize a model-supplied domain list: keep non-empty strings, strip a
-    stray leading scheme/'site:' the model may add. Non-lists become []."""
+def _clean_domains(value) -> tuple[list[str], int]:
+    """Reduce a model-supplied domain list to entries Tavily accepts, and
+    count the entries that had nothing usable. Non-lists become [].
+
+    Tavily takes a domain, subdomain, '*.' wildcard or domain path and fails
+    the WHOLE search with 400 on any other entry ("Query strings, fragments,
+    and regex are not supported"). Models pass page URLs, comma-joined lists,
+    site names and regex, so each entry loses its scheme/'site:', query,
+    fragment, port and trailing slash; a path Tavily could not read falls
+    back to its site; and what is still not a domain is dropped."""
     if not isinstance(value, list):
-        return []
-    out = []
+        return [], 0
+    out: list[str] = []
+    dropped = 0
     for item in value:
-        if not isinstance(item, str):
-            continue
-        d = item.strip().removeprefix("site:").strip()
-        d = d.removeprefix("https://").removeprefix("http://").strip("/ ").strip()
-        if d:
-            out.append(d)
-    return out
+        usable = False
+        for token in _DOMAIN_SEPARATORS.split(item) if isinstance(item, str) else []:
+            d = _URL_SCHEME.sub("", token.removeprefix("site:"))
+            d = d.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+            host, _, path = d.partition("/")
+            host = host.split(":", 1)[0].rstrip(".").lower()
+            if not _DOMAIN_HOST.fullmatch(host):
+                continue
+            usable = True
+            d = f"{host}/{path}" if path and _DOMAIN_PATH.fullmatch(path) else host
+            if d not in out:
+                out.append(d)
+        if not usable and (not isinstance(item, str) or item.strip()):
+            dropped += 1
+    return out, dropped
 
 
 def _https_url(value) -> str:
@@ -210,7 +234,8 @@ class WebSearchTool(GraphTool):
                 "items": {"type": "string"},
                 "description": (
                     "Restrict results to these domains, e.g. ['docs.anthropic.com', "
-                    "'github.com']. Use this instead of a 'site:' operator in the query."
+                    "'github.com']. Use this instead of a 'site:' operator in the query. "
+                    "One bare domain per entry — not a page URL or a site's name."
                 ),
             },
             "exclude_domains": {
@@ -270,12 +295,16 @@ class WebSearchTool(GraphTool):
         # Domain scoping is a first-class Tavily param; the model should reach
         # for these rather than a 'site:' operator, which Tavily matches as
         # literal query text and returns junk for.
-        include_domains = _clean_domains(args.get("include_domains"))
-        exclude_domains = _clean_domains(args.get("exclude_domains"))
-        if include_domains:
-            payload["include_domains"] = include_domains
-        if exclude_domains:
-            payload["exclude_domains"] = exclude_domains
+        for field in ("include_domains", "exclude_domains"):
+            domains, dropped = _clean_domains(args.get(field))
+            if domains:
+                payload[field] = domains
+            if dropped:
+                # Counts only: the entries can name what the user asked about.
+                logger.warning(
+                    "web_search: dropped %d of %d %s entries that are not domains",
+                    dropped, len(args[field]), field,
+                )
 
         logger.info(
             "web_search: customer=%s topic=%s search_depth=%s max_results=%d query='%s'",

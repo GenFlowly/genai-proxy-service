@@ -11,6 +11,8 @@ credential) — there is no TAVILY_API_KEY environment fallback.
 Run with:
     .venv/bin/python -m unittest tests.test_web_search_tool
 """
+import json
+import re
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -319,6 +321,104 @@ class WebSearchProviderRejectionTest(unittest.IsolatedAsyncioTestCase):
     def test_schema_steers_the_model_to_a_short_query(self):
         description = WebSearchTool.parameters["properties"]["query"]["description"]
         self.assertIn("under 400 characters", description)
+
+
+# Tavily's 400 for a domain filter it cannot parse, verbatim from production
+# (2026-11-24 18:59:13Z). Any one bad entry fails the whole search.
+_BAD_DOMAINS = {"detail": {"error": (
+    "include_domains must contain only domains, subdomains, wildcard patterns, or "
+    "domain paths. Examples: 'example.com', 'api.example.com', '*.example.com', "
+    "'example.com/blog/*'. Query strings, fragments, and regex are not supported."
+)}}
+# What that message admits: an optional '*.' wildcard, a dotted host, and an
+# optional plain path.
+_TAVILY_DOMAIN = re.compile(r"(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(/[A-Za-z0-9._~%*/-]*)?")
+
+
+def _tavily_validating_domains():
+    """A stub Tavily that rejects a request the way production did when any
+    include/exclude entry is not a form its 400 message allows, and answers
+    _SAMPLE otherwise. Records each request body it saw."""
+    real_client = httpx.AsyncClient
+    seen: list[dict] = []
+
+    def reply(request):
+        body = json.loads(request.content)
+        seen.append(body)
+        for field in ("include_domains", "exclude_domains"):
+            if not all(_TAVILY_DOMAIN.fullmatch(d) for d in body.get(field, [])):
+                return httpx.Response(400, json=_BAD_DOMAINS)
+        return httpx.Response(200, json=_SAMPLE)
+
+    transport = httpx.MockTransport(reply)
+    return seen, patch("httpx.AsyncClient", lambda **kw: real_client(transport=transport, **kw))
+
+
+class WebSearchDomainFilterTest(unittest.IsolatedAsyncioTestCase):
+    """include_domains/exclude_domains are written by the model, which passes
+    page URLs, comma-joined lists, site names and regex as often as bare
+    domains. Each entry must reach Tavily as a form it accepts or not at all:
+    one unparseable entry turns the whole search into a 400."""
+
+    async def test_model_written_domain_lists_no_longer_fail_the_search(self):
+        seen, stub = _tavily_validating_domains()
+        with stub:
+            result = await WebSearchTool().run(
+                {
+                    "query": "AI startup funding rounds",
+                    "topic": "news",
+                    "search_depth": "advanced",
+                    "days": 365,
+                    "include_domains": [
+                        "news.ycombinator.com/item?id=4126",  # query string
+                        "en.wikipedia.org/wiki/Venture_capital#2026",  # fragment
+                        "reuters.com, apnews.com",  # two domains in one entry
+                        "HTTPS://WWW.FT.COM/",
+                        "techcrunch.com:443",
+                        "*.substack.com",
+                        "crunchbase.com/organization/*",
+                        "Wall Street Journal",  # a site name, not a domain
+                        r".*\.gov$",  # regex
+                        "reuters.com",  # repeat
+                    ],
+                    "exclude_domains": ["pinterest.com/pin/123?utm_source=x"],
+                },
+                _keyed_ctx(),
+            )
+        self.assertEqual(len(result.sources), 2)
+        self.assertEqual(seen[0]["include_domains"], [
+            "news.ycombinator.com/item",
+            "en.wikipedia.org/wiki/Venture_capital",
+            "reuters.com",
+            "apnews.com",
+            "www.ft.com",
+            "techcrunch.com",
+            "*.substack.com",
+            "crunchbase.com/organization/*",
+        ])
+        self.assertEqual(seen[0]["exclude_domains"], ["pinterest.com/pin/123"])
+
+    async def test_a_list_with_no_usable_domain_searches_unfiltered(self):
+        seen, stub = _tavily_validating_domains()
+        with stub, self.assertLogs("graph_tools.tools.web_search", "WARNING") as logs:
+            result = await WebSearchTool().run(
+                {"query": "x", "include_domains": ["The Guardian", "(bbc|cnn)\\.com"]},
+                _keyed_ctx(),
+            )
+        self.assertEqual(len(result.sources), 2)
+        self.assertNotIn("include_domains", seen[0])
+        # Counted, never echoed: the entries can carry what the user asked about.
+        self.assertIn("dropped 2 of 2 include_domains", logs.output[0])
+        self.assertNotIn("Guardian", logs.output[0])
+
+    async def test_a_path_with_unsupported_characters_keeps_the_site(self):
+        seen, stub = _tavily_validating_domains()
+        with stub:
+            await WebSearchTool().run(
+                {"query": "x", "include_domains": ["reddit.com/r/(LocalLLaMA|MachineLearning)"]},
+                _keyed_ctx(),
+            )
+        self.assertEqual(seen[0]["include_domains"], ["reddit.com"])
 
 
 class WebSearchCredentialTest(unittest.IsolatedAsyncioTestCase):
