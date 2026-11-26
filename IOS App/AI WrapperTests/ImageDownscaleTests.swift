@@ -68,12 +68,22 @@ struct ImageDownscaleTests {
         #expect(out.height > out.width)
     }
 
-    @Test func aPNGWithinBothLimitsIsLeftAlone() throws {
+    @Test func aPNGWithinBothLimitsIsReEncodedAtFullSize() throws {
         let small = try noise(width: 400, height: 300, as: .png)
-        #expect(ImageDownscale.png(from: small) == nil)
+        let png = try #require(ImageDownscale.png(from: small))
+        let out = try info(png)
+        #expect(out.type == UTType.png.identifier)
+        #expect(out.width == 400 && out.height == 300)
     }
 
-    @Test func aPhoneSizedJPEGUnder5MBIsStillConvertedAndCappedAt5MP() throws {
+    @Test func aSmallJPEGIsConvertedToPNG() throws {
+        let photo = try noise(width: 400, height: 300, as: .jpeg)
+        let out = try info(try #require(ImageDownscale.png(from: photo)))
+        #expect(out.type == UTType.png.identifier)
+        #expect(out.width == 400 && out.height == 300)
+    }
+
+    @Test func aPhoneSizedJPEGIsConvertedWithinBothLimits() throws {
         let photo = try noise(width: 4032, height: 3024, as: .jpeg, orientation: 6)
         let png = try #require(ImageDownscale.png(from: photo))
         let out = try info(png)
@@ -81,6 +91,10 @@ struct ImageDownscaleTests {
         #expect(Double(out.width * out.height) <= ImageDownscale.maxPixels)
         #expect(out.height > out.width)
         #expect(png.count <= ImageDownscale.maxBytes)
+    }
+
+    @Test func theTargetIs3MB() {
+        #expect(ImageDownscale.maxBytes == 3 * 1024 * 1024)
     }
 
     @Test func aSmallPNGOver5MPIsShrunkTo5MP() throws {

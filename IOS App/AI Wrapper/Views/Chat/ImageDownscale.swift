@@ -2,16 +2,17 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Every image ImageIO reads (camera JPEG, HEIC, ProRAW DNG, ...) goes up as an upright PNG within
-/// `maxBytes` and `maxPixels`, so the retrieval server never decodes a camera original on its small
-/// VM. A PNG already within both (a screenshot) goes up as it is. Mirrors the web's
-/// `imageDownscale.ts`. ImageIO decodes straight to the target size, so the full-resolution pixels
-/// are never held in memory.
+/// Every image ImageIO reads (camera JPEG, HEIC, ProRAW DNG, PNG, ...), whatever its format and
+/// size, is re-encoded as an upright, lossless PNG within `maxBytes` and `maxPixels`, so the
+/// retrieval server never has to decode it. Mirrors the component library's
+/// `prepareImageForUpload`. ImageIO decodes straight to the target size, so the full-resolution
+/// pixels are never held in memory.
 nonisolated enum ImageDownscale {
-    static let maxBytes = 5 * 1024 * 1024
-    /// The retrieval server refuses a decode that doesn't fit in the memory free at that moment,
-    /// which on its 1 GB VM can be under 40 MB: a 12 MP phone photo costs ~90 MB there, a 5 MP PNG
-    /// ~30 MB. 5 MP is about what Anthropic's high-resolution tier (2576 px long edge) uses anyway.
+    /// The retrieval server sends a PNG this size to the model without decoding it (4 MiB of
+    /// base64, within every vendor's per-image limit, for up to 6 images in an Anthropic request).
+    /// Anything larger it has to decode and shrink, which its small VM often hasn't the memory for.
+    static let maxBytes = 3 * 1024 * 1024
+    /// About what Anthropic's high-resolution tier (2576 px long edge) uses; more pixels only add bytes.
     static let maxPixels = 5_000_000.0
     /// Anthropic rejects an image with an edge above 8000 px.
     private static let maxEdge = 8000.0
@@ -23,8 +24,8 @@ nonisolated enum ImageDownscale {
     private static let fillTarget = 0.8
     private static let maxAttempts = 5
 
-    /// The PNG to upload in place of `data`, or nil when `data` is an upright PNG within both limits
-    /// already or isn't an image ImageIO reads (it then goes up as-is, for the backend to convert).
+    /// The PNG to upload in place of `data`, or nil when `data` isn't an image ImageIO reads (it then
+    /// goes up as-is, for the backend to convert).
     static func png(from data: Data) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               CGImageSourceGetCount(source) > 0,
@@ -34,15 +35,14 @@ nonisolated enum ImageDownscale {
               width > 0, height > 0
         else { return nil }
 
-        let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
-        if CGImageSourceGetType(source) as String? == UTType.png.identifier,
-           data.count <= maxBytes, width * height <= maxPixels, orientation == 1 {
-            return nil
-        }
-
         let longEdge = max(width, height)
         let edgeCap = min(longEdge, maxEdge, longEdge * (maxPixels / (width * height)).squareRoot())
-        var edge = min(edgeCap, longEdge * (Double(maxBytes) / (width * height * pngBytesPerPixel)).squareRoot())
+        // A PNG already within the limit (a screenshot) re-encodes to about its own size; the
+        // per-pixel estimate is for photos and would shrink it needlessly.
+        let isSmallPNG = CGImageSourceGetType(source) as String? == UTType.png.identifier && data.count <= maxBytes
+        var edge = isSmallPNG
+            ? edgeCap
+            : min(edgeCap, longEdge * (Double(maxBytes) / (width * height * pngBytesPerPixel)).squareRoot())
         var best: Data?
         for _ in 0..<maxAttempts {
             guard let png = encodePNG(source, longEdge: max(1, Int(edge))) else { return best }
