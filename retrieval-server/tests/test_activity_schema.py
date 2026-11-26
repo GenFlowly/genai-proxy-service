@@ -20,6 +20,8 @@ class BuilderRoundTripTests(unittest.TestCase):
             schema.turn_start(),
             schema.step_start(10, "N:1", schema.KIND_LLM, "N", "Agent"),
             schema.step_progress(20, "N:1", 10),
+            schema.step_calling(25, "N:1"),
+            schema.step_writing(26, "N:1"),
             schema.step_call(30, "T:1", {"name": "web_search", "mode": "skip"}),
             schema.step_end(40, "M:1", schema.KIND_MEMORY, "M", "Memory", 5, counts={"core": 1, "recalled": 0}),
             schema.step_end(40, "N:1", schema.KIND_LLM, "N", "Agent", 30, outcome=schema.OUTCOME_ANSWER),

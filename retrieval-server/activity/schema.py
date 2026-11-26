@@ -17,10 +17,16 @@ ACTIVITY_VERSION = 2
 TURN_START = "turn.start"
 STEP_START = "step.start"
 STEP_PROGRESS = "step.progress"
+STEP_CALLING = "step.calling"
+STEP_WRITING = "step.writing"
 STEP_CALL = "step.call"
 STEP_END = "step.end"
 TURN_END = "turn.end"
-EVENT_TYPES = (TURN_START, STEP_START, STEP_PROGRESS, STEP_CALL, STEP_END, TURN_END)
+EVENT_TYPES = (TURN_START, STEP_START, STEP_PROGRESS, STEP_CALLING, STEP_WRITING, STEP_CALL, STEP_END, TURN_END)
+
+# More text than a tool-call preamble ("Let me look that up…") runs to: one or
+# two sentences, 99-174 characters across the dev account's recorded rounds.
+PREAMBLE_MAX_CHARS = 240
 
 KIND_MEMORY = "memory"
 KIND_LLM = "llm"
@@ -72,6 +78,20 @@ def step_progress(at: Optional[int], step_id: str, first_token_ms: int) -> dict:
     return _event(STEP_PROGRESS, at, id=step_id, first_token_ms=first_token_ms)
 
 
+def step_calling(at: Optional[int], step_id: str) -> dict:
+    """A streaming llm step began writing a tool call, so any text it wrote
+    before was a preamble, not the answer. Clients tell the two apart by it
+    while the step is still running; its step.end says the same afterwards."""
+    return _event(STEP_CALLING, at, id=step_id)
+
+
+def step_writing(at: Optional[int], step_id: str) -> dict:
+    """A streaming llm step has written more than PREAMBLE_MAX_CHARS of text
+    and no tool call: it is writing the answer. A step.calling after it says
+    the model called tools all the same."""
+    return _event(STEP_WRITING, at, id=step_id)
+
+
 def step_call(at: Optional[int], step_id: str, call: dict) -> dict:
     """One tool call of a running tools step finished. Carries the call's
     status facts only; its numbered sources arrive with the step's end."""
@@ -95,6 +115,8 @@ _REQUIRED = {
     TURN_START: (),
     STEP_START: ("id", "kind", "node", "name"),
     STEP_PROGRESS: ("id", "first_token_ms"),
+    STEP_CALLING: ("id",),
+    STEP_WRITING: ("id",),
     STEP_CALL: ("id", "call"),
     STEP_END: ("id", "kind", "node", "name"),
     TURN_END: ("outcome",),

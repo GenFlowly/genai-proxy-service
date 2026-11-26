@@ -30,6 +30,7 @@ File shape: `{name, description, live, stop_reason, events: [activity events], w
 | Memories tile | memory `step.end.counts.core + counts.recalled` |
 | Phase bar and legend | client: memory steps → Memory; llm `tool_calls` steps before any tools step → Plan; tools steps → Search (Tools when not all calls are web searches); later llm time and the final llm step up to `first_token_ms` → Reason; the final step after `first_token_ms` → Answer |
 | Header "Thinking · 14s · …" / "Thought for 22s · …" | client, from the tiles above |
+| Panel open while thinking, folded once the answer streams | client: the newest step is an llm step with `step.writing` and no `step.calling`, or the answer step that just ended; a preamble ("Let me look that up…") is followed by `step.calling` and never reaches `step.writing` |
 | Beat title | client wording from the step: memory `counts`; llm `outcome` and `tool_calls`; tools `calls` names and count |
 | Beat quote | llm `step.end.reasoning`; per call `args.purpose` |
 | Beat duration | `step.end.duration_ms` (an llm beat that called tools adds its tools step) |

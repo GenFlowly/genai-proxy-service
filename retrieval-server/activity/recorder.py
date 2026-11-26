@@ -53,6 +53,17 @@ def chunk_text(chunk) -> str:
     return content if isinstance(content, str) else ""
 
 
+def chunk_calls_tool(chunk) -> bool:
+    """True for a streamed chunk that carries part of a tool call."""
+    if getattr(chunk, "tool_call_chunks", None):
+        return True
+    content = getattr(chunk, "content", None)
+    return isinstance(content, list) and any(
+        isinstance(b, dict) and b.get("type") in ("tool_use", "tool_call_chunk", "function_call")
+        for b in content
+    )
+
+
 def kind_of(node_type: str) -> str:
     key = (node_type or "").upper()
     if key == "MEMORY":
@@ -71,7 +82,7 @@ def _is_nested(event: dict) -> bool:
 
 
 class _Step:
-    __slots__ = ("id", "kind", "node", "name", "started", "first_token_ms")
+    __slots__ = ("id", "kind", "node", "name", "started", "first_token_ms", "calling", "text_chars", "writing")
 
     def __init__(self, step_id: str, kind: str, node: str, name: str, started: float):
         # Elapsed turn time (seconds, pauses excluded) when the step started.
@@ -81,6 +92,9 @@ class _Step:
         self.name = name
         self.started = started
         self.first_token_ms: Optional[int] = None
+        self.calling = False
+        self.text_chars = 0
+        self.writing = False
 
 
 class ActivityRecorder:
@@ -180,9 +194,16 @@ class ActivityRecorder:
             if ended:
                 out.append(ended)
         elif event_type == "on_chat_model_stream":
-            progress = self._first_token(node, (event.get("data") or {}).get("chunk"))
+            chunk = (event.get("data") or {}).get("chunk")
+            progress = self._first_token(node, chunk)
             if progress:
                 out.append(progress)
+            calling = self._first_call(node, chunk)
+            if calling:
+                out.append(calling)
+            writing = self._writing(node, chunk)
+            if writing:
+                out.append(writing)
         elif event_type == "on_custom_event" and event.get("name") == schema.CALL_FINISHED_EVENT:
             call = self._call_finished(node, event.get("data"))
             if call:
@@ -224,6 +245,27 @@ class ActivityRecorder:
             return None
         step.first_token_ms = self._duration_ms(step)
         return schema.step_progress(self._at(), step.id, step.first_token_ms)
+
+    def _first_call(self, node: str, chunk) -> Optional[dict]:
+        if node not in self._streaming or self._structured or not chunk_calls_tool(chunk):
+            return None
+        step = self._latest_open(node)
+        if step is None or step.calling:
+            return None
+        step.calling = True
+        return schema.step_calling(self._at(), step.id)
+
+    def _writing(self, node: str, chunk) -> Optional[dict]:
+        if node not in self._streaming or self._structured:
+            return None
+        step = self._latest_open(node)
+        if step is None or step.calling or step.writing:
+            return None
+        step.text_chars += len(chunk_text(chunk))
+        if step.text_chars <= schema.PREAMBLE_MAX_CHARS:
+            return None
+        step.writing = True
+        return schema.step_writing(self._at(), step.id)
 
     def _call_finished(self, node: str, facts) -> Optional[dict]:
         step = self._latest_open(node)

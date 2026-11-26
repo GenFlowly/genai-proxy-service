@@ -160,7 +160,52 @@ class LlmStepTests(unittest.TestCase):
         rec.observe(sc.start(sc.AGENT, "a"))
         delta = sc.stream(sc.AGENT, "")
         delta["data"]["chunk"].content = [{"type": "tool_use", "input": "{\"q\""}]
-        self.assertEqual(rec.observe(delta), [])
+        self.assertEqual(_types(rec.observe(delta)), ["step.calling"])
+
+    def test_the_first_tool_call_chunk_is_reported_once_per_step(self):
+        rec, clock = _recorder()
+        rec.observe(sc.start(sc.AGENT, "a"))
+        clock.t += 0.4
+        rec.observe(sc.stream(sc.AGENT, "Let me look that up."))
+        clock.t += 0.3
+        calling = rec.observe(sc.calling(sc.AGENT))
+        self.assertEqual(calling, [{"v": 2, "at": 700, "type": "step.calling", "id": "NODAGENT001:1"}])
+        self.assertEqual(rec.observe(sc.calling(sc.AGENT)), [])
+        rec.observe(sc.end(sc.AGENT, "a", {"generated_response": "", "tool_calls": [sc.R1[0]]}))
+        rec.observe(sc.start(sc.AGENT, "b"))
+        self.assertEqual(_types(rec.observe(sc.calling(sc.AGENT))), ["step.calling"])
+
+    def test_more_text_than_a_preamble_is_reported_once_as_writing(self):
+        rec, clock = _recorder()
+        rec.observe(sc.start(sc.AGENT, "a"))
+        clock.t += 0.5
+        self.assertEqual(_types(rec.observe(sc.stream(sc.AGENT, "x" * 240))), ["step.progress"])
+        clock.t += 0.5
+        self.assertEqual(rec.observe(sc.stream(sc.AGENT, "y")), [{"v": 2, "at": 1000, "type": "step.writing",
+                                                                 "id": "NODAGENT001:1"}])
+        self.assertEqual(rec.observe(sc.stream(sc.AGENT, "z" * 500)), [])
+
+    def test_a_preamble_followed_by_a_tool_call_is_never_writing(self):
+        rec, _ = _recorder()
+        rec.observe(sc.start(sc.AGENT, "a"))
+        rec.observe(sc.stream(sc.AGENT, "Let me look that up."))
+        rec.observe(sc.calling(sc.AGENT))
+        self.assertEqual(rec.observe(sc.stream(sc.AGENT, "x" * 500)), [])
+
+    def test_structured_output_and_other_nodes_never_report_writing(self):
+        rec, _ = _recorder(structured_output=True)
+        rec.observe(sc.start(sc.AGENT, "a"))
+        self.assertEqual(rec.observe(sc.stream(sc.AGENT, "x" * 500)), [])
+        rec, _ = _recorder()
+        rec.observe(sc.start("NODANALYZER", "q"))
+        self.assertEqual(rec.observe(sc.stream("NODANALYZER", "x" * 500)), [])
+
+    def test_a_subagents_tool_calls_and_non_streaming_nodes_report_no_calling(self):
+        rec, _ = _recorder(structured_output=False)
+        rec.observe(sc.start(sc.TOOLS, "t"))
+        self.assertEqual(rec.observe(sc.calling("subagent_generator", nested=True)), [])
+        rec.observe(sc.start("NODANALYZER", "q"))
+        self.assertEqual(rec.observe(sc.calling("NODANALYZER")), [])
 
     def test_structured_output_never_reports_a_first_token(self):
         rec, _ = _recorder(structured_output=True)
