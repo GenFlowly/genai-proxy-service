@@ -13,6 +13,7 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -203,6 +204,10 @@ class RunsClient(
                     }
                 }
             }
+        } catch (e: CancellationException) {
+            // The user's Stop (GenerationOrchestrator.cancelGeneration) cancels the
+            // relay mid-read. That's not a failed run; rethrow so it stays a cancellation.
+            throw e
         } catch (e: Exception) {
             logger.error(e) { "Streaming durable run $runId failed" }
         }

@@ -126,6 +126,7 @@ def _construct_dbos() -> None:
         _quiet_idle_polling()
     except Exception:
         logger.exception("Could not slow DBOS idle polling; it keeps its 1-second loops")
+    _quiet_cancelled_run_errors()
 
 
 def _quiet_idle_polling() -> None:
@@ -162,6 +163,20 @@ def _quiet_idle_polling() -> None:
         return queues
 
     SystemDatabase.list_queues = cached_list_queues
+
+
+def _quiet_cancelled_run_errors() -> None:
+    """DBOS logs every async workflow that ends in an exception at ERROR, with a
+    traceback. A run the user stopped (POST /runs/{id}/cancel) ends that way too,
+    in DBOSAwaitedWorkflowCancelledError, so each Stop logged an ERROR. Drop that
+    record: a cancel isn't a failure, and DBOS's "Cancelling workflow(s)" INFO and
+    "was cancelled during execution" WARNING still log it."""
+    from dbos._error import DBOSAwaitedWorkflowCancelledError
+
+    def not_a_cancelled_run(record: logging.LogRecord) -> bool:
+        return not (record.exc_info and isinstance(record.exc_info[1], DBOSAwaitedWorkflowCancelledError))
+
+    logging.getLogger("dbos").addFilter(not_a_cancelled_run)
 
 
 # Construct at import so runs.py's @DBOS.workflow can register before launch.
