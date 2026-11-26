@@ -29,7 +29,10 @@ object ResponseFormatting {
         "When writing mathematical notation, use LaTeX delimited with \\( ... \\) " +
             "for inline math and \\[ ... \\] for display equations. Never use " +
             "\$ ... \$ or \$\$ ... \$\$ as math delimiters — dollar signs are " +
-            "reserved for currency and render as plain text. Inside Markdown " +
+            "reserved for currency and render as plain text. Keep currency " +
+            "amounts out of math: write prices as plain text (≈ \$2,800–\$2,975), " +
+            "not inside \\( ... \\). If a dollar sign must appear inside a math " +
+            "expression, escape it as \\\$. Inside Markdown " +
             "table cells, write \\mid instead of the | character in math " +
             "expressions."
 
