@@ -58,6 +58,7 @@ replaced.
 """
 from __future__ import annotations
 
+import ctypes
 import io
 import json
 import logging
@@ -121,13 +122,17 @@ MAX_RAW_SOURCE_BYTES = _env_int("IMAGE_MAX_RAW_SOURCE_BYTES", 400 * 1024 * 1024)
 # assumption to stay true as the rest of the server grows.
 MAX_DECODE_BYTES = _env_int("IMAGE_MAX_DECODE_BYTES", 370_000_000)
 # Left for the rest of the process after a decode completes: other in-flight
-# requests, the encode step that follows this same decode, and the kernel's
-# own bookkeeping. A decode that would eat into this is refused with a
-# typed, per-request ImageTooLargeError instead of risking the OOM killer
+# requests, the estimate's own error (real decode -> resize -> encode peaks
+# measured 3-17 MiB above it for 4-24 MP JPEG/PNG/WebP on Linux), and the
+# kernel's own bookkeeping. A decode that would eat into this is refused with
+# a typed, per-request ImageTooLargeError instead of risking the OOM killer
 # taking the whole server down for every customer (see the Oct 2026 incident:
 # the server's baseline had grown past what MAX_DECODE_BYTES was tuned
 # against, so a single image decode's real cost outran the static estimate).
-_MEMORY_SAFETY_MARGIN_BYTES = _env_int("IMAGE_MEMORY_SAFETY_MARGIN_BYTES", 200 * 1024 * 1024)
+# No larger: the 1 GB VM's healthy ~550-700 MB RSS leaves ~180-360 MiB
+# available, and a 200 MiB margin refused a 12 MP phone photo most of the
+# time and every decode at all whenever MemAvailable dipped under 200 MiB.
+_MEMORY_SAFETY_MARGIN_BYTES = _env_int("IMAGE_MEMORY_SAFETY_MARGIN_BYTES", 96 * 1024 * 1024)
 
 # libjpeg-turbo's memory cap per (de)compress object, in its decimal "M". A
 # JPEG whose scans don't each cover every component (progressive, or
@@ -138,6 +143,21 @@ _MEMORY_SAFETY_MARGIN_BYTES = _env_int("IMAGE_MEMORY_SAFETY_MARGIN_BYTES", 200 *
 # to the decode budget, so it never refuses what the header guard admitted
 # (a 48 MP 4:4:4 progressive JPEG needs ~290 MB); our own encodes need a few MB.
 os.environ.setdefault("JPEGMEM", f"{max(64, MAX_DECODE_BYTES // 1_000_000)}M")
+
+# glibc raises its mmap threshold to the size of each large block it frees
+# (up to 32 MiB), so after the first decode Pillow's 16 MiB pixel blocks come
+# from the malloc heap and stay resident once freed: one 12 MP photo left
+# ~65 MiB of RSS behind, a 24 MP one ~190 MiB. The process could reuse it, but
+# MemAvailable no longer counts it, so each decode shrank the budget of the
+# next (_effective_decode_budget) until images were refused outright. Pinning
+# the threshold at glibc's own 128 KiB default keeps large allocations
+# mmapped, and munmap returns them as soon as they are freed (measured: 2-5
+# MiB left behind). Process-wide; a no-op off glibc (macOS dev machines).
+_M_MMAP_THRESHOLD = -3
+try:
+    ctypes.CDLL("libc.so.6").mallopt(_M_MMAP_THRESHOLD, 128 * 1024)
+except (OSError, AttributeError):
+    pass
 
 # Header ceiling for baseline JPEGs decoded through draft(): Samsung 200 MP is
 # 16320x12240 = 199.7 MP. Huffman decoding still walks every coefficient, so a
@@ -1128,12 +1148,21 @@ def _effective_decode_budget(max_decode_bytes: int) -> int:
 
 def _check_decode_cost(im: Image.Image, fmt: str, decoded: tuple[int, int],
                        source_size: tuple[int, int], max_decode_bytes: int, data: bytes = b"") -> None:
-    budget = _effective_decode_budget(max_decode_bytes)
     per_pixel = _decode_cost_per_pixel(im, fmt, data)
-    if decoded[0] * decoded[1] * per_pixel > budget:
-        has_alpha = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
-        label = f"{fmt} (with transparency)" if has_alpha else fmt
-        raise ImageTooLargeError(_pixels_message(source_size, int(budget / per_pixel), label))
+    cost = decoded[0] * decoded[1] * per_pixel
+    if cost <= _effective_decode_budget(max_decode_bytes):
+        return
+    if cost <= max_decode_bytes:
+        # Only the machine's headroom right now says no: a smaller export
+        # wouldn't necessarily help, so don't tell the user to make one.
+        w, h = source_size
+        raise ImageTooLargeError(
+            f"The attached image ({w}x{h}) couldn't be processed because the server is short on memory "
+            "right now. Please try again later."
+        )
+    has_alpha = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
+    label = f"{fmt} (with transparency)" if has_alpha else fmt
+    raise ImageTooLargeError(_pixels_message(source_size, int(max_decode_bytes / per_pixel), label))
 
 
 def _jp2_reduce_factor(size: tuple[int, int], max_edge: int) -> int:
