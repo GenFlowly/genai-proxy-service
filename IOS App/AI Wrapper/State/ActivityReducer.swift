@@ -132,6 +132,8 @@ struct ActivityView: Equatable {
     var evidence: [ActivityEvidenceGroup]
     var developer: [ActivityDeveloperEntry]
     var current: ActivityCurrent?
+    /// The answer is streaming, so the agent is done thinking (live only).
+    var answering = false
 }
 
 private let searchTools: Set<String> = ["web_search"]
@@ -164,6 +166,10 @@ private final class StepRecord {
     let name: String
     var startAt: Int?
     var firstTokenMs: Int?
+    /// The step began writing a tool call (`step.calling`).
+    var calling = false
+    /// The step wrote more than a preamble's worth of text (`step.writing`).
+    var writing = false
     var end: ActivityEvent?
     var liveCalls: [String: ActivityToolCall] = [:]
 
@@ -208,6 +214,10 @@ func reduceActivity(
             _ = stepFor(id, event.kind ?? "llm", event.node ?? id, event.name ?? id, event.at)
         case .stepProgress:
             if let id = event.id, let step = byId[id] { step.firstTokenMs = event.firstTokenMs }
+        case .stepCalling:
+            if let id = event.id, let step = byId[id] { step.calling = true }
+        case .stepWriting:
+            if let id = event.id, let step = byId[id] { step.writing = true }
         case .stepCall:
             if let id = event.id, let step = byId[id], let call = event.call {
                 let key = call.id.flatMap { $0.isEmpty ? nil : $0 } ?? "seq-\(call.seq ?? step.liveCalls.count + 1)"
@@ -472,8 +482,17 @@ func reduceActivity(
         beats: beats,
         evidence: evidence,
         developer: developer,
-        current: status == .live ? currentOf(steps, stepStatus: stepStatus, callsOf: callsOf) : nil
+        current: status == .live ? currentOf(steps, stepStatus: stepStatus, callsOf: callsOf) : nil,
+        answering: status == .live && isAnswering(steps, finalAnswer: finalAnswer)
     )
+}
+
+/// The newest step is the answer: an llm step past a preamble's worth of text with no tool
+/// call (`step.writing`, never `step.calling`), or the answer step that just ended.
+private func isAnswering(_ steps: [StepRecord], finalAnswer: StepRecord?) -> Bool {
+    guard let latest = steps.last, latest.kind == "llm" else { return false }
+    if latest.end != nil { return latest === finalAnswer }
+    return latest.writing && !latest.calling
 }
 
 private func phasesOf(

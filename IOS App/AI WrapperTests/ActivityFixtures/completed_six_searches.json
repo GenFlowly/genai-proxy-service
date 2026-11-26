@@ -72,6 +72,12 @@
     },
     {
       "v": 2,
+      "at": 1500,
+      "type": "step.calling",
+      "id": "NODAGENT001:1"
+    },
+    {
+      "v": 2,
       "at": 3500,
       "type": "step.end",
       "id": "NODAGENT001:1",
@@ -421,6 +427,12 @@
     },
     {
       "v": 2,
+      "at": 9400,
+      "type": "step.calling",
+      "id": "NODAGENT001:2"
+    },
+    {
+      "v": 2,
       "at": 11200,
       "type": "step.end",
       "id": "NODAGENT001:2",
@@ -637,6 +649,12 @@
       "type": "step.progress",
       "id": "NODAGENT001:3",
       "first_token_ms": 3600
+    },
+    {
+      "v": 2,
+      "at": 21000,
+      "type": "step.writing",
+      "id": "NODAGENT001:3"
     },
     {
       "v": 2,

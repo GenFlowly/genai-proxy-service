@@ -51,6 +51,12 @@
     },
     {
       "v": 2,
+      "at": 1100,
+      "type": "step.calling",
+      "id": "NODAGENT001:1"
+    },
+    {
+      "v": 2,
       "at": 2000,
       "type": "step.end",
       "id": "NODAGENT001:1",
@@ -283,6 +289,12 @@
     },
     {
       "v": 2,
+      "at": 5300,
+      "type": "step.calling",
+      "id": "NODAGENT001:2"
+    },
+    {
+      "v": 2,
       "at": 6100,
       "type": "step.end",
       "id": "NODAGENT001:2",
@@ -453,6 +465,12 @@
       "kind": "llm",
       "node": "NODAGENT001",
       "name": "Agent"
+    },
+    {
+      "v": 2,
+      "at": 8900,
+      "type": "step.calling",
+      "id": "NODAGENT001:3"
     },
     {
       "v": 2,

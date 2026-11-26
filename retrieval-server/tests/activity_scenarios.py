@@ -53,6 +53,13 @@ def stream(node: str, text: str, nested: bool = False) -> dict:
             "metadata": _meta(node, nested), "data": {"chunk": AIMessageChunk(content=text)}}
 
 
+def calling(node: str, nested: bool = False) -> dict:
+    """The first streamed piece of a tool call."""
+    chunk = AIMessageChunk(content="", tool_call_chunks=[{"name": "web_search", "args": "", "id": "call", "index": 0}])
+    return {"event": "on_chat_model_stream", "name": "ChatOpenAI", "run_id": "llm",
+            "metadata": _meta(node, nested), "data": {"chunk": chunk}}
+
+
 def call_done(node: str, facts: dict, nested: bool = False) -> dict:
     return {"event": "on_custom_event", "name": CALL_FINISHED_EVENT, "run_id": "custom",
             "metadata": _meta(node, nested), "data": facts}
@@ -240,6 +247,7 @@ def _completed_timeline() -> list:
         (0.40, start(AGENT, "a1")),
         (1.20, stream(AGENT, "Those three wedges were inferences, ")),
         (1.30, stream(AGENT, "not measured markets.")),
+        (1.50, calling(AGENT)),
         (3.50, end(AGENT, "a1", {"generated_response": REASON_1, "tool_calls": R1,
                                  "trace": trace(USER_PROMPT, REASON_1)})),
         (3.50, start(TOOLS, "t1")),
@@ -249,6 +257,7 @@ def _completed_timeline() -> list:
         (8.30, end(TOOLS, "t1", tools_output(R1_ENTRIES, {"used": 3, "max": 6}, ALL_SOURCES[:25]))),
         (8.30, start(AGENT, "a2")),
         (9.10, stream(AGENT, "The last pass was inference.")),
+        (9.40, calling(AGENT)),
         (11.20, end(AGENT, "a2", {"generated_response": REASON_2, "tool_calls": R2,
                                   "trace": trace(USER_PROMPT, REASON_2)})),
         (11.20, start(TOOLS, "t2")),
@@ -259,6 +268,7 @@ def _completed_timeline() -> list:
         (16.40, start(AGENT, "a3")),
         (20.00, stream(AGENT, "You're right to reject those. ")),
         (20.10, stream(AGENT, "Two of the three had no buyer data.")),
+        (21.00, stream(AGENT, ANSWER[65:])),
         (22.00, end(AGENT, "a3", {"generated_response": ANSWER, "trace": trace(USER_PROMPT, ANSWER)})),
     ]
 
@@ -316,6 +326,7 @@ def _denied_timeline() -> list:
         (0.00, start(MEMORY, "m1")),
         (0.20, end(MEMORY, "m1", memory_output(CORE_MEMORIES[:3], []))),
         (0.20, start(AGENT, "a1")),
+        (1.10, calling(AGENT)),
         (2.00, end(AGENT, "a1", {"generated_response": "", "tool_calls": D1, "trace": trace(crm_q)})),
         (2.00, start(TOOLS, "t1")),
         (2.00, call_done(TOOLS, facts_of(DENIED_R1[3]))),
@@ -324,6 +335,7 @@ def _denied_timeline() -> list:
         (4.30, call_done(TOOLS, facts_of(DENIED_R1[2]))),
         (4.40, end(TOOLS, "t1", tools_output(DENIED_R1, {"used": 3, "max": 5}, _D_SRC[:4]))),
         (4.40, start(AGENT, "a2")),
+        (5.30, calling(AGENT)),
         (6.10, end(AGENT, "a2", {"generated_response": "I need the self-hosting requirements next.",
                                  "tool_calls": D2, "trace": trace(crm_q)})),
         (6.10, start(TOOLS, "t2")),
@@ -332,6 +344,7 @@ def _denied_timeline() -> list:
         (8.00, call_done(TOOLS, facts_of(DENIED_R2[0]))),
         (8.10, end(TOOLS, "t2", tools_output(DENIED_R2, {"used": 4, "max": 5}, _D_SRC[:5]))),
         (8.10, start(AGENT, "a3")),
+        (8.90, calling(AGENT)),
         (9.40, end(AGENT, "a3", {"generated_response": "", "tool_calls": D3, "trace": trace(crm_q)})),
         (9.40, start(TOOLS, "t3")),
         (9.40, call_done(TOOLS, facts_of(DENIED_R3[1]))),
@@ -360,6 +373,7 @@ def _error_timeline() -> list:
         (0.00, start(MEMORY, "m1")),
         (0.30, end(MEMORY, "m1", {})),
         (0.30, start(AGENT, "a1")),
+        (1.20, calling(AGENT)),
         (1.90, end(AGENT, "a1", {"generated_response": "Two numbers decide this: eligible practices and the rate.",
                                  "tool_calls": E1, "trace": trace(q)})),
         (1.90, start(TOOLS, "t1")),
@@ -395,11 +409,13 @@ def _subagent_timeline() -> list:
         (0.00, start(MEMORY, "m1")),
         (0.30, end(MEMORY, "m1", memory_output(CORE_MEMORIES[:2], RECALLED_MEMORIES[:1]))),
         (0.30, start(AGENT, "a1")),
+        (1.60, calling(AGENT)),
         (2.10, end(AGENT, "a1", {"generated_response": "This needs a side-by-side, so I'll delegate the comparison.",
                                  "tool_calls": S1, "trace": trace(q)})),
         (2.10, start(TOOLS, "t1")),
         (2.20, start("subagent_generator", "c1", nested=True)),
         (3.00, stream("subagent_generator", "Searching vendor pages.", nested=True)),
+        (3.20, calling("subagent_generator", nested=True)),
         (3.40, end("subagent_generator", "c1", {"tool_calls": [sub_call]}, nested=True)),
         (3.40, start("subagent_tools", "c2", nested=True)),
         (5.00, call_done("subagent_tools", facts_of(call_entry(sub_call, 1, "run", 1600, [])), nested=True)),
@@ -426,7 +442,7 @@ def _memory_only_timeline() -> list:
 
 
 def _stopped_timeline() -> list:
-    return _completed_timeline()[:9]
+    return [e for e in _completed_timeline() if e[0] <= 7.9]
 
 
 @dataclass

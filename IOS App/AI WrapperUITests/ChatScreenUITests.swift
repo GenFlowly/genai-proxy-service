@@ -133,31 +133,95 @@ final class ChatScreenUITests: XCTestCase {
     }
 
     @MainActor
-    func testSwipingFromInsideALongResponseShowsTheNextOneFromItsTop() throws {
+    func testThePageFollowsTheThinkingThenGoesBackToTheResponse() throws {
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("AI WrapperTests/ActivityFixtures/completed_six_searches.json")
+        let app = XCUIApplication()
+        app.launchArguments = ["-mockActivityReplay", fixture.path, "--ui-testing"]
+        app.launch()
+        let header = app.buttons["mobile-header-pill"]
+        let editor = element(app.textViews, labelled: "Generate")
+        let pendingAnswer = element(app.staticTexts, labelled: "Wrote the answer")
+        let prompt = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Those three wedges")).firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+
+        // The second search round runs 11-16 s in: the panel is taller than the page by then
+        Thread.sleep(forTimeInterval: 14)
+        let thinking = XCTAttachment(screenshot: app.screenshot())
+        thinking.name = "following-the-thinking"
+        thinking.lifetime = .keepAlways
+        add(thinking)
+        XCTAssertTrue(pendingAnswer.exists)
+        XCTAssertGreaterThanOrEqual(pendingAnswer.frame.minY, header.frame.maxY)
+        XCTAssertLessThanOrEqual(pendingAnswer.frame.maxY, editor.frame.minY)
+        XCTAssertLessThan(prompt.frame.maxY, header.frame.maxY + 1)
+
+        // The answer streams from 21 s: the panel folds and the page goes back to the response
+        Thread.sleep(forTimeInterval: 9)
+        let answering = XCTAttachment(screenshot: app.screenshot())
+        answering.name = "back-at-the-response"
+        answering.lifetime = .keepAlways
+        add(answering)
+        let model = element(app.staticTexts, labelled: "gpt-5.4-nano")
+        XCTAssertFalse(pendingAnswer.exists)
+        XCTAssertGreaterThanOrEqual(model.frame.minY, header.frame.maxY)
+        XCTAssertLessThan(model.frame.minY, header.frame.maxY + 120)
+    }
+
+    @MainActor
+    func testSwipingFromInsideALongResponseKeepsTheReadingPosition() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--mock-two-turns", "--ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
+        let header = app.buttons["mobile-header-pill"]
+        let outgoing = { app.staticTexts.matching(NSPredicate(format: "label == %@", "gpt-5.6-sol")).allElementsBoundByIndex.last }
+        for _ in 0..<20 where (outgoing()?.frame.minY ?? 0) > header.frame.maxY {
+            app.swipeUp(velocity: .slow)
+        }
+        let before = try XCTUnwrap(outgoing()).frame.minY
+        XCTAssertLessThan(before, header.frame.maxY)
+
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.45))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.45)))
+
+        let incoming = { app.staticTexts.matching(NSPredicate(format: "label == %@", "claude-fable-5")).allElementsBoundByIndex.last }
+        XCTAssertTrue(try XCTUnwrap(incoming()).waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1.5)
+        let swiped = XCTAttachment(screenshot: app.screenshot())
+        swiped.name = "swiped-keeps-the-reading-position"
+        swiped.lifetime = .keepAlways
+        add(swiped)
+        // The incoming response starts where the outgoing one did: the page didn't move
+        XCTAssertEqual(try XCTUnwrap(incoming()).frame.minY, before, accuracy: 4)
+    }
+
+    @MainActor
+    func testSwipingPastTheEndOfAShorterResponseShowsItsEnd() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--mock-two-turns", "--ui-testing"]
         app.launch()
         XCTAssertTrue(app.buttons["More actions"].waitForExistence(timeout: 10))
         for _ in 0..<8 { app.swipeUp() }
         let header = app.buttons["mobile-header-pill"]
-        let model = app.staticTexts.matching(NSPredicate(format: "label == %@", "gpt-5.6-sol")).allElementsBoundByIndex.last
-        XCTAssertLessThan(try XCTUnwrap(model).frame.minY, header.frame.maxY)
 
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.45))
             .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.45)))
 
-        let incoming = element(app.staticTexts, labelled: "claude-fable-5")
-        XCTAssertTrue(incoming.waitForExistence(timeout: 5))
-        let deadline = Date().addingTimeInterval(3)
-        while incoming.frame.minY < header.frame.maxY, Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.1)
-        }
+        let incoming = { app.staticTexts.matching(NSPredicate(format: "label == %@", "claude-fable-5")).allElementsBoundByIndex.last }
+        XCTAssertTrue(try XCTUnwrap(incoming()).waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1.5)
         let swiped = XCTAttachment(screenshot: app.screenshot())
-        swiped.name = "swiped-from-inside-a-long-response"
+        swiped.name = "swiped-past-the-end-of-a-shorter-response"
         swiped.lifetime = .keepAlways
         add(swiped)
-        XCTAssertGreaterThanOrEqual(incoming.frame.minY, header.frame.maxY)
-        XCTAssertLessThan(incoming.frame.minY, header.frame.maxY + 80)
+        // Its end sits above the editor; its start stays above the page, not brought to the top
+        let regenerate = element(app.buttons, labelled: "Regenerate")
+        let editor = element(app.textViews, labelled: "Generate")
+        XCTAssertGreaterThanOrEqual(regenerate.frame.minY, header.frame.maxY)
+        XCTAssertLessThanOrEqual(regenerate.frame.maxY, editor.frame.minY)
+        XCTAssertLessThan(try XCTUnwrap(incoming()).frame.minY, header.frame.maxY)
     }
 
     @MainActor

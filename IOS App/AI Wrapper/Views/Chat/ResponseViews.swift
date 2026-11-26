@@ -6,6 +6,8 @@ struct ResponseGroupView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.conversationScroll) private var conversationScroll
+    @Environment(\.trailingEditorHeight) private var trailingEditorHeight
     let block: ConversationBlock
     let onSelectionChange: (AskSelection?) -> Void
 
@@ -15,6 +17,12 @@ struct ResponseGroupView: View {
     @State private var isInReadingZone = false
     /// The responses' top is above the overlay header's bottom edge.
     @State private var startsAboveView = false
+    /// The responses end in the top quarter of the page's visible part, or above it.
+    @State private var endsHigh = false
+    /// The responses fit in the page between the overlay header and the trailing editor.
+    @State private var fitsInView = false
+    /// The messages whose agent is thinking.
+    @State private var thinkingMessages: Set<String> = []
     @State private var width: CGFloat = 0
     /// Each vendor is auto-selected at most once, or toggles would be undone mid-stream.
     @State private var autoSelected: Set<String> = []
@@ -93,7 +101,8 @@ struct ResponseGroupView: View {
                             learnedMemory: showsMemory(for: message) ? learnedMemory : nil,
                             onSelectionChange: onSelectionChange,
                             swipe: swipe,
-                            isSwipeNeighbor: isNeighbor
+                            isSwipeNeighbor: isNeighbor,
+                            onThinkingChange: { thinkingChanged(message.messageId, $0) }
                         )
                         .overlay(alignment: .top) {
                             ResponseSwipeLabel(
@@ -118,11 +127,23 @@ struct ResponseGroupView: View {
                 .overlay(alignment: .top) {
                     Color.clear.frame(height: 1).id(Self.topAnchor(block.conversationBlockId)).allowsHitTesting(false)
                 }
+                .overlay(alignment: .bottom) {
+                    LiftedBottomAnchor(id: Self.endAnchor(block.conversationBlockId), lift: trailingEditorHeight)
+                }
                 .background(swipe.isDragging ? Self.dragTint : .clear)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { swipe.pageHeight = $0 }
                 .onGeometryChange(for: Bool.self) { proxy in
                     proxy.frame(in: .scrollView(axis: .vertical)).minY < mobileHeaderHeight - 0.5
                 } action: { startsAboveView = $0 }
+                .onGeometryChange(for: Bool.self) { proxy in
+                    guard let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height else { return false }
+                    let visible = viewport - mobileHeaderHeight - trailingEditorHeight
+                    return proxy.frame(in: .scrollView(axis: .vertical)).maxY < mobileHeaderHeight + visible / 4
+                } action: { endsHigh = $0 }
+                .onGeometryChange(for: Bool.self) { proxy in
+                    guard let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height else { return false }
+                    return proxy.size.height <= viewport - mobileHeaderHeight - trailingEditorHeight
+                } action: { fitsInView = $0 }
                 .onGeometryChange(for: Bool.self) { proxy in
                     guard let viewport = proxy.bounds(of: .scrollView(axis: .vertical))?.height else { return false }
                     let frame = proxy.frame(in: .scrollView(axis: .vertical))
@@ -249,15 +270,44 @@ struct ResponseGroupView: View {
         .padding(.top, 12)
     }
 
-    /// Response.tsx handleVendorSelectionChange: the reading position inside one vendor's
-    /// response means nothing in another's, and a shorter one would leave the page blank
-    /// below its end, so the new response starts from its top.
+    /// Response.tsx handleVendorSelectionChange: the page stays where it is, and the new
+    /// response shows from the same point. Only one that would end in the top quarter of the
+    /// page or above it moves the page up, as little as shows the most of it, so the page is
+    /// never left near blank below its end.
     private func selectVendors(_ vendors: [String]) {
+        let wasInside = startsAboveView
         conversation.setVendorSelection(for: block.conversationBlockId, vendors: vendors)
-        if startsAboveView { conversation.responseTopRequest = block.conversationBlockId }
+        guard wasInside, let conversationScroll else { return }
+        let id = block.conversationBlockId
+        // After the new response has laid out, or this reads the old one's frame
+        DispatchQueue.main.async {
+            guard endsHigh else { return }
+            if fitsInView {
+                conversationScroll.scrollTo(Self.topAnchor(id), .top, true)
+            } else {
+                conversationScroll.scrollTo(Self.endAnchor(id), .bottom, true)
+            }
+        }
+    }
+
+    /// ConversationBlock's followLiveActivity: once the agent stops thinking and its panel
+    /// folds, a page that had moved past the responses' top goes back to it. A user who scrolled
+    /// the panel's end out of view is left where they are, and so is one who switched vendors:
+    /// a panel leaving the page is not the agent stopping.
+    private func thinkingChanged(_ messageId: String, _ thinking: Bool) {
+        if thinking {
+            thinkingMessages.insert(messageId)
+            return
+        }
+        guard thinkingMessages.remove(messageId) != nil,
+              filteredMessages.contains(where: { $0.messageId == messageId }),
+              !filteredMessages.contains(where: { thinkingMessages.contains($0.messageId) }),
+              startsAboveView, let conversationScroll, !conversationScroll.isFollowPaused else { return }
+        conversationScroll.scrollTo(Self.topAnchor(block.conversationBlockId), .top, true)
     }
 
     static func topAnchor(_ blockId: String) -> String { "responses-top-\(blockId)" }
+    static func endAnchor(_ blockId: String) -> String { "responses-end-\(blockId)" }
 
     private func autoSelectNewVendors() {
         let current = conversation.getVendorSelection(for: block.conversationBlockId)
@@ -296,6 +346,8 @@ struct UsageTotals: Equatable {
 struct ResponseCardView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var conversation: ConversationStore
+    @Environment(\.conversationScroll) private var conversationScroll
+    @Environment(\.trailingEditorHeight) private var trailingEditorHeight
     let block: ConversationBlock
     let message: Message
     let isLastResponseBlock: Bool
@@ -304,6 +356,14 @@ struct ResponseCardView: View {
     let onSelectionChange: (AskSelection?) -> Void
     let swipe: ResponseSwipeModel
     let isSwipeNeighbor: Bool
+    /// Told when this response's agent starts or stops thinking, and false when it leaves the page.
+    var onThinkingChange: (Bool) -> Void = { _ in }
+
+    @State private var isThinking = false
+
+    /// Room kept between a followed activity panel's end and the trailing editor.
+    static let followGap: CGFloat = 16
+    static func activityEndAnchor(_ messageId: String) -> String { "activity-end-\(messageId)" }
 
     /// Nothing follows, so the bar takes up the group's 8pt below it and its buttons end where
     /// the scrolled page does.
@@ -335,8 +395,25 @@ struct ResponseCardView: View {
                 events: message.activity,
                 isLive: message.isLoading,
                 citedSources: message.webSources,
-                stopReason: message.stopReason
+                stopReason: message.stopReason,
+                onThinkingChange: { thinking in
+                    isThinking = thinking
+                    onThinkingChange(thinking)
+                }
             )
+            // While the agent thinks, the page keeps the panel's end in view, above the
+            // trailing editor stuck to the bottom of the page (ConversationBlock's follow)
+            .overlay(alignment: .bottom) {
+                if isThinking, !isSwipeNeighbor, let conversationScroll {
+                    let anchor = Self.activityEndAnchor(message.messageId)
+                    LiftedBottomAnchor(id: anchor, lift: trailingEditorHeight + Self.followGap) {
+                        conversationScroll.follow(anchor, overflow: $0)
+                    }
+                }
+            }
+            .onDisappear {
+                if isThinking { onThinkingChange(false) }
+            }
             .padding(.bottom, showsActivity ? 14 : 0)
             .overlay(alignment: .bottom) {
                 if showsActivity {

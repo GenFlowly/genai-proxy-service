@@ -13,6 +13,11 @@ enum ActivityEventType: String {
     case turnStart = "turn.start"
     case stepStart = "step.start"
     case stepProgress = "step.progress"
+    /// A streaming llm step began writing a tool call: its text so far was a preamble.
+    case stepCalling = "step.calling"
+    /// A streaming llm step has written more text than a tool-call preamble runs to, and no
+    /// tool call: it is writing the answer, unless a `step.calling` still follows.
+    case stepWriting = "step.writing"
     case stepCall = "step.call"
     case stepEnd = "step.end"
     case turnEnd = "turn.end"

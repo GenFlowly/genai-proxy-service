@@ -189,6 +189,15 @@ struct AI_WrapperApp: App {
                         conversation.conversationId = "mock"
                         conversation.blocks = [DebugFixtures.activityFixtureBlock(fixture)]
                     }
+                    // The same, streamed: the fixture's events arrive at their own pace.
+                    if let path = UserDefaults.standard.string(forKey: "mockActivityReplay"),
+                       let data = FileManager.default.contents(atPath: path),
+                       let fixture = JSONValue.parse(data) {
+                        router.navigate(.chat)
+                        conversation.conversationTitle = "Activity replay"
+                        conversation.conversationId = "mock"
+                        DebugFixtures.replayActivity(fixture, into: conversation)
+                    }
                     if CommandLine.arguments.contains("--mock-short-conversation") {
                         router.navigate(.chat)
                         conversation.conversationTitle = "Sorting algorithms compared"

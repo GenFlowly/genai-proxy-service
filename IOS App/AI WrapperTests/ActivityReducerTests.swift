@@ -106,6 +106,44 @@ struct ActivityCompletedTurnTests {
     }
 }
 
+/// activity.reduce.test.tsx "when the answer starts": the panel folds on this.
+struct ActivityAnswerStartTests {
+    /// The completed turn's log up to and including the first matching event.
+    private func upTo(_ type: ActivityEventType, _ id: String) throws -> [ActivityEvent] {
+        let events = try Fixture("completed_six_searches").events
+        let index = try #require(events.firstIndex { $0.type == type && $0.id == id })
+        return Array(events.prefix(through: index))
+    }
+
+    private func answering(_ events: [ActivityEvent]) -> Bool {
+        reduceActivity(events, isLive: true).answering
+    }
+
+    @Test func takesTheStepForTheAnswerOnceItWritesMoreThanAPreamble() throws {
+        #expect(!answering(try upTo(.stepProgress, "NODAGENT001:3")))
+        #expect(answering(try upTo(.stepWriting, "NODAGENT001:3")))
+    }
+
+    @Test func neverTakesAPreambleFollowedByAToolCallForTheAnswer() throws {
+        #expect(!answering(try upTo(.stepProgress, "NODAGENT001:1")))
+        #expect(!answering(try upTo(.stepCalling, "NODAGENT001:1")))
+        let json = try #require(JSONValue.parse(Data(#"{"v":2,"at":21500,"type":"step.calling","id":"NODAGENT001:3"}"#.utf8)))
+        let calling = try #require(ActivityEvent(json: json))
+        #expect(!answering(try upTo(.stepWriting, "NODAGENT001:3") + [calling]))
+    }
+
+    @Test func isTheAnswerOnceTheAnswerStepEnds() throws {
+        #expect(answering(try upTo(.stepEnd, "NODAGENT001:3")))
+    }
+
+    @Test func isThinkingWhileALaterStepRunsAndNeverOnceTheLogSaysTheTurnIsOver() throws {
+        #expect(!(try Fixture("live_mid_turn").reduce(nowMs: 14300).answering))
+        let ended = reduceActivity(try Fixture("completed_six_searches").events, isLive: true)
+        #expect(ended.status == .done)
+        #expect(!ended.answering)
+    }
+}
+
 struct ActivityLiveTurnTests {
     @Test func clockRunsOnTheServerTimeline() throws {
         let view = try Fixture("live_mid_turn").reduce(nowMs: 14300)
