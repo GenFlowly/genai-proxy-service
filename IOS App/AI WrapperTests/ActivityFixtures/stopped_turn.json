@@ -72,6 +72,12 @@
     },
     {
       "v": 2,
+      "at": 1500,
+      "type": "step.calling",
+      "id": "NODAGENT001:1"
+    },
+    {
+      "v": 2,
       "at": 3500,
       "type": "step.end",
       "id": "NODAGENT001:1",

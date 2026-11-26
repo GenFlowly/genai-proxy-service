@@ -2,13 +2,15 @@ import SwiftUI
 
 /// The agent's activity for one response (ActivityPanel.tsx): what it thought, what it ran
 /// and why, what came back, how long each step took, and which sources the answer rests
-/// on. Open for the whole live turn (it never reacts to the answer text, so a tool-call
-/// preamble can't collapse it), folded to one summary line once the turn ends.
+/// on. Open while the agent thinks, folded to one summary line once the answer streams (the
+/// log says so, never the answer text, so a tool-call preamble can't fold it) or the turn ends.
 struct ActivityPanel: View {
     let events: [ActivityEvent]
     let isLive: Bool
     var citedSources: [WebSource]?
     var stopReason: String?
+    /// Told when the agent starts or stops thinking, and on appearing while it thinks.
+    var onThinkingChange: ((Bool) -> Void)?
 
     @State private var open: Bool
     @State private var mode: Mode = .story
@@ -21,11 +23,13 @@ struct ActivityPanel: View {
 
     enum Mode { case story, evidence }
 
-    init(events: [ActivityEvent], isLive: Bool, citedSources: [WebSource]? = nil, stopReason: String? = nil) {
+    init(events: [ActivityEvent], isLive: Bool, citedSources: [WebSource]? = nil, stopReason: String? = nil,
+         onThinkingChange: ((Bool) -> Void)? = nil) {
         self.events = events
         self.isLive = isLive
         self.citedSources = citedSources
         self.stopReason = stopReason
+        self.onThinkingChange = onThinkingChange
         _open = State(initialValue: isLive)
         #if DEBUG
         // Headless capture: open every panel on a view via `-activityPanel story|evidence`.
@@ -54,14 +58,17 @@ struct ActivityPanel: View {
         .onAppear { anchor = (lastAt, Date()) }
         .onChange(of: lastAt) { _, newValue in anchor = (newValue, Date()) }
         .onChange(of: isLive) { wasLive, live in
-            if live && !wasLive { open = true }
-            if !live && wasLive { open = false }
+            if !live && wasLive {
+                open = false
+                onThinkingChange?(false)
+            }
         }
     }
 
     @ViewBuilder private func content(now: Int?) -> some View {
         let view = reduceActivity(events, isLive: isLive, nowMs: now, stopReason: stopReason,
                                   citedFallback: citedSources?.map(\.index))
+        let thinking = view.status == .live && !view.answering
         if !(view.isEmpty && !isLive) {
             VStack(alignment: .leading, spacing: 12) {
                 ActivityHeader(view: view, open: open) { open.toggle() }
@@ -88,6 +95,11 @@ struct ActivityPanel: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel(L("conversation.activity.panelLabel"))
             .accessibilityIdentifier("activity-panel")
+            .onChange(of: thinking, initial: true) { was, thinking in
+                guard isLive else { return }
+                open = thinking
+                if thinking || was { onThinkingChange?(thinking) }
+            }
         }
     }
 

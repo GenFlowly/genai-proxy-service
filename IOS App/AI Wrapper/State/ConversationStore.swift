@@ -29,9 +29,6 @@ final class ConversationStore: ObservableObject {
     var handledFocusDraftRequest = 0
     /// Bumped when the conversation is dragged back up: a draft editor in use is put away.
     @Published var putAwayDraftRequest = 0
-    /// A turn whose responses should be read from their top: another vendor's response took
-    /// their place while the page was scrolled into them.
-    @Published var responseTopRequest: String?
 
     private var streamTasks: [String: Task<Void, Error>] = [:]
     /// Client-minted generation ids per stream key, so Stop can cancel server-side work

@@ -164,6 +164,37 @@ extension DebugFixtures {
         )
     }
 
+    /// Streams a shared activity fixture into a one-response turn: each event at its `at`, the
+    /// answer's text from its `step.writing` on, then the turn ends.
+    @MainActor static func replayActivity(_ fixture: JSONValue, into conversation: ConversationStore) {
+        let events = fixture["events"]?.array?.compactMap(ActivityEvent.init(json:)) ?? []
+        let answer = Array(repeating: "Two of the three had no buyer data. CCM billing is used by under 5% of eligible practices [1], and the funded vendors sell to larger groups.", count: 12).joined(separator: "\n\n")
+        var block = activityFixtureBlock(fixture)
+        block.isLoading = true
+        block.status = .draft
+        block.responseMessages[0].isLoading = true
+        block.responseMessages[0].text = ""
+        block.responseMessages[0].activity = []
+        conversation.blocks = [block]
+        Task { @MainActor in
+            var last = 0
+            var writing = false
+            for event in events {
+                let at = event.at ?? last
+                try? await Task.sleep(for: .milliseconds(max(0, at - last)))
+                last = at
+                writing = writing || event.type == .stepWriting
+                conversation.blocks[0].responseMessages[0].activity.append(event)
+                if writing { conversation.blocks[0].responseMessages[0].text = String(answer.prefix(400)) }
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+            conversation.blocks[0].responseMessages[0].text = answer
+            conversation.blocks[0].responseMessages[0].isLoading = false
+            conversation.blocks[0].isLoading = false
+            conversation.blocks[0].status = .resolved
+        }
+    }
+
     /// A short activity log for the fixture conversation: memory, one search, the answer.
     static let sortingActivity: [ActivityEvent] = [
         #"{"v":2,"at":0,"type":"turn.start"}"#,
