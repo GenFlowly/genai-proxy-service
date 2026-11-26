@@ -369,6 +369,7 @@ enum MarkdownParser {
     private static let inlineMathRegex = try! NSRegularExpression(pattern: "\\$\\$(.+?)\\$\\$", options: [])
     private static let tagDisplay = try! NSRegularExpression(pattern: "\\\\\\[([\\s\\S]+?)\\\\\\]", options: [])
     private static let tagInline = try! NSRegularExpression(pattern: "\\\\\\((.+?)\\\\\\)", options: [])
+    private static let escapedCitation = /\d{1,3}/
     private static let codeSplit = try! NSRegularExpression(pattern: "(```[\\s\\S]*?(?:```|$)|`[^`\\n]*`)", options: [])
 
     /// `normalizeMathDelimiters` + math extraction: fenced `$$` is display math,
@@ -381,7 +382,13 @@ enum MarkdownParser {
         var cursor = 0
         func transform(_ text: String) -> String {
             var t = text
-            t = replacing(tagDisplay, in: t) { "\n$$\n\($0.trimmingCharacters(in: .whitespacesAndNewlines))\n$$\n" }
+            t = replacing(tagDisplay, in: t) { body in
+                let expr = body.trimmingCharacters(in: .whitespacesAndNewlines)
+                // A bare number is a citation marker with its brackets escaped (markdown for a
+                // literal "[6]"), not a formula: it stays as written
+                if expr.wholeMatch(of: escapedCitation) != nil { return "\\[\(body)\\]" }
+                return "\n$$\n\(expr)\n$$\n"
+            }
             t = replacing(tagInline, in: t) { "$$\($0.trimmingCharacters(in: .whitespacesAndNewlines))$$" }
             t = replacing(displayMathRegex, in: t) { body in
                 maths.append(body)

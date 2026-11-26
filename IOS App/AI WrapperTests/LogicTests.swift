@@ -154,6 +154,12 @@ struct CitationLinkTests {
             == "Claim [[1]](cite://1)[[2]](cite://2)[[3]](cite://3)[[4]](cite://4).")
     }
 
+    @Test func escapedMarkersLinkAsPlainOnes() {
+        #expect(CitationText.linkify(#"Growth: **300 req/min** \[2\] and \[9\]."#, sources: sources)
+            == #"Growth: **300 req/min** [[2]](cite://2) and \[9\]."#)
+        #expect(CitationText.counts(#"a \[2\] b [2]"#) == [2: 2])
+    }
+
     @Test func countsEachMarker() {
         #expect(CitationText.counts("a [2] b [2][21] [x](y)") == [2: 2, 21: 1])
     }
@@ -178,6 +184,16 @@ struct CitationChipTests {
             if value is CitationChipBox { chips += 1 }
         }
         #expect(chips == 1)
+    }
+
+    @Test func anEscapedMarkerIsNotAFormula() throws {
+        // Real prod answer: a model escaped its citations, which read as display math
+        let parsed = MarkdownParser.segments(for: #"- Growth: **300 req/min** \[6\]"# + "\n\nNext", options: .init(turnTextSize: 16, reader: true))
+        #expect(!parsed.contains { if case .math = $0 { return true }; return false })
+        guard case .text(_, let text, _, _) = try #require(parsed.first) else { Issue.record("not text"); return }
+        #expect(text.string.contains("[6]"))
+        let formula = MarkdownParser.segments(for: #"\[ 2 + 2 \]"#, options: .init(turnTextSize: 16, reader: true))
+        #expect(formula.contains { if case .math = $0 { return true }; return false })
     }
 
     @Test func theReadingSettingUsesTheSerif() throws {

@@ -8,9 +8,10 @@ enum CitationText {
     /// More chips than this in one run show as this many less one, then "+N".
     static let maxChipsInRun = 4
 
-    private static let marker = try! NSRegularExpression(pattern: "\\[(\\d{1,3})\\](?!\\()")
+    /// A marker may come with its brackets escaped, `\[6\]` (markdown for a literal "[6]").
+    private static let marker = try! NSRegularExpression(pattern: "\\\\?\\[(\\d{1,3})\\\\?\\](?!\\()")
     /// A run of markers, spaces allowed between them.
-    private static let run = try! NSRegularExpression(pattern: "\\[\\d{1,3}\\](?:[ \\t]*\\[\\d{1,3}\\])*(?!\\()")
+    private static let run = try! NSRegularExpression(pattern: "\\\\?\\[\\d{1,3}\\\\?\\](?:[ \\t]*\\\\?\\[\\d{1,3}\\\\?\\])*(?!\\()")
 
     /// Each marker with a source becomes `[[n]](cite://n)`; one without stays text. A run longer
     /// than `maxChipsInRun` keeps its first markers and folds the rest into one
@@ -29,11 +30,11 @@ enum CitationText {
             let linked = markers.filter { known.contains($0.index) }
             if linked.count == markers.count, markers.count > maxChipsInRun {
                 let keep = maxChipsInRun - 1
-                out += markers.prefix(keep).map { "[\($0.text)](\(scheme)://\($0.index))" }.joined()
+                out += markers.prefix(keep).map { "[[\($0.index)]](\(scheme)://\($0.index))" }.joined()
                 let folded = markers.dropFirst(keep)
-                out += "[\(folded.map(\.text).joined())](\(scheme)://more/\(folded.map { String($0.index) }.joined(separator: ",")))"
+                out += "[\(folded.map { "[\($0.index)]" }.joined())](\(scheme)://more/\(folded.map { String($0.index) }.joined(separator: ",")))"
             } else {
-                out += markers.map { known.contains($0.index) ? "[\($0.text)](\(scheme)://\($0.index))" : $0.text }.joined()
+                out += markers.map { known.contains($0.index) ? "[[\($0.index)]](\(scheme)://\($0.index))" : $0.text }.joined()
             }
             cursor = match.range.location + match.range.length
         }
