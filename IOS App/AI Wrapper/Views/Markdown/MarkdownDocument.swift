@@ -263,8 +263,9 @@ enum MarkdownParser {
         var turnTextSize: CGFloat?
         /// The reading setting (the web's ReaderFriendlyTextContainer, phone metrics): text in
         /// Source Serif 4 at 17/28 (a prompt 18/30, weight 500), 24pt between blocks, headings
-        /// in Roboto 600 with 36 above and 10 below, tables ruled between rows only, display
-        /// math on a band, and `cite://` links drawn as citation chips.
+        /// in the serif at 600 with 36 above and 10 below, tables ruled between rows only, display
+        /// math on a band, and `cite://` links drawn as citation chips. Faces and sizes follow the
+        /// component library's TextContainer/TYPOGRAPHY.md.
         var reader = false
     }
 
@@ -977,17 +978,24 @@ enum MarkdownParser {
 
         var base: InlineStyle { if case .quote(let inner) = self { return inner }; return self }
 
-        /// The reading setting's heading sizes and line heights, h1–h6.
+        /// The reading setting's h1–h3 sizes and line heights; h4–h6 are the text's own.
         private static let readerHeadings: [(size: CGFloat, lineHeight: CGFloat)] = [
-            (22, 30), (19, 26), (17, 24), (16, 22), (16, 22), (16, 22)
+            (24, 32), (21, 28), (19, 26)
         ]
+
+        private static func readerHeading(_ level: Int, _ typography: Typography) -> (size: CGFloat, lineHeight: CGFloat) {
+            guard level <= readerHeadings.count else {
+                return (typography.paragraphSize, typography.paragraphSize * typography.lineHeight)
+            }
+            return readerHeadings[max(0, level - 1)]
+        }
 
         func size(_ typography: Typography) -> CGFloat {
             switch base {
             case .paragraph: return typography.paragraphSize
             case .listItem: return typography.listItemSize
             case .heading(let level):
-                if typography.reader { return Self.readerHeadings[max(0, min(5, level - 1))].size }
+                if typography.reader { return Self.readerHeading(level, typography).size }
                 return typography.headingBase * [2, 1.5, 1.17, 1, 0.83, 0.67][max(0, min(5, level - 1))]
             case .tableHeader: return typography.reader ? 12 : 15.2
             case .tableCell: return typography.reader ? 14 : 15.2
@@ -1012,11 +1020,11 @@ enum MarkdownParser {
             }
         }
 
-        /// The reading setting sets running text in the serif; headings and tables stay in Roboto.
+        /// The reading setting sets text and headings in the serif; tables stay in Roboto.
         func usesSerif(_ typography: Typography) -> Bool {
             guard typography.reader else { return false }
             switch base {
-            case .paragraph, .listItem, .quote: return true
+            case .paragraph, .listItem, .quote, .heading: return true
             default: return false
             }
         }
@@ -1043,7 +1051,7 @@ enum MarkdownParser {
             var lineHeight = size * typography.lineHeight
             if typography.reader {
                 switch base {
-                case .heading(let level): lineHeight = Self.readerHeadings[max(0, min(5, level - 1))].lineHeight
+                case .heading(let level): lineHeight = Self.readerHeading(level, typography).lineHeight
                 case .tableHeader: lineHeight = 16
                 case .tableCell: lineHeight = 20
                 default: break
