@@ -7,6 +7,7 @@
 #   APP_STORE_CONNECT_API_KEY_ID / APP_STORE_CONNECT_API_ISSUER_ID / APP_STORE_CONNECT_API_KEY_P8 (base64 .p8)
 #   IOS_DISTRIBUTION_CERT_P12 (base64 .p12) / IOS_DISTRIBUTION_CERT_PASSWORD / IOS_DISTRIBUTION_CERT_ID (optional)
 #   IOS_AUTH0_CLIENT_ID (required for production) / IOS_SENTRY_DSN (optional)
+#   SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT (required once IOS_SENTRY_DSN is set: dSYM upload)
 
 require "base64"
 require "tmpdir"
@@ -64,6 +65,7 @@ platform :ios do
     version = next_app_version(floor, lane_context[SharedValues::LATEST_TESTFLIGHT_VERSION], live_app_version)
     UI.message("Releasing version #{version} (#{build_number})")
     ipa = build_signed(stage: "production", api_key: api_key, version: version, build_number: build_number)
+    upload_debug_symbols
     # An App Store version only accepts a build Apple has finished processing, so this waits.
     upload_to_testflight(
       api_key: api_key,
@@ -132,6 +134,23 @@ platform :ios do
       File.write(pbxproj, original_pbxproj)
     end
   end
+end
+
+# Sentry can only turn a crash's addresses into function names and line numbers with the dSYMs
+# of that exact build, so a build that ships a DSN never goes out without them.
+def upload_debug_symbols
+  if ENV["IOS_SENTRY_DSN"].to_s.strip.empty?
+    UI.message("IOS_SENTRY_DSN is empty: Sentry is off in this build, no dSYM upload")
+    return
+  end
+  %w[SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT].each { |name| secret(name) }
+  UI.user_error!("sentry-cli is not installed") unless system("which sentry-cli > /dev/null 2>&1")
+  dsym_zip = lane_context[SharedValues::DSYM_OUTPUT_PATH].to_s
+  UI.user_error!("build_app left no dSYM archive (Release must build dwarf-with-dsym)") unless File.file?(dsym_zip)
+  dsyms = Dir.mktmpdir
+  sh("unzip", "-q", dsym_zip, "-d", dsyms)
+  # sentry-cli reads the token, org and project from the environment, so nothing lands in the log.
+  sh("sentry-cli", "debug-files", "upload", "--include-sources", dsyms)
 end
 
 def connect_api_key

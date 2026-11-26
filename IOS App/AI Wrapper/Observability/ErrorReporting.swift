@@ -31,6 +31,7 @@ struct LoggingErrorReporter: ErrorReporter {
 enum AppObservability {
     private(set) nonisolated(unsafe) static var reporter: ErrorReporter = LoggingErrorReporter()
     private nonisolated(unsafe) static var started = false
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.unbiase.ai", category: "observability")
 
     /// Installs the reporter once at app launch. Idempotent.
     static func start() {
@@ -41,7 +42,8 @@ enum AppObservability {
             reporter = SentryReporter(dsn: dsn, environment: AppConfig.environment.rawValue)
         }
         #endif
-        captureMessage("observability started — env=\(AppConfig.environment.rawValue), sentry=\(AppConfig.sentryDSN != nil ? "on" : "off")")
+        // Device log only: sent to Sentry this would be one quota-counted event per app launch.
+        logger.notice("observability started — env=\(AppConfig.environment.rawValue, privacy: .public), sentry=\(AppConfig.sentryDSN != nil ? "on" : "off", privacy: .public)")
     }
 
     static func capture(_ error: Error, context: [String: String] = [:]) { reporter.capture(error, context: context) }

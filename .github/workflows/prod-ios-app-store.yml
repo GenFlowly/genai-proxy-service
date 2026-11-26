@@ -59,6 +59,12 @@ jobs:
       - name: Unit tests
         run: fastlane ios unit_tests stage:production
 
+      - name: Sentry CLI
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: brew install sentry-cli
+
       - name: TestFlight and App Store draft
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -69,6 +75,9 @@ jobs:
           IOS_DISTRIBUTION_CERT_ID: ${{ secrets.IOS_DISTRIBUTION_CERT_ID }}
           IOS_AUTH0_CLIENT_ID: ${{ secrets.IOS_AUTH0_CLIENT_ID }}
           IOS_SENTRY_DSN: ${{ secrets.IOS_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.IOS_SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.IOS_SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.IOS_SENTRY_PROJECT }}
         run: fastlane ios release
 
       - name: Keep logs and test results

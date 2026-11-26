@@ -93,6 +93,8 @@ Runner: GitHub's `xcode-27` image (macOS 27, Xcode 27.2 pinned through `DEVELOPE
 
 The lane writes `BuildSettings/CI.xcconfig` (gitignored): it includes the stage file and overrides `AUTH0_CLIENT_ID` and `SENTRY_DSN` from the secrets. As a command-line xcconfig it outranks `Release.xcconfig`, so the placeholder client ID there never ships; the production lane refuses to build without `IOS_AUTH0_CLIENT_ID`.
 
+Crash reporting is Sentry, switched on by the DSN alone: with `IOS_SENTRY_DSN` empty the app never starts the SDK and errors only reach the device log. With a DSN set, the lane also uploads the build's dSYMs to Sentry through `sentry-cli` (installed with Homebrew on the runner) so stack traces come back symbolicated, and refuses to build when the token, org or project is missing. Create the Sentry project as platform **Apple iOS**; the auth token is an organization auth token (Sentry → Settings → Auth Tokens), which is what the `debug-files upload` command asks for. Collected data must stay in step with the App Privacy answers in App Store Connect: with Sentry on, declare Crash Data and Performance Data under Diagnostics, not linked to the user.
+
 Repository secrets:
 
 | Secret | Value |
@@ -109,7 +111,10 @@ Environment secrets (`production`, like the web app's `AUTH0_SPA_CLIENT_ID`):
 | Secret | Value |
 |---|---|
 | `IOS_AUTH0_CLIENT_ID` | Client ID of the production Auth0 **Native** iOS app. Required |
-| `IOS_SENTRY_DSN` | Optional. Sentry DSN for production |
+| `IOS_SENTRY_DSN` | Optional. Sentry DSN for production (Sentry project → Settings → Client Keys) |
+| `IOS_SENTRY_AUTH_TOKEN` | Required with a DSN. Sentry auth token for the dSYM upload |
+| `IOS_SENTRY_ORG` | Required with a DSN. Sentry organization slug |
+| `IOS_SENTRY_PROJECT` | Required with a DSN. Sentry project slug |
 
 ```sh
 gh secret set APP_STORE_CONNECT_API_KEY_ID --body "ABC123DEFG"
@@ -118,6 +123,10 @@ base64 -i ~/Downloads/AuthKey_ABC123DEFG.p8 | gh secret set APP_STORE_CONNECT_AP
 base64 -i ~/Desktop/distribution.p12 | gh secret set IOS_DISTRIBUTION_CERT_P12
 gh secret set IOS_DISTRIBUTION_CERT_PASSWORD --body "<p12 password>"
 gh secret set IOS_AUTH0_CLIENT_ID --env production --body "<production iOS Native app client ID>"
+gh secret set IOS_SENTRY_DSN --env production --body "https://<key>@<host>.ingest.sentry.io/<project id>"
+gh secret set IOS_SENTRY_AUTH_TOKEN --env production --body "sntrys_..."
+gh secret set IOS_SENTRY_ORG --env production --body "<org slug>"
+gh secret set IOS_SENTRY_PROJECT --env production --body "<project slug>"
 ```
 
 ### One-time setup
