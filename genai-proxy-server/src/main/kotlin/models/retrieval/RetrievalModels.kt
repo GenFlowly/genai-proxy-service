@@ -17,6 +17,13 @@ import kotlinx.serialization.json.jsonPrimitive
  * the client remain private to providers/RetrievalServerClient.kt.
  */
 
+/**
+ * Not a vendor reason: a durable run's stream was lost (the retrieval-server
+ * stayed unreachable, or the run ended without its terminal event). Persisted
+ * on the reply so the clients show an "interrupted" note with Regenerate.
+ */
+const val STOP_REASON_INTERRUPTED = "interrupted"
+
 sealed class StreamChunk {
     data class Content(val text: String) : StreamChunk()
     /**
@@ -29,6 +36,14 @@ sealed class StreamChunk {
      * (`reasoning`).
      */
     object ContentReset : StreamChunk()
+    /**
+     * The durable run crashed and DBOS reran it from the top: every event
+     * relayed so far (text, activity, usage, tool calls, sources) belongs to
+     * the abandoned attempt and is repeated by the rerun. Consumers discard
+     * all of it; clients see it as a content reset. Only emitted on the
+     * durable /runs stream.
+     */
+    object RunRestarted : StreamChunk()
     /**
      * The vendor's raw finish reason for the round that ended the turn
      * (end_turn / stop / max_tokens / refusal / content_filter / …), streamed

@@ -180,6 +180,14 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
     )
     stop = _local_runs[run_id] = asyncio.Event()
     try:
+        # DBOS recovery reruns this body from the top after a crash, appending
+        # to the events the first attempt already published. The marker tells
+        # a reattaching consumer to drop what it accumulated; LLM steps that
+        # completed replay memoized without streaming tokens, so the answer may
+        # then arrive only as the terminal event's generated_response.
+        if await run_events.latest_seq(run_id) > 0:
+            await run_events.publish(run_id, {"run_restarted": True})
+            count("agent_run_restarted_total", source=req.request_source or "conversation")
         resume_cycles = 0
         while True:
             async with contextlib.aclosing(stream_events_dicts(
