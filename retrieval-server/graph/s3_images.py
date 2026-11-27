@@ -10,16 +10,18 @@ conversion/downscale). The original S3 object is never modified.
 Fetch + normalize run on ONE dedicated worker thread: only one source object
 is resident and decoding at a time (the server is one process on 1 GB RAM
 serving everyone), and requests queued behind a slow conversion don't occupy
-asyncio's shared default executor. Results are kept in a byte-bounded
-in-memory LRU backed by a local-disk cache, so a continuing conversation
-doesn't refetch and reconvert the same images on every turn — also when
-several image-heavy conversations take turns (each replay walks its images in
-order, which defeats any LRU smaller than the combined working set). Failures
-are remembered for a few minutes so an unusable file isn't re-downloaded on
-every turn. A camera RAW too large to hold in memory is streamed to a
-temporary file for the RAW decoder instead (see _normalize_large_camera_raw).
+asyncio's shared default executor. Results are data-URL strings in the shared
+attachment cache (graph/attachment_cache.py), backed by a local-disk cache, so
+a continuing conversation doesn't refetch and reconvert the same images on
+every turn — also when several image-heavy conversations take turns (each
+replay walks its images in order, which defeats any LRU smaller than the
+combined working set). The vendors of one turn share one preparation and one
+string per image: a passthrough result (the uploaded bytes) is reused by every
+vendor whose limits it also fits. Failures are remembered for a few minutes so
+an unusable file isn't re-downloaded on every turn. A camera RAW too large to
+hold in memory is streamed to a temporary file for the RAW decoder instead
+(see _normalize_large_camera_raw).
 """
-import asyncio
 import base64
 import hashlib
 import logging
@@ -29,12 +31,15 @@ import threading
 import time
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 
 import boto3
 import urllib3
 from botocore.exceptions import BotoCoreError, ClientError
 
+from encoding_library.observability import count
 from graph import image_normalize
+from graph.attachment_cache import CACHE
 from graph.image_normalize import (
     ImageLimits,
     ImageNormalizationError,
@@ -54,46 +59,45 @@ class AttachmentFetchError(ImageTemporarilyUnavailableError):
     Transient by nature, so never cached."""
 
 
-class _ByteBoundedLRU:
-    """LRU keyed by (s3_key, ImageLimits) holding (base64, media_type)
-    results, bounded by total base64 size rather than entry count. S3 keys
-    are immutable (fresh UUID per upload), so results never go stale."""
-
-    def __init__(self, max_bytes: int):
-        self._max_bytes = max_bytes
-        self._entries: OrderedDict = OrderedDict()
-        self._bytes = 0
-        self._lock = threading.Lock()
-
-    def get(self, key):
-        with self._lock:
-            entry = self._entries.get(key)
-            if entry is not None:
-                self._entries.move_to_end(key)
-            return entry
-
-    def put(self, key, value, cost: int) -> None:
-        if cost > self._max_bytes:
-            return
-        with self._lock:
-            old = self._entries.pop(key, None)
-            if old is not None:
-                self._bytes -= old[1]
-            self._entries[key] = (value, cost)
-            self._bytes += cost
-            while self._bytes > self._max_bytes:
-                _, (_, evicted_cost) = self._entries.popitem(last=False)
-                self._bytes -= evicted_cost
-
-    def clear(self) -> None:
-        with self._lock:
-            self._entries.clear()
-            self._bytes = 0
+@dataclass(frozen=True)
+class PreparedImage:
+    """An attachment ready for a data-URL image block. `data_url` is the one
+    string every request sending this image shares."""
+    data_url: str
+    media_type: str
+    nbytes: int
+    size: tuple[int, int]
+    passthrough: bool
 
 
-# 64 MiB of base64 holds a dozen full-budget images or ~40 at the tiers long
-# threads get; sized against the 1 GB VM next to one in-flight conversion.
-_CACHE = _ByteBoundedLRU(image_normalize._env_int("IMAGE_CACHE_BYTES", 64 * 1024 * 1024))
+def _prepared(data: bytes, media_type: str, size: tuple[int, int], passthrough: bool) -> PreparedImage:
+    url = (f"data:{media_type};base64,".encode("ascii") + base64.b64encode(data)).decode("ascii")
+    return PreparedImage(url, media_type, len(data), size, passthrough)
+
+
+def _cost(prepared: PreparedImage) -> int:
+    return len(prepared.data_url)
+
+
+def _image_key(s3_key: str, limits: ImageLimits):
+    return ("image", s3_key, limits)
+
+
+def _passthrough_key(s3_key: str):
+    return ("image-passthrough", s3_key)
+
+
+def _reusable(s3_key: str, limits: ImageLimits) -> PreparedImage | None:
+    """A passthrough of this image prepared for another vendor, when it also
+    fits `limits`: passthrough depends on the limits only through the format,
+    the size and the edge (image_normalize.fits_limits)."""
+    passthrough = CACHE.get(_passthrough_key(s3_key))
+    if passthrough is not None and image_normalize.fits_limits(
+            passthrough.media_type, passthrough.nbytes, passthrough.size, limits):
+        return passthrough
+    return None
+
+
 # A failure may be transient (memory pressure from other requests, a codec
 # out-of-memory reported as a decode error), so it is retried after this.
 _FAILURE_TTL_S = 600
@@ -139,9 +143,10 @@ _FAILURES = _FailureMemory()
 
 
 class _DiskCache:
-    """Normalized bytes on local disk, keyed by (s3_key, ImageLimits), oldest
-    (by last use) evicted past max_bytes. Only the image worker thread touches
-    it. Best effort: any filesystem error just means a miss."""
+    """Normalized bytes on local disk, keyed by (s3_key, ImageLimits) — or
+    (s3_key, None) for a passthrough, which serves every vendor it fits —
+    oldest (by last use) evicted past max_bytes. Only the image worker thread
+    touches it. Best effort: any filesystem error just means a miss."""
 
     _EXT = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
     _TYPE = {v: k for k, v in _EXT.items()}
@@ -155,7 +160,10 @@ class _DiskCache:
     @staticmethod
     def _name(key) -> str:
         s3_key, limits = key
-        ident = f"{s3_key}|{sorted(limits.passthrough_formats)}|{limits.max_base64_bytes}|{limits.max_edge}"
+        if limits is None:
+            ident = f"{s3_key}|passthrough"
+        else:
+            ident = f"{s3_key}|{sorted(limits.passthrough_formats)}|{limits.max_base64_bytes}|{limits.max_edge}"
         return hashlib.sha256(ident.encode()).hexdigest()
 
     def _paths(self, key):
@@ -236,43 +244,56 @@ def _client():
     return _s3_client
 
 
-def _from_cache(s3_key: str, limits: ImageLimits):
-    """A cached result, None on a miss; raises a remembered failure."""
+def _raise_if_remembered(s3_key: str, limits: ImageLimits) -> None:
     _FAILURES.raise_if_remembered((s3_key, None))
     _FAILURES.raise_if_remembered((s3_key, limits))
-    entry = _CACHE.get((s3_key, limits))
-    return None if entry is None else entry[0]
 
 
-async def image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
-    """(base64, media_type) of an attachment, ready for a data-URL image block.
+async def image_data_url(s3_key: str, limits: ImageLimits) -> str:
+    """The `data:<media type>;base64,...` URL of an attachment within `limits`,
+    shared with every other request sending it.
 
     Cache hits return immediately; misses queue on the dedicated image worker.
     Raises ImageNormalizationError (user-readable) when the file can't be used,
     RuntimeError on missing bucket configuration.
     """
-    cached = _from_cache(s3_key, limits)
-    if cached is not None:
-        return cached
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_IMAGE_POOL, fetch_image_for_llm, s3_key, limits)
+    _raise_if_remembered(s3_key, limits)
+    prepared = CACHE.get(_image_key(s3_key, limits))
+    if prepared is not None:
+        count("attachment_cache_total", data_type="image", status="hit")
+        return prepared.data_url
+    prepared = _reusable(s3_key, limits)
+    if prepared is not None:
+        count("attachment_cache_total", data_type="image", status="reused")
+        return prepared.data_url
+    prepared = await CACHE.get_or_prepare(
+        _image_key(s3_key, limits), lambda: prepare_image(s3_key, limits), _IMAGE_POOL,
+        cost=_cost, data_type="image",
+    )
+    return prepared.data_url
 
 
-def fetch_image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
-    """Synchronous core of image_for_llm (runs on the image worker). The media
-    type is that of the bytes actually returned (sniffed/converted), never the
+def prepare_image(s3_key: str, limits: ImageLimits) -> PreparedImage:
+    """Synchronous core of image_data_url (runs on the image worker). The media
+    type is that of the bytes actually sent (sniffed/converted), never the
     uploader's declaration."""
-    key = (s3_key, limits)
-    cached = _from_cache(s3_key, limits)
-    if cached is not None:
-        return cached
-    on_disk = _DISK_CACHE.get(key)
+    _raise_if_remembered(s3_key, limits)
+    reused = _reusable(s3_key, limits)
+    if reused is not None:
+        return reused
+    on_disk = _DISK_CACHE.get((s3_key, None))
     if on_disk is not None:
-        result = base64.b64encode(on_disk[0]).decode("ascii"), on_disk[1]
-        _CACHE.put(key, result, cost=len(result[0]))
-        return result
+        data, media_type = on_disk
+        passthrough = _prepared(data, media_type, image_normalize.image_size(data), passthrough=True)
+        CACHE.put(_passthrough_key(s3_key), passthrough, _cost(passthrough))
+        if image_normalize.fits_limits(media_type, len(data), passthrough.size, limits):
+            return passthrough
+    on_disk = _DISK_CACHE.get((s3_key, limits))
+    if on_disk is not None:
+        data, media_type = on_disk
+        return _prepared(data, media_type, image_normalize.image_size(data), passthrough=False)
     try:
-        data, media_type = _fetch_normalized(s3_key, limits)
+        normalized = _fetch_normalized(s3_key, limits)
     except ImageTemporarilyUnavailableError:
         raise
     except ImageNormalizationError as e:
@@ -282,12 +303,14 @@ def fetch_image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
         if getattr(e, "file_only", False):
             _FAILURES.remember((s3_key, None), e, _FILE_FAILURE_TTL_S)
         else:
-            _FAILURES.remember(key, e, _FAILURE_TTL_S)
+            _FAILURES.remember((s3_key, limits), e, _FAILURE_TTL_S)
         raise
-    _DISK_CACHE.put(key, data, media_type)
-    result = base64.b64encode(data).decode("ascii"), media_type
-    _CACHE.put(key, result, cost=len(result[0]))
-    return result
+    passthrough = normalized.strategy == "passthrough"
+    _DISK_CACHE.put((s3_key, None if passthrough else limits), normalized.data, normalized.media_type)
+    prepared = _prepared(normalized.data, normalized.media_type, normalized.output_size, passthrough)
+    if passthrough:
+        CACHE.put(_passthrough_key(s3_key), prepared, _cost(prepared))
+    return prepared
 
 
 # Errors reading from S3. StreamingBody wraps most urllib3 errors in botocore
@@ -295,7 +318,7 @@ def fetch_image_for_llm(s3_key: str, limits: ImageLimits) -> tuple[str, str]:
 _S3_ERRORS = (ClientError, BotoCoreError, urllib3.exceptions.HTTPError)
 
 
-def _fetch_normalized(s3_key: str, limits: ImageLimits) -> tuple[bytes, str]:
+def _fetch_normalized(s3_key: str, limits: ImageLimits) -> image_normalize.NormalizedImage:
     bucket = os.environ.get("ATTACHMENTS_BUCKET", "")
     if not bucket:
         raise RuntimeError("ATTACHMENTS_BUCKET environment variable is not set")
@@ -321,7 +344,7 @@ def _fetch_normalized(s3_key: str, limits: ImageLimits) -> tuple[bytes, str]:
         del data
     # Dimensions/sizes only — never pixel data or base64.
     logger.info("Attachment %s: %s", s3_key, result.log_summary())
-    return result.data, result.media_type
+    return result
 
 
 # Enough of an object's start to recognize a camera RAW: magic numbers and,

@@ -2,6 +2,13 @@ app = "retrieval-server"
 # Co-located with the proxy server and DynamoDB (us-east-1)
 primary_region = "iad"
 
+# Swap turns a brief memory spike into a slowdown instead of an OOM kill that
+# ends every stream on the machine. What the process accumulates over its
+# lifetime is mostly memory nothing touches again, which the kernel swaps out
+# first. Must stay above the first [table]: below it, TOML assigns the key to
+# that table.
+swap_size_mb = 512
+
 [build]
   dockerfile = "Dockerfile"
 
@@ -10,6 +17,9 @@ primary_region = "iad"
   # Dev logs everything: INFO level + user content (prompts, responses,
   # memories) — see app.py and content_logging.py
   APP_ENV = "development"
+  # glibc gives each thread its own heap, up to 8 on this 1-vCPU VM; two are
+  # enough for one CPU and strand less freed memory across heaps.
+  MALLOC_ARENA_MAX = "2"
 
 # Dev only (prod uses fly.production.toml): traffic arrives via Flycast
 # (http://<app-name>.flycast, port 80) so fly-proxy can auto stop/start the

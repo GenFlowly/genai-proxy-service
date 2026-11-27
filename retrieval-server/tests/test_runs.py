@@ -8,6 +8,7 @@ event, credentials left unset (resolved from DDB downstream), and the summary
 read from the checkpointed final state. Run with:
     .venv/bin/python -m unittest tests.test_runs
 """
+import asyncio
 import unittest
 from unittest.mock import patch
 
@@ -108,9 +109,14 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(runs, "_resolve_durable_graph", resolve), \
              patch.object(runs.durable_runtime, "get_checkpointer", lambda: object()), \
              patch.object(run_events, "publish", fake_publish), \
-             patch.object(run_events, "latest_seq", fake_latest_seq):
+             patch.object(run_events, "latest_seq", fake_latest_seq), \
+             patch.object(runs.allocator, "release_soon") as self.release_soon:
             summary = await runs._run_agent_graph("run_x", dict(_RUN_INPUT))
         return summary, published
+
+    async def test_a_run_that_ends_schedules_a_memory_release(self):
+        await self._run(_fake_resolve)
+        self.release_soon.assert_called_once()
 
     async def test_happy_path_streams_and_summarizes(self):
         summary, published = await self._run(_fake_resolve)
@@ -205,6 +211,77 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(published), 1)
         self.assertFalse(runs.signal_cancel("run_x"), "the run's stop signal outlives it")
+
+
+class _SlowGraph(_FakeGraph):
+    """Counts how many runs are inside the graph at once."""
+    inside = 0
+    most = 0
+
+    async def astream_events(self, state, config=None, version=None):
+        type(self).inside += 1
+        type(self).most = max(type(self).most, type(self).inside)
+        try:
+            await asyncio.sleep(0.05)
+            async for event in super().astream_events(state, config, version):
+                yield event
+        finally:
+            type(self).inside -= 1
+
+
+def _slow_resolve(customer_id, graph_id, checkpointer):
+    return _SlowGraph(), {"n": "RESPONSE_GENERATOR"}, {"n": "Gen"}, {"n": {}}, {"n"}, 10
+
+
+class RecoveryPacingTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        _SlowGraph.inside = _SlowGraph.most = 0
+        self.published = {}
+
+        async def fake_publish(run_id, event, terminal=False):
+            self.published.setdefault(run_id, []).append(event)
+            return len(self.published[run_id])
+
+        async def fake_latest_seq(run_id):
+            return 7 if run_id.startswith("recovered") else 0
+
+        for p in (patch.object(runs, "_resolve_durable_graph", _slow_resolve),
+                  patch.object(runs.durable_runtime, "get_checkpointer", lambda: object()),
+                  patch.object(run_events, "publish", fake_publish),
+                  patch.object(run_events, "latest_seq", fake_latest_seq),
+                  patch.object(runs.allocator, "release_soon"),
+                  patch.object(runs, "_RECOVERY_CONCURRENCY", 1),
+                  patch.object(runs, "_RECOVERY_POLL_SEC", 0.005),
+                  patch.object(runs, "_RECOVERY_HEARTBEAT_SEC", 0.0)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    async def test_recovered_runs_take_turns_and_queued_ones_publish_heartbeats(self):
+        await asyncio.gather(*(runs._run_agent_graph(f"recovered-{i}", dict(_RUN_INPUT)) for i in range(3)))
+        self.assertEqual(_SlowGraph.most, 1)
+        heartbeats = [sum("recovery_queued" in e for e in evs) for evs in self.published.values()]
+        self.assertEqual(sorted(heartbeats)[0], 0)  # the first one never waited
+        self.assertTrue(all(h > 0 for h in sorted(heartbeats)[1:]))
+        for evs in self.published.values():
+            self.assertEqual(evs[0], {"run_restarted": True})  # the marker comes before any heartbeat
+            self.assertIn("status", evs[-1])
+        self.assertEqual(runs._recovering, 0)
+
+    async def test_runs_started_normally_are_never_paced(self):
+        await asyncio.gather(*(runs._run_agent_graph(f"fresh-{i}", dict(_RUN_INPUT)) for i in range(3)))
+        self.assertEqual(_SlowGraph.most, 3)
+        self.assertFalse(any("recovery_queued" in e for evs in self.published.values() for e in evs))
+
+    async def test_a_cancel_reaches_a_queued_recovered_run(self):
+        from dbos._error import DBOSWorkflowCancelledError
+
+        with patch.object(runs, "_recovering", 1):  # the only slot is taken
+            task = asyncio.ensure_future(runs._run_agent_graph("recovered-x", dict(_RUN_INPUT)))
+            await asyncio.sleep(0.05)
+            self.assertTrue(runs.signal_cancel("recovered-x"))
+            with self.assertRaises(DBOSWorkflowCancelledError):
+                await task
+        self.assertEqual(_SlowGraph.most, 0)
 
 
 class CancelRouteTest(unittest.IsolatedAsyncioTestCase):
