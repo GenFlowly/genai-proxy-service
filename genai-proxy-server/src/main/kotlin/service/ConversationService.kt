@@ -16,6 +16,7 @@ import com.genflowly.repository.CustomerProfileRepository
 import com.genflowly.repository.PendingRun
 import com.genflowly.repository.ProjectRepository
 import com.genflowly.repository.ShareRepository
+import com.genflowly.repository.ReadStamp
 import com.genflowly.repository.TouchResult
 import com.genflowly.utils.MemoryRedaction
 import org.slf4j.LoggerFactory
@@ -446,13 +447,24 @@ class ConversationService(
      */
     private suspend fun touchConversationForMessage(message: Message): Boolean {
         val vendors = message.aiConfig.map { it.aiVendor.name }.toSet()
-        val own = conversationRepository.touchConversation(message.customerId, message.conversationId, vendors)
+        // A reply is news for the owner; their own message means they've read the rest.
+        // A share recipient's message stamps nothing on the owner's row.
+        val replied = message.role == "assistant"
+        val own = conversationRepository.touchConversation(
+            message.customerId, message.conversationId, vendors, if (replied) ReadStamp.REPLIED else ReadStamp.READ
+        )
         if (own != TouchResult.NO_ROW) return true
         val ownerCustomerId = conversationRepository.getConversationById(message.conversationId)?.customerId
             ?: return false
         if (ownerCustomerId == message.customerId) return false
-        return conversationRepository.touchConversation(ownerCustomerId, message.conversationId, vendors) != TouchResult.NO_ROW
+        return conversationRepository.touchConversation(
+            ownerCustomerId, message.conversationId, vendors, if (replied) ReadStamp.REPLIED else null
+        ) != TouchResult.NO_ROW
     }
+
+    /** The owner read the conversation; false for anyone else. */
+    suspend fun markConversationRead(customerId: String, conversationId: String): Boolean =
+        conversationRepository.markConversationRead(customerId, conversationId)
 
     private suspend fun updateSequenceOfMessageInConversation(message: Message):
             Message {
