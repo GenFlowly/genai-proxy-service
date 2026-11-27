@@ -30,6 +30,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from botocore.exceptions import ClientError
 from PIL import Image, ImageCms, ImageFile, TiffImagePlugin
 
+import graph.attachment_cache as attachment_cache
 import graph.image_normalize as image_normalize
 import graph.nodes.llm_node as llm_node_module
 import graph.s3_images as s3_images
@@ -1491,11 +1492,24 @@ class RawRenderTests(unittest.TestCase):
             self.rd._seccomp_program("riscv64")
 
 
+def _fetch(s3_key, limits):
+    """(base64, media type) of prepare_image — the shape these tests assert on."""
+    prepared = s3_images.prepare_image(s3_key, limits)
+    return prepared.data_url.split(",", 1)[1], prepared.media_type
+
+
+def _normalized(data=b"ABC", media_type="image/png", strategy="passthrough", size=(1, 1)):
+    return image_normalize.NormalizedImage(
+        data=data, media_type=media_type, strategy=strategy, source_format="PNG",
+        source_bytes=len(data), source_size=size, output_size=size,
+    )
+
+
 class S3FetchTests(unittest.TestCase):
     def setUp(self):
-        s3_images._CACHE.clear()
+        attachment_cache.CACHE.clear()
         s3_images._FAILURES.clear()
-        self.addCleanup(s3_images._CACHE.clear)
+        self.addCleanup(attachment_cache.CACHE.clear)
         self.addCleanup(s3_images._FAILURES.clear)
         disk = patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache("/nonexistent", 0))
         disk.start()
@@ -1512,14 +1526,17 @@ class S3FetchTests(unittest.TestCase):
         return client, body
 
     def test_returns_normalized_base64_and_sniffed_media_type_and_caches(self):
+        import asyncio
+
         heic = _heic_bytes()
         client, _ = self._client(heic)
         with patch.object(s3_images, "_client", return_value=client):
-            b64, media_type = s3_images.fetch_image_for_llm("cust/att-1", limits_for_request("anthropic", 1))
-            again = s3_images.fetch_image_for_llm("cust/att-1", limits_for_request("anthropic", 1))
-        self.assertEqual(media_type, "image/png")
+            url = asyncio.run(s3_images.image_data_url("cust/att-1", limits_for_request("anthropic", 1)))
+            again = asyncio.run(s3_images.image_data_url("cust/att-1", limits_for_request("anthropic", 1)))
+        header, b64 = url.split(",", 1)
+        self.assertEqual(header, "data:image/png;base64")
         self.assertEqual(_decode(base64.b64decode(b64)).size, (160, 120))
-        self.assertEqual(again, (b64, media_type))
+        self.assertIs(again, url)
         client.get_object.assert_called_once_with(Bucket="bucket", Key="cust/att-1")
 
     def test_source_ceiling_is_checked_before_reading_more_than_a_peek(self):
@@ -1527,7 +1544,7 @@ class S3FetchTests(unittest.TestCase):
         client.get_object.return_value["ContentLength"] = 10 * 2**30
         with patch.object(s3_images, "_client", return_value=client):
             with self.assertRaises(ImageTooLargeError) as ctx:
-                s3_images.fetch_image_for_llm("cust/huge", limits_for_request(None, 1))
+                _fetch("cust/huge", limits_for_request(None, 1))
         self.assertIn("the limit is 100 MB", str(ctx.exception))
         body.read.assert_called_once_with(s3_images._RAW_HEAD_BYTES)
         body.close.assert_called_once()
@@ -1538,7 +1555,7 @@ class S3FetchTests(unittest.TestCase):
         with patch.object(s3_images, "_client", return_value=client), \
                 patch.object(image_normalize.subprocess, "Popen", _no_child):
             with self.assertRaises(ImageTooLargeError) as ctx:
-                s3_images.fetch_image_for_llm("cust/huge.dng", limits_for_request(None, 1))
+                _fetch("cust/huge.dng", limits_for_request(None, 1))
         self.assertIn("the limit is 400 MB", str(ctx.exception))
         body.read.assert_called_once_with(s3_images._RAW_HEAD_BYTES)
 
@@ -1548,7 +1565,7 @@ class S3FetchTests(unittest.TestCase):
         with patch.object(s3_images, "_client", return_value=client), \
                 patch.object(image_normalize.subprocess, "Popen", _no_child):
             with self.assertRaises(ImageTooLargeError) as ctx:
-                s3_images.fetch_image_for_llm("cust/big-png", limits_for_request(None, 1))
+                _fetch("cust/big-png", limits_for_request(None, 1))
         self.assertIn("the limit is 100 MB", str(ctx.exception))
         body.read.assert_called_once_with(s3_images._RAW_HEAD_BYTES)
         body.close.assert_called_once()
@@ -1567,7 +1584,7 @@ class S3FetchTests(unittest.TestCase):
 
         with patch.object(s3_images, "_client", return_value=client), \
                 patch.object(image_normalize, "camera_raw_spool", spool):
-            b64, media_type = s3_images.fetch_image_for_llm("cust/big.dng", limits_for_request("anthropic", 1))
+            b64, media_type = _fetch("cust/big.dng", limits_for_request("anthropic", 1))
         self.assertEqual((media_type, _decode(base64.b64decode(b64)).size), ("image/png", (96, 160)))
         self.assertFalse(os.path.exists(spools[0].name))
         body.close.assert_called_once()
@@ -1587,7 +1604,7 @@ class S3FetchTests(unittest.TestCase):
                         patch.object(image_normalize, "camera_raw_spool", side_effect=OSError(errno.ENOSPC, "No space left")):
                     for _ in range(2):
                         with self.assertRaises(image_normalize.ImageTemporarilyUnavailableError) as ctx:
-                            s3_images.fetch_image_for_llm("cust/raw.dng", limits)
+                            _fetch("cust/raw.dng", limits)
                 self.assertIn("try again", str(ctx.exception))
                 self.assertNotIn("Errno", str(ctx.exception))
                 self.assertEqual(user_facing_llm_error(ctx.exception, "anthropic")[0], "attachment_error")
@@ -1610,7 +1627,7 @@ class S3FetchTests(unittest.TestCase):
                 with patch.object(s3_images, "_client", return_value=client), \
                         patch.object(image_normalize.subprocess, "Popen", _no_child):
                     with self.assertRaises(s3_images.AttachmentFetchError) as ctx:
-                        s3_images.fetch_image_for_llm("cust/raw.dng", limits)
+                        _fetch("cust/raw.dng", limits)
                 self.assertIn("could not be loaded right now", str(ctx.exception))
                 body.close.assert_called_once()
 
@@ -1632,7 +1649,7 @@ class S3FetchTests(unittest.TestCase):
                 client.get_object.side_effect = lambda whole=whole, ifd_body=ifd_body, **kw: {"Body": ifd_body} if "Range" in kw else whole
                 with patch.object(s3_images, "_client", return_value=client):
                     with self.assertRaises(UnsupportedImageError) as ctx:  # recognized; LibRaw then can't read the junk
-                        s3_images.fetch_image_for_llm("cust/late-ifd.dng", limits_for_request(None, 1))
+                        _fetch("cust/late-ifd.dng", limits_for_request(None, 1))
                 self.assertIn("camera RAW (DNG)", str(ctx.exception))
                 ranged = [c for c in client.get_object.call_args_list if "Range" in c.kwargs]
                 self.assertEqual(ranged[0].kwargs["Range"], f"bytes={offset}-{offset + s3_images._IFD_BYTES - 1}")
@@ -1645,8 +1662,8 @@ class S3FetchTests(unittest.TestCase):
         with patch.object(s3_images, "_client", return_value=client):
             for limits in (limits_for_request("anthropic", 1), limits_for_request("anthropic", 30), limits_for_request("xai", 1)):
                 with self.assertRaises(UnsupportedImageError):
-                    s3_images.fetch_image_for_llm("cust/bad.raf", limits)
-                s3_images._CACHE.clear()  # results pushed out by other conversations don't take it along
+                    _fetch("cust/bad.raf", limits)
+                attachment_cache.CACHE.clear()  # results pushed out by other conversations don't take it along
         client.get_object.assert_called_once()
 
     def test_disk_cache_directory_is_private(self):
@@ -1667,7 +1684,7 @@ class S3FetchTests(unittest.TestCase):
         with patch.object(s3_images, "_client", return_value=client):
             for _ in range(2):
                 with self.assertRaises(ImageNormalizationError) as ctx:
-                    s3_images.fetch_image_for_llm("cust/missing", limits)
+                    _fetch("cust/missing", limits)
         self.assertIn("no longer available", str(ctx.exception))
         self.assertNotIn("NoSuchKey", str(ctx.exception))  # no storage internals for users
         self.assertEqual(client.get_object.call_count, 2)  # transient: retried next time
@@ -1678,7 +1695,7 @@ class S3FetchTests(unittest.TestCase):
         with patch.object(s3_images, "_client", return_value=client):
             for _ in range(3):
                 with self.assertRaises(UnsupportedImageError) as ctx:
-                    s3_images.fetch_image_for_llm("cust/doc", limits)
+                    _fetch("cust/doc", limits)
         self.assertIn("PDF", str(ctx.exception))
         client.get_object.assert_called_once()
 
@@ -1691,7 +1708,7 @@ class S3FetchTests(unittest.TestCase):
             for advance in (0, 60, s3_images._FAILURE_TTL_S):
                 clock[0] += advance
                 with self.assertRaises(UnsupportedImageError):
-                    s3_images.fetch_image_for_llm("cust/doc", limits)
+                    _fetch("cust/doc", limits)
         self.assertEqual(client.get_object.call_count, 2)  # retried once the entry expired
 
     def test_disk_tier_serves_results_evicted_from_memory(self):
@@ -1703,9 +1720,9 @@ class S3FetchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache(tmp, 10 * _MiB)), \
                 patch.object(s3_images, "_client", return_value=client):
-            first = s3_images.fetch_image_for_llm("cust/h", limits)
-            s3_images._CACHE.clear()  # e.g. pushed out by other conversations
-            second = s3_images.fetch_image_for_llm("cust/h", limits)
+            first = _fetch("cust/h", limits)
+            attachment_cache.CACHE.clear()  # e.g. pushed out by other conversations
+            second = _fetch("cust/h", limits)
             self.assertEqual(len(os.listdir(tmp)), 1)
         self.assertEqual(first, second)
         client.get_object.assert_called_once()
@@ -1730,28 +1747,57 @@ class S3FetchTests(unittest.TestCase):
         webp = _encode(_photo_like(64, 48), "WEBP", lossless=True)
         client, _ = self._client(webp)
         with patch.object(s3_images, "_client", return_value=client):
-            _, anthropic_type = s3_images.fetch_image_for_llm("cust/w", limits_for_request("anthropic", 1))
-            _, xai_type = s3_images.fetch_image_for_llm("cust/w", limits_for_request("xai", 1))
+            _, anthropic_type = _fetch("cust/w", limits_for_request("anthropic", 1))
+            _, xai_type = _fetch("cust/w", limits_for_request("xai", 1))
         self.assertEqual((anthropic_type, xai_type), ("image/webp", "image/png"))
         self.assertEqual(client.get_object.call_count, 2)
 
-    def test_cache_is_keyed_by_limits_and_bounded_by_bytes(self):
-        cache = s3_images._ByteBoundedLRU(max_bytes=10)
-        cache.put(("a", 1), "AAAA", cost=4)
-        cache.put(("a", 2), "BBBB", cost=4)
-        self.assertEqual(cache.get(("a", 1))[0], "AAAA")  # now most recent
-        cache.put(("b", 1), "CCCC", cost=4)  # 12 > 10: evicts the least recent
-        self.assertIsNone(cache.get(("a", 2)))
-        self.assertIsNotNone(cache.get(("a", 1)))
-        cache.put(("huge", 1), "X" * 11, cost=11)  # larger than the cache: not kept
-        self.assertIsNone(cache.get(("huge", 1)))
+    def test_a_passthrough_serves_every_vendor_it_fits_without_refetching(self):
+        png = _encode(_photo_like(64, 48), "PNG")
+        client, _ = self._client(png, "image/png")
+        with patch.object(s3_images, "_client", return_value=client):
+            prepared = [s3_images.prepare_image("cust/p", limits_for_request(vendor, 4))
+                        for vendor in ("openai", "anthropic", "gemini")]
+        self.assertTrue(all(p.passthrough for p in prepared))
+        self.assertIs(prepared[1], prepared[0])  # one string for every vendor
+        self.assertIs(prepared[2], prepared[0])
+        client.get_object.assert_called_once()
+
+    def test_a_passthrough_too_large_for_another_vendors_share_is_converted_for_it(self):
+        png = _encode(Image.frombytes("RGB", (600, 600), os.urandom(600 * 600 * 3)), "PNG")
+        client, _ = self._client(png, "image/png")
+        roomy, tight = limits_for_request("anthropic", 1), limits_for_request("anthropic", 48)
+        self.assertGreater(len(png), (tight.max_base64_bytes // 4) * 3)
+        with patch.object(s3_images, "_client", return_value=client):
+            first = s3_images.prepare_image("cust/big", roomy)
+            second = s3_images.prepare_image("cust/big", tight)
+        self.assertTrue(first.passthrough)
+        self.assertFalse(second.passthrough)
+        self.assertLessEqual(len(second.data_url.split(",", 1)[1]), tight.max_base64_bytes)
+        self.assertEqual(client.get_object.call_count, 2)
+
+    def test_the_disk_passthrough_serves_other_vendors_after_a_restart(self):
+        import tempfile
+
+        png = _encode(_photo_like(64, 48), "PNG")
+        client, _ = self._client(png, "image/png")
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache(tmp, 10 * _MiB)), \
+                patch.object(s3_images, "_client", return_value=client):
+            first = s3_images.prepare_image("cust/p", limits_for_request("openai", 2))
+            attachment_cache.CACHE.clear()  # a new process
+            second = s3_images.prepare_image("cust/p", limits_for_request("anthropic", 2))
+            self.assertEqual(len(os.listdir(tmp)), 1)
+        self.assertEqual(second.data_url, first.data_url)
+        self.assertEqual(second.size, (64, 48))
+        client.get_object.assert_called_once()
 
 
 class ImageWorkerTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        s3_images._CACHE.clear()
+        attachment_cache.CACHE.clear()
         s3_images._FAILURES.clear()
-        self.addCleanup(s3_images._CACHE.clear)
+        self.addCleanup(attachment_cache.CACHE.clear)
         self.addCleanup(s3_images._FAILURES.clear)
         disk = patch.object(s3_images, "_DISK_CACHE", s3_images._DiskCache("/nonexistent", 0))
         disk.start()
@@ -1764,16 +1810,37 @@ class ImageWorkerTests(unittest.IsolatedAsyncioTestCase):
 
         def fake_fetch(s3_key, limits):
             threads.append(threading.current_thread().name)
-            return (b"ABC", "image/png")
+            return _normalized()
 
         limits = limits_for_request("anthropic", 1)
         with patch.object(s3_images, "_fetch_normalized", side_effect=fake_fetch):
-            first = await s3_images.image_for_llm("cust/k", limits)
-            second = await s3_images.image_for_llm("cust/k", limits)
-        self.assertEqual(first, second)
-        self.assertEqual(first, ("QUJD", "image/png"))
+            first = await s3_images.image_data_url("cust/k", limits)
+            second = await s3_images.image_data_url("cust/k", limits)
+        self.assertIs(first, second)
+        self.assertEqual(first, "data:image/png;base64,QUJD")
         self.assertEqual(len(threads), 1)
         self.assertTrue(threads[0].startswith("attachment-image"), threads)
+
+    async def test_a_turns_vendors_share_one_preparation_and_one_string(self):
+        import asyncio
+        import threading
+
+        release = threading.Event()
+        calls = []
+
+        def slow_fetch(s3_key, limits):
+            calls.append(limits)
+            release.wait(5)
+            return _normalized()
+
+        with patch.object(s3_images, "_fetch_normalized", side_effect=slow_fetch):
+            waiting = [asyncio.ensure_future(s3_images.image_data_url("cust/k", limits_for_request(v, 3)))
+                       for v in ("openai", "openai", "anthropic", "gemini")]
+            await asyncio.sleep(0.05)
+            release.set()
+            urls = await asyncio.gather(*waiting)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(all(u is urls[0] for u in urls))
 
 
 class _RaisingGraph:
@@ -1787,9 +1854,9 @@ class _RaisingGraph:
 
 class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
     async def test_image_blocks_use_the_normalized_media_type(self):
-        fetch = AsyncMock(return_value=("QUJD", "image/png"))
+        fetch = AsyncMock(return_value="data:image/png;base64,QUJD")
         limits = limits_for_request("anthropic", 1)
-        with patch.object(llm_node_module, "image_for_llm", fetch):
+        with patch.object(llm_node_module, "image_data_url", fetch):
             blocks = await llm_node_module._image_blocks(
                 [{"s3_key": "cust/a.heic", "media_type": "image/heic"}], strict=True, limits=limits,
             )
@@ -1797,8 +1864,8 @@ class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
         fetch.assert_awaited_once_with("cust/a.heic", limits)
 
     async def test_omitted_history_images_become_a_note_without_a_fetch(self):
-        fetch = AsyncMock(return_value=("QUJD", "image/png"))
-        with patch.object(llm_node_module, "image_for_llm", fetch):
+        fetch = AsyncMock(return_value="data:image/png;base64,QUJD")
+        with patch.object(llm_node_module, "image_data_url", fetch):
             blocks = await llm_node_module._image_blocks(
                 [{"s3_key": "old"}, {"s3_key": "new"}], strict=False,
                 limits=limits_for_request("groq", 5), omitted=frozenset({"old"}),
@@ -1811,16 +1878,16 @@ class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
         fetch = AsyncMock(side_effect=UnsupportedImageError("The attached file isn't a supported image (detected: SVG)."))
         images = [{"s3_key": "cust/a.svg", "media_type": "image/svg+xml"}]
         limits = limits_for_request("openai", 1)
-        with patch.object(llm_node_module, "image_for_llm", fetch):
+        with patch.object(llm_node_module, "image_data_url", fetch):
             with self.assertRaises(UnsupportedImageError):
                 await llm_node_module._image_blocks(images, strict=True, limits=limits)
             blocks = await llm_node_module._image_blocks(images, strict=False, limits=limits)
         self.assertEqual(blocks, [{"type": "text", "text": "[attached image unavailable]"}])
 
     async def test_tool_result_s3_images_use_the_normalized_media_type(self):
-        fetch = AsyncMock(return_value=("QUJD", "image/png"))
+        fetch = AsyncMock(return_value="data:image/png;base64,QUJD")
         results = [{"tool_call_id": "t1", "content": "shot", "images": [{"s3_key": "cust/s.tiff", "media_type": "image/tiff"}]}]
-        with patch.object(llm_node_module, "image_for_llm", fetch):
+        with patch.object(llm_node_module, "image_data_url", fetch):
             [msg] = await llm_node_module._tool_messages(results, "anthropic")
         self.assertIn({"type": "image_url", "image_url": {"url": "data:image/png;base64,QUJD"}}, msg.content)
         fetch.assert_awaited_once_with("cust/s.tiff", limits_for_request("anthropic", 1))
@@ -1828,7 +1895,7 @@ class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
     async def test_response_node_sends_every_image_with_the_requests_limits(self):
         from tests.test_llm_node_prompt import _RecorderLLM, _state
 
-        fetch = AsyncMock(return_value=("QUJD", "image/png"))
+        fetch = AsyncMock(return_value="data:image/png;base64,QUJD")
         state = _state(
             llm_provider="xai",
             query_images=[{"s3_key": "cust/q.heic", "media_type": "image/heic"}],
@@ -1838,7 +1905,7 @@ class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
                 {"role": "user", "content": "how many hotels does MGM own"},
             ],
         )
-        with patch.object(llm_node_module, "image_for_llm", fetch), \
+        with patch.object(llm_node_module, "image_data_url", fetch), \
                 patch.object(llm_node_module, "_build_llm_and_structured", return_value=(_RecorderLLM(), None)), \
                 patch.object(llm_node_module, "credentials_for", return_value={}):
             await llm_node_module.make_llm_node("RESPONSE_GENERATOR")(state)
@@ -1864,7 +1931,7 @@ class LlmWiringTests(unittest.IsolatedAsyncioTestCase):
         failure = UnsupportedImageError("The attached file isn't a supported image (detected: SVG).")
         # Only the streaming branch reads the raw request (is_disconnected polling).
         http_request = SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
-        with patch.object(llm_node_module, "image_for_llm", AsyncMock(side_effect=failure)):
+        with patch.object(llm_node_module, "image_data_url", AsyncMock(side_effect=failure)):
             with self.assertRaises(HTTPException) as ctx:
                 await retrieve_route.retrieve(req, http_request)
         self.assertEqual(ctx.exception.status_code, 422)

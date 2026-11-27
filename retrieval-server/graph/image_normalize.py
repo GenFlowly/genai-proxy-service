@@ -240,6 +240,7 @@ _VENDOR_FORMATS = {
     "gemini": frozenset({"JPEG", "PNG", "WEBP"}),  # GIF is not a documented input
 }
 _MEDIA_TYPES = {"JPEG": "image/jpeg", "PNG": "image/png", "GIF": "image/gif", "WEBP": "image/webp"}
+_FORMATS_BY_MEDIA_TYPE = {v: k for k, v in _MEDIA_TYPES.items()}
 
 _MiB = 1024 * 1024
 # Base64 bytes all images of one request may take together, per vendor —
@@ -982,10 +983,29 @@ def _kill_process_group(proc: subprocess.Popen) -> None:
         proc.kill()
 
 
+def _within(fmt, nbytes, size, passthrough_formats, budget, max_edge) -> bool:
+    """The limit-dependent half of passthrough; the rest depends on the file only."""
+    return (fmt in passthrough_formats and fmt in _MEDIA_TYPES
+            and nbytes <= budget and max(size) <= max_edge)
+
+
+def fits_limits(media_type: str, nbytes: int, size: tuple[int, int], limits: ImageLimits) -> bool:
+    """Whether a passthrough result prepared under other limits may also go,
+    unchanged, to a vendor with `limits`."""
+    fmt = _FORMATS_BY_MEDIA_TYPE.get(media_type)
+    return fmt is not None and _within(
+        fmt, nbytes, size, limits.passthrough_formats, (limits.max_base64_bytes // 4) * 3, limits.max_edge,
+    )
+
+
+def image_size(data: bytes) -> tuple[int, int]:
+    """Pixel size of an image this module produced, read from its header."""
+    with Image.open(io.BytesIO(data), formats=list(_MEDIA_TYPES)) as im:
+        return im.size
+
+
 def _can_pass_through(im, fmt, nbytes, passthrough_formats, budget, max_edge) -> bool:
-    if fmt not in passthrough_formats or fmt not in _MEDIA_TYPES:
-        return False
-    if nbytes > budget or max(im.size) > max_edge:
+    if not _within(fmt, nbytes, im.size, passthrough_formats, budget, max_edge):
         return False
     # Vendors want stills (OpenAI rejects animated GIF). Multi-frame JPEGs (MPO:
     # Ultra HDR gain maps, stereo pairs) are plain JPEGs to every decoder.

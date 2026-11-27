@@ -20,14 +20,21 @@ so it skips the child entirely.
 Parser imports (pypdfium2, pdfplumber) are lazy, inside the child workers, so
 this module imports cleanly even where those wheels aren't installed; only the
 fallback paths need them.
+
+Each form (raw base64, the data URL OpenAI takes, rendered pages, extracted
+text) is prepared once per file and shared by every vendor of the turn through
+the attachment cache, where it expires once idle: history turns don't re-send
+documents.
 """
 import base64
 import logging
 import multiprocessing as mp
 import os
 import queue as _queue
+from concurrent.futures import ThreadPoolExecutor
 
-from graph.image_normalize import ImageNormalizationError
+from graph.attachment_cache import CACHE
+from graph.image_normalize import ImageNormalizationError, limits_for_request
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +70,12 @@ PDF_PARSE_CPU_SEC = _env_int("PDF_PARSE_CPU_SEC", 25)
 # A clean child per render/extract — isolates the parse and avoids forking an
 # asyncio process (which can inherit held locks).
 _MP = mp.get_context("spawn")
+# Renders and extractions wait on a child for up to PDF_PARSE_TIMEOUT_SEC, so
+# they get their own threads rather than the image worker's.
+_PARSE_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="attachment-parse")
+# How long a prepared form outlives its last use: the vendors of one turn ask
+# within seconds of each other, and a Regenerate shortly after.
+_IDLE_TTL_S = 300
 
 
 class PdfInputError(ImageNormalizationError):
@@ -73,23 +86,30 @@ class PdfInputError(ImageNormalizationError):
 
 # ── per-vendor native document blocks ───────────────────────────────────────
 
-def native_block(provider: str, b64: str, filename: str | None) -> dict | None:
+_NATIVE_FORMS = {"anthropic": "base64", "gemini": "base64", "openai": "data_url"}
+
+
+def native_form(provider: str) -> str | None:
+    """Which encoding of the PDF a provider's native document block carries:
+    "base64", "data_url", or None when it has no known native form."""
+    return _NATIVE_FORMS.get((provider or "").lower())
+
+
+def native_block(provider: str, payload: str, filename: str | None) -> dict | None:
     """The content block carrying the raw PDF for a model that reads PDFs
-    natively. LangChain normalizes these into each vendor's wire shape. Returns
-    None for a provider with no known native form (caller then falls back)."""
+    natively; `payload` is in native_form(provider). LangChain normalizes these
+    into each vendor's wire shape. Returns None for a provider with no known
+    native form (caller then falls back)."""
     p = (provider or "").lower()
     if p == "anthropic":
         return {
             "type": "document",
-            "source": {"type": "base64", "media_type": "application/pdf", "data": b64},
+            "source": {"type": "base64", "media_type": "application/pdf", "data": payload},
         }
     if p == "openai":
-        return {
-            "type": "file",
-            "file": {"filename": filename or "document.pdf", "file_data": f"data:application/pdf;base64,{b64}"},
-        }
+        return {"type": "file", "file": {"filename": filename or "document.pdf", "file_data": payload}}
     if p == "gemini":
-        return {"type": "media", "mime_type": "application/pdf", "data": b64}
+        return {"type": "media", "mime_type": "application/pdf", "data": payload}
     return None
 
 
@@ -121,12 +141,27 @@ def _fetch_pdf_bytes_sync(s3_key: str) -> bytes:
     return data
 
 
-async def _fetch_pdf_bytes(s3_key: str) -> bytes:
-    import asyncio
+async def _shared(key, prepare, executor, cost=len):
+    return await CACHE.get_or_prepare(key, prepare, executor, cost=cost, data_type="pdf", idle_ttl_s=_IDLE_TTL_S)
 
+
+async def document_base64(s3_key: str) -> str:
+    """The PDF's base64, fetched and encoded once for every vendor of the turn."""
     from graph import s3_images
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(s3_images._IMAGE_POOL, _fetch_pdf_bytes_sync, s3_key)
+
+    return await _shared(
+        ("pdf-base64", s3_key),
+        lambda: base64.b64encode(_fetch_pdf_bytes_sync(s3_key)).decode("ascii"),
+        s3_images._IMAGE_POOL,
+    )
+
+
+async def document_data_url(s3_key: str) -> str:
+    """`data:application/pdf;base64,...`, built once from document_base64."""
+    from graph import s3_images
+
+    b64 = await document_base64(s3_key)
+    return await _shared(("pdf-data-url", s3_key), lambda: "data:application/pdf;base64," + b64, s3_images._IMAGE_POOL)
 
 
 # ── bounded child process ────────────────────────────────────────────────────
@@ -156,8 +191,7 @@ def _worker(q, op: str, pdf_bytes: bytes, kwargs: dict) -> None:
             q.put(("ok", _extract_text(pdf_bytes, kwargs["max_chars"])))
         elif op == "pages":
             q.put(("ok", _render_pages(
-                pdf_bytes, kwargs["max_pages"], kwargs["scale"],
-                kwargs["max_edge"], kwargs["max_base64_bytes"], kwargs["passthrough"],
+                pdf_bytes, kwargs["max_pages"], kwargs["scale"], kwargs["provider"], kwargs["other_images"],
             )))
         else:  # pragma: no cover - guarded by callers
             q.put(("err", f"unknown op {op}"))
@@ -208,8 +242,9 @@ def _extract_text(pdf_bytes: bytes, max_chars: int) -> dict:
     return {"text": text[:max_chars], "truncated": truncated, "pages": page_count}
 
 
-def _render_pages(pdf_bytes: bytes, max_pages: int, scale: float,
-                  max_edge: int, max_base64_bytes: int, passthrough: list) -> dict:
+def _render_pages(pdf_bytes: bytes, max_pages: int, scale: float, provider: str, other_images: int) -> dict:
+    """Pages as image data URLs. Each page is one more image of the request, so
+    it gets a share of the vendor's request budget like any attachment."""
     import io
 
     import pypdfium2 as pdfium
@@ -219,8 +254,10 @@ def _render_pages(pdf_bytes: bytes, max_pages: int, scale: float,
     pdf = pdfium.PdfDocument(pdf_bytes)
     try:
         total = len(pdf)
-        out: list[list] = []
-        for i in range(min(total, max_pages)):
+        rendered = min(total, max_pages)
+        limits = limits_for_request(provider, other_images + rendered)
+        out: list[str] = []
+        for i in range(rendered):
             page = pdf[i]
             bitmap = page.render(scale=scale)
             pil = bitmap.to_pil().convert("RGB")
@@ -228,12 +265,12 @@ def _render_pages(pdf_bytes: bytes, max_pages: int, scale: float,
             pil.save(buf, format="PNG")
             norm = image_normalize.normalize_image(
                 buf.getvalue(), "image/png",
-                passthrough_formats=frozenset(passthrough),
-                max_base64_bytes=max_base64_bytes,
-                max_edge=max_edge,
+                passthrough_formats=limits.passthrough_formats,
+                max_base64_bytes=limits.max_base64_bytes,
+                max_edge=limits.max_edge,
             )
-            out.append([base64.b64encode(norm.data).decode("ascii"), norm.media_type])
-        return {"pages": out, "total": total, "rendered": len(out)}
+            out.append(f"data:{norm.media_type};base64," + base64.b64encode(norm.data).decode("ascii"))
+        return {"pages": out, "total": total, "rendered": rendered}
     finally:
         pdf.close()
 
@@ -243,33 +280,30 @@ def _render_pages(pdf_bytes: bytes, max_pages: int, scale: float,
 async def native_pdf_block(provider: str, s3_key: str, filename: str | None) -> dict:
     """A native document block for a PDF-capable model. Raises PdfInputError if
     the provider has no native form (shouldn't happen — gated on caps.pdf_input)."""
-    data = await _fetch_pdf_bytes(s3_key)
-    block = native_block(provider, base64.b64encode(data).decode("ascii"), filename)
-    if block is None:
+    form = native_form(provider)
+    if form is None:
         raise PdfInputError("This model cannot read PDFs directly.")
-    return block
+    payload = await (document_data_url(s3_key) if form == "data_url" else document_base64(s3_key))
+    return native_block(provider, payload, filename)
 
 
-async def pdf_page_image_blocks(s3_key: str, max_edge: int, max_base64_bytes: int,
-                                passthrough, max_pages: int = PDF_MAX_RENDER_PAGES) -> list[dict]:
-    """Each PDF page rendered to an image_url block (vision-model fallback).
+async def pdf_page_image_blocks(s3_key: str, provider: str, other_images: int = 0,
+                                max_pages: int = PDF_MAX_RENDER_PAGES) -> list[dict]:
+    """Each PDF page rendered to an image_url block (vision-model fallback),
+    sharing the vendor's request budget with `other_images` attachments.
     Rendering + normalization run in the capped child."""
-    import asyncio
-
-    data = await _fetch_pdf_bytes(s3_key)
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None, lambda: _run_child(
-            "pages", data,
+    def render():
+        return _run_child(
+            "pages", _fetch_pdf_bytes_sync(s3_key),
             max_pages=max_pages, scale=PDF_RENDER_SCALE,
-            max_edge=max_edge, max_base64_bytes=max_base64_bytes,
-            passthrough=list(passthrough),
-        ),
+            provider=(provider or "").lower(), other_images=other_images,
+        )
+
+    result = await _shared(
+        ("pdf-pages", s3_key, (provider or "").lower(), other_images, max_pages), render, _PARSE_POOL,
+        cost=lambda r: sum(len(u) for u in r["pages"]),
     )
-    blocks = [
-        {"type": "image_url", "image_url": {"url": f"data:{mt};base64,{b}"}}
-        for b, mt in result["pages"]
-    ]
+    blocks = [{"type": "image_url", "image_url": {"url": url}} for url in result["pages"]]
     if result["total"] > result["rendered"]:
         blocks.append({"type": "text", "text":
                        f"[Showing the first {result['rendered']} of {result['total']} PDF pages.]"})
@@ -283,11 +317,12 @@ async def pdf_extracted_text(s3_key: str, filename: str | None,
     """Extracted text for a text-only model. Scanned/image-only PDFs yield no
     text — return an explicit note so the model can tell the user instead of
     silently seeing nothing."""
-    import asyncio
-
-    data = await _fetch_pdf_bytes(s3_key)
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(None, lambda: _run_child("text", data, max_chars=max_chars))
+    result = await _shared(
+        ("pdf-text", s3_key, max_chars),
+        lambda: _run_child("text", _fetch_pdf_bytes_sync(s3_key), max_chars=max_chars),
+        _PARSE_POOL,
+        cost=lambda r: len(r["text"]),
+    )
     name = filename or "document.pdf"
     text = result["text"]
     if not text:

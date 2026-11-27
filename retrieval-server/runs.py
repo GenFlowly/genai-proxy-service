@@ -29,6 +29,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import threading
 import time
 
 from dbos._error import DBOSWorkflowCancelledError
@@ -37,6 +38,7 @@ import durable_runtime
 import run_cleanup
 import run_events
 from encoding_library.observability import count, observe
+from graph import allocator
 from graph.dynamic_graph import get_or_build_durable_graph
 from graph.graph_loader import get_default_graph_and_nodes, get_graph_and_nodes_by_id
 from models import ExecuteAgentGraphRequest, RetrieveRequest
@@ -63,6 +65,17 @@ _RESUME_TOPIC = "resume"
 _RESUME_TIMEOUT_SEC = int(os.getenv("RUN_RESUME_TIMEOUT_SEC", "3600"))
 # Safety cap on interrupt→resume cycles per run (runaway guard).
 _MAX_RESUME_CYCLES = int(os.getenv("RUN_MAX_RESUME_CYCLES", "50"))
+# How many recovered runs execute at once. After a crash DBOS hands back every
+# run that was in flight in the same instant; run together on a freshly booted
+# process they reload all their attachments at once, enough to be OOM-killed
+# again before any of them finishes. Runs started normally never wait.
+_RECOVERY_CONCURRENCY = max(1, int(os.getenv("RUN_RECOVERY_CONCURRENCY", "2")))
+# A queued recovered run publishes this often: the proxy gives up on a run
+# whose stream shows no progress for 3 minutes.
+_RECOVERY_HEARTBEAT_SEC = 30.0
+_RECOVERY_POLL_SEC = 0.5
+_recovery_lock = threading.Lock()
+_recovering = 0
 
 
 async def _pending_interrupts(graph, cfg) -> list:
@@ -135,6 +148,32 @@ def _resolve_durable_graph(customer_id: str, graph_id, checkpointer):
 _local_runs: dict[str, asyncio.Event] = {}
 
 
+@contextlib.asynccontextmanager
+async def _recovery_slot(run_id: str, stop: asyncio.Event):
+    """Hold one of the _RECOVERY_CONCURRENCY slots for a recovered run."""
+    global _recovering
+    queued_at = time.monotonic()
+    last_heartbeat = None
+    while True:
+        with _recovery_lock:
+            if _recovering < _RECOVERY_CONCURRENCY:
+                _recovering += 1
+                break
+        if stop.is_set():
+            raise DBOSWorkflowCancelledError(f"Workflow {run_id} is cancelled.")
+        now = time.monotonic()
+        if last_heartbeat is None or now - last_heartbeat >= _RECOVERY_HEARTBEAT_SEC:
+            await run_events.publish(run_id, {"recovery_queued": True})
+            last_heartbeat = now
+        await asyncio.sleep(_RECOVERY_POLL_SEC)
+    observe("agent_run_recovery_wait_duration_seconds", time.monotonic() - queued_at)
+    try:
+        yield
+    finally:
+        with _recovery_lock:
+            _recovering -= 1
+
+
 def signal_cancel(run_id: str) -> bool:
     """Stop a cancelled run that executes in this process at its next event.
     False when it runs elsewhere; DBOS's preemptible LLM step stops it there."""
@@ -185,12 +224,14 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
         # a reattaching consumer to drop what it accumulated; LLM steps that
         # completed replay memoized without streaming tokens, so the answer may
         # then arrive only as the terminal event's generated_response.
-        if await run_events.latest_seq(run_id) > 0:
+        restarted = await run_events.latest_seq(run_id) > 0
+        if restarted:
             await run_events.publish(run_id, {"run_restarted": True})
             count("agent_run_restarted_total", source=req.request_source or "conversation")
         resume_cycles = 0
         while True:
-            async with contextlib.aclosing(stream_events_dicts(
+            slot = _recovery_slot(run_id, stop) if restarted else contextlib.nullcontext()
+            async with slot, contextlib.aclosing(stream_events_dicts(
                 graph_input,
                 graph=graph,
                 node_type_map=node_type_map,
@@ -280,6 +321,7 @@ async def _run_agent_graph(run_id: str, run_input: dict) -> dict:
         raise
     finally:
         _local_runs.pop(run_id, None)
+        allocator.release_soon()
 
 
 async def _request_agent_run(run_id: str, run_input: dict) -> dict:

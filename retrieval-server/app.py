@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sys
@@ -26,6 +27,8 @@ from fastapi import FastAPI, Request
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from encoding_library.observability import configure_observability, set_request_id, setup_logging
+from graph import allocator
+from graph.attachment_cache import CACHE as ATTACHMENT_CACHE
 
 from routes.connectors import router as connectors_router
 from routes.debug_memory import router as debug_memory_router
@@ -90,7 +93,9 @@ async def lifespan(app: FastAPI):
     # if its import failed, in which case durable runs are already disabled.)
     if durable_runtime is not None:
         await durable_runtime.startup()
+    memory_release = asyncio.create_task(allocator.release_periodically(ATTACHMENT_CACHE.purge_expired))
     yield
+    memory_release.cancel()
     if durable_runtime is not None:
         await durable_runtime.shutdown()
 
@@ -108,6 +113,8 @@ async def request_id_middleware(request: Request, call_next):
     # Adopt the proxy's X-Request-Id (or mint one) so all log lines of this
     # request — here and in the Kotlin proxy — share one correlation id.
     rid = set_request_id(request.headers.get("x-request-id"))
+    if request.url.path not in ("/health", "/metrics"):
+        allocator.note_activity()
     response = await call_next(request)
     response.headers["X-Request-Id"] = rid
     return response

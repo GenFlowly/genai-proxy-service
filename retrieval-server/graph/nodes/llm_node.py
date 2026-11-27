@@ -14,7 +14,7 @@ from encoding_library.observability import count, observe
 from graph.credentials import credentials_for, resolve_credentials
 from graph.llm_factory import THINKING_LEVELS, get_llm
 from graph.image_normalize import ImageLimits, ImageNormalizationError, limits_for_request, max_images_for_request
-from graph.s3_images import image_for_llm
+from graph.s3_images import image_data_url
 from graph.state import RetrievalState
 from graph.tools_runtime import specs_for
 
@@ -237,10 +237,12 @@ def _make_human(content, cache: bool) -> HumanMessage:
 
 @dataclass(frozen=True)
 class RequestImagePlan:
-    """How this request's images are sent: per-image limits, and the oldest
-    history attachments left out because the request can't carry them all."""
+    """How this request's images are sent: per-image limits, the oldest
+    history attachments left out because the request can't carry them all,
+    and how many images it carries."""
     limits: ImageLimits
     omitted: frozenset = frozenset()
+    count: int = 0
 
 
 _OMITTED_IMAGE_NOTE = "[earlier image omitted to fit the model's request size limit]"
@@ -276,7 +278,7 @@ def plan_request_images(state: dict, provider: str | None, with_history: bool) -
         step = max(1, cap // 4)
         omitted = frozenset(history_keys[: min(len(history_keys), -(-overflow // step) * step)])
     count = current + tool_images + len(history_keys) - len(omitted)
-    return RequestImagePlan(limits_for_request(provider, count), omitted)
+    return RequestImagePlan(limits_for_request(provider, count), omitted, count)
 
 
 async def _image_blocks(images: list, strict: bool, limits: ImageLimits | None = None,
@@ -286,10 +288,11 @@ async def _image_blocks(images: list, strict: bool, limits: ImageLimits | None =
     image_url form is normalized by langchain-anthropic/-openai/-google-genai
     into each provider's native image format, so one shape covers all vendors.
 
-    Uploads may be any image type/size: image_for_llm sniffs the real format
+    Uploads may be any image type/size: image_data_url sniffs the real format
     and converts/downscales within `limits` (request_image_limits; see
     graph/image_normalize.py), so the data URL carries the media type of the
-    bytes actually sent — the declared img["media_type"] is not trusted.
+    bytes actually sent — the declared img["media_type"] is not trusted. The
+    URL string is shared with every other request sending the image.
 
     strict=True (current turn): a failure fails the request; an
     ImageNormalizationError message reaches the user verbatim (streaming.py).
@@ -304,8 +307,7 @@ async def _image_blocks(images: list, strict: bool, limits: ImageLimits | None =
             blocks.append({"type": "text", "text": _OMITTED_IMAGE_NOTE})
             continue
         try:
-            b64, media_type = await image_for_llm(s3_key, limits)
-            blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{b64}"}})
+            blocks.append({"type": "image_url", "image_url": {"url": await image_data_url(s3_key, limits)}})
         except Exception as e:
             log = logger.warning if isinstance(e, ImageNormalizationError) else logger.error
             log("Failed to prepare attachment image %s: %s", s3_key, e)
@@ -322,7 +324,7 @@ def _user_content(text: str, image_blocks: list):
     return [{"type": "text", "text": text}, *image_blocks]
 
 
-async def _file_blocks(files: list, provider: str, model: str | None, limits: ImageLimits) -> list:
+async def _file_blocks(files: list, provider: str, model: str | None, image_plan: RequestImagePlan) -> list:
     """
     Resolve current-turn document attachments (PDFs) into content blocks,
     choosing the representation the chosen model can consume (see
@@ -357,9 +359,7 @@ async def _file_blocks(files: list, provider: str, model: str | None, limits: Im
         if caps.pdf_input:
             blocks.append(await pdf_input.native_pdf_block(provider, s3_key, filename))
         elif caps.vision:
-            blocks.extend(await pdf_input.pdf_page_image_blocks(
-                s3_key, limits.max_edge, limits.max_base64_bytes, limits.passthrough_formats,
-            ))
+            blocks.extend(await pdf_input.pdf_page_image_blocks(s3_key, provider, other_images=image_plan.count))
         else:
             blocks.append({"type": "text", "text": await pdf_input.pdf_extracted_text(s3_key, filename)})
     return blocks
@@ -462,18 +462,20 @@ async def _tool_messages(tool_results: list, provider: str, limits: ImageLimits 
             if provider != "anthropic":
                 blocks.append({"type": "text", "text": "[image tool result omitted — images in tool results are Claude-only]"})
                 continue
-            media_type = img.get("media_type") or "image/png"
             data = img.get("data")
-            if not data and img.get("s3_key"):
+            if data:
+                url = f"data:{img.get('media_type') or 'image/png'};base64,{data}"
+            elif img.get("s3_key"):
                 try:
                     # Normalized like attachments; the media type is the sniffed one.
-                    data, media_type = await image_for_llm(img["s3_key"], limits)
+                    url = await image_data_url(img["s3_key"], limits)
                 except Exception as e:
                     logger.error("Failed to fetch tool-result image %s: %s", img.get("s3_key"), e)
                     blocks.append({"type": "text", "text": "[image unavailable]"})
                     continue
-            if data:
-                blocks.append({"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{data}"}})
+            else:
+                continue
+            blocks.append({"type": "image_url", "image_url": {"url": url}})
         out.append(ToolMessage(content=blocks or "", tool_call_id=r.get("tool_call_id", "")))
     return out
 
@@ -1039,7 +1041,7 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
             query_image_blocks = await _image_blocks(state.get("query_images", []), strict=True, limits=image_limits)
             # Documents (PDFs) attached this turn, fed per the model's capabilities.
             query_file_blocks = await _file_blocks(
-                state.get("query_files", []), provider, effective_model, image_limits,
+                state.get("query_files", []), provider, effective_model, image_plan,
             )
         current_content = _user_content(rendered_input, query_image_blocks + query_file_blocks)
 
