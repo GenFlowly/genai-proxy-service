@@ -6,9 +6,11 @@ import '@genflowly/component-library/dist/main.css';
 import './styles/index.scss';
 import './i18n';
 import App from './App';
-import reportWebVitals from './reportWebVitals';
+import { startSentry } from './observability/sentry';
 import { LayoutProvider } from "./context/LayoutContext";
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
+
+startSentry();
 
 const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement
@@ -24,8 +26,6 @@ root.render(
         </LayoutProvider>
     </BrowserRouter>
 );
-
-reportWebVitals();
 
 // Registered unconditionally at boot (ahead of auth/onboarding gating) so
 // precaching starts on first visit; the update-available toast is wired up

@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-/// App-wide error / crash reporting seam. Call sites report through
+/// App-wide error, crash and timing seam. Call sites report through
 /// `AppObservability`, decoupled from any specific SDK. At launch, a Sentry-backed
 /// reporter is installed when a DSN is configured (`AppConfig.sentryDSN`) and the
 /// Sentry package is linked; otherwise events are logged locally via OSLog. This
@@ -9,10 +9,24 @@ import OSLog
 protocol ErrorReporter {
     func capture(_ error: Error, context: [String: String])
     func captureMessage(_ message: String)
+    func startReply(vendor: String, model: String) -> ReplyTiming
 }
 
 extension ErrorReporter {
     func capture(_ error: Error) { capture(error, context: [:]) }
+    func startReply(vendor: String, model: String) -> ReplyTiming { UntimedReply() }
+}
+
+/// Times one streamed reply, from sending the request to the end of the stream.
+protocol ReplyTiming: AnyObject {
+    /// Marks the reply's first text; later calls are ignored.
+    func firstToken()
+    func finish(error: Error?)
+}
+
+final class UntimedReply: ReplyTiming {
+    func firstToken() {}
+    func finish(error: Error?) {}
 }
 
 /// Always-available reporter backed by OSLog. Safe with no network / no DSN.
@@ -48,4 +62,22 @@ enum AppObservability {
 
     static func capture(_ error: Error, context: [String: String] = [:]) { reporter.capture(error, context: context) }
     static func captureMessage(_ message: String) { reporter.captureMessage(message) }
+
+    /// Runs [run] as one timed reply tagged with the vendor and model. A reply
+    /// that throws, including one the user stops, finishes with an error status.
+    static func timeReply<T>(
+        _ aiConfig: AIConfig,
+        reporter: ErrorReporter = AppObservability.reporter,
+        _ run: (ReplyTiming) async throws -> T
+    ) async throws -> T {
+        let reply = reporter.startReply(vendor: aiConfig.aiVendor.rawValue, model: aiConfig.model)
+        do {
+            let result = try await run(reply)
+            reply.finish(error: nil)
+            return result
+        } catch {
+            reply.finish(error: error)
+            throw error
+        }
+    }
 }

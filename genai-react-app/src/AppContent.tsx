@@ -1,5 +1,5 @@
 import React from 'react'
-import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router'
+import { Route, Navigate, useLocation, useNavigate } from 'react-router'
 import { useAuth } from './context/AuthContext'
 import { useDefaultsPrefetch } from './hooks/useDefaultsPrefetch'
 import { useTapOutsideEndsEditing } from './hooks/useTapOutsideEndsEditing'
@@ -37,6 +37,7 @@ import { ConversationProvider } from './context/ConversationContext'
 import { EdgeSwipeProvider } from './context/EdgeSwipeContext'
 import { LayoutProvider } from './context/LayoutContext'
 import { ToastProvider } from './context/ToastContext'
+import { SentryRoutes } from './observability/SentryRoutes'
 
 /** On phones the app's root is the L1 Menu, which AppMenuOverlay shows; desktop has the navbar instead. */
 function HomeRoute(): React.ReactElement | null {
@@ -97,7 +98,7 @@ export default function AppContent(): React.ReactElement | null {
                 <AIProvider>
                     <ConversationProvider>
                         <EdgeSwipeProvider>
-                            <Routes>
+                            <SentryRoutes>
                                 <Route path="/" element={<HomeRoute />} />
                                 <Route path="/chat">
                                     <Route index element={<NewChatRoute />} />
@@ -125,7 +126,7 @@ export default function AppContent(): React.ReactElement | null {
                                 <Route path="/support" element={<SupportPage />} />
                                 <Route path="/content-rules" element={<ContentRulesPage />} />
                                 <Route path="/blocked-users" element={<Navigate to="/settings/profile/blocked" replace />} />
-                            </Routes>
+                            </SentryRoutes>
                             <AppMenuOverlay />
                         </EdgeSwipeProvider>
                         {!isNarrow && <AppFooter />}

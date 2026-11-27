@@ -5,7 +5,8 @@
   "proxy": "http://127.0.0.1:8080",
   "dependencies": {
     "@auth0/auth0-react": "^2.11.0",
-    "@genflowly/component-library": "^0.1.159",
+    "@genflowly/component-library": "^0.1.160",
+    "@sentry/react": "^11.17.0",
     "@tanstack/react-query": "^5.105.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -22,8 +23,7 @@
     "react-router": "^7.18.5",
     "react-scripts": "5.0.1",
     "sass": "^1.93.2",
-    "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
+    "typescript": "^4.9.5"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -42,7 +42,6 @@
       "!src/**/*.models.ts",
       "!src/**/*Core.tsx",
       "!src/test/**/*",
-      "!src/reportWebVitals.ts",
       "!src/index.tsx",
       "!src/service-worker.ts"
     ],
