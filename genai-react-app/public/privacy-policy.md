@@ -9,7 +9,7 @@ Unbiase AI ("Unbiase AI", "we", "us") is operated by Genflowly, based in Seattle
 ## The short version
 
 - **We don't sell your data, show ads, or use your content to train AI models.**
-- **There are no analytics or advertising trackers in our apps.** The iOS app sends crash and performance reports to Sentry so we can fix bugs. They don't contain your conversations.
+- **There are no analytics or advertising trackers in our apps.** The web and iOS apps send crash and performance reports to Sentry so we can fix bugs. They don't contain your conversations.
 - **Where your content goes depends on the mode you use.** With Bring Your Own Key, it goes only to the services you connect, under your own accounts. Pay-as-you-go isn't available yet. When it launches, your content will go to AI and embedding providers we've chosen, under the limits in section 2.
 - **Memory is on by default, and you control it.** You can see, edit and delete everything it has learned, and turn it off in Settings.
 - **You stay in control.** You can delete your conversations, memories, API keys and account at any time.
@@ -173,7 +173,7 @@ Because requests will run under our accounts, we'll be responsible for how the s
 | **Settings** | Model choices and feature preferences | You |
 | **Usage** | Token counts, estimated costs, and counts of searches and database operations, grouped by day | Generated as you use the app |
 | **Technical** | Request IDs, error messages and timestamps | Generated automatically |
-| **Diagnostics** (iOS app) | Crash and hang reports, failed requests, timings for a sample of app starts and requests, device model, iOS and app version, and a random identifier created when the app is installed | Generated automatically by the iOS app |
+| **Diagnostics** (web and iOS apps) | Crash and hang reports, failed requests, timings for page loads, app starts, requests and replies, your browser or device model, operating system and app version, and on iOS a random identifier created when the app is installed | Generated automatically by the apps |
 | **Reports and blocks** | Reports you make, or that others make about something you shared, with a copy of the reported content; and the people you block | You and other users |
 | **Payment** (Pay-as-you-go only) | Billing details, handled by our payment processor | You |
 
@@ -211,7 +211,7 @@ We don't ask you to provide sensitive information. If you include it in your con
 | **Cloudflare** (global network) | Website hosting and delivery, security, routing of web app requests | Web app traffic, including your content in transit, and your IP address |
 | **Auth0 by Okta** (United States) | Sign-in | Your sign-in details, email, name, picture, and login records |
 | **Grafana Labs** | Service health dashboards and alerts | Performance metrics and operational logs |
-| **Sentry** (United States) | Crash and performance reports from the iOS app | The diagnostics described under "Mobile app", and your IP address when a report arrives |
+| **Sentry** (United States) | Crash and performance reports from the web and iOS apps | The diagnostics described under "Web app" and "Mobile app", and your IP address when a report arrives, from which Sentry estimates your city and country |
 | **Apple** | iOS app distribution | As described in Apple's own terms. We don't send it your content. |
 
 In Pay-as-you-go, the providers in section 2.2 will also process your content on our behalf.
@@ -309,11 +309,15 @@ We don't use advertising or analytics cookies.
 - **Security.** Cloudflare may use cookies and a small script to detect automated traffic.
 - **Your browser's local storage.** The web app stores sign-in tokens, your memories, conversation titles, instructions, agents and display preferences so that the app loads quickly. Signing out clears everything except your theme choice. Please sign out on shared devices.
 
+### Web app
+
+When the web app crashes or hits an error, it sends a report to Sentry so we can find and fix the cause. A report says where in the app's code the problem happened and what the app did just before it, such as which pages opened, which buttons and fields were used (not what you typed) and which of our server addresses it called, with their status codes. It also includes your browser, operating system, language, time zone and the app version. The web app also sends timings for page loads, requests and replies, such as how long a reply took to start and to finish. Reports don't include your messages, memories, attachments, search terms, API keys, name or email, and Sentry doesn't set cookies or store anything in your browser. Rarely, an error message may include a short fragment of your content. These reports aren't used for analytics or advertising.
+
 ### Mobile app
 
 The iOS app stores conversation history, memories, instructions and unsent drafts on your device so that they open quickly, and keeps sign-in tokens in the iOS Keychain. Signing out clears this data, apart from your theme choice. The camera is used only if you take a photo to attach. The app doesn't track you across other companies' apps or websites.
 
-When the iOS app crashes, freezes or hits an error, it sends a report to Sentry so we can find and fix the cause. A report says where in the app's code the problem happened and what the app did just before it, such as which screens opened and which of our server addresses it called, with their status codes. It also includes your device model, iOS version, free memory and storage, the app version, and a random identifier created when the app is installed. The app also sends timings for a small sample of app starts and requests. Reports don't include your messages, memories, attachments, API keys, name or email. Rarely, an error message may include a short fragment of your content. These reports aren't used for analytics or advertising.
+When the iOS app crashes, freezes or hits an error, it sends a report to Sentry so we can find and fix the cause. A report says where in the app's code the problem happened and what the app did just before it, such as which screens opened and which of our server addresses it called, with their status codes. It also includes your device model, iOS version, free memory and storage, the app version, and a random identifier created when the app is installed. The app also sends timings for app starts, requests and replies, such as how long a reply took to start and to finish. Reports don't include your messages, memories, attachments, search terms, API keys, name or email. Rarely, an error message may include a short fragment of your content. These reports aren't used for analytics or advertising.
 
 Before any of your content is first sent to an AI service, the web and iOS apps ask for your permission and explain which kinds of services receive it. You can review this in Settings > Profile.
 
