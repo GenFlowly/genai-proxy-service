@@ -1062,6 +1062,7 @@
 "conversation.stopReason.truncated" = "The response was cut off because it reached the length limit (finish reason: {{reason}}).";
 "conversation.stopReason.finished" = "Finished · {{reason}}";
 "conversation.stopReason.cancelled" = "You stopped this response.";
+"conversation.stopReason.interrupted" = "This response was interrupted before it finished. Regenerate to try again.";
 "conversation.response.generationFailedDefault" = "Generation failed";
 "conversation.response.askSourceSwitched" = "Follow-up now quotes {{vendor}}'s response";
 "common.attachmentCard.error" = "Download failed — tap to retry";

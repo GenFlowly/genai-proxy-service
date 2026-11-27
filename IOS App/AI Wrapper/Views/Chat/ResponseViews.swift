@@ -656,6 +656,8 @@ struct StopReasonNote: View {
     private static let truncation: Set<String> = ["max_tokens", "length", "model_length", "max_output_tokens"]
     /// Not a vendor reason: set on a reply the user stopped mid-generation.
     static let cancelled = "cancelled"
+    /// Not a vendor reason: set on a reply the server lost before it finished.
+    static let interrupted = "interrupted"
 
     private var normalized: String { reason.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
 
@@ -669,6 +671,8 @@ struct StopReasonNote: View {
             boxed(L("conversation.stopReason.truncated", ["reason": r]), color: AppTheme.textMuted, border: AppTheme.borderLight, size: 12.8)
         } else if r == Self.cancelled {
             boxed(L("conversation.stopReason.cancelled"), color: AppTheme.textMuted, border: AppTheme.borderLight, size: 12.8)
+        } else if r == Self.interrupted {
+            boxed(L("conversation.stopReason.interrupted"), color: AppTheme.textMuted, border: AppTheme.borderLight, size: 12.8)
         } else {
             Text(L("conversation.stopReason.finished", ["reason": r]))
                 .font(DSFont.roboto(11.2).smallCaps())
