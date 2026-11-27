@@ -1,4 +1,4 @@
-import { generateTextStream, StreamGenerationError, StreamTruncatedError, STOP_REASON_CANCELLED } from '../../services/generateTextStreamService';
+import { generateTextStream, readNdjsonStream, StreamGenerationError, StreamTruncatedError, STOP_REASON_CANCELLED } from '../../services/generateTextStreamService';
 import { fetchWithRetry } from '../../utils/apiUtils';
 import { endpoints } from '../../config/endpoints';
 import { HttpMethod } from '../../constants/http';
@@ -503,3 +503,41 @@ describe('generateTextStreamService', () => {
 });
 // Trigger coverage run
 // Trigger coverage run
+
+describe('readNdjsonStream, resuming a durable run', () => {
+    const responseOf = (lines: string[]) => {
+        const encoder = new TextEncoder();
+        const read = jest.fn();
+        lines.forEach(line => read.mockResolvedValueOnce({ done: false, value: encoder.encode(line + '\n') }));
+        read.mockResolvedValueOnce({ done: true });
+        return { body: { getReader: () => ({ read, releaseLock: jest.fn() }) } } as unknown as Response;
+    };
+
+    test('the run frame names the run and its clock', async () => {
+        const onRun = jest.fn();
+        const onSeq = jest.fn();
+        await readNdjsonStream(responseOf([
+            '{"t":"run","v":"run_1","s":4,"ms":41250}',
+            '{"t":"done","status":"ok","s":4}',
+        ]), { onDelta: jest.fn(), onRun, onSeq });
+        expect(onRun).toHaveBeenCalledWith('run_1', 41250);
+        expect(onSeq).toHaveBeenCalledWith(4);
+    });
+
+    test('each frame commits its seq after it is applied', async () => {
+        const order: string[] = [];
+        await readNdjsonStream(responseOf([
+            '{"t":"c","v":"Hel","s":5}',
+            '{"t":"c","v":"lo","s":6}',
+            '{"t":"done","status":"ok","s":6}',
+        ]), { onDelta: c => order.push(c), onSeq: s => order.push(`s${s}`) });
+        expect(order).toEqual(['Hel', 's5', 'lo', 's6', 's6']);
+    });
+
+    test('an error frame does not commit its seq', async () => {
+        const onSeq = jest.fn();
+        await expect(readNdjsonStream(responseOf(['{"t":"err","v":"quota","s":9}']), { onDelta: jest.fn(), onSeq }))
+            .rejects.toBeInstanceOf(StreamGenerationError);
+        expect(onSeq).not.toHaveBeenCalled();
+    });
+});

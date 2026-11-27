@@ -72,6 +72,10 @@ export interface StreamCallbacks {
     onGeneratedAttachments?: (attachments: AttachmentRef[]) => void;
     /** A durable run paused for human/client input — render a prompt + reply box. */
     onAwaitingInput?: (payload: AwaitingInput) => void;
+    /** `run`: the durable run generating this reply, and how long its turn has been going. */
+    onRun?: (runId: string, elapsedMs?: number) => void;
+    /** `s` on any frame: the run event it came from, applied. Reattach after it. */
+    onSeq?: (seq: number) => void;
 }
 
 /**
@@ -94,7 +98,12 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
         if (!trimmed) return;
         try {
             const msg = JSON.parse(trimmed);
-            if (msg.t === "c") cb.onDelta(msg.v);
+            if (msg.t === "run") {
+                if (typeof msg.v === "string" && msg.v) {
+                    cb.onRun?.(msg.v, typeof msg.ms === "number" ? msg.ms : undefined);
+                }
+            }
+            else if (msg.t === "c") cb.onDelta(msg.v);
             else if (msg.t === "cr") cb.onContentReset?.();
             else if (msg.t === "sr") {
                 if (typeof msg.v === "string" && msg.v) cb.onStopReason?.(msg.v);
@@ -148,6 +157,7 @@ export async function readNdjsonStream(response: Response, cb: StreamCallbacks):
                 }
             }
             // other types (heartbeat, etc.) are silently ignored
+            if (typeof msg.s === "number") cb.onSeq?.(msg.s);
         } catch (e) {
             if (e instanceof StreamGenerationError) throw e;
             // Not JSON. The proxy emits "[Error: <reason>]" as a raw line when
@@ -201,7 +211,8 @@ export async function generateTextStream(
     onGeneratedAttachments?: (attachments: AttachmentRef[]) => void,
     onAwaitingInput?: (payload: AwaitingInput) => void,
     onContentReset?: () => void,
-    onStopReason?: (reason: string) => void
+    onStopReason?: (reason: string) => void,
+    resume?: Pick<StreamCallbacks, "onRun" | "onSeq">
 ): Promise<void> {
     return timeReply(request.aiConfig, async (timing) => {
         const response = await fetchWithRetry(endpoints.generateTextStream, {
@@ -279,6 +290,7 @@ export async function generateTextStream(
             onWebSources,
             onGeneratedAttachments,
             onAwaitingInput,
+            ...resume,
         });
     });
 }

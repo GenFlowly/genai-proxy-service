@@ -122,7 +122,7 @@ describe('ConversationContext durable-run HITL', () => {
 
         await act(async () => { getByTestId('load').click(); });
         await waitFor(() =>
-            expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object))
+            expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object), 0, expect.any(AbortSignal))
         );
         await waitFor(() => expect(getByTestId('text')).toHaveTextContent('resumed'));
     });
@@ -155,7 +155,7 @@ describe('ConversationContext durable-run HITL', () => {
         );
         await act(async () => { getByTestId('load').click(); });
         await waitFor(() =>
-            expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object))
+            expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object), 0, expect.any(AbortSignal))
         );
         await waitFor(() => expect(getByTestId('text')).toHaveTextContent('recovered'));
     });
@@ -197,7 +197,7 @@ describe('ConversationContext durable-run HITL', () => {
             <MemoryRouter><ConversationProvider><Comp /></ConversationProvider></MemoryRouter>
         );
         await act(async () => { getByTestId('load').click(); });
-        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object)));
+        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-9', 'c1', expect.any(Object), 0, expect.any(AbortSignal)));
         await waitFor(() => expect(getByTestId('text')).toHaveTextContent('streamed answer'));
         await waitFor(() => expect(getAIUsageActivity).toHaveBeenCalledWith('token', 'c1', 'real-rm'));
         await waitFor(() => expect(getByTestId('tokens')).toHaveTextContent('33'));
@@ -248,8 +248,8 @@ describe('ConversationContext durable-run HITL', () => {
             <MemoryRouter><ConversationProvider><Comp /></ConversationProvider></MemoryRouter>
         );
         await act(async () => { getByTestId('load').click(); });
-        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-openai', 'c1', expect.any(Object)));
-        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-claude', 'c1', expect.any(Object)));
+        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-openai', 'c1', expect.any(Object), 0, expect.any(AbortSignal)));
+        await waitFor(() => expect(reattachRun).toHaveBeenCalledWith('token', 'run-claude', 'c1', expect.any(Object), 0, expect.any(AbortSignal)));
         await waitFor(() => expect(getByTestId('t0')).toHaveTextContent('openai answer'));
         await waitFor(() => expect(getByTestId('t1')).toHaveTextContent('claude answer'));
     });
