@@ -2037,6 +2037,47 @@ struct TapOutsideEndsEditingTests {
         #expect(!TapOutsideEndsEditing.keepsFocus(touched: text))
         #expect(!TapOutsideEndsEditing.keepsFocus(touched: input))
     }
+
+    private func markdownText(y: CGFloat = 0, reports: @escaping (String?) -> Void) -> (MarkdownUITextView, MarkdownTextView.Coordinator) {
+        let text = MarkdownUITextView(frame: CGRect(x: 0, y: y, width: 300, height: 100))
+        text.isEditable = false
+        text.attributedText = NSAttributedString(string: "Quicksort partitions in place while merge sort splits and merges.")
+        let coordinator = MarkdownTextView.Coordinator()
+        coordinator.onSelectionChange = reports
+        text.delegate = coordinator
+        return (text, coordinator)
+    }
+
+    @Test func aTapElsewhereTakesTheAskPillWithTheSelection() throws {
+        var reported: [String?] = []
+        let (text, coordinator) = markdownText { reported.append($0) }
+        let window = try window(with: text)
+        defer { window.isHidden = true }
+        _ = coordinator
+
+        #expect(text.becomeFirstResponder())
+        text.selectedRange = NSRange(location: 10, length: 10)
+        #expect(reported.last == "partitions")
+
+        window.endEditing(true)
+        #expect(text.selectedRange.length == 0)
+        #expect(reported.last == .some(nil))
+    }
+
+    @Test func selectingInOtherTextLeavesThePillOnTheNewSelection() throws {
+        var reported: [String?] = []
+        let (first, firstCoordinator) = markdownText { reported.append($0) }
+        let (second, secondCoordinator) = markdownText(y: 150) { reported.append($0) }
+        let window = try window(with: first, second)
+        defer { window.isHidden = true }
+        _ = (firstCoordinator, secondCoordinator)
+
+        #expect(first.becomeFirstResponder())
+        first.selectedRange = NSRange(location: 10, length: 10)
+        #expect(second.becomeFirstResponder())
+        second.selectedRange = NSRange(location: 0, length: 9)
+        #expect(reported.last == "Quicksort")
+    }
 }
 
 

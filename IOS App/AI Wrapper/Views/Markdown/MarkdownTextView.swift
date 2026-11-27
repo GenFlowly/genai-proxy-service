@@ -176,6 +176,16 @@ private final class UnlimitedHeightTextContainer: NSTextContainer {
 final class MarkdownUITextView: UITextView {
     var onSelectionChange: ((String?) -> Void)?
 
+    /// Resigning only hides a read-only text view's selection: the range stays and the delegate
+    /// hears nothing, so the "Ask" pill would outlive the selection. Collapsing it reports it gone.
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned, selectedRange.length > 0 {
+            selectedRange = NSRange(location: selectedRange.location, length: 0)
+        }
+        return resigned
+    }
+
     override func copy(_ sender: Any?) {
         guard let text = selectedPlainText else { return }
         UIPasteboard.general.string = text
