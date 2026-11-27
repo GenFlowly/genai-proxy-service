@@ -61,10 +61,22 @@ jobs:
           REACT_APP_AUTH0_AUDIENCE: ${{ secrets.AUTH0_API_AUDIENCE }}
           REACT_APP_SUPPORT_API_URL: ${{ steps.support-api.outputs.url }}
           REACT_APP_BACKEND_URL: "https://api.genflowly.com"
+          REACT_APP_SENTRY_DSN: ${{ secrets.WEB_SENTRY_DSN }}
+          REACT_APP_SENTRY_RELEASE: ${{ github.sha }}
+          # One organization token uploads for both the iOS and web projects.
+          SENTRY_AUTH_TOKEN: ${{ secrets.IOS_SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.IOS_SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.WEB_SENTRY_PROJECT }}
         working-directory: genai-react-app
         run: |
           npm install
           npm run build
+          # Source maps turn minified stack traces back into source lines. inject
+          # writes a debug id into each script, so it runs before the deploy.
+          if [ -n "$REACT_APP_SENTRY_DSN" ]; then
+            npx --yes @sentry/cli@3.8.2 sourcemaps inject build
+            npx --yes @sentry/cli@3.8.2 sourcemaps upload --release "$REACT_APP_SENTRY_RELEASE" build
+          fi
           # wrangler must stay pinned to v3: in v4 the `pages` commands deploy
           # to Workers instead of the classic Pages project.
           npx wrangler@3 pages deploy build --project-name=genflowly-react-app --branch=main --commit-dirty=true

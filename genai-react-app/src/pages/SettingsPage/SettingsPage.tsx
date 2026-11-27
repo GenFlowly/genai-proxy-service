@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router'
+import { Route, Navigate, useLocation } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import { ResizableSidebar, ScrollArea } from '@genflowly/component-library'
 import Navbar from '../../components/navbar/Navbar'
@@ -32,6 +32,7 @@ import { ConnectorsSettings } from './components/ConnectorsSettings'
 import { DeveloperSettings } from './components/DeveloperSettings'
 import { findSettingsLocation } from './settingsNav'
 import { SettingsHeaderInfo, SettingsShellContext } from './SettingsShellContext'
+import { SentryRoutes } from '../../observability/SentryRoutes'
 import styles from './SettingsPage.module.scss'
 
 const SETTINGS_SIDEBAR_WIDTH_STORAGE_KEY = 'settings_sidebar_width_rem'
@@ -112,7 +113,7 @@ export default function SettingsPage(): React.ReactElement {
                     )}
                     <ScrollArea className={styles.content}>
                         <div className={styles.contentInner}>
-                            <Routes>
+                            <SentryRoutes>
                                 {Object.entries(REDIRECTS).map(([from, to]) => (
                                     <Route key={from || 'index'} path={from || '/'} element={<Navigate to={to} replace />} />
                                 ))}
@@ -136,7 +137,7 @@ export default function SettingsPage(): React.ReactElement {
                                 <Route path="tools" element={<SettingsFrame page="tools"><ToolsSettings /></SettingsFrame>} />
                                 <Route path="connectors" element={<SettingsFrame page="connectors"><ConnectorsSettings /></SettingsFrame>} />
                                 <Route path="*" element={<Navigate to="/settings/profile/account" replace />} />
-                            </Routes>
+                            </SentryRoutes>
                         </div>
                     </ScrollArea>
                 </div>

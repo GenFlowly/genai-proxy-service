@@ -5,6 +5,7 @@ import { WebSource } from "../models/conversation.models";
 import { ActivityEvent, isActivityEvent } from "@genflowly/component-library";
 import { AttachmentRef } from "../models/attachment.models";
 import { fetchWithRetry } from "../utils/apiUtils";
+import { timeReply } from "../observability/sentry";
 
 /** Vendor failure relayed mid-stream by the proxy ({"t":"err"} chunk, or a {"t":"done","status":"error"} terminal frame). */
 export class StreamGenerationError extends Error {}
@@ -202,77 +203,82 @@ export async function generateTextStream(
     onContentReset?: () => void,
     onStopReason?: (reason: string) => void
 ): Promise<void> {
-    const response = await fetchWithRetry(endpoints.generateTextStream, {
-        method: HttpMethod.POST,
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(request),
-        signal,
-    });
-
-    if (response.status === 401 || response.status === 403) {
-        const err: any = new Error('Session expired')
-        err.error = 'login_required'
-        throw err
-    }
-
-    if (!response.ok) {
-        // The proxy returns {"error": "<reason>"} on failures — surface the
-        // real reason instead of a generic status line when it's available
-        let reason = '';
-        let code: unknown;
-        try {
-            const body = await response.text();
-            try {
-                const parsed = JSON.parse(body);
-                reason = parsed?.error ?? '';
-                code = parsed?.code;
-            } catch {
-                reason = body;
-            }
-        } catch {
-            // Body unreadable — fall back to status text only
-        }
-        reason = (reason || '').trim();
-        // Written for the person who sent it, so it needs no status code.
-        if (code === 'CONTENT_BLOCKED' && reason) throw new Error(reason);
-        throw new Error(
-            reason
-                ? `${reason} (HTTP ${response.status})`
-                : `Text generation failed: ${response.status} ${response.statusText}`
-        );
-    }
-
-    const conversationId = response.headers.get("X-Conversation-Id");
-    const messageId = response.headers.get("X-Message-Id");
-    const responseMessageId = response.headers.get("X-Response-Message-Id");
-    const aiVendor = response.headers.get("X-Ai-Vendor");
-    const instructionId = response.headers.get("X-Instruction-Id");
-
-    // Call onMetadata immediately with header-based fields (tokens arrive later via sentinel)
-    if (onMetadata) {
-        onMetadata({
-            conversationId,
-            messageId,
-            responseMessageId,
-            aiVendor,
-            instructionId,
-            inputTokens: null,
-            outputTokens: null,
-            totalTokens: null,
-            tokensReadFromCache: null,
+    return timeReply(request.aiConfig, async (timing) => {
+        const response = await fetchWithRetry(endpoints.generateTextStream, {
+            method: HttpMethod.POST,
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(request),
+            signal,
         });
-    }
 
-    await readNdjsonStream(response, {
-        onDelta,
-        onContentReset,
-        onStopReason,
-        onActivity,
-        onWebSources,
-        onGeneratedAttachments,
-        onAwaitingInput,
+        if (response.status === 401 || response.status === 403) {
+            const err: any = new Error('Session expired')
+            err.error = 'login_required'
+            throw err
+        }
+
+        if (!response.ok) {
+            // The proxy returns {"error": "<reason>"} on failures — surface the
+            // real reason instead of a generic status line when it's available
+            let reason = '';
+            let code: unknown;
+            try {
+                const body = await response.text();
+                try {
+                    const parsed = JSON.parse(body);
+                    reason = parsed?.error ?? '';
+                    code = parsed?.code;
+                } catch {
+                    reason = body;
+                }
+            } catch {
+                // Body unreadable — fall back to status text only
+            }
+            reason = (reason || '').trim();
+            // Written for the person who sent it, so it needs no status code.
+            if (code === 'CONTENT_BLOCKED' && reason) throw new Error(reason);
+            throw new Error(
+                reason
+                    ? `${reason} (HTTP ${response.status})`
+                    : `Text generation failed: ${response.status} ${response.statusText}`
+            );
+        }
+
+        const conversationId = response.headers.get("X-Conversation-Id");
+        const messageId = response.headers.get("X-Message-Id");
+        const responseMessageId = response.headers.get("X-Response-Message-Id");
+        const aiVendor = response.headers.get("X-Ai-Vendor");
+        const instructionId = response.headers.get("X-Instruction-Id");
+
+        // Call onMetadata immediately with header-based fields (tokens arrive later via sentinel)
+        if (onMetadata) {
+            onMetadata({
+                conversationId,
+                messageId,
+                responseMessageId,
+                aiVendor,
+                instructionId,
+                inputTokens: null,
+                outputTokens: null,
+                totalTokens: null,
+                tokensReadFromCache: null,
+            });
+        }
+
+        await readNdjsonStream(response, {
+            onDelta: (chunk) => {
+                timing.firstToken();
+                onDelta(chunk);
+            },
+            onContentReset,
+            onStopReason,
+            onActivity,
+            onWebSources,
+            onGeneratedAttachments,
+            onAwaitingInput,
+        });
     });
 }
