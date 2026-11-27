@@ -315,7 +315,7 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `llm_tokens_total` | vendor, model, direction (`input`\|`output`\|`cache_read`\|`cache_creation`) | retrieval-server LLM nodes |
 | `llm_cost_usd_total` | vendor, model | Kotlin proxy (`CostCalculationService`) |
 | `llm_cost_unpriced_total` | vendor, model | Kotlin proxy — turns with no catalog pricing (cost silently null) |
-| `generation_total` | vendor, model, status (`ok`\|`cancelled`\|failure kind: `transport_error`\|`rate_limit`\|`model_not_found`\|`provider_error`\|`exception`\|…) | Kotlin proxy (`GenerationOrchestrator`) — one per generation outcome; the ONLY alertable signal for mid-stream deaths, which never become HTTP 5xx |
+| `generation_total` | vendor, model, status (`ok`\|`cancelled`\|`interrupted` (durable-run stream lost, reply saved with that stop reason)\|failure kind: `transport_error`\|`rate_limit`\|`model_not_found`\|`provider_error`\|`exception`\|…) | Kotlin proxy (`GenerationOrchestrator`) — one per generation outcome; the ONLY alertable signal for mid-stream deaths, which never become HTTP 5xx |
 | `vector_store_total` / `_duration_seconds` | status | store_embeddings lambda |
 | `vector_store_chunks_total` | data_type | store_embeddings lambda |
 | `vector_store_ddb_writeback_failure_total` | data_type | store_embeddings lambda |
@@ -324,6 +324,7 @@ Only these dimension keys are allowed: `operation`, `status`, `vendor`, `model`,
 | `vector_retrieval_total` / `_duration_seconds` | status, source (`retrieve`\|`search`) | retrieval-server |
 | `embedding_failure_total` | source, model | retrieval-server |
 | `zilliz_credential_fallback_total` | — | encoding-library (both runtimes) |
+| `agent_run_restarted_total` | source | retrieval-server `runs.py` — a durable run DBOS recovered after a crash/redeploy and reran from the top |
 | `web_search_total` / `_duration_seconds` | status (`ok`\|`error`\|`missing_key`) | retrieval-server `web_search` tool — calls that reached (or tried to reach) Tavily; calls served from the lookup pool are not counted, so this is the spend to watch |
 | `tool_execution_total` / `_duration_seconds` | tool, status (`ok`\|`error`\|`pooled`\|`budget_skipped`\|`budget_exhausted`) | retrieval-server TOOL_EXECUTOR — `pooled` = answered from the per-message lookup pool without running the tool |
 | `lookup_pool_total` | tool, status (`executed`\|`shared`\|`deduplicated`\|`fallback`\|`bypassed`) | retrieval-server `graph/lookup_pool.py` — one per call to a shareable tool: how the per-message pool served it (`shared` + `deduplicated` = provider calls avoided; `bypassed` = no turn id, i.e. regenerate / internal) |

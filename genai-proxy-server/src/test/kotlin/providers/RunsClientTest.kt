@@ -1,5 +1,6 @@
 package com.genflowly.providers
 
+import com.genflowly.models.retrieval.STOP_REASON_INTERRUPTED
 import com.genflowly.models.retrieval.StreamChunk
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -45,15 +46,29 @@ class RunsClientTest {
     private val json = Json { ignoreUnknownKeys = true }
     private val logger = KotlinLogging.logger("RunsClientTest")
 
-    private fun client(handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): Pair<RunsClient, MutableList<HttpRequestData>> {
+    private fun client(
+        reconnectWindowMillis: Long = 180_000L,
+        handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData
+    ): Pair<RunsClient, MutableList<HttpRequestData>> {
         val captured = mutableListOf<HttpRequestData>()
         val engine = MockEngine { req ->
             captured += req
             handler(req)
         }
         val http = HttpClient(engine) { install(HttpTimeout) }
-        return RunsClient(logger, json, http, "http://retrieval-server:5001") to captured
+        return RunsClient(logger, json, http, "http://retrieval-server:5001", reconnectWindowMillis) { 1L } to captured
     }
+
+    private fun MockRequestHandleScope.sse(body: String) =
+        respond(content = body, status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"))
+
+    private fun MockRequestHandleScope.runStatus(status: String) =
+        respond(content = """{"status":"$status","last_seq":3}""", status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "application/json"))
+
+    private val streamRequests: (List<HttpRequestData>) -> List<HttpRequestData> =
+        { all -> all.filter { it.url.encodedPath.endsWith("/stream") } }
 
     @Test
     fun `startRun posts to runs, omits credentials, and returns run_id`() = runTest {
@@ -101,7 +116,7 @@ class RunsClientTest {
             append("data: {\"content\":\"Hello\"}\n\n")
             append("data: {\"content\":\" world\"}\n\n")
             append("data: {\"usage\":{\"input_tokens\":1,\"output_tokens\":2,\"total_tokens\":3}}\n\n")
-            append("data: {\"status\":\"completed\"}\n\n") // no recognized key -> skipped
+            append("data: {\"status\":\"completed\",\"run_id\":\"run_abc\",\"tool_calls\":null}\n\n") // terminal summary -> nothing to relay
             append("data: [DONE]\n\n")
             append("data: {\"content\":\"after done\"}\n\n") // must NOT be emitted
         }
@@ -119,6 +134,113 @@ class RunsClientTest {
         assertEquals(StreamChunk.Content("Hello"), chunks[1])
         assertEquals(StreamChunk.Content(" world"), chunks[2])
         assertEquals(StreamChunk.Usage(1, 2, 3, 0, 0), chunks[3])
+    }
+
+    // The reconnect tests below use runBlocking for the same reason as the Stop
+    // test: the SSE read runs on Dispatchers.IO, outside runTest's virtual time.
+    @Test
+    fun `a dropped stream reconnects from the last relayed seq`() = runBlocking {
+        var calls = 0
+        val (runs, captured) = client { req ->
+            if (!req.url.encodedPath.endsWith("/stream")) return@client runStatus("PENDING")
+            calls++
+            if (calls == 1) {
+                // Cut off mid-run: no terminal event, no [DONE].
+                sse("id: 1\ndata: {\"content\":\"Hel\"}\n\nid: 2\ndata: {\"content\":\"lo\"}\n\n")
+            } else {
+                sse("id: 3\ndata: {\"status\":\"completed\",\"run_id\":\"run_abc\"}\n\ndata: [DONE]\n\n")
+            }
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertEquals(listOf("0", "2"), streamRequests(captured).map { it.url.parameters["from_seq"] })
+        assertEquals(listOf(StreamChunk.Content("Hel"), StreamChunk.Content("lo")), chunks)
+    }
+
+    @Test
+    fun `a transport error mid-stream is retried rather than ending the reply`() = runBlocking {
+        var calls = 0
+        val (runs, captured) = client { req ->
+            calls++
+            if (calls == 1) throw java.io.IOException("Chunked stream has ended unexpectedly")
+            sse("id: 1\ndata: {\"content\":\"Hi\"}\n\nid: 2\ndata: {\"status\":\"completed\",\"run_id\":\"run_abc\"}\n\ndata: [DONE]\n\n")
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertEquals(2, streamRequests(captured).size)
+        assertEquals(listOf(StreamChunk.Content("Hi")), chunks)
+    }
+
+    @Test
+    fun `a recovered run resets the reply and falls back to the memoized answer`() = runBlocking {
+        val (runs, _) = client {
+            sse(buildString {
+                append("id: 1\ndata: {\"content\":\"Partial\"}\n\n")
+                append("id: 2\ndata: {\"run_restarted\":true}\n\n")
+                append("id: 3\ndata: {\"activity\":{\"v\":2,\"at\":0,\"type\":\"turn.start\"}}\n\n")
+                append("id: 4\ndata: {\"status\":\"completed\",\"run_id\":\"run_abc\",\"generated_response\":\"Full answer\"}\n\n")
+                append("data: [DONE]\n\n")
+            })
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertEquals(StreamChunk.Content("Partial"), chunks[0])
+        assertEquals(StreamChunk.RunRestarted, chunks[1])
+        assertTrue(chunks[2] is StreamChunk.Activity)
+        assertEquals(StreamChunk.Content("Full answer"), chunks[3])
+        assertEquals(4, chunks.size)
+    }
+
+    @Test
+    fun `a rerun that streams its answer is not given the answer twice`() = runBlocking {
+        val (runs, _) = client {
+            sse(buildString {
+                append("id: 1\ndata: {\"run_restarted\":true}\n\n")
+                append("id: 2\ndata: {\"content\":\"Full answer\"}\n\n")
+                append("id: 3\ndata: {\"status\":\"completed\",\"run_id\":\"run_abc\",\"generated_response\":\"Full answer\"}\n\n")
+                append("data: [DONE]\n\n")
+            })
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertEquals(listOf(StreamChunk.RunRestarted, StreamChunk.Content("Full answer")), chunks)
+    }
+
+    @Test
+    fun `an unreachable run ends interrupted once the reconnect window passes`() = runBlocking {
+        val (runs, captured) = client(reconnectWindowMillis = 50L) {
+            respondError(HttpStatusCode.ServiceUnavailable)
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertTrue(streamRequests(captured).size > 1, "retried before giving up")
+        assertEquals(listOf(StreamChunk.StopReason(STOP_REASON_INTERRUPTED)), chunks)
+    }
+
+    @Test
+    fun `a run that ends without its terminal event is interrupted`() = runBlocking {
+        val (runs, _) = client { req ->
+            if (req.url.encodedPath.endsWith("/stream")) sse("id: 1\ndata: {\"content\":\"Part\"}\n\ndata: [DONE]\n\n")
+            else runStatus("MAX_RECOVERY_ATTEMPTS_EXCEEDED")
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertEquals(listOf(StreamChunk.Content("Part"), StreamChunk.StopReason(STOP_REASON_INTERRUPTED)), chunks)
+    }
+
+    @Test
+    fun `a cancelled run ends without an interrupted note`() = runBlocking {
+        val (runs, _) = client { req ->
+            if (req.url.encodedPath.endsWith("/stream")) sse("data: [DONE]\n\n") else runStatus("CANCELLED")
+        }
+
+        assertEquals(emptyList<StreamChunk>(), runs.streamRun("run_abc").toList())
     }
 
     // runBlocking, not runTest: the SSE read runs on Dispatchers.IO (flowOn), and

@@ -5,6 +5,7 @@ import com.genflowly.models.retrieval.FileRef
 import com.genflowly.models.retrieval.ImageRef
 import com.genflowly.models.retrieval.PayloadToolDefinition
 import com.genflowly.models.retrieval.PayloadToolResult
+import com.genflowly.models.retrieval.STOP_REASON_INTERRUPTED
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.parseRetrievalEvent
 import io.ktor.client.*
@@ -15,6 +16,7 @@ import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
@@ -22,6 +24,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KLogger
@@ -92,7 +96,11 @@ class RunsClient(
     private val logger: KLogger,
     private val json: Json,
     private val httpClient: HttpClient,
-    private val retrievalServerUrl: String
+    private val retrievalServerUrl: String,
+    /** How long [streamRun] keeps reconnecting without receiving an event. A
+     *  retrieval-server restart takes ~15 s; this spans a few back-to-back ones. */
+    private val reconnectWindowMillis: Long = 180_000L,
+    private val reconnectBackoffMillis: (attempt: Int) -> Long = { attempt -> minOf(1_000L shl minOf(attempt, 4), 10_000L) }
 ) {
     /**
      * Starts a durable run and returns its id, or null on failure (caller may
@@ -174,42 +182,109 @@ class RunsClient(
      * [Flow]<[StreamChunk]>, replaying from [fromSeq] (0 = from the start). The
      * SSE reader mirrors RetrievalServerClient.retrieveAndGenerateStream so the
      * downstream mapping is identical.
+     *
+     * The run outlives this connection: when the retrieval-server drops it
+     * (crash, OOM kill, redeploy) the stream reconnects from the last relayed
+     * seq until [reconnectWindowMillis] passes without progress. A rerun after
+     * DBOS recovery arrives as [StreamChunk.RunRestarted]; if the rerun then
+     * streams no text (completed LLM steps replay memoized), the terminal
+     * event's generated_response is emitted as the content. A run that can't
+     * be reached again, or ends without its terminal event, ends on
+     * [STOP_REASON_INTERRUPTED].
      */
     fun streamRun(runId: String, fromSeq: Long = 0): Flow<StreamChunk> = channelFlow {
         logger.info { "Reattaching to durable run $runId from seq $fromSeq" }
-        try {
-            httpClient.prepareGet("$retrievalServerUrl/runs/$runId/stream?from_seq=$fromSeq") {
-                // A durable run can outlive the request timeout; only the socket
-                // timeout (gap between events) guards against a stalled tail.
-                timeout {
-                    requestTimeoutMillis = 1_800_000L
-                    socketTimeoutMillis = 300_000L
-                }
-            }.execute { response ->
-                if (!response.status.isSuccess()) {
-                    logger.error { "Run stream error for $runId: ${response.status}" }
-                    return@execute
-                }
-                val channel = response.bodyAsChannel()
-                while (!channel.isClosedForRead) {
-                    val line = channel.readUTF8Line() ?: break
-                    if (!line.startsWith("data: ")) continue
-                    val data = line.removePrefix("data: ")
-                    if (data == "[DONE]") break
-                    try {
-                        val jsonObj = json.parseToJsonElement(data).jsonObject
-                        parseRetrievalEvent(jsonObj)?.let { send(it) }
-                    } catch (_: Exception) {
-                        // skip malformed SSE chunk
+        var lastSeq = fromSeq
+        var restarted = false
+        var streamedSinceRestart = false
+        var sawTerminal = false
+        var sawDone = false
+        var attempt = 0
+        var lastProgressAt = System.currentTimeMillis()
+        while (true) {
+            try {
+                httpClient.prepareGet("$retrievalServerUrl/runs/$runId/stream?from_seq=$lastSeq") {
+                    // A durable run can outlive the request timeout; only the socket
+                    // timeout (gap between events) guards against a stalled tail.
+                    timeout {
+                        requestTimeoutMillis = 1_800_000L
+                        socketTimeoutMillis = 300_000L
+                    }
+                }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        logger.warn { "Run stream error for $runId: ${response.status}" }
+                        return@execute
+                    }
+                    val channel = response.bodyAsChannel()
+                    var eventSeq: Long? = null
+                    while (!channel.isClosedForRead) {
+                        val line = channel.readUTF8Line() ?: break
+                        if (line.startsWith("id: ")) {
+                            eventSeq = line.removePrefix("id: ").trim().toLongOrNull()
+                            continue
+                        }
+                        if (!line.startsWith("data: ")) continue
+                        val data = line.removePrefix("data: ")
+                        if (data == "[DONE]") {
+                            sawDone = true
+                            break
+                        }
+                        val event = try {
+                            json.parseToJsonElement(data).jsonObject
+                        } catch (_: Exception) {
+                            null // skip malformed SSE chunk
+                        }
+                        when {
+                            event == null -> {}
+                            event.containsKey("run_restarted") -> {
+                                restarted = true
+                                streamedSinceRestart = false
+                                send(StreamChunk.RunRestarted)
+                            }
+                            event.containsKey("status") && event.containsKey("run_id") -> {
+                                sawTerminal = true
+                                val answer = (event["generated_response"] as? JsonPrimitive)?.contentOrNull
+                                if (restarted && !streamedSinceRestart && !answer.isNullOrEmpty()) {
+                                    send(StreamChunk.Content(answer))
+                                }
+                                parseRetrievalEvent(event)?.let { send(it) }
+                            }
+                            else -> parseRetrievalEvent(event)?.let { chunk ->
+                                if (chunk is StreamChunk.Content) streamedSinceRestart = true
+                                if (chunk is StreamChunk.ContentReset) streamedSinceRestart = false
+                                send(chunk)
+                            }
+                        }
+                        eventSeq?.let { lastSeq = it }
+                        eventSeq = null
+                        attempt = 0
+                        lastProgressAt = System.currentTimeMillis()
                     }
                 }
+            } catch (e: CancellationException) {
+                // The user's Stop (GenerationOrchestrator.cancelGeneration) cancels the
+                // relay mid-read. That's not a failed run; rethrow so it stays a cancellation.
+                throw e
+            } catch (e: Exception) {
+                logger.warn { "Stream of durable run $runId dropped after seq $lastSeq: ${e.message}" }
             }
-        } catch (e: CancellationException) {
-            // The user's Stop (GenerationOrchestrator.cancelGeneration) cancels the
-            // relay mid-read. That's not a failed run; rethrow so it stays a cancellation.
-            throw e
-        } catch (e: Exception) {
-            logger.error(e) { "Streaming durable run $runId failed" }
+            if (sawTerminal) break
+            if (sawDone) {
+                // The run went terminal without publishing its outcome (an
+                // exception in the workflow, or recovery attempts exhausted). A
+                // user cancel also ends this way and is already handled upstream.
+                if (getRunStatus(runId)?.status != "CANCELLED") {
+                    logger.error { "Durable run $runId ended without its terminal event" }
+                    send(StreamChunk.StopReason(STOP_REASON_INTERRUPTED))
+                }
+                break
+            }
+            if (System.currentTimeMillis() - lastProgressAt >= reconnectWindowMillis) {
+                logger.error { "Durable run $runId unreachable since seq $lastSeq — giving up" }
+                send(StreamChunk.StopReason(STOP_REASON_INTERRUPTED))
+                break
+            }
+            delay(reconnectBackoffMillis(attempt++))
         }
     }.flowOn(Dispatchers.IO)
 

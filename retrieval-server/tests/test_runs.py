@@ -95,16 +95,20 @@ class RunRequestTest(unittest.TestCase):
 
 
 class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
-    async def _run(self, resolve):
+    async def _run(self, resolve, already_published: int = 0):
         published = []
 
         async def fake_publish(run_id, event, terminal=False):
             published.append((run_id, event, terminal))
             return len(published)
 
+        async def fake_latest_seq(run_id):
+            return already_published
+
         with patch.object(runs, "_resolve_durable_graph", resolve), \
              patch.object(runs.durable_runtime, "get_checkpointer", lambda: object()), \
-             patch.object(run_events, "publish", fake_publish):
+             patch.object(run_events, "publish", fake_publish), \
+             patch.object(run_events, "latest_seq", fake_latest_seq):
             summary = await runs._run_agent_graph("run_x", dict(_RUN_INPUT))
         return summary, published
 
@@ -129,6 +133,18 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary["generated_artifacts"], [{"artifact_id": "a1"}])
         self.assertIsNone(summary["error"])
         self.assertNotIn("llm_credentials", summary)
+
+    async def test_a_fresh_run_publishes_no_restart_marker(self):
+        _, published = await self._run(_fake_resolve)
+
+        self.assertFalse(any("run_restarted" in ev for _, ev, _ in published))
+
+    async def test_a_recovered_run_marks_the_restart_before_its_new_events(self):
+        _, published = await self._run(_fake_resolve, already_published=7)
+
+        self.assertEqual(published[0][1], {"run_restarted": True})
+        self.assertEqual(sum("run_restarted" in ev for _, ev, _ in published), 1)
+        self.assertTrue(published[-1][2], "the rerun still ends on a terminal event")
 
     async def test_the_activity_log_opens_and_closes_the_run_once(self):
         # One recorder spans the whole run: a single turn.start first, a single
@@ -177,9 +193,13 @@ class RunAgentGraphTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(runs.signal_cancel(run_id))
             return len(published)
 
+        async def no_events(run_id):
+            return 0
+
         with patch.object(runs, "_resolve_durable_graph", _fake_resolve), \
              patch.object(runs.durable_runtime, "get_checkpointer", lambda: object()), \
-             patch.object(run_events, "publish", publish_then_cancel):
+             patch.object(run_events, "publish", publish_then_cancel), \
+             patch.object(run_events, "latest_seq", no_events):
             with self.assertRaises(DBOSWorkflowCancelledError):
                 await runs._run_agent_graph("run_x", dict(_RUN_INPUT))
 

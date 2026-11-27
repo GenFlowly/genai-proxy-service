@@ -4,6 +4,7 @@ import com.genflowly.models.AIVendor
 import com.genflowly.models.api.InstructionResponse
 import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
+import com.genflowly.models.retrieval.STOP_REASON_INTERRUPTED
 import com.genflowly.models.retrieval.StreamChunk
 import com.genflowly.models.retrieval.toNdjsonFrame
 import com.genflowly.models.retrieval.doneNdjsonFrame
@@ -689,6 +690,17 @@ class GenerationOrchestrator(
                         // final round; the preamble is kept in the activity
                         // log (the llm step's reasoning) inside capturedActivity.
                         is StreamChunk.ContentReset -> sb.setLength(0)
+                        is StreamChunk.RunRestarted -> {
+                            sb.setLength(0)
+                            capturedActivity.clear()
+                            capturedStopReason = null
+                            capturedToolCallsJson = null
+                            capturedWebSourcesJson = null
+                            capturedGeneratedArtifactsJson = null
+                            capturedUsage = null
+                            capturedErrorMessage = null
+                            capturedErrorType = null
+                        }
                         // Last writer wins: only the terminal round emits this,
                         // and after a content_reset any earlier round's reason is
                         // moot — so the final value is the turn's real stop reason.
@@ -737,10 +749,12 @@ class GenerationOrchestrator(
                 // NonCancellable: after a user cancel this coroutine is dead —
                 // persistence of the partial text must still run.
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                // A stopped reply is kept even with no text yet (stopped while
-                // thinking, or after a tool-call preamble was reset), so the
-                // vendor's card and its activity log survive a reload.
-                if (cancelled || (success && (responseText.isNotEmpty() || capturedToolCallsJson != null))) {
+                // A stopped or interrupted reply is kept even with no text yet
+                // (stopped while thinking, or after a tool-call preamble was
+                // reset), so the vendor's card, its note and its activity log
+                // survive a reload.
+                val interrupted = capturedStopReason == STOP_REASON_INTERRUPTED
+                if (cancelled || (success && (responseText.isNotEmpty() || capturedToolCallsJson != null || interrupted))) {
                     val responseMessage = Message(
                         messageId = responseMessageId,
                         conversationId = message.conversationId,
@@ -809,7 +823,11 @@ class GenerationOrchestrator(
                     // alertable signal for them.
                     Metrics.count(
                         "generation_total", 1.0,
-                        "status" to if (doneStatus == "error") (capturedErrorType ?: "error") else doneStatus,
+                        "status" to when {
+                            doneStatus == "error" -> capturedErrorType ?: "error"
+                            capturedStopReason == STOP_REASON_INTERRUPTED -> STOP_REASON_INTERRUPTED
+                            else -> doneStatus
+                        },
                         "vendor" to config.aiVendor.metricVendor(),
                         "model" to config.model,
                     )

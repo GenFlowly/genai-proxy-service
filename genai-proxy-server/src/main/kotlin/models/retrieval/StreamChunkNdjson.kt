@@ -20,7 +20,7 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 fun StreamChunk.toNdjsonFrame(): String? = when (this) {
     is StreamChunk.Content -> "{\"t\":\"c\",\"v\":${JsonPrimitive(text)}}\n"
-    is StreamChunk.ContentReset -> "{\"t\":\"cr\"}\n"
+    is StreamChunk.ContentReset, is StreamChunk.RunRestarted -> "{\"t\":\"cr\"}\n"
     is StreamChunk.StopReason -> "{\"t\":\"sr\",\"v\":${JsonPrimitive(reason)}}\n"
     is StreamChunk.Activity -> "{\"t\":\"ac\",\"v\":$json}\n"
     is StreamChunk.ToolCalls -> "{\"t\":\"tc\",\"v\":$json}\n"
