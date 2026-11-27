@@ -12,6 +12,30 @@
     opacity: 0.7;
 }
 
+// Unread reply: the title keeps its ellipsis, the dot never gets cut off
+.unreadLabel {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+.unreadTitle {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.unreadDot {
+    flex-shrink: 0;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--color-primary);
+}
+
 // Create-project dialog
 .projectForm {
     display: flex;

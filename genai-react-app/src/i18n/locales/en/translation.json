@@ -255,6 +255,7 @@
         },
         "conversationHistory": {
             "history": "History",
+            "unreadReply": "New reply",
             "untitledConversation": "Untitled conversation",
             "deleteConversation": "Delete conversation",
             "delete": "Delete",

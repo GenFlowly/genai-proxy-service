@@ -24,8 +24,8 @@ import { ActivityEvent, appendActivity } from '@genflowly/component-library'
 import { customerKey, StorageSuffix } from '../utils/storageKeys'
 import { AttachmentRef } from '../models/attachment.models'
 import { createConversationTitle } from '../services/createConversationTitleService'
-import { forkConversation as forkConversationApi } from '../services/conversationHistoryService'
-import { CONVERSATION_FORKED_EVENT } from '../constants/events'
+import { forkConversation as forkConversationApi, markConversationRead } from '../services/conversationHistoryService'
+import { CONVERSATION_FORKED_EVENT, CONVERSATION_LIST_CHANGED_EVENT } from '../constants/events'
 import i18n from '../i18n'
 
 const ConversationContext = createContext<IConversationContext | undefined>(undefined)
@@ -410,6 +410,20 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         }, onDelta, onMetadata, onActivity, signal, onWebSources, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason, resume)
     }
 
+    // A reply ended: one in the chat on screen has been read; any other leaves its
+    // chat unread. Either way the history list refreshes to show it.
+    const replyEnded = useCallback((replyConversationId?: string | null) => {
+        const listChanged = () => window.dispatchEvent(new CustomEvent(CONVERSATION_LIST_CHANGED_EVENT))
+        if (!replyConversationId || replyConversationId !== conversationIdRef.current) {
+            listChanged()
+            return
+        }
+        getAccessTokenSilently()
+            .then(token => markConversationRead(token, replyConversationId))
+            .catch(e => console.warn('Mark read failed', e))
+            .finally(listChanged)
+    }, [getAccessTokenSilently])
+
     const loadConversation = useCallback(async (id: string) => {
         try {
             let token = ''
@@ -430,6 +444,9 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 setConversationId(data.conversationId)
                 setConversationBlockList(data.blocks)
                 setConversationRole(data.role)
+                if (token && data.role === 'OWNER') {
+                    markConversationRead(token, data.conversationId).catch(e => console.warn('Mark read failed', e))
+                }
 
                 // Restore the page title from the saved conversation title
                 if (data.title) {
@@ -517,6 +534,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                 b.conversationBlockId === bId
                                     ? { ...b, isLoading: b.responseMessages.some(m => m.messageId !== targetId && m.isLoading), responseMessages: b.responseMessages.map(m => m.messageId === targetId ? { ...m, isLoading: false } : m) }
                                     : b))
+                            replyEnded(data.conversationId)
                         }
                         followRun(getAccessTokenSilently, cursor, data.conversationId, {
                             onDelta: (c) => { acc += c; gotContent = true; patch(m => ({ ...m, text: acc })) },
@@ -587,7 +605,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 console.error("Failed to load conversation", err)
             }
         }
-    }, [isSessionAuthenticated, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId, loginWithRedirect])
+    }, [isSessionAuthenticated, getAccessTokenSilently, showToast, navigate, setSelectedInstructionId, loginWithRedirect, replyEnded])
 
     // Deliver a human/client reply to the durable run generating [messageId]. The
     // run resumes from its checkpoint; the still-open stream delivers what follows.
@@ -883,10 +901,16 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             const currentConversationId = conversationIdRef.current
             // Helper to perform the fetch for a specific config
             const runStream = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string, index: number = 0) => {
+                let resolvedConversationId: string | undefined
+                const noteId = (cid: string) => {
+                    resolvedConversationId = cid.split(',')[0].trim()
+                    onIdResolved?.(cid)
+                }
                 try {
-                    await streamVendor(conf, msgId, onIdResolved, explicitConversationId, index)
+                    await streamVendor(conf, msgId, noteId, explicitConversationId, index)
                 } finally {
                     releaseStream(`${id}-${conf.aiVendor}`)
+                    replyEnded(explicitConversationId || resolvedConversationId)
                 }
             }
             const streamVendor = async (conf: AIConfig, msgId: string, onIdResolved?: (id: string) => void, explicitConversationId?: string, index: number = 0) => {
