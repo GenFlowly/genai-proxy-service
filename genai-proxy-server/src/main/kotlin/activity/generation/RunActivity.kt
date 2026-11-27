@@ -3,8 +3,7 @@ package com.genflowly.activity.generation
 import com.genflowly.ResponseHeaders
 import com.genflowly.Routes
 import com.genflowly.models.retrieval.StreamChunk
-import com.genflowly.models.retrieval.toNdjsonFrame
-import com.genflowly.models.retrieval.doneNdjsonFrame
+import com.genflowly.models.retrieval.NdjsonFramer
 import com.genflowly.providers.RunsClient
 import com.genflowly.utils.MemoryRedaction
 import com.genflowly.service.ConversationAccessDeniedException
@@ -85,6 +84,7 @@ fun Route.registerRunRoutes(
             call.response.header(HttpHeaders.Connection, "keep-alive")
             call.response.header(ResponseHeaders.ACCEL_BUFFERING, "no")
             call.respondTextWriter(contentType = ContentType.Text.Plain) {
+                val framer = NdjsonFramer()
                 try {
                     write(" ")  // heartbeat so the client sees TTFB immediately
                     flush()
@@ -92,18 +92,18 @@ fun Route.registerRunRoutes(
                         val safeChunk = if (redactForViewer && chunk is StreamChunk.Activity) {
                             MemoryRedaction.redactActivityEventJson(chunk.json)?.let { StreamChunk.Activity(it) }
                         } else chunk
-                        safeChunk?.toNdjsonFrame()?.let { write(it); flush() }
+                        safeChunk?.let(framer::frame)?.let { write(it); flush() }
                     }
                     // Terminal frame so a client reconnecting via reattach can
                     // tell the relay actually reached the run's end, not just
                     // that this connection happened to close.
-                    write(doneNdjsonFrame("ok"))
+                    write(framer.done("ok"))
                     flush()
                 } catch (e: java.io.IOException) {
                     logger.warn("Reattach stream closed by client: {}", e.message)
                 } catch (e: Exception) {
                     logger.error("Error during reattach stream for run {}", runId, e)
-                    runCatching { write(doneNdjsonFrame("error", e.message)); flush() }
+                    runCatching { write(framer.done("error", e.message)); flush() }
                 }
             }
         }

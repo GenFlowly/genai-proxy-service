@@ -6,8 +6,7 @@ import com.genflowly.models.ToolDefinition
 import com.genflowly.models.ToolResult
 import com.genflowly.models.retrieval.STOP_REASON_INTERRUPTED
 import com.genflowly.models.retrieval.StreamChunk
-import com.genflowly.models.retrieval.toNdjsonFrame
-import com.genflowly.models.retrieval.doneNdjsonFrame
+import com.genflowly.models.retrieval.NdjsonFramer
 import com.genflowly.models.retrieval.parseGeneratedArtifacts
 import com.genflowly.models.retrieval.toConversationMessage
 import com.genflowly.models.retrieval.toFileRefs
@@ -579,6 +578,7 @@ class GenerationOrchestrator(
         val generationJob = appScope.launch {
             val emit: suspend (String) -> Unit = { chunkChannel.send(it) }
             val sb = StringBuilder()
+            val framer = NdjsonFramer()
             var capturedUsage: StreamChunk.Usage? = null
             var capturedErrorMessage: String? = null
             var capturedErrorType: String? = null
@@ -724,8 +724,9 @@ class GenerationOrchestrator(
                         }
                         is StreamChunk.AwaitingInput ->
                             logger.info("Generation {} awaiting input: {}", responseMessageId, chunk.json)
+                        is StreamChunk.RunStarted, is StreamChunk.Position -> {}
                     }
-                    chunk.toNdjsonFrame()?.let { emit(it) }
+                    framer.frame(chunk)?.let { emit(it) }
                 }
                 success = true
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -831,7 +832,7 @@ class GenerationOrchestrator(
                         "vendor" to config.aiVendor.metricVendor(),
                         "model" to config.model,
                     )
-                    runCatching { emit(doneNdjsonFrame(doneStatus, capturedErrorMessage)) }
+                    runCatching { emit(framer.done(doneStatus, capturedErrorMessage)) }
                     // Close AFTER persistence so a connected client's stream end
                     // implies the message is queryable (usage fetch follows it).
                     chunkChannel.close()

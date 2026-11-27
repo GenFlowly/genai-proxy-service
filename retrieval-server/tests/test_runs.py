@@ -351,3 +351,44 @@ def _is_terminal(ev: dict) -> bool:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _ConnectedRequest:
+    headers: dict = {}
+
+    async def is_disconnected(self):
+        return False
+
+
+class StreamRouteClockTest(unittest.IsolatedAsyncioTestCase):
+    async def _lines(self, clock):
+        import routes.runs as runs_route
+
+        async def fake_elapsed(run_id):
+            if isinstance(clock, Exception):
+                raise clock
+            return clock
+
+        async def fake_read_since(run_id, from_seq=0, limit=500):
+            return [{"seq": 7, "event": {"status": "success", "run_id": run_id}, "terminal": True}]
+
+        with patch.object(runs_route, "_require_ready", lambda: None), \
+             patch.object(run_events, "elapsed_ms", fake_elapsed), \
+             patch.object(run_events, "read_since", fake_read_since):
+            response = await runs_route.stream_run("run_x", _ConnectedRequest(), from_seq=3)
+            return [chunk async for chunk in response.body_iterator]
+
+    async def test_the_clock_comes_first_and_carries_no_seq(self):
+        lines = await self._lines(41250)
+        self.assertEqual(lines[0], 'data: {"clock_ms": 41250}\n\n')
+        self.assertTrue(lines[1].startswith("id: 7\n"))
+        self.assertEqual(lines[-1], "data: [DONE]\n\n")
+
+    async def test_a_run_with_no_activity_yet_sends_a_null_clock(self):
+        lines = await self._lines(None)
+        self.assertEqual(lines[0], 'data: {"clock_ms": null}\n\n')
+
+    async def test_a_clock_read_failure_still_streams_the_run(self):
+        lines = await self._lines(RuntimeError("pool closed"))
+        self.assertEqual(lines[0], 'data: {"clock_ms": null}\n\n')
+        self.assertTrue(lines[1].startswith("id: 7\n"))

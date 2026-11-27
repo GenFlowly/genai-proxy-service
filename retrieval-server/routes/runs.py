@@ -90,6 +90,13 @@ async def stream_run(run_id: str, request: Request, from_seq: int = 0):
     async def gen():
         last = start_seq
         waited = 0.0
+        # No `id:`: the clock is not a log event, so it never moves the seq.
+        try:
+            clock = await run_events.elapsed_ms(run_id)
+        except Exception:
+            logger.warning("Stream %s: could not read the run's clock", run_id, exc_info=True)
+            clock = None
+        yield f"data: {json.dumps({'clock_ms': clock})}\n\n"
         while True:
             if await request.is_disconnected():
                 logger.info("Stream %s: client disconnected at seq=%s", run_id, last)
