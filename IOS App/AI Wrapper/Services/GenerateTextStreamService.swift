@@ -132,39 +132,46 @@ enum GenerateTextStreamService {
         onMetadata: ((StreamMetadata) -> Void)? = nil,
         callbacks: StreamCallbacks
     ) async throws {
-        var request = URLRequest(url: Endpoints.generateTextStream)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONEncoder().encode(body)
-        request.timeoutInterval = 300
+        try await AppObservability.timeReply(body.aiConfig) { reply in
+            var request = URLRequest(url: Endpoints.generateTextStream)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.httpBody = try JSONEncoder().encode(body)
+            request.timeoutInterval = 300
 
-        let (bytes, response) = try await APIClient.session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw APIError(status: -1, message: "Invalid response")
-        }
-        if http.statusCode == 401 || http.statusCode == 403 {
-            throw Auth0Service.AuthError.loginRequired
-        }
-        if http.statusCode == 422 {
-            var body = Data()
-            for try await byte in bytes { body.append(byte) }
-            if ModerationRefusal(body: body) == .contentBlocked {
-                throw APIError(status: 422, message: L("moderation.postRefusedByFilter"))
+            let (bytes, response) = try await APIClient.session.bytes(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw APIError(status: -1, message: "Invalid response")
             }
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            throw APIError(status: http.statusCode, message: L("errors.ai.generateTextStreamFailed"))
-        }
+            if http.statusCode == 401 || http.statusCode == 403 {
+                throw Auth0Service.AuthError.loginRequired
+            }
+            if http.statusCode == 422 {
+                var body = Data()
+                for try await byte in bytes { body.append(byte) }
+                if ModerationRefusal(body: body) == .contentBlocked {
+                    throw APIError(status: 422, message: L("moderation.postRefusedByFilter"))
+                }
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                throw APIError(status: http.statusCode, message: L("errors.ai.generateTextStreamFailed"))
+            }
 
-        onMetadata?(StreamMetadata(
-            conversationId: http.value(forHTTPHeaderField: "X-Conversation-Id"),
-            messageId: http.value(forHTTPHeaderField: "X-Message-Id"),
-            responseMessageId: http.value(forHTTPHeaderField: "X-Response-Message-Id"),
-            aiVendor: http.value(forHTTPHeaderField: "X-Ai-Vendor"),
-            instructionId: http.value(forHTTPHeaderField: "X-Instruction-Id")
-        ))
+            onMetadata?(StreamMetadata(
+                conversationId: http.value(forHTTPHeaderField: "X-Conversation-Id"),
+                messageId: http.value(forHTTPHeaderField: "X-Message-Id"),
+                responseMessageId: http.value(forHTTPHeaderField: "X-Response-Message-Id"),
+                aiVendor: http.value(forHTTPHeaderField: "X-Ai-Vendor"),
+                instructionId: http.value(forHTTPHeaderField: "X-Instruction-Id")
+            ))
 
-        try await readNdjsonStream(bytes, callbacks)
+            var timed = callbacks
+            timed.onDelta = { delta in
+                reply.firstToken()
+                callbacks.onDelta(delta)
+            }
+            try await readNdjsonStream(bytes, timed)
+        }
     }
 }
