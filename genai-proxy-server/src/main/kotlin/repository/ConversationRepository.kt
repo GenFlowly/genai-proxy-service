@@ -8,6 +8,8 @@ import com.genflowly.DynamoDBConstants.CONVERSATION_PINNED_GSI_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_PROJECT_GSI_KEY
 import com.genflowly.DynamoDBConstants.CONVERSATION_TABLE
 import com.genflowly.DynamoDBConstants.CUSTOMER_ID_KEY
+import com.genflowly.DynamoDBConstants.LAST_READ_AT_KEY
+import com.genflowly.DynamoDBConstants.LAST_REPLY_AT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_ID_SORT_KEY
 import com.genflowly.DynamoDBConstants.MESSAGE_TABLE
 import com.genflowly.DynamoDBConstants.PARENT_CONVERSATION_ID_KEY
@@ -69,6 +71,21 @@ enum class TouchResult {
     NO_ROW,
     /** The update failed for another reason; the row may well exist. */
     FAILED
+}
+
+/** What a message write says about the owner's unread state, beside bumping updatedAt. */
+enum class ReadStamp {
+    /** An AI reply was saved: the conversation has something new for its owner. */
+    REPLIED,
+    /** The owner wrote in it: they have read what came before. */
+    READ
+}
+
+/** A reply saved after the owner's last read. No read stamp counts as read (rows from before). */
+internal fun isUnread(item: Map<String, AttributeValue>?): Boolean {
+    val replied = item?.get(LAST_REPLY_AT_KEY)?.s()?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return false
+    val read = item[LAST_READ_AT_KEY]?.s()?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return false
+    return replied.isAfter(read)
 }
 
 data class ConversationAttributes(
@@ -211,7 +228,8 @@ class ConversationRepository(
     suspend fun touchConversation(
         customerId: String,
         conversationId: String,
-        vendors: Set<String> = emptySet()
+        vendors: Set<String> = emptySet(),
+        stamp: ReadStamp? = null
     ): TouchResult = withContext(Dispatchers.IO) {
         try {
             val attrNames = mutableMapOf("#ua" to "updatedAt", "#cid" to CONVERSATION_ID_KEY)
@@ -219,6 +237,11 @@ class ConversationRepository(
                 ":now" to AttributeValue.builder().s(Instant.now().toString()).build()
             )
             var updateExpression = "SET #ua = :now"
+            when (stamp) {
+                ReadStamp.REPLIED -> { updateExpression += ", #lr = :now"; attrNames["#lr"] = LAST_REPLY_AT_KEY }
+                ReadStamp.READ -> { updateExpression += ", #rd = :now"; attrNames["#rd"] = LAST_READ_AT_KEY }
+                null -> {}
+            }
             if (vendors.isNotEmpty()) {
                 updateExpression += " ADD #v :vendors"
                 attrNames["#v"] = VENDORS_KEY
@@ -244,6 +267,31 @@ class ConversationRepository(
             // Best-effort: a failed touch must not fail the message write
             logger.error("Failed to touch conversation $conversationId", e)
             TouchResult.FAILED
+        }
+    }
+
+    /**
+     * The owner has read the conversation now. Keyed by the caller, so it's a no-op
+     * (false) for anyone but the owner: their row doesn't exist under that key.
+     */
+    suspend fun markConversationRead(customerId: String, conversationId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            dynamoDbClient.updateItem(
+                UpdateItemRequest.builder()
+                    .tableName(CONVERSATION_TABLE)
+                    .key(mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(conversationId).build()
+                    ))
+                    .updateExpression("SET #rd = :now")
+                    .conditionExpression("attribute_exists(#cid)")
+                    .expressionAttributeNames(mapOf("#rd" to LAST_READ_AT_KEY, "#cid" to CONVERSATION_ID_KEY))
+                    .expressionAttributeValues(mapOf(":now" to AttributeValue.builder().s(Instant.now().toString()).build()))
+                    .build()
+            )
+            true
+        } catch (e: ConditionalCheckFailedException) {
+            false
         }
     }
 
@@ -622,12 +670,14 @@ class ConversationRepository(
                         CONVERSATION_ID_KEY to AttributeValue.builder().s(it).build()
                     )
                 },
-                projectionExpression = "$CONVERSATION_ID_KEY, #pid, #parent, #pa, #v",
+                projectionExpression = "$CONVERSATION_ID_KEY, #pid, #parent, #pa, #v, #lr, #rd",
                 expressionAttributeNames = mapOf(
                     "#pid" to PROJECT_ID_KEY,
                     "#parent" to PARENT_CONVERSATION_ID_KEY,
                     "#pa" to PINNED_AT_KEY,
-                    "#v" to VENDORS_KEY
+                    "#v" to VENDORS_KEY,
+                    "#lr" to LAST_REPLY_AT_KEY,
+                    "#rd" to LAST_READ_AT_KEY
                 )
             ).mapNotNull { item ->
                 item[CONVERSATION_ID_KEY]?.s()?.let { it to item }
@@ -648,7 +698,8 @@ class ConversationRepository(
                 pinnedAt = baseRow?.get(PINNED_AT_KEY)?.s(),
                 vendors = resolveVendors(customerId, convId, baseRow?.get(VENDORS_KEY)),
                 projectId = baseRow?.get(PROJECT_ID_KEY)?.s(),
-                parentConversationId = baseRow?.get(PARENT_CONVERSATION_ID_KEY)?.s()
+                parentConversationId = baseRow?.get(PARENT_CONVERSATION_ID_KEY)?.s(),
+                unread = isUnread(baseRow)
             )
         }
 
@@ -701,6 +752,25 @@ class ConversationRepository(
 
         val response = dynamoDbClient.query(queryBuilder.build())
 
+        // The pinned index's INCLUDE projection lacks the read stamps, and changing
+        // it means replacing the index: one BatchGetItem per page fills them in.
+        val pinnedIds = response.items().mapNotNull { it[CONVERSATION_ID_KEY]?.s() }
+        val stampsByConversation: Map<String, Map<String, AttributeValue>> =
+            if (pinnedIds.isEmpty()) emptyMap()
+            else dynamoDbClient.batchGetWithRetry(
+                tableName = CONVERSATION_TABLE,
+                keys = pinnedIds.map {
+                    mapOf(
+                        CUSTOMER_ID_KEY to AttributeValue.builder().s(customerId).build(),
+                        CONVERSATION_ID_KEY to AttributeValue.builder().s(it).build()
+                    )
+                },
+                projectionExpression = "$CONVERSATION_ID_KEY, #lr, #rd",
+                expressionAttributeNames = mapOf("#lr" to LAST_REPLY_AT_KEY, "#rd" to LAST_READ_AT_KEY)
+            ).mapNotNull { item ->
+                item[CONVERSATION_ID_KEY]?.s()?.let { it to item }
+            }.toMap()
+
         val conversations = response.items().mapNotNull { item ->
             val convId = item[CONVERSATION_ID_KEY]?.s() ?: return@mapNotNull null
             ConversationSummary(
@@ -711,7 +781,8 @@ class ConversationRepository(
                 pinnedAt = item[PINNED_AT_KEY]?.s(),
                 vendors = resolveVendors(customerId, convId, item[VENDORS_KEY]),
                 projectId = item[PROJECT_ID_KEY]?.s(),
-                parentConversationId = item[PARENT_CONVERSATION_ID_KEY]?.s()
+                parentConversationId = item[PARENT_CONVERSATION_ID_KEY]?.s(),
+                unread = isUnread(stampsByConversation[convId])
             )
         }
 
@@ -818,13 +889,15 @@ class ConversationRepository(
                     )
                 },
                 // "title" is a DynamoDB reserved word — alias it
-                projectionExpression = "$CONVERSATION_ID_KEY, #t, createdAt, updatedAt, #aa, #pa, #parent, #v",
+                projectionExpression = "$CONVERSATION_ID_KEY, #t, createdAt, updatedAt, #aa, #pa, #parent, #v, #lr, #rd",
                 expressionAttributeNames = mapOf(
                     "#t" to "title",
                     "#aa" to ARCHIVED_AT_KEY,
                     "#pa" to PINNED_AT_KEY,
                     "#parent" to PARENT_CONVERSATION_ID_KEY,
-                    "#v" to VENDORS_KEY
+                    "#v" to VENDORS_KEY,
+                    "#lr" to LAST_REPLY_AT_KEY,
+                    "#rd" to LAST_READ_AT_KEY
                 )
             ).mapNotNull { item ->
                 item[CONVERSATION_ID_KEY]?.s()?.let { it to item }
@@ -842,7 +915,8 @@ class ConversationRepository(
                 pinnedAt = baseRow[PINNED_AT_KEY]?.s(),
                 vendors = resolveVendors(customerId, convId, baseRow[VENDORS_KEY]),
                 projectId = projectId,
-                parentConversationId = baseRow[PARENT_CONVERSATION_ID_KEY]?.s()
+                parentConversationId = baseRow[PARENT_CONVERSATION_ID_KEY]?.s(),
+                unread = isUnread(baseRow)
             )
         }
 

@@ -129,6 +129,7 @@ enum Endpoints {
     static var getPinnedConversations: URL { URL(string: "\(base)/conversations/pinned")! }
     static func pinConversation(_ id: String) -> URL { URL(string: "\(base)/conversation/pin?conversationId=\(enc(id))")! }
     static func unpinConversation(_ id: String) -> URL { URL(string: "\(base)/conversation/unpin?conversationId=\(enc(id))")! }
+    static func markConversationRead(_ id: String) -> URL { URL(string: "\(base)/conversation/read?conversationId=\(enc(id))")! }
     static func forkConversation(_ id: String, messageId: String) -> URL { URL(string: "\(base)/conversation/fork?conversationId=\(enc(id))&messageId=\(enc(messageId))")! }
     static var getProjects: URL { URL(string: "\(base)/projects")! }
     static var getProjectConversations: URL { URL(string: "\(base)/projects/conversations")! }

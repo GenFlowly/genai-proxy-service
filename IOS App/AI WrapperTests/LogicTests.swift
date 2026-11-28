@@ -2442,3 +2442,130 @@ struct DetailPageTests {
         }
     }
 }
+
+// MARK: - Leaving a conversation
+
+@MainActor
+struct LeavingConversationTests {
+    private final class Cancels { var ids: [String] = [] }
+
+    /// A store with one reply streaming: its request is open and the server has answered.
+    private func streamingStore(_ cancels: Cancels) -> (ConversationStore, Task<Void, Error>) {
+        let store = ConversationStore()
+        store.cancelOnServer = { ids in cancels.ids += ids }
+        let task = Task<Void, Error> { try await Task.sleep(nanoseconds: 60_000_000_000) }
+        store.streamTasks["b1-OPENAI"] = task
+        store.generationIds["b1-OPENAI"] = "gen-1"
+        store.headersReceived.insert("b1-OPENAI")
+        return (store, task)
+    }
+
+    @Test func newChatDropsTheStreamWithoutCancellingTheReply() async {
+        let cancels = Cancels()
+        let (store, task) = streamingStore(cancels)
+        store.resetConversation()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(task.isCancelled)
+        #expect(cancels.ids.isEmpty)
+    }
+
+    @Test func aRequestStillWaitingForItsHeadersStaysOpen() async {
+        let cancels = Cancels()
+        let (store, task) = streamingStore(cancels)
+        store.headersReceived.remove("b1-OPENAI")
+        store.resetConversation()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(!task.isCancelled)
+        #expect(cancels.ids.isEmpty)
+        task.cancel()
+    }
+
+    @Test func stopStillCancelsTheReplyOnTheServer() async {
+        let cancels = Cancels()
+        let (store, task) = streamingStore(cancels)
+        store.stopGenerating()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(task.isCancelled)
+        #expect(cancels.ids == ["gen-1"])
+    }
+}
+
+// MARK: - Resuming a reply
+
+@MainActor
+struct ReplyResumeFrameTests {
+    private final class Seen {
+        var runs: [(String, Int?)] = []
+        var seqs: [Int] = []
+        var deltas: [String] = []
+    }
+
+    private func feed(_ lines: [String]) throws -> Seen {
+        let seen = Seen()
+        let cb = StreamCallbacks(
+            onDelta: { seen.deltas.append($0) },
+            onRun: { seen.runs.append(($0, $1)) },
+            onSeq: { seen.seqs.append($0) }
+        )
+        for line in lines { _ = try GenerateTextStreamService.processLine(line, cb) }
+        return seen
+    }
+
+    @Test func theRunFrameNamesTheRunAndItsClock() throws {
+        let seen = try feed([#"{"t":"run","v":"run_1","s":4,"ms":41250}"#])
+        #expect(seen.runs.count == 1)
+        #expect(seen.runs.first?.0 == "run_1")
+        #expect(seen.runs.first?.1 == 41250)
+        #expect(seen.seqs == [4])
+    }
+
+    @Test func eachFrameCommitsItsSeqAfterItIsApplied() throws {
+        let seen = try feed([#"{"t":"c","v":"Hel","s":5}"#, #"{"t":"c","v":"lo","s":6}"#, #"{"t":"done","status":"ok","s":6}"#])
+        #expect(seen.deltas == ["Hel", "lo"])
+        #expect(seen.seqs == [5, 6, 6])
+    }
+
+    @Test func framesWithoutASeqLeaveItAlone() throws {
+        let seen = try feed([#"{"t":"c","v":"x"}"#, #"{"t":"done","status":"ok"}"#])
+        #expect(seen.seqs.isEmpty)
+    }
+
+    @Test func anErrorFrameDoesNotCommitItsSeq() {
+        let seen = Seen()
+        let cb = StreamCallbacks(onDelta: { _ in }, onSeq: { seen.seqs.append($0) })
+        #expect(throws: StreamGenerationError.self) { try GenerateTextStreamService.processLine(#"{"t":"err","v":"quota","s":9}"#, cb) }
+        #expect(seen.seqs.isEmpty)
+    }
+
+    @Test func theTurnClockRunsOnFromWhenItArrived() {
+        let received = Date(timeIntervalSince1970: 1_000)
+        let clock = RunClock(at: 41_250, receivedAt: received)
+        #expect(clock.now(received.addingTimeInterval(2.5)) == 43_750)
+    }
+}
+
+// MARK: - Unread replies
+
+@MainActor
+struct UnreadReplyTests {
+    @Test func theListSaysWhichChatsHaveAnUnreadReply() throws {
+        let json = #"{"conversations":[{"conversationId":"c1","title":"A","unread":true},{"conversationId":"c2","title":"B"}]}"#
+        let page = try JSONDecoder().decode(GetCustomerConversationsResponse.self, from: Data(json.utf8))
+        #expect(page.conversations[0].unread == true)
+        #expect(page.conversations[1].unread == nil)
+    }
+
+    @Test func openingAChatClearsItsDotEverywhereItIsListed() {
+        let history = HistoryStore()
+        history.items = [ConversationSummary(conversationId: "c1", unread: true), ConversationSummary(conversationId: "c2", unread: true)]
+        history.pinned = [ConversationSummary(conversationId: "c1", unread: true)]
+        history.projectItems = ["PRJ1": [ConversationSummary(conversationId: "c1", projectId: "PRJ1", unread: true)]]
+
+        history.markRead(id: "c1")
+
+        #expect(history.items.first { $0.conversationId == "c1" }?.unread == false)
+        #expect(history.pinned.first?.unread == false)
+        #expect(history.projectItems["PRJ1"]?.first?.unread == false)
+        #expect(history.items.first { $0.conversationId == "c2" }?.unread == true)
+    }
+}

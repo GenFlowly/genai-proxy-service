@@ -140,8 +140,10 @@ struct ConversationSummary: Codable, Identifiable, Equatable {
     var projectName: String?
     /// Conversation this one was forked from (nests under its parent in history).
     var parentConversationId: String?
+    /// A reply arrived after its owner last read it: the row shows a dot.
+    var unread: Bool?
 
-    init(conversationId: String, title: String? = nil, createdAt: String? = nil, updatedAt: String? = nil, pinnedAt: String? = nil, vendors: [String]? = nil, projectId: String? = nil, projectName: String? = nil, parentConversationId: String? = nil) {
+    init(conversationId: String, title: String? = nil, createdAt: String? = nil, updatedAt: String? = nil, pinnedAt: String? = nil, vendors: [String]? = nil, projectId: String? = nil, projectName: String? = nil, parentConversationId: String? = nil, unread: Bool? = nil) {
         self.conversationId = conversationId
         self.title = title
         self.createdAt = createdAt
@@ -151,6 +153,7 @@ struct ConversationSummary: Codable, Identifiable, Equatable {
         self.projectId = projectId
         self.projectName = projectName
         self.parentConversationId = parentConversationId
+        self.unread = unread
     }
 
     var id: String { conversationId }

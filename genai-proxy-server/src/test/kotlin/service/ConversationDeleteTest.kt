@@ -7,6 +7,7 @@ import com.genflowly.models.Message
 import com.genflowly.models.ShareRole
 import com.genflowly.repository.ConversationAttributes
 import com.genflowly.repository.ConversationRepository
+import com.genflowly.repository.ReadStamp
 import com.genflowly.repository.ShareRepository
 import com.genflowly.repository.TouchResult
 import io.mockk.coEvery
@@ -93,7 +94,7 @@ class LateMessageTest {
     )
 
     private fun touch(customerId: String, result: TouchResult) {
-        coEvery { conversationRepo.touchConversation(customerId, conv, any()) } returns result
+        coEvery { conversationRepo.touchConversation(customerId, conv, any(), any()) } returns result
     }
 
     @Test
@@ -139,3 +140,61 @@ class LateMessageTest {
         coVerify { conversationRepo.deleteMessage(conv, id) }
     }
 }
+
+/** What a message write tells the owner's unread state (the history list's dot). */
+class UnreadStampTest {
+
+    private val conv = "conv-1"
+    private val owner = "cust-owner"
+    private val recipient = "cust-recipient"
+
+    private val conversationRepo = mockk<ConversationRepository>(relaxed = true)
+    private val conversations = ConversationService(conversationRepo, mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), ContentFilter(emptyList()))
+
+    private fun message(author: String, role: String) = Message(
+        conversationId = conv, text = "hi", client = "test", role = role, customerId = author,
+        systemPrompt = "", aiConfig = listOf(AIConfig(AIVendor.OPENAI, "gpt-5.4-nano")), previousMessageId = null
+    )
+
+    @Test
+    fun `a reply marks the conversation replied`() = runTest {
+        coEvery { conversationRepo.touchConversation(owner, conv, any(), any()) } returns TouchResult.TOUCHED
+
+        conversations.addMessageInConversation(message(owner, "assistant"))
+
+        coVerify { conversationRepo.touchConversation(owner, conv, any(), ReadStamp.REPLIED) }
+    }
+
+    @Test
+    fun `a reply the user stopped is not news`() = runTest {
+        coEvery { conversationRepo.touchConversation(owner, conv, any(), any()) } returns TouchResult.TOUCHED
+
+        conversations.addMessageInConversation(message(owner, "assistant").copy(stopReason = "cancelled"))
+
+        coVerify { conversationRepo.touchConversation(owner, conv, any(), ReadStamp.READ) }
+        coVerify(exactly = 0) { conversationRepo.touchConversation(owner, conv, any(), ReadStamp.REPLIED) }
+    }
+
+    @Test
+    fun `the owner's own message marks it read`() = runTest {
+        coEvery { conversationRepo.touchConversation(owner, conv, any(), any()) } returns TouchResult.TOUCHED
+
+        conversations.addMessageInConversation(message(owner, "user"))
+
+        coVerify { conversationRepo.touchConversation(owner, conv, any(), ReadStamp.READ) }
+    }
+
+    @Test
+    fun `a recipient's message never marks the owner's row read, but a reply still counts`() = runTest {
+        coEvery { conversationRepo.touchConversation(recipient, conv, any(), any()) } returns TouchResult.NO_ROW
+        coEvery { conversationRepo.getConversationById(conv) } returns Conversation(conv, owner, "REACT_APP")
+        coEvery { conversationRepo.touchConversation(owner, conv, any(), any()) } returns TouchResult.TOUCHED
+
+        conversations.addMessageInConversation(message(recipient, "user"))
+        coVerify { conversationRepo.touchConversation(owner, conv, any(), null) }
+
+        conversations.addMessageInConversation(message(recipient, "assistant"))
+        coVerify { conversationRepo.touchConversation(owner, conv, any(), ReadStamp.REPLIED) }
+    }
+}
+

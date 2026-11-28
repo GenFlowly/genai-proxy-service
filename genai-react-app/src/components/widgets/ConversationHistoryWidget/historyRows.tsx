@@ -42,6 +42,22 @@ function renderDetails(conv: ConversationSummary): React.ReactElement {
     )
 }
 
+/** A row's title, with a dot after it when a reply came in since the chat was last read. */
+function renderLabel(title: string, unread: boolean, t: TFunction): React.ReactNode {
+    if (!unread) return title
+    return (
+        <span className={styles.unreadLabel}>
+            <span className={styles.unreadTitle}>{title}</span>
+            <span
+                className={styles.unreadDot}
+                role="img"
+                aria-label={t('conversation.conversationHistory.unreadReply')}
+                data-testid="conv-history-unread-dot"
+            />
+        </span>
+    )
+}
+
 /**
  * Builds the rows the Projects and Chats widgets list: a conversation with
  * Move to project, Pin or Unpin and Delete behind its More actions button.
@@ -51,7 +67,11 @@ function renderDetails(conv: ConversationSummary): React.ReactElement {
 export function historyRowBuilder(history: ConversationHistory, t: TFunction, menu: boolean) {
     const toRow = (conv: ConversationSummary, isPinned: boolean): SidebarListItem => ({
         id: conv.conversationId,
-        label: conv.title?.trim() || (menu ? t('conversation.conversationHistory.untitledConversation') : conv.conversationId),
+        label: renderLabel(
+            conv.title?.trim() || (menu ? t('conversation.conversationHistory.untitledConversation') : conv.conversationId),
+            !!conv.unread && conv.conversationId !== history.activeId,
+            t
+        ),
         details: renderDetails(conv),
         isActive: conv.conversationId === history.activeId,
         ariaCurrent: 'page',

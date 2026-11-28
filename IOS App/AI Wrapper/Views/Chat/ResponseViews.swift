@@ -396,6 +396,7 @@ struct ResponseCardView: View {
                 isLive: message.isLoading,
                 citedSources: message.webSources,
                 stopReason: message.stopReason,
+                clock: message.runClock,
                 onThinkingChange: { thinking in
                     isThinking = thinking
                     onThinkingChange(thinking)

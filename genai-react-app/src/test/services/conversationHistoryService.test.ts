@@ -3,6 +3,7 @@ import {
     deleteProject,
     getCustomerConversations,
     getPinnedConversations,
+    markConversationRead,
     pinConversation,
     renameProject,
     unpinConversation,
@@ -56,6 +57,27 @@ describe('conversationHistoryService', () => {
 
             await expect(deleteConversation(mockToken, mockConversationId)).rejects.toThrow(
                 'Failed to delete conversation: Internal Server Error'
+            );
+        });
+    });
+
+    describe('markConversationRead', () => {
+        it('posts the read for the conversation', async () => {
+            (fetchWithRetry as jest.Mock).mockResolvedValueOnce({ ok: true });
+
+            await markConversationRead(mockToken, mockConversationId);
+
+            expect(fetchWithRetry).toHaveBeenCalledWith(
+                endpoints.markConversationRead(mockConversationId),
+                { method: HttpMethod.POST, headers: { Authorization: `Bearer ${mockToken}` } }
+            );
+        });
+
+        it('throws when the server refuses', async () => {
+            (fetchWithRetry as jest.Mock).mockResolvedValueOnce({ ok: false, statusText: 'Bad Request' });
+
+            await expect(markConversationRead(mockToken, mockConversationId)).rejects.toThrow(
+                'Failed to mark conversation read: Bad Request'
             );
         });
     });

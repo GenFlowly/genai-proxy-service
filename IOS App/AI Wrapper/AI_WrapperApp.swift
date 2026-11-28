@@ -263,6 +263,8 @@ struct AI_WrapperApp: App {
                 .onChange(of: scenePhase) { previous, phase in
                     if phase == .active, previous == .background {
                         Task { await auth.checkSessionOnReturn() }
+                        // Replies that finished while away show as unread.
+                        Task { await history.refreshUnread() }
                     }
                 }
         }

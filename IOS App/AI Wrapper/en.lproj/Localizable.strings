@@ -1104,6 +1104,7 @@
 "layout.mobileMenu.searchSettings" = "Search settings";
 "conversation.conversationHistory.history" = "History";
 "conversation.conversationHistory.untitledConversation" = "Untitled conversation";
+"conversation.conversationHistory.unreadReply" = "New reply";
 "agentsPage.menu.agents" = "Agents";
 "agentsPage.menu.createdByYou" = "Created by you";
 "agentsPage.menu.noAgents" = "No agents match";

@@ -91,7 +91,24 @@ nonisolated enum SentryScrubbing {
     static func event(_ event: Event) -> Event? {
         event.request?.queryString = nil
         event.request?.fragment = nil
+        // An NSError carries its failing URL (NSErrorFailingURLKey) into the exception text
+        // and the "user info" context.
+        event.exceptions?.forEach { exception in exception.value = exception.value.map(stripQueries) }
+        if var userInfo = event.context?["user info"] {
+            for (key, value) in userInfo {
+                if let text = value as? String { userInfo[key] = stripQueries(text) }
+            }
+            event.context?["user info"] = userInfo
+        }
         return event
+    }
+
+    /// A query runs to whitespace, a quote, or a comma that ends the URL in NSError text.
+    private static let urlQuery = try! NSRegularExpression(pattern: #"(https?://[^\s?#"'<>]+)[?#](?:[^\s"'<>,]|,(?!\s|$))*"#)
+
+    /// Every URL in [text] cut to its scheme, host and path.
+    static func stripQueries(_ text: String) -> String {
+        urlQuery.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "$1")
     }
 }
 #endif

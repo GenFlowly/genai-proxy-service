@@ -18,6 +18,7 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
@@ -95,9 +96,26 @@ class ConversationProjectReadTest {
             }
         }
 
+        // The pinned index lacks the read stamps: they come from the base table.
+        every { client.batchGetItem(any<BatchGetItemRequest>()) } returns
+            BatchGetItemResponse.builder()
+                .responses(
+                    mapOf(
+                        DynamoDBConstants.CONVERSATION_TABLE to listOf(
+                            mapOf(
+                                DynamoDBConstants.CONVERSATION_ID_KEY to s("conv-1"),
+                                DynamoDBConstants.LAST_REPLY_AT_KEY to s("2026-01-02T00:00:05Z"),
+                                DynamoDBConstants.LAST_READ_AT_KEY to s("2026-01-02T00:00:01Z")
+                            )
+                        )
+                    )
+                )
+                .build()
+
         val pinned = repository.getPinnedConversationsByCustomer(cust)
 
         assertEquals("PRJ1", pinned.conversations.single().projectId)
+        assertTrue(pinned.conversations.single().unread)
     }
 
     @Test
