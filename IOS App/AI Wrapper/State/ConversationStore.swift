@@ -385,6 +385,7 @@ final class ConversationStore: ObservableObject {
                 if let saved {
                     self.updateMessage(blockId: blockId, matching: ids) {
                         $0.text = saved.text
+                        $0.activity = Self.savedActivity(saved, over: $0.activity)
                         $0.webSources = saved.webSources ?? $0.webSources
                         $0.generatedAttachments = saved.generatedAttachments ?? $0.generatedAttachments
                         $0.stopReason = saved.stopReason ?? $0.stopReason
@@ -950,6 +951,7 @@ final class ConversationStore: ObservableObject {
             if !cursor.active, let saved = await fetchPersistedResponse(token: token, conversationId: targetConversation, messageId: currentMessageId) {
                 accumulatedText = saved.text
                 update { message in
+                    message.activity = Self.savedActivity(saved, over: message.activity)
                     message.webSources = saved.webSources ?? message.webSources
                     message.generatedAttachments = saved.generatedAttachments ?? message.generatedAttachments
                     message.stopReason = saved.stopReason ?? message.stopReason
@@ -965,6 +967,8 @@ final class ConversationStore: ObservableObject {
                 if let recovered = await recoverPersistedResponse(token: token, conversationId: targetConversation, messageId: currentMessageId, maxAttempts: attempts) {
                     accumulatedText = recovered.text
                     update { message in
+                        message.activity = Self.savedActivity(recovered, over: message.activity)
+                        message.stopReason = recovered.stopReason ?? message.stopReason
                         message.webSources = recovered.webSources ?? message.webSources
                         message.generatedAttachments = recovered.generatedAttachments ?? message.generatedAttachments
                         message.inputTokens = recovered.inputTokens ?? message.inputTokens
@@ -993,6 +997,13 @@ final class ConversationStore: ObservableObject {
             update { apply(metrics, to: &$0) }
         }
         update { $0.isLoading = false }
+    }
+
+    /// The activity log to show once a reply's saved copy is in: the saved log is the whole
+    /// turn, while the streamed one stops where the connection dropped. A reply saved without a
+    /// log keeps what streamed.
+    nonisolated static func savedActivity(_ saved: Message, over streamed: [ActivityEvent]) -> [ActivityEvent] {
+        saved.activity.isEmpty ? streamed : saved.activity
     }
 
     /// A `StreamGenerationError` is the server's final word, so nothing more is coming: it saves

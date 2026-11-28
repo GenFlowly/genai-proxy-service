@@ -48,6 +48,12 @@ const markStopped = (m: Message): Message => ({
     stopReason: STOP_REASON_CANCELLED,
 })
 
+/** The activity log to show once a reply's saved copy is in: the saved log is
+ * the whole turn, while the streamed one stops where the connection dropped.
+ * A reply saved without a log keeps what streamed. */
+const savedActivity = (saved: Message, current: Message) =>
+    saved.activity?.length ? saved.activity : current.activity
+
 /**
  * Human-in-the-loop state for durable runs paused on an in-graph interrupt().
  * Kept in a small app-owned context because the main conversation value is typed
@@ -513,6 +519,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                     if (saved) patch(m => ({
                                         ...m,
                                         text: saved.text,
+                                        activity: savedActivity(saved, m),
                                         webSources: saved.webSources ?? m.webSources,
                                         generatedAttachments: saved.generatedAttachments ?? m.generatedAttachments,
                                         stopReason: saved.stopReason ?? m.stopReason,
@@ -1204,6 +1211,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                         return {
                                             ...m,
                                             text: saved.text,
+                                            activity: savedActivity(saved, m),
                                             webSources: saved.webSources ?? m.webSources,
                                             generatedAttachments: saved.generatedAttachments ?? m.generatedAttachments,
                                             stopReason: saved.stopReason ?? m.stopReason,
@@ -1238,6 +1246,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                         return {
                                             ...m,
                                             text: recovered.text,
+                                            activity: savedActivity(recovered, m),
+                                            stopReason: recovered.stopReason ?? m.stopReason,
                                             webSources: recovered.webSources ?? m.webSources,
                                             generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
                                             inputTokens: recovered.inputTokens ?? m.inputTokens,
