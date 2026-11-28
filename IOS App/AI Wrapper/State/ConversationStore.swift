@@ -30,17 +30,20 @@ final class ConversationStore: ObservableObject {
     /// Bumped when the conversation is dragged back up: a draft editor in use is put away.
     @Published var putAwayDraftRequest = 0
 
-    private var streamTasks: [String: Task<Void, Error>] = [:]
+    var streamTasks: [String: Task<Void, Error>] = [:]
     /// Client-minted generation ids per stream key, so Stop can cancel server-side work
     /// even before the response headers arrive.
-    private var generationIds: [String: String] = [:]
+    var generationIds: [String: String] = [:]
     /// Streams Stop was pressed for, and streams whose response headers have arrived. A stream
     /// stopped before its headers keeps its request open until they come: they carry the
     /// conversation id a new chat's other vendors join, and without it the next vendor starts a
     /// conversation of its own. A vendor stopped before it launched still sends its request, so
     /// the server records it as stopped.
     private var stopRequested: Set<String> = []
-    private var headersReceived: Set<String> = []
+    var headersReceived: Set<String> = []
+    /// Changes when the user leaves the conversation. A stream from an earlier session belongs
+    /// to a conversation no longer on screen: it must not write into this one.
+    private var streamSession = UUID()
     /// How long a reply stopped before its headers waits for them before giving up on them.
     private static let stopHeadersTimeoutNanoseconds: UInt64 = 30_000_000_000
     private var askSourceMessageId: String?
@@ -181,8 +184,8 @@ final class ConversationStore: ObservableObject {
 
     // MARK: - Stop
 
-    /// Freezes the stopped replies and cancels their server work. Without a block (leaving the
-    /// conversation) the requests are dropped at once: nothing waits on their ids any more.
+    /// Freezes the stopped replies and cancels their server work (the Stop button). Without a
+    /// block it stops every reply in progress and drops their requests at once.
     func stopGenerating(blockId: String? = nil, vendor: AIVendor? = nil) {
         let keys = generationIds.keys.filter { key in
             guard !stopRequested.contains(key) else { return false }
@@ -218,11 +221,15 @@ final class ConversationStore: ObservableObject {
         guard !idsToCancel.isEmpty else { return }
         // Cancelling the request only detaches this client — generation survives
         // disconnects by design and keeps billing, so a true Stop also cancels server-side.
-        Task { [weak self] in
-            guard let token = try? await self?.auth?.getAccessTokenSilently() else { return }
-            for id in idsToCancel {
-                await StreamRecoveryService.cancelGeneration(token: token, id: id)
-            }
+        let cancel = cancelOnServer
+        Task { await cancel(idsToCancel) }
+    }
+
+    /// Cancels generations on the server by client generation id. Replaced in tests.
+    lazy var cancelOnServer: ([String]) async -> Void = { [weak self] ids in
+        guard let token = try? await self?.auth?.getAccessTokenSilently() else { return }
+        for id in ids {
+            await StreamRecoveryService.cancelGeneration(token: token, id: id)
         }
     }
 
@@ -246,6 +253,7 @@ final class ConversationStore: ObservableObject {
 
     func loadConversation(_ id: String) async {
         guard let auth else { return }
+        if id != conversationId { detachStreams() }
         resetAskSession()
         do {
             var token = ""
@@ -364,8 +372,16 @@ final class ConversationStore: ObservableObject {
         if !ok { toasts?.showToast(L("conversation.runHitl.replyFailed")) }
     }
 
+    /// Leaving the conversation stops this client listening, never the replies: they keep
+    /// generating on the server, and only Stop cancels them. A request still waiting for its
+    /// headers stays open until they arrive, so the server has taken the turn.
+    private func detachStreams() {
+        streamSession = UUID()
+        for (key, task) in streamTasks where headersReceived.contains(key) { task.cancel() }
+    }
+
     func resetConversation() {
-        stopGenerating()
+        detachStreams()
         if let customerId = auth?.customerId {
             CacheStore.shared.removeAll(withPrefix: StorageSuffix.customerKey(customerId, StorageSuffix.promptEditorContentPrefix))
         }
@@ -581,12 +597,13 @@ final class ConversationStore: ObservableObject {
                     let titlePrompt = prep.prompt
                     let titleVendors = prep.aiConfigs.map(\.aiVendor)
                     let instructionName = instruction?.name
+                    let session = streamSession
                     Task { [weak self] in
                         if let response = try? await CreateConversationTitleService.createConversationTitle(
                             token: token,
                             request: CreateConversationTitleRequest(conversationId: newId, prompt: titlePrompt, instructionName: instructionName)
                         ), let title = response.title {
-                            self?.conversationTitle = title
+                            if self?.streamSession == session { self?.conversationTitle = title }
                             self?.history?.didTitleConversation(id: newId, title: title, vendors: titleVendors, pendingProjectId: self?.pendingProjectId)
                         }
                     }
@@ -681,6 +698,7 @@ final class ConversationStore: ObservableObject {
         onIdResolved: ((String) -> Void)?
     ) async throws {
         let key = "\(blockId)-\(config.aiVendor.rawValue)"
+        let session = streamSession
         var accumulatedText = ""
         var currentMessageId = placeholderMessageId
         var lastFlush = Date.distantPast
@@ -755,6 +773,14 @@ final class ConversationStore: ObservableObject {
                 onMetadata: { metadata in
                     guard let self else { return }
                     let sanitizedId = metadata.conversationId?.split(separator: ",").first.map { $0.trimmingCharacters(in: .whitespaces) }
+                    guard self.streamSession == session else {
+                        // Left before the server answered: the turn is taken, so the turn's other
+                        // vendors still start in its conversation, and this client is done.
+                        if let sanitizedId, !sanitizedId.isEmpty { onIdResolved?(sanitizedId) }
+                        self.headersReceived.insert(key)
+                        self.streamTasks[key]?.cancel()
+                        return
+                    }
                     if let sanitizedId, !sanitizedId.isEmpty, sanitizedId != self.conversationId {
                         self.conversationId = sanitizedId
                     }
@@ -788,9 +814,11 @@ final class ConversationStore: ObservableObject {
         } catch is CancellationError {
             // User stopped this vendor — keep whatever streamed, no error. The stop
             // reason keeps the card on screen even when nothing streamed yet.
+            guard streamSession == session else { return }
             finish(error: nil, stopReason: StopReasonNote.cancelled)
             return
         } catch let error as URLError where error.code == .cancelled {
+            guard streamSession == session else { return }
             finish(error: nil, stopReason: StopReasonNote.cancelled)
             return
         } catch Auth0Service.AuthError.loginRequired {

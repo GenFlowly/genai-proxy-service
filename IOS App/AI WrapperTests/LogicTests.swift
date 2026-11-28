@@ -2442,3 +2442,50 @@ struct DetailPageTests {
         }
     }
 }
+
+// MARK: - Leaving a conversation
+
+@MainActor
+struct LeavingConversationTests {
+    private final class Cancels { var ids: [String] = [] }
+
+    /// A store with one reply streaming: its request is open and the server has answered.
+    private func streamingStore(_ cancels: Cancels) -> (ConversationStore, Task<Void, Error>) {
+        let store = ConversationStore()
+        store.cancelOnServer = { ids in cancels.ids += ids }
+        let task = Task<Void, Error> { try await Task.sleep(nanoseconds: 60_000_000_000) }
+        store.streamTasks["b1-OPENAI"] = task
+        store.generationIds["b1-OPENAI"] = "gen-1"
+        store.headersReceived.insert("b1-OPENAI")
+        return (store, task)
+    }
+
+    @Test func newChatDropsTheStreamWithoutCancellingTheReply() async {
+        let cancels = Cancels()
+        let (store, task) = streamingStore(cancels)
+        store.resetConversation()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(task.isCancelled)
+        #expect(cancels.ids.isEmpty)
+    }
+
+    @Test func aRequestStillWaitingForItsHeadersStaysOpen() async {
+        let cancels = Cancels()
+        let (store, task) = streamingStore(cancels)
+        store.headersReceived.remove("b1-OPENAI")
+        store.resetConversation()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(!task.isCancelled)
+        #expect(cancels.ids.isEmpty)
+        task.cancel()
+    }
+
+    @Test func stopStillCancelsTheReplyOnTheServer() async {
+        let cancels = Cancels()
+        let (store, task) = streamingStore(cancels)
+        store.stopGenerating()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        #expect(task.isCancelled)
+        #expect(cancels.ids == ["gen-1"])
+    }
+}
