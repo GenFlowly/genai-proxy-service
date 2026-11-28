@@ -80,6 +80,39 @@ async def read_since(run_id: str, from_seq: int = 0, limit: int = 500) -> list[d
         return await cur.fetchall()
 
 
+async def elapsed_ms(run_id: str) -> int | None:
+    """How long the run's turn has been going, in the activity log's own time
+    (`at`: ms since the turn started, pauses excluded): the newest activity
+    event's `at` plus how long ago it was written. A reattaching client starts
+    its thinking timer here instead of at its last-seen event. While the run
+    waits on a human the clock is stopped, so nothing is added. None before
+    the first activity event."""
+    async with _pool.connection() as conn:
+        cur = await conn.execute(
+            f"""
+            SELECT seq,
+                   (event->'activity'->>'at')::bigint AS at,
+                   (EXTRACT(EPOCH FROM (now() - created_at)) * 1000)::bigint AS age_ms
+            FROM {TABLE}
+            WHERE run_id = %s AND event ? 'activity'
+              AND jsonb_typeof(event->'activity'->'at') = 'number'
+            ORDER BY seq DESC
+            LIMIT 1
+            """,
+            (run_id,),
+        )
+        row = await cur.fetchone()
+        if row is None:
+            return None
+        cur = await conn.execute(
+            f"SELECT EXISTS (SELECT 1 FROM {TABLE} WHERE run_id = %s AND seq > %s"
+            f" AND event ? 'awaiting_input') AS paused",
+            (run_id, row["seq"]),
+        )
+        paused = (await cur.fetchone())["paused"]
+        return int(row["at"]) + (0 if paused else max(0, int(row["age_ms"])))
+
+
 async def latest_seq(run_id: str) -> int:
     """Highest seq published for a run (0 if none) — for status/rediscovery."""
     async with _pool.connection() as conn:

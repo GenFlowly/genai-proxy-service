@@ -50,4 +50,44 @@ class StreamChunkNdjsonTest {
     fun `usage produces no client frame`() {
         assertNull(StreamChunk.Usage(1, 2, 3, 0, 0).toNdjsonFrame())
     }
+
+    @Test
+    fun `frames carry the seq of the event they came from`() {
+        assertEquals("{\"t\":\"c\",\"v\":\"hi\",\"s\":12}\n", StreamChunk.Content("hi").toNdjsonFrame(12))
+        assertEquals("{\"t\":\"cr\",\"s\":3}\n", StreamChunk.RunRestarted.toNdjsonFrame(3))
+    }
+
+    @Test
+    fun `run frame names the run, its replay seq and the turn clock`() {
+        assertEquals(
+            "{\"t\":\"run\",\"v\":\"run_abc\",\"s\":5,\"ms\":41250}\n",
+            StreamChunk.RunStarted("run_abc", 5, 41250).toNdjsonFrame()
+        )
+        assertEquals(
+            "{\"t\":\"run\",\"v\":\"run_abc\",\"s\":0}\n",
+            StreamChunk.RunStarted("run_abc", 0, null).toNdjsonFrame()
+        )
+    }
+
+    @Test
+    fun `position carries no frame of its own`() {
+        assertNull(StreamChunk.Position(9).toNdjsonFrame())
+    }
+
+    @Test
+    fun `framer stamps later frames with the latest position, done included`() {
+        val framer = NdjsonFramer()
+        assertEquals("{\"t\":\"run\",\"v\":\"r\",\"s\":4}\n", framer.frame(StreamChunk.RunStarted("r", 4, null)))
+        assertNull(framer.frame(StreamChunk.Position(5)))
+        assertEquals("{\"t\":\"c\",\"v\":\"a\",\"s\":5}\n", framer.frame(StreamChunk.Content("a")))
+        assertEquals("{\"t\":\"sr\",\"v\":\"interrupted\",\"s\":5}\n", framer.frame(StreamChunk.StopReason("interrupted")))
+        assertEquals("{\"t\":\"done\",\"status\":\"ok\",\"s\":5}\n", framer.done("ok"))
+    }
+
+    @Test
+    fun `stateless frames carry no seq`() {
+        val framer = NdjsonFramer()
+        assertEquals("{\"t\":\"c\",\"v\":\"a\"}\n", framer.frame(StreamChunk.Content("a")))
+        assertEquals("{\"t\":\"done\",\"status\":\"ok\"}\n", framer.done("ok"))
+    }
 }

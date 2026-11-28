@@ -67,6 +67,10 @@ class RunsClientTest {
         respond(content = """{"status":"$status","last_seq":3}""", status = HttpStatusCode.OK,
             headers = headersOf(HttpHeaders.ContentType, "application/json"))
 
+    /** What reaches the client as content: the run's markers aside. */
+    private fun List<StreamChunk>.relayed() =
+        filterNot { it is StreamChunk.RunStarted || it is StreamChunk.Position }
+
     private val streamRequests: (List<HttpRequestData>) -> List<HttpRequestData> =
         { all -> all.filter { it.url.encodedPath.endsWith("/stream") } }
 
@@ -125,7 +129,7 @@ class RunsClientTest {
                 headers = headersOf(HttpHeaders.ContentType, "text/event-stream"))
         }
 
-        val chunks = runs.streamRun("run_abc", fromSeq = 5).toList()
+        val chunks = runs.streamRun("run_abc", fromSeq = 5).toList().relayed()
 
         assertEquals("/runs/run_abc/stream", captured.single().url.encodedPath)
         assertEquals("5", captured.single().url.parameters["from_seq"])
@@ -152,7 +156,7 @@ class RunsClientTest {
             }
         }
 
-        val chunks = runs.streamRun("run_abc").toList()
+        val chunks = runs.streamRun("run_abc").toList().relayed()
 
         assertEquals(listOf("0", "2"), streamRequests(captured).map { it.url.parameters["from_seq"] })
         assertEquals(listOf(StreamChunk.Content("Hel"), StreamChunk.Content("lo")), chunks)
@@ -167,7 +171,7 @@ class RunsClientTest {
             sse("id: 1\ndata: {\"content\":\"Hi\"}\n\nid: 2\ndata: {\"status\":\"completed\",\"run_id\":\"run_abc\"}\n\ndata: [DONE]\n\n")
         }
 
-        val chunks = runs.streamRun("run_abc").toList()
+        val chunks = runs.streamRun("run_abc").toList().relayed()
 
         assertEquals(2, streamRequests(captured).size)
         assertEquals(listOf(StreamChunk.Content("Hi")), chunks)
@@ -185,7 +189,7 @@ class RunsClientTest {
             })
         }
 
-        val chunks = runs.streamRun("run_abc").toList()
+        val chunks = runs.streamRun("run_abc").toList().relayed()
 
         assertEquals(StreamChunk.Content("Partial"), chunks[0])
         assertEquals(StreamChunk.RunRestarted, chunks[1])
@@ -205,7 +209,7 @@ class RunsClientTest {
             })
         }
 
-        val chunks = runs.streamRun("run_abc").toList()
+        val chunks = runs.streamRun("run_abc").toList().relayed()
 
         assertEquals(listOf(StreamChunk.RunRestarted, StreamChunk.Content("Full answer")), chunks)
     }
@@ -216,7 +220,7 @@ class RunsClientTest {
             respondError(HttpStatusCode.ServiceUnavailable)
         }
 
-        val chunks = runs.streamRun("run_abc").toList()
+        val chunks = runs.streamRun("run_abc").toList().relayed()
 
         assertTrue(streamRequests(captured).size > 1, "retried before giving up")
         assertEquals(listOf(StreamChunk.StopReason(STOP_REASON_INTERRUPTED)), chunks)
@@ -229,7 +233,7 @@ class RunsClientTest {
             else runStatus("MAX_RECOVERY_ATTEMPTS_EXCEEDED")
         }
 
-        val chunks = runs.streamRun("run_abc").toList()
+        val chunks = runs.streamRun("run_abc").toList().relayed()
 
         assertEquals(listOf(StreamChunk.Content("Part"), StreamChunk.StopReason(STOP_REASON_INTERRUPTED)), chunks)
     }
@@ -240,7 +244,7 @@ class RunsClientTest {
             if (req.url.encodedPath.endsWith("/stream")) sse("data: [DONE]\n\n") else runStatus("CANCELLED")
         }
 
-        assertEquals(emptyList<StreamChunk>(), runs.streamRun("run_abc").toList())
+        assertEquals(emptyList<StreamChunk>(), runs.streamRun("run_abc").toList().relayed())
     }
 
     // runBlocking, not runTest: the SSE read runs on Dispatchers.IO (flowOn), and
@@ -258,7 +262,7 @@ class RunsClientTest {
         body.writeStringUtf8("data: {\"content\":\"Partial\"}\n\n")
 
         val generation = launch(Dispatchers.Default) {
-            runs.streamRun("run_abc").collect { firstChunk.complete(it) }
+            runs.streamRun("run_abc").collect { if (it is StreamChunk.Content) firstChunk.complete(it) }
         }
         assertEquals(StreamChunk.Content("Partial"), withTimeout(5_000) { firstChunk.await() })
         // What GenerationOrchestrator.cancelGeneration does on Stop.
@@ -290,5 +294,62 @@ class RunsClientTest {
         val status = runs.getRunStatus("r")
         assertEquals("SUCCESS", status?.status)
         assertEquals(12L, status?.lastSeq)
+    }
+
+    @Test
+    fun `streamRun opens with the run, its replay seq and the turn clock`() = runTest {
+        val sse = buildString {
+            append("data: {\"clock_ms\": 41250}\n\n")
+            append("id: 6\ndata: {\"content\":\"Hi\"}\n\n")
+            append("id: 7\ndata: {\"activity\":{\"v\":2,\"at\":900,\"type\":\"step.end\"}}\n\n")
+            append("data: [DONE]\n\n")
+        }
+        val (runs, _) = client { req ->
+            if (req.url.encodedPath.endsWith("/stream")) sse(sse) else runStatus("SUCCESS")
+        }
+
+        val chunks = runs.streamRun("run_abc", fromSeq = 5).toList()
+
+        assertEquals(StreamChunk.RunStarted("run_abc", 5, 41250), chunks[0])
+        assertEquals(StreamChunk.Position(6), chunks[1])
+        assertEquals(StreamChunk.Content("Hi"), chunks[2])
+        assertEquals(StreamChunk.Position(7), chunks[3])
+        assertTrue(chunks[4] is StreamChunk.Activity)
+    }
+
+    @Test
+    fun `an older retrieval server without a clock still opens the run first`() = runTest {
+        val sse = "id: 1\ndata: {\"content\":\"Hi\"}\n\ndata: [DONE]\n\n"
+        val (runs, _) = client { req ->
+            if (req.url.encodedPath.endsWith("/stream")) sse(sse) else runStatus("SUCCESS")
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertEquals(StreamChunk.RunStarted("run_abc", 0, null), chunks[0])
+        assertEquals(StreamChunk.Position(1), chunks[1])
+        assertEquals(StreamChunk.Content("Hi"), chunks[2])
+    }
+
+    @Test
+    fun `a reconnect to the retrieval server announces the run only once`() = runTest {
+        var calls = 0
+        val (runs, captured) = client { req ->
+            if (!req.url.encodedPath.endsWith("/stream")) return@client runStatus("SUCCESS")
+            calls++
+            if (calls == 1) {
+                sse("data: {\"clock_ms\": 100}\n\nid: 1\ndata: {\"content\":\"a\"}\n\n")
+            } else {
+                sse("data: {\"clock_ms\": 200}\n\nid: 2\ndata: {\"content\":\"b\"}\n\n" +
+                    "id: 3\ndata: {\"status\":\"success\",\"run_id\":\"run_abc\"}\n\n")
+            }
+        }
+
+        val chunks = runs.streamRun("run_abc").toList()
+
+        assertEquals(1, chunks.count { it is StreamChunk.RunStarted })
+        assertEquals(StreamChunk.RunStarted("run_abc", 0, 100), chunks.first())
+        assertEquals(listOf(1L, 2L, 3L), chunks.filterIsInstance<StreamChunk.Position>().map { it.seq })
+        assertTrue(streamRequests(captured)[1].url.toString().contains("from_seq=1"))
     }
 }

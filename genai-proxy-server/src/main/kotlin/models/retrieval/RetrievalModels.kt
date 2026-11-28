@@ -99,6 +99,23 @@ sealed class StreamChunk {
      * client's resume(). Only emitted on the durable /runs reattach stream.
      */
     data class AwaitingInput(val json: String) : StreamChunk()
+
+    /**
+     * Opens a durable run's stream for this client: the run to reattach to
+     * after a dropped connection, the seq it replays after, and how long the
+     * turn has been going ([elapsedMs], the activity log's `at` clock; null
+     * before its first event or from an older retrieval server). Only emitted
+     * on the durable /runs stream, once per client stream.
+     */
+    data class RunStarted(val runId: String, val fromSeq: Long, val elapsedMs: Long?) : StreamChunk()
+
+    /**
+     * The run_events seq of the event whose chunks follow. Carries no client
+     * frame of its own: [NdjsonFramer] stamps it on the frames after it, so a
+     * client can reattach from the last one it applied. Only emitted on the
+     * durable /runs stream.
+     */
+    data class Position(val seq: Long) : StreamChunk()
 }
 
 /**

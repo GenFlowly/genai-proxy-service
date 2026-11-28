@@ -199,6 +199,7 @@ class RunsClient(
         var streamedSinceRestart = false
         var sawTerminal = false
         var sawDone = false
+        var announced = false
         var attempt = 0
         var lastProgressAt = System.currentTimeMillis()
         while (true) {
@@ -234,6 +235,15 @@ class RunsClient(
                         } catch (_: Exception) {
                             null // skip malformed SSE chunk
                         }
+                        if (!announced) {
+                            announced = true
+                            val clock = (event?.get("clock_ms") as? JsonPrimitive)?.contentOrNull?.toLongOrNull()
+                            send(StreamChunk.RunStarted(runId, fromSeq, clock))
+                        }
+                        // Sent on every connect, so it isn't progress: a server that
+                        // keeps dropping right after it must still exhaust the window.
+                        if (event?.containsKey("clock_ms") == true) continue
+                        if (event != null && eventSeq != null) send(StreamChunk.Position(eventSeq))
                         when {
                             event == null -> {}
                             event.containsKey("run_restarted") -> {
