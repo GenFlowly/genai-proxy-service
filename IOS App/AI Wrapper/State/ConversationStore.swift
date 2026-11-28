@@ -253,7 +253,11 @@ final class ConversationStore: ObservableObject {
 
     func loadConversation(_ id: String) async {
         guard let auth else { return }
-        if id != conversationId { detachStreams() }
+        if id != conversationId {
+            detachStreams()
+        } else if !streamTasks.isEmpty {
+            return   // already on screen and streaming live
+        }
         resetAskSession()
         do {
             var token = ""
@@ -296,9 +300,15 @@ final class ConversationStore: ObservableObject {
     }
 
     /// Reattach one response to its durable run: reset text, stream the replay in, then
-    /// fetch usage; if the run already finished, poll for the persisted message.
+    /// fetch usage. A dropped stream picks up where it stopped; a run already over has saved
+    /// its reply, which is fetched once. Stop and leaving the chat work as on a live reply.
     private func reattach(blockId: String, messageId: String, runId: String, synthetic: Bool, token: String, conversationId: String) {
         let ids: Set<String> = [messageId]
+        let vendor = blocks.first { $0.conversationBlockId == blockId }?
+            .responseMessages.first { $0.messageId == messageId }?.aiVendor
+        let key = "\(blockId)-\(vendor?.rawValue ?? messageId)"
+        let session = streamSession
+        let cursor = ReplyCursor(runId: runId)
         updateMessage(blockId: blockId, matching: ids) { $0.isLoading = true; $0.text = "" }
         var accumulated = ""
         var gotContent = false
@@ -326,27 +336,57 @@ final class ConversationStore: ObservableObject {
                 var input = payload
                 input.runId = runId
                 self?.awaitingInputs[messageId] = input
-            }
+            },
+            onRun: { [weak self] _, elapsedMs in
+                guard let elapsedMs else { return }
+                self?.updateMessage(blockId: blockId, matching: ids) { $0.runClock = RunClock(at: elapsedMs, receivedAt: Date()) }
+            },
+            onSeq: { cursor.lastSeq = $0 }
         )
-        Task { [weak self] in
-            var runFailure: String?
-            do {
-                try await StreamRecoveryService.reattachRun(token: token, runId: runId, conversationId: conversationId, callbacks: callbacks)
-            } catch {
-                AppObservability.capture(error, context: ["where": "reattachRun"])
-                runFailure = (error as? StreamGenerationError)?.message
-            }
+        let task = Task<Void, Error> { [weak self] in
             guard let self else { return }
+            let background = BackgroundTime("reply")
+            defer { background.end() }
+            var runFailure: String?
+            var stopped = false
+            do {
+                try await self.follow(cursor, conversationId: conversationId, callbacks: callbacks)
+            } catch is CancellationError {
+                stopped = true
+            } catch {
+                AppObservability.capture(error, context: ["where": "replyRecoveryFailed"])
+                runFailure = (error as? StreamGenerationError)?.message ?? L("errors.ai.generateTextStreamFailed")
+            }
+            if self.generationIds[key] == messageId {
+                self.streamTasks.removeValue(forKey: key)
+                self.generationIds.removeValue(forKey: key)
+                self.headersReceived.remove(key)
+            }
+            // A chat no longer on screen isn't written into. Stop froze the card already;
+            // it only has to stop loading.
+            guard self.streamSession == session else { return }
             if let runFailure {
                 self.updateMessage(blockId: blockId, matching: ids) { $0.error = runFailure }
             }
-            if !synthetic {
-                // A failed run saved nothing to wait for.
-                if !gotContent, runFailure == nil, let recovered = await self.recoverPersistedResponse(token: token, conversationId: conversationId, messageId: messageId) {
+            if !synthetic, !stopped {
+                // A run already over saved its reply before it left the pending set. One that
+                // ended with nothing streamed saves it just after its stream closes.
+                let saved: Message?
+                if runFailure != nil {
+                    saved = nil
+                } else if !cursor.active {
+                    saved = await self.fetchPersistedResponse(token: token, conversationId: conversationId, messageId: messageId)
+                } else if !gotContent {
+                    saved = await self.recoverPersistedResponse(token: token, conversationId: conversationId, messageId: messageId, maxAttempts: 3)
+                } else {
+                    saved = nil
+                }
+                if let saved {
                     self.updateMessage(blockId: blockId, matching: ids) {
-                        $0.text = recovered.text
-                        $0.webSources = recovered.webSources ?? $0.webSources
-                        $0.generatedAttachments = recovered.generatedAttachments ?? $0.generatedAttachments
+                        $0.text = saved.text
+                        $0.webSources = saved.webSources ?? $0.webSources
+                        $0.generatedAttachments = saved.generatedAttachments ?? $0.generatedAttachments
+                        $0.stopReason = saved.stopReason ?? $0.stopReason
                     }
                 }
                 if let metrics = await AIUsageService.getAIUsageActivity(token: token, conversationId: conversationId, messageId: messageId) {
@@ -358,6 +398,42 @@ final class ConversationStore: ObservableObject {
                     block.responseMessages[index].isLoading = false
                 }
                 block.isLoading = block.responseMessages.contains { $0.isLoading }
+            }
+        }
+        // Stop cancels the run by its reply id; the server answered long ago.
+        generationIds[key] = messageId
+        headersReceived.insert(key)
+        streamTasks[key] = task
+    }
+
+    /// Follows a reply's durable run from the last event this client applied until the run
+    /// ends, reconnecting whenever the stream drops. Waits while the app is away or offline,
+    /// and gives up after five failed attempts in the foreground. Leaves `cursor.active` false
+    /// when the run is already over, so its reply is saved.
+    private func follow(_ cursor: ReplyCursor, conversationId: String, callbacks: StreamCallbacks) async throws {
+        guard let runId = cursor.runId else { return }
+        var failures = 0
+        while true {
+            await ReconnectGate.shared.waitUntilOpen()
+            try Task.checkCancellation()
+            let token = (try? await auth?.getAccessTokenSilently()) ?? ""
+            do {
+                cursor.active = try await StreamRecoveryService.reattachRun(
+                    token: token, runId: runId, conversationId: conversationId, fromSeq: cursor.lastSeq, callbacks: callbacks
+                )
+                return
+            } catch let error as URLError where error.code == .cancelled {
+                throw CancellationError()
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as StreamGenerationError {
+                throw error
+            } catch let error as APIError where (400..<500).contains(error.status) {
+                throw error
+            } catch {
+                if ReconnectGate.shared.isOpen { failures += 1 }
+                if failures >= 5 { throw ReplyRecoveryFailed(underlying: error) }
+                try await Task.sleep(nanoseconds: UInt64(1 << min(failures, 3)) * 1_000_000_000)
             }
         }
     }
@@ -699,6 +775,9 @@ final class ConversationStore: ObservableObject {
     ) async throws {
         let key = "\(blockId)-\(config.aiVendor.rawValue)"
         let session = streamSession
+        let cursor = ReplyCursor()
+        let background = BackgroundTime("reply")
+        defer { background.end() }
         var accumulatedText = ""
         var currentMessageId = placeholderMessageId
         var lastFlush = Date.distantPast
@@ -763,7 +842,12 @@ final class ConversationStore: ObservableObject {
                     message.generatedAttachments = existing + refs.filter { ref in !existing.contains { $0.attachmentId == ref.attachmentId } }
                 }
             },
-            onAwaitingInput: { [weak self] payload in self?.awaitingInputs[currentMessageId] = payload }
+            onAwaitingInput: { [weak self] payload in self?.awaitingInputs[currentMessageId] = payload },
+            onRun: { runId, elapsedMs in
+                cursor.runId = runId
+                if let elapsedMs { update { $0.runClock = RunClock(at: elapsedMs, receivedAt: Date()) } }
+            },
+            onSeq: { cursor.lastSeq = $0 }
         )
 
         let task = Task { [weak self] in
@@ -823,10 +907,39 @@ final class ConversationStore: ObservableObject {
             return
         } catch Auth0Service.AuthError.loginRequired {
             throw Auth0Service.AuthError.loginRequired
+        } catch where cursor.runId != nil && !(error is StreamGenerationError) {
+            // The run keeps generating without this client (the app was suspended, the
+            // network dropped): pick its stream up after the last event applied.
+            flushText()
+            let targetConversation = explicitConversationId ?? conversationId
+            let resume = Task<Void, Error> { [weak self] in
+                try await self?.follow(cursor, conversationId: targetConversation, callbacks: callbacks)
+            }
+            streamTasks[key] = resume
+            do {
+                try await resume.value
+            } catch is CancellationError {
+                guard streamSession == session else { return }
+                finish(error: nil, stopReason: StopReasonNote.cancelled)
+                return
+            } catch {
+                AppObservability.capture(error, context: ["where": "replyRecoveryFailed"])
+                finish(error: (error as? StreamGenerationError)?.message ?? L("errors.ai.generateTextStreamFailed"))
+                return
+            }
+            guard streamSession == session else { return }
+            if !cursor.active, let saved = await fetchPersistedResponse(token: token, conversationId: targetConversation, messageId: currentMessageId) {
+                accumulatedText = saved.text
+                update { message in
+                    message.webSources = saved.webSources ?? message.webSources
+                    message.generatedAttachments = saved.generatedAttachments ?? message.generatedAttachments
+                    message.stopReason = saved.stopReason ?? message.stopReason
+                }
+            }
         } catch {
             flushText()
-            // The server keeps generating after a dropped connection (backgrounded app).
-            // When its response id is already known, poll for the persisted message.
+            // No durable run to reattach to (the server fell back to a direct stream): it
+            // still saves the reply, so poll for it once its response id is known.
             if currentMessageId != placeholderMessageId {
                 let targetConversation = explicitConversationId ?? conversationId
                 let attempts = Self.recoveryAttempts(after: error, streamedText: !accumulatedText.isEmpty)
@@ -877,11 +990,17 @@ final class ConversationStore: ObservableObject {
         guard !conversationId.isEmpty else { return nil }
         for _ in 0..<maxAttempts {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
-            guard let data = try? await ConversationService.getConversation(token: token, conversationId: conversationId) else { continue }
-            if let found = data.blocks.flatMap(\.responseMessages).first(where: { $0.messageId == messageId }), !found.text.isEmpty {
+            if let found = await fetchPersistedResponse(token: token, conversationId: conversationId, messageId: messageId) {
                 return found
             }
         }
         return nil
+    }
+
+    /// The saved copy of a reply, if it has text yet.
+    private func fetchPersistedResponse(token: String, conversationId: String, messageId: String) async -> Message? {
+        guard !conversationId.isEmpty,
+              let data = try? await ConversationService.getConversation(token: token, conversationId: conversationId) else { return nil }
+        return data.blocks.flatMap(\.responseMessages).first { $0.messageId == messageId && !$0.text.isEmpty }
     }
 }

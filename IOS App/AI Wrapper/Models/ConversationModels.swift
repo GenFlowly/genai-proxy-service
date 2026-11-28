@@ -112,6 +112,8 @@ struct Message: Identifiable, Equatable {
     var costUsd: Double?
     var model: String?
     var learnedFacts: LearnedFactsState = .fresh
+    /// The server's clock for the turn when this client (re)joined its run. Not persisted.
+    var runClock: RunClock?
 
     var id: String { messageId }
 
@@ -121,6 +123,16 @@ struct Message: Identifiable, Equatable {
 
     /// Placeholder ids assigned client-side before the backend echoes the real one.
     var hasRealId: Bool { !messageId.hasPrefix("resp-") && !messageId.hasPrefix("error-") }
+}
+
+/// How long a reply's turn had been going ([at], the activity log's ms) at [receivedAt].
+/// Lets the thinking timer start at the right time after a reconnect.
+struct RunClock: Equatable {
+    var at: Int
+    var receivedAt: Date
+
+    /// The turn's elapsed ms now, on the server's clock.
+    func now(_ date: Date = Date()) -> Int { at + Int(date.timeIntervalSince(receivedAt) * 1000) }
 }
 
 enum BlockStatus: String {

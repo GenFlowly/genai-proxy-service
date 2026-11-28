@@ -24,15 +24,16 @@ enum StreamRecoveryService {
     }
 
     /// Reattach to an in-flight durable run's event stream (reload/background
-    /// recovery), replaying frames after [fromSeq]. A 404 means the run already
-    /// finished — a no-op so a stale runId doesn't surface an error.
+    /// recovery), replaying frames after [fromSeq]. Returns false on a 404: the run
+    /// is no longer active, so its reply is saved and the stream has nothing to add.
+    @discardableResult
     static func reattachRun(
         token: String,
         runId: String,
         conversationId: String,
         fromSeq: Int = 0,
         callbacks: StreamCallbacks
-    ) async throws {
+    ) async throws -> Bool {
         var request = URLRequest(url: Endpoints.reattachRun(runId, conversationId: conversationId, fromSeq: fromSeq))
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -42,11 +43,12 @@ enum StreamRecoveryService {
         guard let http = response as? HTTPURLResponse else {
             throw APIError(status: -1, message: "Invalid response")
         }
-        if http.statusCode == 404 { return }   // run already finished
+        if http.statusCode == 404 { return false }
         guard (200..<300).contains(http.statusCode) else {
             throw APIError(status: http.statusCode, message: "Reattach failed: \(http.statusCode)")
         }
         try await GenerateTextStreamService.readNdjsonStream(bytes, callbacks)
+        return true
     }
 
     /// Deliver a human reply to a durable run paused on an in-graph interrupt().
