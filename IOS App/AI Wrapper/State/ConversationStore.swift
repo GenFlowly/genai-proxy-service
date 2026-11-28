@@ -611,6 +611,13 @@ final class ConversationStore: ObservableObject {
             block.attachments = attachmentsToUse
         }
 
+        // A turn the user left belongs to a conversation no longer on screen, and a new chat's
+        // first block reuses this block's id.
+        let session = streamSession
+        func settle(_ transform: (inout ConversationBlock) -> Void) {
+            if streamSession == session { updateBlock(id, transform) }
+        }
+
         var repliedId: String?
         do {
             let token = try await auth.getAccessTokenSilently()
@@ -679,7 +686,7 @@ final class ConversationStore: ObservableObject {
                 if establishedId == nil, starterIndex + 1 < prep.aiConfigs.count {
                     // Vendors that never launched: the turn was stopped.
                     let unlaunched = Set(prep.aiConfigs[(starterIndex + 1)...].map(\.aiVendor.rawValue))
-                    updateBlock(id) { block in
+                    settle { block in
                         for index in block.responseMessages.indices
                         where block.responseMessages[index].isLoading && unlaunched.contains(block.responseMessages[index].aiVendor.rawValue) {
                             Self.markStopped(&block.responseMessages[index])
@@ -714,20 +721,20 @@ final class ConversationStore: ObservableObject {
                 for task in pending { try await task.value }
             }
 
-            updateBlock(id) { block in
+            settle { block in
                 block.isLoading = false
                 block.status = .resolved
                 block.prompt = prep.prompt
             }
-            selectedResponseByBlock[id] = ""
+            if streamSession == session { selectedResponseByBlock[id] = "" }
         } catch is CancellationError {
-            updateBlock(id) { block in
+            settle { block in
                 block.isLoading = false
                 block.status = .resolved
             }
         } catch Auth0Service.AuthError.loginRequired {
             // Session expired mid-use: the draft is already persisted by the editor.
-            updateBlock(id) { block in
+            settle { block in
                 block.isLoading = false
                 block.status = .draft
             }
@@ -737,7 +744,7 @@ final class ConversationStore: ObservableObject {
             // Per-vendor failures are handled inside runStream; this only fires for errors
             // outside the streams (e.g. token fetch). Never wipe text that already streamed.
             let reason = error.localizedDescription
-            updateBlock(id) { block in
+            settle { block in
                 for index in block.responseMessages.indices where block.responseMessages[index].isLoading {
                     block.responseMessages[index].isLoading = false
                     block.responseMessages[index].error = reason
