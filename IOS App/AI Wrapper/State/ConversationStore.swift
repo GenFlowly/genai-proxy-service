@@ -270,6 +270,7 @@ final class ConversationStore: ObservableObject {
             conversationRole = data.role
             conversationTitle = data.title
             ai?.selectedInstructionId = data.instructionId
+            if data.role == .owner, !token.isEmpty { markRead(data.conversationId, token: token) }
 
             // Durable runs still generating the latest reply: reattach to each so the
             // responses continue live. A multi-vendor turn has one run per vendor.
@@ -399,6 +400,7 @@ final class ConversationStore: ObservableObject {
                 }
                 block.isLoading = block.responseMessages.contains { $0.isLoading }
             }
+            self.replyEnded(conversationId: conversationId)
         }
         // Stop cancels the run by its reply id; the server answered long ago.
         generationIds[key] = messageId
@@ -436,6 +438,22 @@ final class ConversationStore: ObservableObject {
                 try await Task.sleep(nanoseconds: UInt64(1 << min(failures, 3)) * 1_000_000_000)
             }
         }
+    }
+
+    /// A reply ended. One in the chat on screen has been read; any other leaves its chat unread,
+    /// which the history lists show on their next refresh.
+    private func replyEnded(conversationId replyConversationId: String) {
+        guard replyConversationId == conversationId, let auth else { return }
+        Task {
+            guard let token = try? await auth.getAccessTokenSilently() else { return }
+            markRead(replyConversationId, token: token)
+        }
+    }
+
+    /// The owner has read the conversation: its dot goes now, and the server is told.
+    private func markRead(_ id: String, token: String) {
+        history?.markRead(id: id)
+        Task { try? await ConversationHistoryService.markConversationRead(token: token, conversationId: id) }
     }
 
     /// Delivers a reply to the durable run generating [messageId]; the run resumes from
@@ -730,6 +748,7 @@ final class ConversationStore: ObservableObject {
 
         if let repliedId, auth.isAuthenticated {
             history?.didReply(id: repliedId, vendors: prep.aiConfigs.map(\.aiVendor))
+            replyEnded(conversationId: repliedId)
         }
         // A regenerate that already took a key over keeps it.
         for (key, generationId) in turnGenerationIds where generationIds[key] == nil || generationIds[key] == generationId {

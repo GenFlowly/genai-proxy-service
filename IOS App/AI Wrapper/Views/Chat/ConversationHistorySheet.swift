@@ -412,9 +412,22 @@ struct ConversationHistoryPanel: View {
                 onSelect()
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
-                    WebTruncatedLine(displayTitle(item))
-                        .sidebarRowText(.history, active: isActive)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    let unread = item.unread == true && !isActive
+                    HStack(spacing: 6.4) {
+                        // Unread is bold like the selected row, in the row's own color (web .unreadTitle).
+                        WebTruncatedLine(displayTitle(item))
+                            .webText(arial: SidebarRowTokens.history.fontSize, bold: isActive || unread, lineHeight: SidebarRowTokens.history.lineHeight)
+                            .foregroundStyle(isActive ? SidebarRowTokens.history.activeColor : SidebarRowTokens.history.color)
+                        if unread {
+                            // Web's .unreadDot: 0.45rem, the primary color
+                            Circle()
+                                .fill(AppTheme.primary)
+                                .frame(width: 7.2, height: 7.2)
+                                .accessibilityLabel(L("conversation.conversationHistory.unreadReply"))
+                                .accessibilityIdentifier("conv-history-unread-dot")
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     details(item, isActive: isActive)
                 }
                 .padding(.horizontal, 12)
