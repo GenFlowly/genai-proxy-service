@@ -1288,8 +1288,22 @@ struct MarkdownTableTests {
         #expect(alignment(parsed.rows[0][0]) == .left)
         #expect(alignment(parsed.rows[0][1]) == .right)
         #expect(alignment(parsed.rows[0][2]) == .center)
-        #expect(alignment(parsed.labels[1]) == .right)
         #expect(alignment(parsed.header[2]) == .center)
+    }
+
+    /// UA-13: a `--:` column's label and value sat against the right edge of the cards.
+    @Test func aStackedCardIgnoresTheMarkdownsAlignment() throws {
+        let parsed = try table("""
+        | Product | Probable status | Reason |
+        |---|---:|:-:|
+        | Mobile app | Not affected | Uses a different stack |
+        """)
+        for column in 0..<3 {
+            #expect(paragraphAlignment(parsed.labels[column]) == .left)
+            #expect(paragraphAlignment(parsed.stackedRows[0][column]) == .left)
+        }
+        #expect(paragraphAlignment(parsed.rows[0][1]) == .right)
+        #expect(paragraphAlignment(parsed.header[2]) == .center)
     }
 
     @Test(arguments: [

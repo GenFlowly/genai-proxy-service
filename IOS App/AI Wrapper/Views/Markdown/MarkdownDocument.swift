@@ -108,7 +108,7 @@ struct MarkdownTable {
         return !filled.isEmpty && filled.allSatisfy { $0.wholeMatch(of: numericCell) != nil }
     }
 
-    init(alignments: [Alignment], numericColumns: Set<Int> = [], header: [NSAttributedString], rows: [[NSAttributedString]], labels: [NSAttributedString], ruled: Bool = false) {
+    init(alignments: [Alignment], header: [NSAttributedString], rows: [[NSAttributedString]], labels: [NSAttributedString], ruled: Bool = false) {
         self.alignments = alignments
         self.ruled = ruled
         paddingX = ruled ? 10 : Self.cellPaddingX
@@ -116,9 +116,9 @@ struct MarkdownTable {
         self.header = header
         self.rows = rows
         self.labels = labels
-        stackedRows = numericColumns.isEmpty ? rows : rows.map { row in
-            row.enumerated().map { column, cell in
-                guard numericColumns.contains(column) else { return cell }
+        // Left whatever aligns the column in the grid: the numeric rule or the markdown's `--:` / `:-:`.
+        stackedRows = rows.map { row in
+            row.map { cell in
                 let aligned = NSMutableAttributedString(attributedString: cell)
                 aligned.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: aligned.length)) { value, range, _ in
                     guard let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
@@ -612,7 +612,6 @@ enum MarkdownParser {
                 let blank = NSAttributedString()
                 let table = MarkdownTable(
                     alignments: alignments,
-                    numericColumns: numericColumns,
                     header: (0..<columns).map { header[$0] ?? blank },
                     rows: rows.keys.sorted().map { key in (0..<columns).map { rows[key]?[$0] ?? blank } },
                     labels: (0..<columns).map { column in
@@ -621,7 +620,7 @@ enum MarkdownParser {
                             NSAttributedString(string: text, attributes: [.font: DSFont.ui(typography.reader ? 14 : 15.2, weight: 600), .foregroundColor: AppTheme.UI.textSecondary]),
                             style: .tableHeader,
                             typography: typography,
-                            alignment: column < alignments.count ? alignments[column] : .left,
+                            alignment: .left,
                             fixedLineHeight: true
                         )
                     },
