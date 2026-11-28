@@ -2489,3 +2489,57 @@ struct LeavingConversationTests {
         #expect(cancels.ids == ["gen-1"])
     }
 }
+
+// MARK: - Resuming a reply
+
+@MainActor
+struct ReplyResumeFrameTests {
+    private final class Seen {
+        var runs: [(String, Int?)] = []
+        var seqs: [Int] = []
+        var deltas: [String] = []
+    }
+
+    private func feed(_ lines: [String]) throws -> Seen {
+        let seen = Seen()
+        let cb = StreamCallbacks(
+            onDelta: { seen.deltas.append($0) },
+            onRun: { seen.runs.append(($0, $1)) },
+            onSeq: { seen.seqs.append($0) }
+        )
+        for line in lines { _ = try GenerateTextStreamService.processLine(line, cb) }
+        return seen
+    }
+
+    @Test func theRunFrameNamesTheRunAndItsClock() throws {
+        let seen = try feed([#"{"t":"run","v":"run_1","s":4,"ms":41250}"#])
+        #expect(seen.runs.count == 1)
+        #expect(seen.runs.first?.0 == "run_1")
+        #expect(seen.runs.first?.1 == 41250)
+        #expect(seen.seqs == [4])
+    }
+
+    @Test func eachFrameCommitsItsSeqAfterItIsApplied() throws {
+        let seen = try feed([#"{"t":"c","v":"Hel","s":5}"#, #"{"t":"c","v":"lo","s":6}"#, #"{"t":"done","status":"ok","s":6}"#])
+        #expect(seen.deltas == ["Hel", "lo"])
+        #expect(seen.seqs == [5, 6, 6])
+    }
+
+    @Test func framesWithoutASeqLeaveItAlone() throws {
+        let seen = try feed([#"{"t":"c","v":"x"}"#, #"{"t":"done","status":"ok"}"#])
+        #expect(seen.seqs.isEmpty)
+    }
+
+    @Test func anErrorFrameDoesNotCommitItsSeq() {
+        let seen = Seen()
+        let cb = StreamCallbacks(onDelta: { _ in }, onSeq: { seen.seqs.append($0) })
+        #expect(throws: StreamGenerationError.self) { try GenerateTextStreamService.processLine(#"{"t":"err","v":"quota","s":9}"#, cb) }
+        #expect(seen.seqs.isEmpty)
+    }
+
+    @Test func theTurnClockRunsOnFromWhenItArrived() {
+        let received = Date(timeIntervalSince1970: 1_000)
+        let clock = RunClock(at: 41_250, receivedAt: received)
+        #expect(clock.now(received.addingTimeInterval(2.5)) == 43_750)
+    }
+}

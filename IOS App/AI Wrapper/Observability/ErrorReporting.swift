@@ -60,7 +60,11 @@ enum AppObservability {
         logger.notice("observability started — env=\(AppConfig.environment.rawValue, privacy: .public), sentry=\(AppConfig.sentryDSN != nil ? "on" : "off", privacy: .public)")
     }
 
-    static func capture(_ error: Error, context: [String: String] = [:]) { reporter.capture(error, context: context) }
+    /// A dropped connection isn't a fault: the reply resumes, so only its giving up is reported.
+    static func capture(_ error: Error, context: [String: String] = [:]) {
+        guard !NetworkLoss.matches(error) else { return }
+        reporter.capture(error, context: context)
+    }
     static func captureMessage(_ message: String) { reporter.captureMessage(message) }
 
     /// Runs [run] as one timed reply tagged with the vendor and model. A reply

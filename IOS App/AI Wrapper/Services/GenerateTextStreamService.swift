@@ -37,6 +37,10 @@ struct StreamCallbacks {
     var onWebSources: ([WebSource]) -> Void = { _ in }      // `ws`
     var onGeneratedAttachments: ([AttachmentRef]) -> Void = { _ in }  // `ga`
     var onAwaitingInput: (AwaitingInput) -> Void = { _ in } // `ai` (HITL)
+    /// `run`: the durable run generating this reply, and how long its turn has been going.
+    var onRun: (_ runId: String, _ elapsedMs: Int?) -> Void = { _, _ in }
+    /// `s` on any frame: the run event it came from, applied. Reattach after it.
+    var onSeq: (Int) -> Void = { _ in }
 }
 
 enum GenerateTextStreamService {
@@ -60,7 +64,10 @@ enum GenerateTextStreamService {
             return false
         }
 
+        let seq = (msg["s"] as? NSNumber)?.intValue
         switch type {
+        case "run":
+            if let v = msg["v"] as? String, !v.isEmpty { cb.onRun(v, (msg["ms"] as? NSNumber)?.intValue) }
         case "c":
             if let v = msg["v"] as? String { cb.onDelta(v) }
         case "cr":
@@ -91,10 +98,12 @@ enum GenerateTextStreamService {
             if (msg["status"] as? String) == "error" {
                 throw StreamGenerationError(message: (msg["m"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L("conversation.response.generationFailedDefault"))
             }
+            if let seq { cb.onSeq(seq) }
             return true
         default:
             break   // heartbeat / unknown — ignored
         }
+        if let seq { cb.onSeq(seq) }
         return false
     }
 

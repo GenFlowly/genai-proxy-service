@@ -83,5 +83,40 @@ struct SentryScrubbingTests {
         #expect(scrubbed.request?.queryString == nil)
         #expect(scrubbed.request?.fragment == nil)
     }
+
+    @Test func anErrorsFailingURLLosesItsQueryInTheTextAndUserInfo() throws {
+        let failing = "https://api.genflowly.com/api/v1/runs/run_1/stream?conversationId=8b98d27e&fromSeq=0"
+        let event = Event(level: .error)
+        let exception = Exception(value: "Error Domain=NSURLErrorDomain Code=-1005 NSErrorFailingURLKey=\(failing), x=1", type: "NSURLErrorDomain")
+        event.exceptions = [exception]
+        event.context = ["user info": ["NSErrorFailingURLKey": failing, "NSErrorFailingURLStringKey": failing, "_kCFStreamErrorCodeKey": 53]]
+        let scrubbed = try #require(SentryScrubbing.event(event))
+        let path = "https://api.genflowly.com/api/v1/runs/run_1/stream"
+        #expect(scrubbed.exceptions?.first?.value == "Error Domain=NSURLErrorDomain Code=-1005 NSErrorFailingURLKey=\(path), x=1")
+        #expect(scrubbed.context?["user info"]?["NSErrorFailingURLKey"] as? String == path)
+        #expect(scrubbed.context?["user info"]?["NSErrorFailingURLStringKey"] as? String == path)
+        #expect(scrubbed.context?["user info"]?["_kCFStreamErrorCodeKey"] as? Int == 53)
+    }
+
+    @Test func signedLinksLoseTheirSignature() {
+        let signed = "PUT https://bucket.s3.amazonaws.com/a/b.png?X-Amz-Credential=AKIA123&X-Amz-Signature=abc failed"
+        #expect(SentryScrubbing.stripQueries(signed) == "PUT https://bucket.s3.amazonaws.com/a/b.png failed")
+    }
 }
 #endif
+
+@MainActor
+struct NetworkLossTests {
+    @Test func aDroppedConnectionIsNotAFault() {
+        #expect(NetworkLoss.matches(URLError(.networkConnectionLost)))
+        #expect(NetworkLoss.matches(URLError(.notConnectedToInternet)))
+        #expect(NetworkLoss.matches(URLError(.timedOut)))
+        #expect(NetworkLoss.matches(StreamTruncatedError()))
+    }
+
+    @Test func realFailuresStillCount() {
+        #expect(!NetworkLoss.matches(URLError(.badServerResponse)))
+        #expect(!NetworkLoss.matches(StreamGenerationError(message: "quota")))
+        #expect(!NetworkLoss.matches(ReplyRecoveryFailed(underlying: URLError(.networkConnectionLost))))
+    }
+}

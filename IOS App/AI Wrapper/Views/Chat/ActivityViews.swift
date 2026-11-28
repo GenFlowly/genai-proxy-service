@@ -9,6 +9,9 @@ struct ActivityPanel: View {
     let isLive: Bool
     var citedSources: [WebSource]?
     var stopReason: String?
+    /// The server's clock for the turn when this client joined its run: after a reconnect
+    /// the newest event can be long past, and the clock must not restart from it.
+    var clock: RunClock?
     /// Told when the agent starts or stops thinking, and on appearing while it thinks.
     var onThinkingChange: ((Bool) -> Void)?
 
@@ -24,11 +27,12 @@ struct ActivityPanel: View {
     enum Mode { case story, evidence }
 
     init(events: [ActivityEvent], isLive: Bool, citedSources: [WebSource]? = nil, stopReason: String? = nil,
-         onThinkingChange: ((Bool) -> Void)? = nil) {
+         clock: RunClock? = nil, onThinkingChange: ((Bool) -> Void)? = nil) {
         self.events = events
         self.isLive = isLive
         self.citedSources = citedSources
         self.stopReason = stopReason
+        self.clock = clock
         self.onThinkingChange = onThinkingChange
         _open = State(initialValue: isLive)
         #if DEBUG
@@ -45,6 +49,11 @@ struct ActivityPanel: View {
 
     private var lastAt: Int { events.compactMap(\.at).max() ?? 0 }
 
+    /// Whichever is later now: the newest event, or the server's clock for the turn.
+    private func freshAnchor(_ date: Date = Date()) -> (at: Int, date: Date) {
+        (max(lastAt, clock?.now(date) ?? 0), date)
+    }
+
     var body: some View {
         Group {
             if isLive {
@@ -55,8 +64,9 @@ struct ActivityPanel: View {
                 content(now: nil)
             }
         }
-        .onAppear { anchor = (lastAt, Date()) }
-        .onChange(of: lastAt) { _, newValue in anchor = (newValue, Date()) }
+        .onAppear { anchor = freshAnchor() }
+        .onChange(of: lastAt) { _, _ in anchor = freshAnchor() }
+        .onChange(of: clock) { _, _ in anchor = freshAnchor() }
         .onChange(of: isLive) { wasLive, live in
             if !live && wasLive {
                 open = false
