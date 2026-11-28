@@ -274,3 +274,29 @@ struct ActivityEdgeCaseTests {
         #expect(ActivityFormat.monogram("cms.gov") == "C")
     }
 }
+
+/// Citations from the model's own knowledge: the message's source list carries them, no step
+/// found them, and they count with the cited sources like the library's reducer counts them.
+struct ActivityKnowledgeSourceTests {
+    private let knowledge = [WebSource(index: 1, title: "Madrian & Shea, QJE, 2001", url: "", origin: "training")]
+
+    @Test func theyCountAsCitedAndJoinTheAnswer() throws {
+        let fixture = try Fixture("memory_only")
+        let view = reduceActivity(fixture.events, isLive: false, knowledgeSources: knowledge)
+        #expect(view.sourcesFound == 1)
+        #expect(view.sourcesCited == 1)
+        #expect(view.knowledge.map(\.source.index) == [1])
+        #expect(view.knowledge.first?.cited == true)
+        let answer = view.beats.compactMap { beat -> [ActivitySourceView]? in
+            if case .answer(_, let cited) = beat.kind { return cited }
+            return nil
+        }.first
+        #expect(answer?.map(\.source.index) == [1])
+    }
+
+    @Test func aLiveTurnAddsNone() throws {
+        let fixture = try Fixture("live_mid_turn")
+        let view = reduceActivity(fixture.events, isLive: true, knowledgeSources: knowledge)
+        #expect(view.knowledge.isEmpty)
+    }
+}

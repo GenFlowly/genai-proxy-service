@@ -130,6 +130,8 @@ struct ActivityView: Equatable {
     var memoryTextsRecalled: [String]?
     var beats: [ActivityBeat]
     var evidence: [ActivityEvidenceGroup]
+    /// Cited from the model's own knowledge: counted with the sources, found by no step.
+    var knowledge: [ActivitySourceView] = []
     var developer: [ActivityDeveloperEntry]
     var current: ActivityCurrent?
     /// The answer is streaming, so the agent is done thinking (live only).
@@ -138,6 +140,8 @@ struct ActivityView: Equatable {
 
 private let searchTools: Set<String> = ["web_search"]
 private let knowledgeTools: Set<String> = ["search_knowledge_base"]
+/// The step id knowledge sources carry: no step of the log found them.
+private let knowledgeStep = "knowledge"
 private let subagentTools: Set<String> = ["spawn_agent"]
 private let planTools: Set<String> = ["write_todos"]
 private let fileTools: Set<String> = ["fs_read", "fs_write", "fs_list"]
@@ -186,12 +190,15 @@ private final class StepRecord {
 ///   - nowMs: milliseconds since the turn started, on the server's clock (live only).
 ///   - stopReason: the message's stop reason; "cancelled" means the user stopped it.
 ///   - citedFallback: cited source indices for logs whose turn.end carries none.
+///   - knowledgeSources: sources the answer cites from the model's own knowledge. No step found
+///     them, so they come from the message's source list, not the log.
 func reduceActivity(
     _ events: [ActivityEvent],
     isLive: Bool,
     nowMs: Int? = nil,
     stopReason: String? = nil,
-    citedFallback: [Int]? = nil
+    citedFallback: [Int]? = nil,
+    knowledgeSources: [WebSource]? = nil
 ) -> ActivityView {
     var steps: [StepRecord] = []
     var byId: [String: StepRecord] = [:]
@@ -452,10 +459,15 @@ func reduceActivity(
         }
     }
 
-    let citedSources: [ActivitySourceView]? = citedIndices.map { indices in
-        foundOrder.compactMap { foundSources[$0] }.filter { indices.contains($0.source.index) }
-            .sorted { $0.source.index < $1.source.index }
+    let knowledge: [ActivitySourceView] = status == .live ? [] : (knowledgeSources ?? []).map {
+        ActivitySourceView(source: ActivitySource($0), domain: "", cited: true, stepId: knowledgeStep, callSeq: 0)
     }
+    let citedFromSteps: [ActivitySourceView]? = citedIndices.map { indices in
+        foundOrder.compactMap { foundSources[$0] }.filter { indices.contains($0.source.index) }
+    }
+    let citedSources: [ActivitySourceView]? = citedFromSteps == nil && knowledge.isEmpty
+        ? nil
+        : ((citedFromSteps ?? []) + knowledge).sorted { $0.source.index < $1.source.index }
     if let citedSources {
         beats = beats.map { beat in
             guard case .answer(let outcome, _) = beat.kind else { return beat }
@@ -473,7 +485,7 @@ func reduceActivity(
                          stepDuration: stepDuration, finalAnswer: finalAnswer),
         searchesUsed: searchesUsed,
         searchesMax: searchMax,
-        sourcesFound: foundSources.count,
+        sourcesFound: foundSources.count + knowledge.count,
         sourcesCited: citedSources?.count,
         memoriesCore: memoriesCore,
         memoriesRecalled: memoriesRecalled,
@@ -481,6 +493,7 @@ func reduceActivity(
         memoryTextsRecalled: textsRecalled,
         beats: beats,
         evidence: evidence,
+        knowledge: knowledge,
         developer: developer,
         current: status == .live ? currentOf(steps, stepStatus: stepStatus, callsOf: callsOf) : nil,
         answering: status == .live && isAnswering(steps, finalAnswer: finalAnswer)

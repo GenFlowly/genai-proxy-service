@@ -31,6 +31,8 @@ struct ActivitySource: Equatable {
     var favicon: String?
     /// As the provider sent it (RFC 1123 or ISO); a calendar date, shown in UTC.
     var publishedDate: String?
+    /// "training": cited from the model's own knowledge, with no page.
+    var origin: String?
 
     init?(json: JSONValue) {
         guard let index = json["index"]?.int else { return nil }
@@ -39,7 +41,10 @@ struct ActivitySource: Equatable {
         url = json["url"]?.string ?? ""
         favicon = json["favicon"]?.string
         publishedDate = json["published_date"]?.string
+        origin = json["origin"]?.string
     }
+
+    var isTraining: Bool { origin == "training" }
 }
 
 /// What a tool call is about and why the agent made it, from its arguments.

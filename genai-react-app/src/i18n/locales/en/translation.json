@@ -341,6 +341,7 @@
             "swipeHint": "Swipe to see other responses",
             "selected": "Selected",
             "sources": "Sources",
+            "fromTraining": "(from training knowledge)",
             "stop": "Stop",
             "streamInterrupted": "Response interrupted: {{reason}}",
             "tokensReadFromCache": "Tokens read from cache in this conversation so far (this vendor)",
@@ -500,7 +501,10 @@
                 "developerSub": "prompts and raw outputs",
                 "prompt": "Prompt",
                 "response": "Response",
-                "step": "Step {{n}}"
+                "step": "Step {{n}}",
+                "training": "From training knowledge",
+                "knowledge_one": "From training knowledge · {{count}}",
+                "knowledge_other": "From training knowledge · {{count}}"
             },
             "status": {
                 "running": "Running",

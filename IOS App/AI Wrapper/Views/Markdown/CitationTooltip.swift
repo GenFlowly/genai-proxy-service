@@ -8,6 +8,7 @@ extension ActivitySource {
         url = source.url
         favicon = source.favicon
         publishedDate = source.publishedDate
+        origin = source.origin
     }
 }
 

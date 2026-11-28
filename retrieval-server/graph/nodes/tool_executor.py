@@ -250,7 +250,8 @@ _CITATION_INSTRUCTION = (
     "Cite each claim inline with the bracketed number shown next to the source "
     "you drew it from, e.g. [1] or [2][3]. Never write your own Sources or "
     "References section — the application renders the numbered source list to "
-    "the user from these entries."
+    "the user from these entries. (A citation from your own knowledge still gets "
+    "its `[n]: reference` line at the end of the answer.)"
 )
 
 _CITATION_MARKER = re.compile(r"\[(\d{1,3})\]")

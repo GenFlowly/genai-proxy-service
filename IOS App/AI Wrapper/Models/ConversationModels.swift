@@ -11,13 +11,17 @@ struct WebSource: Codable, Equatable, Hashable {
     var favicon: String?
     /// Publish date as the provider sent it; a calendar date.
     var publishedDate: String?
+    /// "training": the model cited its own knowledge. Such a source has a reference for a
+    /// title and no page (`url` is empty).
+    var origin: String?
 
-    init(index: Int, title: String, url: String, favicon: String? = nil, publishedDate: String? = nil) {
+    init(index: Int, title: String, url: String, favicon: String? = nil, publishedDate: String? = nil, origin: String? = nil) {
         self.index = index
         self.title = title
         self.url = url
         self.favicon = favicon
         self.publishedDate = publishedDate
+        self.origin = origin
     }
 
     init?(json: JSONValue) {
@@ -27,7 +31,11 @@ struct WebSource: Codable, Equatable, Hashable {
         url = json["url"]?.string ?? ""
         favicon = json["favicon"]?.string
         publishedDate = json["published_date"]?.string
+        origin = json["origin"]?.string
     }
+
+    /// A citation from the model's own knowledge, which has no page to open.
+    var isTraining: Bool { origin == "training" }
 }
 
 /// Reference to a file in the attachments bucket (uploaded image/PDF or generated artifact).
