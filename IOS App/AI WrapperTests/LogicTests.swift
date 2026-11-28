@@ -143,6 +143,15 @@ struct CitationLinkTests {
         #expect(CitationText.linkify("[2](https://x.test)", sources: sources) == "[2](https://x.test)")
     }
 
+    @Test func aTrainingSourceIsAChipLikeAnyOther() throws {
+        let training = WebSource(index: 4, title: "Kahneman, 2011", url: "", origin: "training")
+        #expect(CitationText.linkify("Known [4].", sources: [training]) == "Known [[4]](cite://4).")
+        let json = try #require(JSONValue.parse(Data(#"{"index":4,"title":"K","url":"","origin":"training"}"#.utf8)))
+        let parsed = try #require(WebSource(json: json))
+        #expect(parsed.isTraining)
+        #expect(!sources[0].isTraining)
+    }
+
     @Test func noSourcesMeansNoWork() {
         #expect(CitationText.linkify("See [2].", sources: nil) == "See [2].")
     }

@@ -77,7 +77,8 @@ struct ActivityPanel: View {
 
     @ViewBuilder private func content(now: Int?) -> some View {
         let view = reduceActivity(events, isLive: isLive, nowMs: now, stopReason: stopReason,
-                                  citedFallback: citedSources?.map(\.index))
+                                  citedFallback: citedSources?.map(\.index),
+                                  knowledgeSources: citedSources?.filter(\.isTraining))
         let thinking = view.status == .live && !view.answering
         if !(view.isEmpty && !isLive) {
             VStack(alignment: .leading, spacing: 12) {
@@ -582,18 +583,12 @@ private struct BeatDetail: View {
             if !citedSources.isEmpty {
                 FlowLayout(spacing: 6, lineSpacing: 6) {
                     ForEach(citedSources) { source in
-                        Link(destination: URL(string: source.source.url) ?? AppConfig.webAppURL) {
-                            HStack(spacing: 5) {
-                                SiteIcon(url: source.source.url, favicon: source.source.favicon, size: 14)
-                                Text("[\(source.source.index)] \(source.domain)")
-                                    .webText(11, lineHeight: 15.95)
-                                    .foregroundStyle(AppTheme.textSecondary)
+                        if source.source.isTraining {
+                            answerChip(source)
+                        } else {
+                            Link(destination: URL(string: source.source.url) ?? AppConfig.webAppURL) {
+                                answerChip(source)
                             }
-                            .padding(.leading, 4)
-                            .padding(.trailing, 8)
-                            .padding(.vertical, 2)
-                            .background(AppTheme.activityWell)
-                            .clipShape(Capsule())
                         }
                     }
                 }
@@ -603,6 +598,21 @@ private struct BeatDetail: View {
         default:
             EmptyView()
         }
+    }
+
+    private func answerChip(_ source: ActivitySourceView) -> some View {
+        let training = source.source.isTraining
+        return HStack(spacing: 5) {
+            SiteIcon(url: source.source.url, favicon: source.source.favicon, size: 14, training: training)
+            Text("[\(source.source.index)] \(training ? L("conversation.activity.evidence.training") : source.domain)")
+                .webText(11, lineHeight: 15.95)
+                .foregroundStyle(AppTheme.textSecondary)
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 8)
+        .padding(.vertical, 2)
+        .background(AppTheme.activityWell)
+        .clipShape(Capsule())
     }
 }
 
@@ -779,8 +789,20 @@ struct SiteIcon: View {
     let url: String
     let favicon: String?
     var size: CGFloat = 16
+    /// A source cited from the model's own knowledge has no site and shows the thinking icon.
+    var training = false
 
     var body: some View {
+        if training {
+            WebIcon(name: "lucide-brain", size: size, color: AppTheme.textMuted)
+                .frame(width: size, height: size)
+                .accessibilityIdentifier("activity-training-icon")
+        } else {
+            siteIcon
+        }
+    }
+
+    @ViewBuilder private var siteIcon: some View {
         let monogram = Text(ActivityFormat.monogram(activityDomain(url)))
             .font(DSFont.roboto(size * 0.625, 700))
             .foregroundStyle(AppTheme.textPrimary)
@@ -815,13 +837,14 @@ struct SourceRow: View {
 
     var body: some View {
         let title = source.source.title.isEmpty ? source.source.url : source.source.title
-        let link = URL(string: source.source.url) ?? AppConfig.webAppURL
+        let training = source.source.isTraining
+        let domain = training ? L("conversation.activity.evidence.training") : source.domain
         switch variant {
         case .compact:
             HStack(spacing: 8) {
-                SiteIcon(url: source.source.url, favicon: source.source.favicon)
-                Text(source.domain).webText(12).foregroundStyle(AppTheme.textMuted).lineLimit(1).fixedSize()
-                Link(destination: link) {
+                SiteIcon(url: source.source.url, favicon: source.source.favicon, training: training)
+                Text(domain).webText(12).foregroundStyle(AppTheme.textMuted).lineLimit(1).fixedSize()
+                linked {
                     Text(title).webText(13).foregroundStyle(AppTheme.textSecondary).lineLimit(1).truncationMode(.tail)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -830,10 +853,10 @@ struct SourceRow: View {
             .opacity(source.cited == false ? 0.7 : 1)
             .accessibilityIdentifier("activity-source")
         case .ledger:
-            let line = [source.domain, ActivityFormat.sourceDate(source.source.publishedDate), meta].compactMap { $0 }.joined(separator: " · ")
+            let line = [domain, ActivityFormat.sourceDate(source.source.publishedDate), meta].compactMap { $0 }.joined(separator: " · ")
             HStack(spacing: 10) {
                 if source.cited == true {
-                    Link(destination: link) {
+                    linked {
                         Text("[\(source.source.index)]").webText(11).monospacedDigit()
                             .foregroundStyle(AppTheme.textPrimary)
                             .padding(.horizontal, 6).padding(.vertical, 1)
@@ -842,9 +865,9 @@ struct SourceRow: View {
                             .overlay(Capsule().strokeBorder(AppTheme.primary, lineWidth: 1))
                     }
                 }
-                SiteIcon(url: source.source.url, favicon: source.source.favicon, size: 20)
+                SiteIcon(url: source.source.url, favicon: source.source.favicon, size: 20, training: training)
                 VStack(alignment: .leading, spacing: 0) {
-                    Link(destination: link) {
+                    linked {
                         Text(title).webText(13, lineHeight: 18.85).foregroundStyle(AppTheme.textSecondary)
                             .lineLimit(1).truncationMode(.tail)
                     }
@@ -857,6 +880,15 @@ struct SourceRow: View {
                 if !plain { Rectangle().fill(AppTheme.borderLight).frame(height: 1) }
             }
             .accessibilityIdentifier("activity-evidence-source")
+        }
+    }
+
+    /// The source's page as a link; a source with no page (training knowledge) is plain text.
+    @ViewBuilder private func linked(@ViewBuilder _ label: () -> some View) -> some View {
+        if source.source.isTraining {
+            label()
+        } else {
+            Link(destination: URL(string: source.source.url) ?? AppConfig.webAppURL, label: label)
         }
     }
 
@@ -885,9 +917,10 @@ private struct ActivityEvidence: View {
 
     var body: some View {
         let citationsKnown = view.sourcesCited != nil
-        let all = view.evidence.flatMap(\.sources)
+        let all = view.evidence.flatMap(\.sources) + view.knowledge
         let active: EvidenceFilter = (!citationsKnown && (filter == .cited || filter == .notCited)) ? .all : filter
         let groups = view.evidence.filter { !$0.calls.isEmpty }
+        let knowledge = active == .all || active == .cited ? view.knowledge : []
         VStack(alignment: .leading, spacing: 12) {
             if !groups.isEmpty {
                 FlowLayout(spacing: 6, lineSpacing: 6) {
@@ -899,7 +932,7 @@ private struct ActivityEvidence: View {
                     chip(.failed, L("conversation.activity.evidence.failed", ["count": view.evidence.reduce(0) { $0 + $1.failedCalls.count }]), active)
                 }
                 .accessibilityIdentifier("activity-evidence-filter")
-            } else {
+            } else if view.knowledge.isEmpty {
                 Text(L("conversation.activity.evidence.noSources")).webText(13).foregroundStyle(AppTheme.textMuted)
             }
             ForEach(groups) { group in
@@ -908,6 +941,18 @@ private struct ActivityEvidence: View {
                                   beat: view.beats.first { $0.id == group.beatId },
                                   focused: focusedStep == group.stepId,
                                   onShowInStory: onShowInStory)
+            }
+            if !knowledge.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(L("conversation.activity.evidence.knowledge", ["count": knowledge.count]))
+                        .webText(13, 500).foregroundStyle(AppTheme.textPrimary).lineLimit(1)
+                        .padding(.vertical, 6)
+                    ForEach(knowledge) { source in
+                        SourceRow(source: source, variant: .ledger)
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("activity-evidence-knowledge")
             }
             VStack(alignment: .leading, spacing: 8) {
                 MemorySection(view: view)

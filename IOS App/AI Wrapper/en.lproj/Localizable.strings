@@ -333,6 +333,9 @@
 "conversation.activity.evidence.showNotCited_one" = "Show {{count}} not cited";
 "conversation.activity.evidence.showNotCited_other" = "Show {{count}} not cited";
 "conversation.activity.evidence.citedBadge" = "cited [{{index}}]";
+"conversation.activity.evidence.training" = "From training knowledge";
+"conversation.activity.evidence.knowledge_one" = "From training knowledge · {{count}}";
+"conversation.activity.evidence.knowledge_other" = "From training knowledge · {{count}}";
 "conversation.activity.evidence.query" = "query {{seq}}";
 "conversation.activity.evidence.openStep" = "Show this step in the story";
 "conversation.activity.evidence.memory" = "Memory · {{count}}";
@@ -440,6 +443,7 @@
 "conversation.response.responseFrom" = "Response from {{vendor}}";
 "conversation.response.selected" = "Selected";
 "conversation.response.sources" = "Sources";
+"conversation.response.fromTraining" = "(from training knowledge)";
 "conversation.response.stop" = "Stop";
 "conversation.response.streamInterrupted" = "Response interrupted: {{reason}}";
 "conversation.response.tokensReadFromCache" = "Tokens read from cache in this conversation so far (this vendor)";

@@ -91,6 +91,49 @@ def _web_sources_events(payloads):
     return [p["web_sources"] for p in payloads if "web_sources" in p]
 
 
+def _content(payloads):
+    return "".join(p["content"] for p in payloads if "content" in p)
+
+
+class KnowledgeCitationTests(unittest.IsolatedAsyncioTestCase):
+    """The answer's own reference lines become training sources in the final
+    web_sources event and never reach the content stream."""
+
+    async def test_a_turn_without_tools_gets_training_sources(self):
+        payloads = await _collect([
+            _stream_event("Defaults work.[1]\n\n"),
+            _stream_event("[1]: Madrian & Shea, *QJE*, 2001"),
+            _model_end_event([]),
+        ])
+        self.assertEqual(_content(payloads), "Defaults work.[1]\n")
+        self.assertEqual(_web_sources_events(payloads), [[
+            {"index": 1, "title": "Madrian & Shea, QJE, 2001", "url": "", "origin": "training"},
+        ]])
+
+    async def test_training_sources_follow_the_cited_tool_sources(self):
+        payloads = await _collect([
+            _stream_event("Searching."),
+            _model_end_event(["web_search"]),
+            _executor_end_event(_SOURCES),
+            _stream_event("Use Two [2]. Also known [4].\n\n[4]: Kahneman, 2011"),
+            _model_end_event([]),
+        ])
+        self.assertEqual(_web_sources_events(payloads)[-1], [
+            _SOURCES[1],
+            {"index": 4, "title": "Kahneman, 2011", "url": "", "origin": "training"},
+        ])
+        self.assertNotIn("Kahneman", _content(payloads))
+
+    async def test_an_answer_without_reference_lines_is_unchanged(self):
+        payloads = await _collect([
+            _stream_event("Plain answer.\n"),
+            _stream_event("Second line."),
+            _model_end_event([]),
+        ])
+        self.assertEqual(_content(payloads), "Plain answer.\nSecond line.")
+        self.assertEqual(_web_sources_events(payloads), [])
+
+
 class TrimmingTests(unittest.IsolatedAsyncioTestCase):
     async def test_final_event_holds_only_cited_entries_with_original_indices(self):
         payloads = await _collect([

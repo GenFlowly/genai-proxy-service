@@ -198,6 +198,20 @@ _DEFAULT_CITATION_INSTRUCTION = (
 )
 
 
+# Every answer gets this, tool or not: a citation from the model's own knowledge
+# has no tool source to point at, so it brings its own line, which the stream
+# turns into a source (graph/knowledge_references.py).
+_KNOWLEDGE_CITATION_INSTRUCTION = (
+    "If you cite a claim that comes from your own knowledge rather than from a tool "
+    "result, put a bracketed number such as [4] right after the claim in the text, "
+    "numbered after any source numbers a tool gave you. Then end your answer with "
+    "one line per such citation, in exactly this form: `[4]: Author(s), Title, "
+    "Publication, Year`. Every citation needs both the number in the text and its "
+    "line at the end. Put no heading above those lines and write no other Sources "
+    "or References section: the application shows them in its source list."
+)
+
+
 def _build_web_context(results: list, answer: str | None, citation_instruction: str | None = None) -> str:
     if not results and not answer:
         return "No web search results available."
@@ -895,6 +909,8 @@ def make_llm_node(agent_type: str, node_id: str | None = None):
                     "turn. One sentence only — it announces the lookup, it is never a "
                     "substitute for the full answer once the results are in."
                 )
+            if not state.get("response_schema"):
+                system_prompt += f"\n\n{_KNOWLEDGE_CITATION_INSTRUCTION}"
             model_override = None
         else:
             system_prompt = config.get("system_prompt", "You are a helpful assistant.")

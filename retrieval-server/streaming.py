@@ -11,6 +11,7 @@ from activity.recorder import chunk_text, stop_reason_of as _stop_reason_of
 from activity.schema import TURN_COMPLETED, TURN_ERROR
 from encoding_library.observability import count
 from graph.image_normalize import ImageNormalizationError
+from graph.knowledge_references import ReferenceTail
 from graph.state import RetrievalState
 
 logger = logging.getLogger(__name__)
@@ -230,6 +231,7 @@ async def stream_events_dicts(
     # end-of-turn cited-only trimming event (see _cited_web_sources).
     answer_parts: list[str] = []
     last_web_sources: list = []
+    reference_tail = ReferenceTail()
     usage = {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -358,6 +360,7 @@ async def stream_events_dicts(
                         # preamble itself is preserved in the activity log's
                         # llm step as `reasoning`, so nothing is lost from the panel.
                         answer_parts.clear()
+                        reference_tail.reset()
                         yield {"content_reset": True}
                     if not raw_tool_calls:
                         # This round produced no tool calls, so it terminates the
@@ -379,8 +382,10 @@ async def stream_events_dicts(
                 text = chunk_text(event["data"].get("chunk"))
                 if text:
                     token_count += 1
-                    answer_parts.append(text)
-                    yield {"content": text}
+                    text = reference_tail.feed(text)
+                    if text:
+                        answer_parts.append(text)
+                        yield {"content": text}
 
         logger.info(
             "Stream: completed — %d events processed, %d tokens emitted",
@@ -399,6 +404,10 @@ async def stream_events_dicts(
         # subset (last-write-wins downstream: live panel trims, proxy persists
         # only these). Skipped on the error path above: a partial answer keeps
         # the full list.
+        rest, knowledge_sources = reference_tail.finish(s.get("index") for s in last_web_sources)
+        if rest:
+            answer_parts.append(rest)
+            yield {"content": rest}
         answer = "".join(answer_parts)
         if last_web_sources:
             found = {s.get("index") for s in last_web_sources}
@@ -409,6 +418,15 @@ async def stream_events_dicts(
                 "Stream: trimming web_sources to cited entries — %d → %d",
                 len(last_web_sources), len(trimmed_sources),
             )
+        if knowledge_sources:
+            # Citations from the model's own knowledge join the list after the
+            # tools' sources, so every [n] in the answer resolves the same way.
+            logger.info("Stream: %d citation(s) from the model's own knowledge", len(knowledge_sources))
+            trimmed_sources = sorted(
+                (trimmed_sources if trimmed_sources is not None else last_web_sources) + knowledge_sources,
+                key=lambda source: source.get("index", 0),
+            )
+        if trimmed_sources is not None:
             yield {"web_sources": trimmed_sources}
         if owns_recorder:
             for activity_event in recorder.finish(TURN_COMPLETED):
@@ -420,6 +438,9 @@ async def stream_events_dicts(
         count("stream_error_total", vendor=_provider)
         logger.error("Stream: unhandled exception — %s", e, exc_info=True)
         kind, message = user_facing_llm_error(e, _provider)
+        rest, _ = reference_tail.finish()
+        if rest:
+            yield {"content": rest}
         if owns_recorder:
             for activity_event in recorder.finish(TURN_ERROR):
                 yield {"activity": activity_event}

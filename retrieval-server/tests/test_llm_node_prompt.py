@@ -84,6 +84,31 @@ async def _run(node_type: str, state: dict) -> str:
     return content
 
 
+class KnowledgeCitationTests(unittest.IsolatedAsyncioTestCase):
+    """Citations from the model's own knowledge need their own reference lines
+    in every answer, with or without tools: no tool result carries the rule."""
+
+    _MARKER = "If you cite a claim that comes from your own knowledge"
+
+    async def test_an_answer_without_tools_gets_the_rule(self):
+        prompt = await _run("RESPONSE_GENERATOR", _state())
+        self.assertIn(self._MARKER, prompt)
+        self.assertIn("`[4]: Author(s), Title, Publication, Year`", prompt)
+
+    async def test_an_answer_with_tools_gets_it_after_the_tool_sentences(self):
+        prompt = await _run("RESPONSE_GENERATOR", _state(builtin_tools=["web_search"]))
+        self.assertLess(prompt.index(_PREAMBLE_MARKER), prompt.index(self._MARKER))
+
+    async def test_structured_output_has_no_reference_lines(self):
+        schema = {"type": "object", "properties": {"x": {"type": "string"}}}
+        prompt = await _run("RESPONSE_GENERATOR", _state(response_schema=schema))
+        self.assertNotIn(self._MARKER, prompt)
+
+    async def test_pipeline_nodes_never_get_it(self):
+        prompt = await _run("QUERY_ANALYZER", _state())
+        self.assertNotIn(self._MARKER, prompt)
+
+
 class ToolPreambleTests(unittest.IsolatedAsyncioTestCase):
     async def test_builtin_tools_add_the_preamble_instruction(self):
         prompt = await _run(

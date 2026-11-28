@@ -627,20 +627,36 @@ struct SourcesSection: View {
     private func row(_ source: WebSource) -> some View {
         let index = "[\(source.index)]"
         let indexWidth = LayoutUnit.ceiling(index.size(withAttributes: [.font: Self.font]).width)
+        // A citation from the model's own knowledge keeps its label whole; its reference gives way.
+        let origin = source.isTraining ? L("conversation.response.fromTraining") : ""
+        let originWidth = origin.isEmpty ? 0 : LayoutUnit.ceiling(origin.size(withAttributes: [.font: Self.font]).width) + Self.indexGap
         let title = source.title.isEmpty ? source.url : source.title
-        let fitted = title.webTruncated(toFit: width.map { $0 - indexWidth - Self.indexGap } ?? .infinity, font: Self.font)
+        let fitted = title.webTruncated(toFit: width.map { $0 - indexWidth - Self.indexGap - originWidth } ?? .infinity, font: Self.font)
         return HStack(alignment: .firstTextBaseline, spacing: Self.indexGap) {
             Text(index)
                 .webText(12, lineHeight: 20.4)
                 .monospacedDigit()
                 .foregroundStyle(AppTheme.textMuted)
-            Link(destination: URL(string: source.url) ?? AppConfig.webAppURL) {
-                // Chrome's ellipsis isn't part of the text, so the underline stops before it.
-                Text(joining: Text(verbatim: fitted.text).underline(), Text(verbatim: fitted.isTruncated ? "\u{2026}" : ""))
+            if source.isTraining {
+                Text(verbatim: fitted.text + (fitted.isTruncated ? "\u{2026}" : ""))
                     .webText(12, lineHeight: 20.4)
                     .foregroundStyle(AppTheme.textPrimary)
                     .lineLimit(1)
-                    .truncationMode(.tail)
+                    .accessibilityIdentifier("sources-section-training")
+                Text(origin)
+                    .webText(12, lineHeight: 20.4)
+                    .foregroundStyle(AppTheme.textMuted)
+                    .lineLimit(1)
+                    .fixedSize()
+            } else {
+                Link(destination: URL(string: source.url) ?? AppConfig.webAppURL) {
+                    // Chrome's ellipsis isn't part of the text, so the underline stops before it.
+                    Text(joining: Text(verbatim: fitted.text).underline(), Text(verbatim: fitted.isTruncated ? "\u{2026}" : ""))
+                        .webText(12, lineHeight: 20.4)
+                        .foregroundStyle(AppTheme.textPrimary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
             }
         }
     }
