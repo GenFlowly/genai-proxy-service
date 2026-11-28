@@ -496,6 +496,31 @@ final class HistoryStore: ObservableObject {
         persist()
     }
 
+    /// The conversation was opened: its dot goes at once, before the server confirms the read.
+    func markRead(id: String) {
+        func clear(_ list: inout [ConversationSummary]) {
+            guard let index = list.firstIndex(where: { $0.conversationId == id && $0.unread == true }) else { return }
+            list[index].unread = false
+        }
+        clear(&items)
+        clear(&pinned)
+        for key in Array(projectItems.keys) {
+            guard var list = projectItems[key] else { continue }
+            clear(&list)
+            projectItems[key] = list
+        }
+        persist()
+    }
+
+    /// Unread dots come from the server: a reply that finished while the app was away or on
+    /// another chat shows up on the next refresh of the lists.
+    func refreshUnread() async {
+        guard hasLoaded else { return }
+        async let page: Void = fetchPage(startKey: nil)
+        async let pins: Void = fetchPinned()
+        _ = await (page, pins)
+    }
+
     /// A reply was written: the server bumped updatedAt and added the vendors, and a project's
     /// members aren't refetched this session, so its rows would otherwise never show them.
     func didReply(id: String, vendors: [AIVendor]) {

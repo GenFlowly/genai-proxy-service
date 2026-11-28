@@ -2543,3 +2543,29 @@ struct ReplyResumeFrameTests {
         #expect(clock.now(received.addingTimeInterval(2.5)) == 43_750)
     }
 }
+
+// MARK: - Unread replies
+
+@MainActor
+struct UnreadReplyTests {
+    @Test func theListSaysWhichChatsHaveAnUnreadReply() throws {
+        let json = #"{"conversations":[{"conversationId":"c1","title":"A","unread":true},{"conversationId":"c2","title":"B"}]}"#
+        let page = try JSONDecoder().decode(GetCustomerConversationsResponse.self, from: Data(json.utf8))
+        #expect(page.conversations[0].unread == true)
+        #expect(page.conversations[1].unread == nil)
+    }
+
+    @Test func openingAChatClearsItsDotEverywhereItIsListed() {
+        let history = HistoryStore()
+        history.items = [ConversationSummary(conversationId: "c1", unread: true), ConversationSummary(conversationId: "c2", unread: true)]
+        history.pinned = [ConversationSummary(conversationId: "c1", unread: true)]
+        history.projectItems = ["PRJ1": [ConversationSummary(conversationId: "c1", projectId: "PRJ1", unread: true)]]
+
+        history.markRead(id: "c1")
+
+        #expect(history.items.first { $0.conversationId == "c1" }?.unread == false)
+        #expect(history.pinned.first?.unread == false)
+        #expect(history.projectItems["PRJ1"]?.first?.unread == false)
+        #expect(history.items.first { $0.conversationId == "c2" }?.unread == true)
+    }
+}

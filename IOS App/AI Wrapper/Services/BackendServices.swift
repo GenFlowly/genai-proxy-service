@@ -153,6 +153,11 @@ enum ConversationHistoryService {
         _ = try await APIClient.request(Endpoints.unpinConversation(conversationId), method: .post, token: token)
     }
 
+    /// Clears the conversation's unread dot: its owner has seen its latest reply.
+    static func markConversationRead(token: String, conversationId: String) async throws {
+        _ = try await APIClient.request(Endpoints.markConversationRead(conversationId), method: .post, token: token)
+    }
+
     // MARK: - Fork
 
     static func forkConversation(token: String, conversationId: String, messageId: String) async throws -> ForkConversationResponse {
