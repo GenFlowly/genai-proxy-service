@@ -152,6 +152,22 @@ struct CitationLinkTests {
         #expect(!sources[0].isTraining)
     }
 
+    /// UA-18 / UA-19: the Sources list keeps a training reference whole, in a view that can be
+    /// selected and copied, with the muted note running on after it.
+    @MainActor @Test func aTrainingReferenceIsShownWholeAndSelectable() throws {
+        let reference = "Kendall et al., Muscles: Testing and Function with Posture and Pain, 5th ed., 2005"
+        let view = SourcesSection.trainingReference(WebSource(index: 4, title: reference, url: "", origin: "training"))
+        let text = view.attributed
+        #expect(text.string == reference.webHyphenBreakable + " (from training knowledge)")
+        let primary = text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+        let note = text.attribute(.foregroundColor, at: text.length - 1, effectiveRange: nil) as? UIColor
+        #expect(primary == AppTheme.UI.textPrimary)
+        #expect(note == AppTheme.UI.textMuted)
+
+        // Narrow enough to need more than one 20.4 pt line: nothing is cut, the row grows.
+        #expect(MarkdownTextView.height(of: text, width: 240) > 21)
+    }
+
     @Test func noSourcesMeansNoWork() {
         #expect(CitationText.linkify("See [2].", sources: nil) == "See [2].")
     }
