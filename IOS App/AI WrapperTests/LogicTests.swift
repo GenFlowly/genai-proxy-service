@@ -1635,6 +1635,25 @@ struct StreamRecoveryTests {
         #expect(ConversationStore.recoveryAttempts(after: StreamTruncatedError(), streamedText: false) == 36)
         #expect(ConversationStore.recoveryAttempts(after: URLError(.networkConnectionLost), streamedText: true) == 36)
     }
+
+    private func event(_ json: String) throws -> ActivityEvent {
+        let value = try #require(JSONValue.parse(Data(json.utf8)))
+        return try #require(ActivityEvent(json: value))
+    }
+
+    @Test func theSavedActivityLogReplacesTheCutOne() throws {
+        let start = try event(#"{"v":2,"at":0,"type":"turn.start"}"#)
+        let end = try event(#"{"v":2,"at":900,"type":"turn.end","outcome":"completed"}"#)
+        var saved = Message(aiVendor: AIVendor(rawValue: "OPENAI"), text: "done", messageId: "m-1")
+        saved.activity = [start, end]
+        #expect(ConversationStore.savedActivity(saved, over: [start]) == [start, end])
+    }
+
+    @Test func aReplySavedWithoutALogKeepsWhatStreamed() throws {
+        let start = try event(#"{"v":2,"at":0,"type":"turn.start"}"#)
+        let saved = Message(aiVendor: AIVendor(rawValue: "OPENAI"), text: "done", messageId: "m-1")
+        #expect(ConversationStore.savedActivity(saved, over: [start]) == [start])
+    }
 }
 
 @Suite("One-line truncation")

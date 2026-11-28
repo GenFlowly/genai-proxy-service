@@ -68,6 +68,7 @@ const Tester = () => {
             <div data-testid="text">{message?.text ?? ''}</div>
             <div data-testid="error">{message?.error ?? ''}</div>
             <div data-testid="loading">{String(!!message?.isLoading)}</div>
+            <div data-testid="activity">{(message?.activity ?? []).map(e => e.type).join(',')}</div>
             <button data-testid="stream" onClick={() => conversation.generateResponsesStream('conv-default')}>stream</button>
             <button data-testid="load" onClick={() => conversation.loadConversation('c1')}>load</button>
         </div>
@@ -83,6 +84,9 @@ const streamThatFails = (error: Error, partialText?: string) => {
         return Promise.reject(error);
     });
 };
+
+const TURN_START = { v: 2, at: 0, type: 'turn.start' }
+const TURN_END = { v: 2, at: 900, type: 'turn.end', outcome: 'completed' }
 
 const saved = (text: string) => ({
     blocks: [{ responseMessages: [{ messageId: 'rm1', text }] }],
@@ -159,6 +163,39 @@ describe('ConversationContext after a failed stream', () => {
         expect(getByTestId('text')).toHaveTextContent('the full answer');
         expect(mockGetConversation).toHaveBeenCalledTimes(3);
         expect(getByTestId('error').textContent).toBe('');
+    });
+
+    test('the saved activity log replaces the one cut off with the connection', async () => {
+        mockGenerate.mockImplementation((...args: any[]) => {
+            args[3]?.({ conversationId: 'c1', responseMessageId: 'rm1' });
+            args[4]?.(TURN_START);
+            return Promise.reject(new StreamTruncatedError('Connection lost'));
+        });
+        mockGetConversation.mockResolvedValue({
+            blocks: [{ responseMessages: [{ messageId: 'rm1', text: 'the full answer', activity: [TURN_START, TURN_END] }] }],
+        });
+
+        const { getByTestId } = renderTester();
+        await act(async () => { getByTestId('stream').click(); });
+        await pollIntervals(1);
+
+        expect(getByTestId('text')).toHaveTextContent('the full answer');
+        expect(getByTestId('activity')).toHaveTextContent('turn.start,turn.end');
+    });
+
+    test('a saved reply with no activity log keeps what streamed', async () => {
+        mockGenerate.mockImplementation((...args: any[]) => {
+            args[3]?.({ conversationId: 'c1', responseMessageId: 'rm1' });
+            args[4]?.(TURN_START);
+            return Promise.reject(new StreamTruncatedError('Connection lost'));
+        });
+        mockGetConversation.mockResolvedValue(saved('the full answer'));
+
+        const { getByTestId } = renderTester();
+        await act(async () => { getByTestId('stream').click(); });
+        await pollIntervals(1);
+
+        expect(getByTestId('activity')).toHaveTextContent('turn.start');
     });
 
     test('a pending run that turns out to have failed shows why, without polling', async () => {
