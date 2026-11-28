@@ -4,7 +4,8 @@ Unit tests for durable-run cleanup (run_cleanup) and DBOS idle-polling tuning
 
 Covers: checkpoints dropped when a workflow ends but kept when its task is
 cancelled for recovery, the sweep deleting ended runs then orphans, unused
-queue deletion, the DBOS internals _quiet_idle_polling sets still existing
+queue deletion, row-level security turned on for every public table startup
+creates, the DBOS internals _quiet_idle_polling sets still existing
 on the pinned version, a stopped run not logged as a DBOS ERROR, the
 connection caps fitting the Supabase pooler, and startup giving up promptly
 on an unreachable database. Run with:
@@ -12,6 +13,7 @@ on an unreachable database. Run with:
 """
 import asyncio
 import logging
+import re
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,17 +26,24 @@ import run_cleanup
 
 
 class _FakeCursor:
-    def __init__(self, rowcount):
+    def __init__(self, rowcount, rows=()):
         self.rowcount = rowcount
+        self.rows = rows
+
+    async def fetchall(self):
+        return list(self.rows)
 
 
 class _FakeConn:
     def __init__(self):
         self.sql = []
+        self.params = []
+        self.rows = ()
 
     async def execute(self, sql, params=None):
         self.sql.append(sql)
-        return _FakeCursor(2)
+        self.params.append(params)
+        return _FakeCursor(2, self.rows)
 
 
 class _FakePool:
@@ -158,6 +167,45 @@ class DeleteUnusedQueuesTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([c.args[0] for c in delete.await_args_list], ["agent_runs", "p2_node_q"])
         self.assertEqual(durable_runtime._queue_list_cache, {})
+
+
+class EnableRowLevelSecurityTest(unittest.IsolatedAsyncioTestCase):
+    async def test_alters_only_the_tables_still_off(self):
+        pool = _FakePool()
+        pool.conn.rows = [{"relname": "run_events"}, {"relname": "checkpoints"}]
+        with patch.object(durable_runtime, "_pool", pool):
+            await durable_runtime._enable_row_level_security()
+
+        select, *alters = pool.conn.sql
+        self.assertIn("NOT c.relrowsecurity", select)
+        self.assertEqual(pool.conn.params[0], (list(durable_runtime._PUBLIC_TABLES),))
+        self.assertEqual([a.as_string(None) for a in alters], [
+            'ALTER TABLE "run_events" ENABLE ROW LEVEL SECURITY',
+            'ALTER TABLE "checkpoints" ENABLE ROW LEVEL SECURITY',
+        ])
+
+    async def test_all_on_alters_nothing(self):
+        pool = _FakePool()
+        with patch.object(durable_runtime, "_pool", pool):
+            await durable_runtime._enable_row_level_security()
+
+        self.assertEqual(len(pool.conn.sql), 1)
+
+    async def test_a_failure_is_logged_and_never_raises(self):
+        pool = _FakePool()
+        pool.conn.execute = AsyncMock(side_effect=RuntimeError("must be owner of table"))
+        with patch.object(durable_runtime, "_pool", pool), \
+             self.assertLogs(durable_runtime.logger, level="ERROR"):
+            await durable_runtime._enable_row_level_security()
+
+    def test_covers_every_table_startup_creates(self):
+        from langgraph.checkpoint.postgres.base import BasePostgresSaver
+        import run_events
+
+        created = {run_events.TABLE}
+        for migration in BasePostgresSaver.MIGRATIONS:
+            created.update(re.findall(r"CREATE TABLE IF NOT EXISTS (\w+)", migration))
+        self.assertEqual(created, set(durable_runtime._PUBLIC_TABLES))
 
 
 class QuietIdlePollingTest(unittest.TestCase):
