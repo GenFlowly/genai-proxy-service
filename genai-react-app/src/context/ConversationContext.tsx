@@ -230,6 +230,11 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         conversationIdRef.current = conversationId
     }, [conversationId])
 
+    // Changes when the user leaves the conversation. A turn from an earlier
+    // session belongs to a conversation no longer on screen: it must not write
+    // into this one, and a new chat's first block reuses its block id.
+    const streamSessionRef = useRef(0)
+
     const [conversationBlockList, setConversationBlockList] = useState<ConversationBlock[]>([
         {
             conversationBlockId: `conv-default`,
@@ -431,6 +436,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     }, [getAccessTokenSilently])
 
     const loadConversation = useCallback(async (id: string) => {
+        if (id !== conversationIdRef.current) streamSessionRef.current++
         try {
             let token = ''
             // Auth0-level check, NOT strict isAuthenticated: right after the
@@ -663,6 +669,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
     }, [getAccessTokenSilently, navigate, showToast])
 
     const resetConversation = useCallback(() => {
+        streamSessionRef.current++
         navigate('/chat')
         if (customerId) {
             // Drafts older component-library versions left in localStorage
@@ -673,10 +680,15 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             })
         }
 
+        // A new chat's first turn sets only the ref, so the state may already be
+        // '' and its effect would never clear the ref.
+        conversationIdRef.current = ''
         setConversationId('')
+        // A fresh block id: the left chat's editor would otherwise stay mounted
+        // for the new chat, still holding the prompt it sent.
         setConversationBlockList([
             {
-                conversationBlockId: `conv-default`,
+                conversationBlockId: `conv-${Date.now()}`,
                 prompt: '',
                 responseMessages: [],
                 isLoading: false,
@@ -842,6 +854,9 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
              if (abortControllers.current.has(`${id}-${vendorToRegenerate}`)) return
         }
         
+        const session = streamSessionRef.current
+        const onScreen = () => streamSessionRef.current === session
+
         const turnControllers = new Map<string, AbortController>()
         aiConfigs.forEach(c => {
              const key = `${id}-${c.aiVendor}`
@@ -1083,7 +1098,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             if (newConversationId && newConversationId !== conversationIdRef.current) {
                                 const sanitizedId = newConversationId.split(',')[0].trim()
 
-                                if (sanitizedId && sanitizedId !== conversationIdRef.current) {
+                                if (sanitizedId && sanitizedId !== conversationIdRef.current && onScreen()) {
                                     conversationIdRef.current = sanitizedId
                                 }
                             }
@@ -1392,7 +1407,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         prompt: promptToUse,
                         instructionName: instruction?.name
                     }).then(res => {
-                        if (res.title) {
+                        if (res.title && onScreen()) {
                             document.title = res.title
                             setConversationTitle(res.title)
                         }
@@ -1418,6 +1433,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             }
 
 
+            if (!onScreen()) return
             updateConversationBlock(id, {
                 isLoading: false,
                 status: 'resolved',
@@ -1433,6 +1449,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             }
 
         } catch (err: any) {
+            if (!onScreen()) return
             if (err.name === 'AbortError') {
                 updateConversationBlock(id, {
                     isLoading: false,
