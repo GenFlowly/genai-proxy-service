@@ -294,6 +294,18 @@ struct ActivityKnowledgeSourceTests {
         #expect(answer?.map(\.source.index) == [1])
     }
 
+    @Test func theAnswerStepShowsTheReferenceNotJustItsNumber() throws {
+        let fixture = try Fixture("memory_only")
+        let sources = knowledge + [WebSource(index: 2, title: " ", url: "", origin: "training")]
+        let view = reduceActivity(fixture.events, isLive: false, knowledgeSources: sources)
+        let answer = view.beats.compactMap { beat -> [ActivitySourceView]? in
+            if case .answer(_, let cited) = beat.kind { return cited }
+            return nil
+        }.first
+        // A reference that came back empty still says where the citation is from.
+        #expect(answer?.map(\.answerChipLabel) == ["[1] Madrian & Shea, QJE, 2001", "[2] From training knowledge"])
+    }
+
     @Test func aLiveTurnAddsNone() throws {
         let fixture = try Fixture("live_mid_turn")
         let view = reduceActivity(fixture.events, isLive: true, knowledgeSources: knowledge)

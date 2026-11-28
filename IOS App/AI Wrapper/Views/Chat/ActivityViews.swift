@@ -601,10 +601,9 @@ private struct BeatDetail: View {
     }
 
     private func answerChip(_ source: ActivitySourceView) -> some View {
-        let training = source.source.isTraining
-        return HStack(spacing: 5) {
-            SiteIcon(url: source.source.url, favicon: source.source.favicon, size: 14, training: training)
-            Text("[\(source.source.index)] \(training ? L("conversation.activity.evidence.training") : source.domain)")
+        HStack(spacing: 5) {
+            SiteIcon(url: source.source.url, favicon: source.source.favicon, size: 14, training: source.source.isTraining)
+            Text(verbatim: source.answerChipLabel)
                 .webText(11, lineHeight: 15.95)
                 .foregroundStyle(AppTheme.textSecondary)
         }
@@ -612,7 +611,17 @@ private struct BeatDetail: View {
         .padding(.trailing, 8)
         .padding(.vertical, 2)
         .background(AppTheme.activityWell)
-        .clipShape(Capsule())
+        // `border-radius: 10px`: a pill on one line, a rounded card when a reference wraps.
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+extension ActivitySourceView {
+    /// A page shows its site; a citation from training knowledge has no site, so it shows its reference.
+    var answerChipLabel: String {
+        guard source.isTraining else { return "[\(source.index)] \(domain)" }
+        let reference = source.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "[\(source.index)] \(reference.isEmpty ? L("conversation.activity.evidence.training") : reference)"
     }
 }
 
