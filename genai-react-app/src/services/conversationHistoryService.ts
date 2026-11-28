@@ -114,6 +114,26 @@ export const pinConversation = async (
     }
 };
 
+/** Clears the conversation's unread dot: its owner has seen its latest reply. */
+export const markConversationRead = async (
+    token: string,
+    conversationId: string
+): Promise<void> => {
+    const response = await fetchWithRetry(
+        endpoints.markConversationRead(conversationId),
+        {
+            method: HttpMethod.POST,
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(`Failed to mark conversation read: ${response.statusText}`);
+    }
+};
+
 export const unpinConversation = async (
     token: string,
     conversationId: string
