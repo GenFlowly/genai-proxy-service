@@ -12,7 +12,8 @@ Lifecycle:
                    decorators (runs.py) can register, and slow its idle polling.
                    Does NOT touch Postgres.
   startup()     -> open the checkpointer connection pool, run checkpointer + DBOS
-                   migrations, DBOS.launch() (also recovers interrupted workflows),
+                   migrations, turn on row-level security for the public tables,
+                   DBOS.launch() (also recovers interrupted workflows),
                    delete unused DBOS queues, start the run cleanup loop.
   shutdown()    -> DBOS.destroy() + close the pool.
 
@@ -64,6 +65,18 @@ _BACKGROUND_JOBS_SEC = 30.0
 _QUEUE_LIST_CACHE_SEC = 60.0
 # No workflow schedules exist.
 _SCHEDULER_POLL_SEC = 600.0
+
+# The tables startup creates in the default (public) schema: the checkpointer's
+# four and run_events. The Supabase Data API serves public tables to anyone with
+# the anon key unless row-level security is on. DBOS's tables live in their own
+# schema, which the Data API doesn't expose.
+_PUBLIC_TABLES = (
+    "checkpoint_migrations",
+    "checkpoints",
+    "checkpoint_blobs",
+    "checkpoint_writes",
+    "run_events",
+)
 
 _dbos_constructed = False  # DBOS() instance exists -> workflows may register/decorate
 _ready = False             # checkpointer setup + DBOS.launch() succeeded -> runs usable
@@ -213,6 +226,7 @@ async def startup() -> None:
         # Reattach events table (poll-based stream channel) shares this pool.
         import run_events
         await run_events.setup(_pool)
+        await _enable_row_level_security()
 
         DBOS.launch()  # runs migrations + recovers any interrupted workflows
         await _delete_unused_queues()
@@ -237,6 +251,34 @@ async def _close_pool() -> None:
         except Exception:
             logger.exception("Checkpointer pool close error")
         _pool = None
+
+
+async def _enable_row_level_security() -> None:
+    """Turn on row-level security for each of _PUBLIC_TABLES that has it off.
+    With no policies the Data API's roles see and change no rows, while this
+    server connects as the tables' owner, which bypasses it. Not FORCE: that
+    would apply to the owner too and block every run.
+
+    Only tables still off are altered, because ALTER TABLE locks the table
+    against the other machine's running runs during a deploy."""
+    from psycopg import sql
+
+    try:
+        async with _pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT c.relname FROM pg_class c"
+                " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                " WHERE n.nspname = current_schema() AND c.relname = ANY(%s)"
+                " AND NOT c.relrowsecurity",
+                (list(_PUBLIC_TABLES),),
+            )
+            for row in await cur.fetchall():
+                await conn.execute(
+                    sql.SQL("ALTER TABLE {} ENABLE ROW LEVEL SECURITY").format(
+                        sql.Identifier(row["relname"])))
+                logger.info("Enabled row-level security on %s", row["relname"])
+    except Exception:
+        logger.exception("Could not enable row-level security on the durable-run tables")
 
 
 async def _delete_unused_queues() -> None:
