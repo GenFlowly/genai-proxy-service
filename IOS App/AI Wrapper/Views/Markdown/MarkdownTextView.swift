@@ -214,19 +214,28 @@ struct WebSelectableText: View {
     let font: UIFont
     let lineHeight: CGFloat
     let color: UIColor
+    /// Inline text after `text`, past a space, in its own color (a muted note).
+    var trailing: (text: String, color: UIColor)?
 
-    private var attributed: NSAttributedString {
+    var attributed: NSAttributedString {
         let box = WebLineBox(font: font, lineHeight: DSFont.scaledSize(lineHeight))
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byWordWrapping
         paragraph.minimumLineHeight = box.height
         paragraph.maximumLineHeight = box.height
-        return NSAttributedString(string: text.webHyphenBreakable, attributes: [
+        let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color,
             .paragraphStyle: paragraph,
             .baselineOffset: box.height + font.descender - box.baseline
-        ])
+        ]
+        let string = NSMutableAttributedString(string: text.webHyphenBreakable, attributes: attributes)
+        if let trailing {
+            var muted = attributes
+            muted[.foregroundColor] = trailing.color
+            string.append(NSAttributedString(string: " " + trailing.text, attributes: muted))
+        }
+        return string
     }
 
     var body: some View {
