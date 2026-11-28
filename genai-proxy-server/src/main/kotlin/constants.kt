@@ -113,6 +113,11 @@ object DynamoDBConstants {
     // Absent on rows created before denormalization — list reads lazily
     // backfill it from the messages.
     const val VENDORS_KEY = "vendors"
+    // When the conversation's latest AI reply was saved, and when its owner last
+    // read it (opened it, or sent in it). A reply after the read is unread: the
+    // history list shows a dot. Absent on rows from before; no read means read.
+    const val LAST_REPLY_AT_KEY = "lastReplyAt"
+    const val LAST_READ_AT_KEY = "lastReadAt"
     // Sparse GSI (customerId, pinnedAt): contains exactly the pinned rows —
     // pinnedAt only exists while pinned — pre-sorted most-recently-pinned-first.
     const val CONVERSATION_PINNED_GSI_KEY = "pinnedIndex"

@@ -21,6 +21,7 @@ import com.genflowly.activity.conversation.registerGetPinnedConversationsRoutes
 import com.genflowly.activity.project.registerProjectRoutes
 import com.genflowly.activity.search.registerSearchRoutes
 import com.genflowly.activity.conversation.registerForkConversationRoutes
+import com.genflowly.activity.conversation.registerMarkConversationReadRoutes
 import com.genflowly.activity.conversation.registerPinConversationRoutes
 import com.genflowly.activity.conversation.registerUnpinConversationRoutes
 import com.genflowly.activity.customer.registerCustomerProfileSettingsRoutes
@@ -142,6 +143,7 @@ object Routes {
     const val PIN_CONVERSATION = "$API_V1/conversation/pin"
     const val UNPIN_CONVERSATION = "$API_V1/conversation/unpin"
     const val FORK_CONVERSATION = "$API_V1/conversation/fork"
+    const val MARK_CONVERSATION_READ = "$API_V1/conversation/read"
     const val GET_PINNED_CONVERSATIONS = "$API_V1/conversations/pinned"
     const val ASSIGN_CONVERSATION_PROJECT = "$API_V1/conversation/assign-project"
     const val UNASSIGN_CONVERSATION_PROJECT = "$API_V1/conversation/unassign-project"
@@ -332,6 +334,7 @@ fun Application.configureRouting(
         registerGetCustomerConversationsPaginatedRoutes(customerProfileService, conversationManagementService)
         registerDeleteConversationRoutes(customerProfileService, conversationManagementService)
         registerPinConversationRoutes(customerProfileService, conversationManagementService)
+        registerMarkConversationReadRoutes(customerProfileService, conversationService)
         registerUnpinConversationRoutes(customerProfileService, conversationManagementService)
         registerForkConversationRoutes(customerProfileService, conversationManagementService)
         registerGetPinnedConversationsRoutes(customerProfileService, conversationManagementService)

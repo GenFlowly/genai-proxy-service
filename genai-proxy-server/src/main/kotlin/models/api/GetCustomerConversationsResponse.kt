@@ -20,7 +20,9 @@ data class ConversationSummary(
     val projectName: String? = null,
     // Conversation this one was forked from; the sidebar nests forks under
     // their parent. Null for non-forks and when the parent is unknown.
-    val parentConversationId: String? = null
+    val parentConversationId: String? = null,
+    // A reply was saved after the owner last read the conversation.
+    val unread: Boolean = false
 )
 
 @Serializable
