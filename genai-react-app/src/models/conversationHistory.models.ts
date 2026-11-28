@@ -13,6 +13,8 @@ export interface ConversationSummary {
     // Conversation this one was forked from; the history panel nests forks
     // under their parent (when the parent is visible in the same section).
     parentConversationId?: string | null;
+    // A reply arrived after the owner last read it: the row shows a dot.
+    unread?: boolean;
 }
 
 /** POST /conversation/fork — the newly created forked conversation. */

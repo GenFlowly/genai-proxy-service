@@ -272,6 +272,47 @@ describe('ConversationHistoryComponent', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/chat/conv-1')
     })
 
+    describe('unread replies', () => {
+        const unread = { conversationId: 'conv-1', title: 'First Chat', createdAt: null, updatedAt: null, unread: true }
+
+        test('a chat with a reply since it was last read shows a dot', async () => {
+            mockGetCustomerConversations.mockResolvedValue({ conversations: [unread], lastEvaluatedKey: null })
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument())
+            expect(within(screen.getByTestId('conv-history-item-conv-1')).getByTestId('conv-history-unread-dot')).toBeInTheDocument()
+        })
+
+        test('opening it clears the dot at once', async () => {
+            mockGetCustomerConversations.mockResolvedValue({ conversations: [unread], lastEvaluatedKey: null })
+            render(<ConversationHistoryComponent />)
+            await waitFor(() => expect(screen.getByTestId('conv-history-unread-dot')).toBeInTheDocument())
+
+            fireEvent.click(screen.getByTestId('conv-history-item-conv-1'))
+
+            await waitFor(() => expect(screen.queryByTestId('conv-history-unread-dot')).not.toBeInTheDocument())
+        })
+
+        test('the chat on screen never shows one', async () => {
+            setupMocks({ activeId: 'conv-1' })
+            mockGetCustomerConversations.mockResolvedValue({ conversations: [unread], lastEvaluatedKey: null })
+            render(<ConversationHistoryComponent />)
+
+            await waitFor(() => expect(screen.getByTestId('conv-history-item-conv-1')).toBeInTheDocument())
+            expect(screen.queryByTestId('conv-history-unread-dot')).not.toBeInTheDocument()
+        })
+
+        test('coming back to the tab refreshes the list', async () => {
+            render(<ConversationHistoryComponent />)
+            await waitFor(() => expect(mockGetCustomerConversations).toHaveBeenCalledTimes(1))
+
+            act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+
+            await waitFor(() => expect(mockGetCustomerConversations).toHaveBeenCalledTimes(2))
+            expect(mockGetPinnedConversations).toHaveBeenCalledTimes(2)
+        })
+    })
+
     test('fires onSelect synchronously on item click, alongside navigate', async () => {
         const onSelect = jest.fn()
         render(<ConversationHistoryComponent onSelect={onSelect} />)

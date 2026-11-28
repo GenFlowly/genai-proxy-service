@@ -413,11 +413,18 @@ export function useConversationHistory({ onSelect }: { onSelect?: () => void } =
         return () => window.removeEventListener(CONVERSATION_FORKED_EVENT, onForked)
     }, [projects, upsertIntoProjectItems])
 
+    // A reply that finished (here or anywhere else) can leave a chat unread: the
+    // list is refreshed when one ends and whenever the tab comes back into view.
     useEffect(() => {
-        const onChanged = () => { fetchPage() }
+        const onChanged = () => { fetchPage(); fetchPinned() }
+        const onVisible = () => { if (document.visibilityState === 'visible') onChanged() }
         window.addEventListener(CONVERSATION_LIST_CHANGED_EVENT, onChanged)
-        return () => window.removeEventListener(CONVERSATION_LIST_CHANGED_EVENT, onChanged)
-    }, [fetchPage])
+        document.addEventListener('visibilitychange', onVisible)
+        return () => {
+            window.removeEventListener(CONVERSATION_LIST_CHANGED_EVENT, onChanged)
+            document.removeEventListener('visibilitychange', onVisible)
+        }
+    }, [fetchPage, fetchPinned])
 
     const loadMore = useCallback(() => { fetchPage(lastKey) }, [fetchPage, lastKey])
 
@@ -431,6 +438,14 @@ export function useConversationHistory({ onSelect }: { onSelect?: () => void } =
     }, [error, hasMore, lastKey, pageRetries, fetchPage])
 
     const navigateTo = (convId: string) => {
+        // Opening it reads it; the server is told by the conversation load.
+        const markRead = (list: ConversationSummary[]) =>
+            list.some(c => c.conversationId === convId && c.unread)
+                ? list.map(c => c.conversationId === convId ? { ...c, unread: false } : c)
+                : list
+        setItems(markRead)
+        setPinned(markRead)
+        setProjectItems(prev => Object.fromEntries(Object.entries(prev).map(([id, list]) => [id, markRead(list)])))
         navigate(`/chat/${convId}`)
         onSelect?.()
     }
