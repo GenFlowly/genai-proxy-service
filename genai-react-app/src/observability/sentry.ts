@@ -47,6 +47,14 @@ export function reportRenderError(error: Error, info: ErrorInfo): void {
     Sentry.captureReactException(error, info)
 }
 
+/**
+ * A reply whose recovery gave up. Dropped connections themselves are never
+ * reported: the reply resumes.
+ */
+export function reportReplyRecoveryFailed(error: unknown): void {
+    Sentry.captureException(error, { tags: { where: 'replyRecoveryFailed' } })
+}
+
 const URL_KEYS = ['url', 'from', 'to']
 
 /**

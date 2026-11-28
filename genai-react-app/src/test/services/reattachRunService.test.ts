@@ -34,10 +34,10 @@ describe('reattachRunService', () => {
         expect(reader.releaseLock).toHaveBeenCalled();
     });
 
-    test('treats 404 as a no-op (run already finished)', async () => {
+    test('resolves false on a 404: the run is over and its reply saved', async () => {
         mockFetch.mockResolvedValue({ ok: false, status: 404 });
         const onDelta = jest.fn();
-        await expect(reattachRun('t', 'r', 'c', { onDelta })).resolves.toBeUndefined();
+        await expect(reattachRun('t', 'r', 'c', { onDelta })).resolves.toBe(false);
         expect(onDelta).not.toHaveBeenCalled();
     });
 

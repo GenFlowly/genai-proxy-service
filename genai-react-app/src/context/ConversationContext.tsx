@@ -6,8 +6,9 @@ import { useAuth } from './AuthContext'
 import { AIConfig, useAI } from './AIContext'
 import { useToast } from './ToastContext'
 import { generateText } from '../services/generateTextService'
-import { generateTextStream, StreamMetadata, AwaitingInput, StreamGenerationError, STOP_REASON_CANCELLED } from '../services/generateTextStreamService'
-import { reattachRun } from '../services/reattachRunService'
+import { generateTextStream, StreamMetadata, AwaitingInput, StreamCallbacks, StreamGenerationError, STOP_REASON_CANCELLED } from '../services/generateTextStreamService'
+import { followRun, newRunCursor, turnClockEvent } from '../services/followRunService'
+import { reportReplyRecoveryFailed } from '../observability/sentry'
 import { resumeRun as resumeRunApi } from '../services/resumeRunService'
 import { getAIUsageActivity } from '../services/getAIUsageService'
 import { getConversation } from '../services/conversationService'
@@ -71,6 +72,47 @@ export const useRunHitl = (): RunHitlContextValue => {
  * this context, so the conversation tree — every block's markdown — no
  * longer re-renders on each editor debounce tick or viewport change.
  */
+/**
+ * Background-recovery for interrupted streams: mobile browsers kill the
+ * network stream when the app/tab is backgrounded, but the server keeps
+ * generating and persists the response under its deterministic message id.
+ * Poll the conversation until that message appears and return its text.
+ * Timers are throttled while the tab is hidden, so in practice this
+ * resumes polling the moment the user returns.
+ */
+async function recoverPersistedResponse(
+    token: string,
+    conversationId: string,
+    responseMessageId: string,
+    maxAttempts = 36
+): Promise<Message | null> {
+    const POLL_INTERVAL_MS = 5000
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+        const found = await fetchPersistedResponse(token, conversationId, responseMessageId)
+        if (found) return found
+    }
+    return null
+}
+
+/** The saved copy of a reply, if it has text yet. */
+async function fetchPersistedResponse(
+    token: string,
+    conversationId: string,
+    responseMessageId: string
+): Promise<Message | null> {
+    try {
+        const data = await getConversation(token, conversationId)
+        const found = data?.blocks
+            ?.flatMap(b => b.responseMessages)
+            .find(m => m.messageId === responseMessageId)
+        return found?.text ? found : null
+    } catch (e) {
+        console.warn('Fetching the saved reply failed', e)
+        return null
+    }
+}
+
 const ConversationUIProvider = ({ children }: { children: ReactNode }) => {
     const [editorPrompt, setEditorPrompt] = useState<string>('')
     const [activeViewportItem, setActiveViewportItem] = useState<{ blockId: string, type: 'request' | 'response' } | null>(null)
@@ -248,36 +290,6 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
 
     // --- API Calls ---
 
-    /**
-     * Background-recovery for interrupted streams: mobile browsers kill the
-     * network stream when the app/tab is backgrounded, but the server keeps
-     * generating and persists the response under its deterministic message id.
-     * Poll the conversation until that message appears and return its text.
-     * Timers are throttled while the tab is hidden, so in practice this
-     * resumes polling the moment the user returns.
-     */
-    const recoverPersistedResponse = async (
-        token: string,
-        conversationId: string,
-        responseMessageId: string,
-        maxAttempts = 36
-    ): Promise<Message | null> => {
-        const POLL_INTERVAL_MS = 5000
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
-            try {
-                const data = await getConversation(token, conversationId)
-                const found = data?.blocks
-                    ?.flatMap(b => b.responseMessages)
-                    .find(m => m.messageId === responseMessageId)
-                if (found?.text) return found
-            } catch (e) {
-                console.warn('Recovery poll failed, will retry', e)
-            }
-        }
-        return null
-    }
-
     // Project the NEXT brand-new conversation is created into (set by the
     // history sidebar's per-project "new conversation" action; cleared by
     // resetConversation). Sent only when the generate request carries no
@@ -375,7 +387,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
         onStopReason?: (reason: string) => void,
         regenerateMessageId?: string,
         generationId?: string,
-        turnResponseCount?: number
+        turnResponseCount?: number,
+        resume?: Pick<StreamCallbacks, 'onRun' | 'onSeq'>
     ): Promise<void> => {
         await generateTextStream(token, {
             aiConfig: aiConfig,
@@ -394,7 +407,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
             regenerateMessageId,
             generationId,
             turnResponseCount,
-        }, onDelta, onMetadata, onActivity, signal, onWebSources, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason)
+        }, onDelta, onMetadata, onActivity, signal, onWebSources, onGeneratedAttachments, onAwaitingInput, onContentReset, onStopReason, resume)
     }
 
     const loadConversation = useCallback(async (id: string) => {
@@ -440,9 +453,11 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
 
                     // Reattach one response message to its durable run: reset text,
                     // stream the replay in, then (for a real backend id) fetch
-                    // usage/cost and poll for the persisted message if the run already
-                    // finished. `synthetic` = we invented the id (legacy proxy, no
-                    // placeholder), so there's no server record to fetch usage for.
+                    // usage/cost. A dropped stream picks up where it stopped; a run
+                    // already over has saved its reply, fetched once. Stop and
+                    // leaving the chat work as on a live reply. `synthetic` = we
+                    // invented the id (legacy proxy, no placeholder), so there's
+                    // no server record to fetch usage for.
                     const reattachOne = (targetId: string, runId: string, synthetic: boolean) => {
                         const patch = (fn: (m: any) => any) => setConversationBlockList(prev => prev.map(b =>
                             b.conversationBlockId === bId
@@ -450,24 +465,41 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                 : b))
                         // Reset text: the reattach replays the run from the start.
                         patch(m => ({ ...m, isLoading: true, text: '' }))
+                        const vendor = lastBlock.responseMessages.find(m => m.messageId === targetId)?.aiVendor
+                        const streamKey = `${bId}-${vendor || targetId}`
+                        const controller = new AbortController()
+                        // Stop cancels the run by its reply id; the server answered long ago.
+                        abortControllers.current.set(streamKey, controller)
+                        generationIds.current.set(streamKey, targetId)
+                        headersReceived.current.add(streamKey)
+                        stopRequested.current.delete(streamKey)
+                        const cursor = newRunCursor(runId)
                         let acc = ''
                         let gotContent = false
                         let runFailed = false
+                        let stopped = false
                         const finish = async () => {
-                            if (!synthetic) {
-                                // Run finished before we reconnected → poll for the
-                                // persisted message so we never leave an empty card.
-                                // A failed run saved nothing to wait for.
-                                if (!gotContent && !runFailed) {
-                                    try {
-                                        const recovered = await recoverPersistedResponse(token, data.conversationId, targetId)
-                                        if (recovered) patch(m => ({
-                                            ...m,
-                                            text: recovered.text,
-                                            webSources: recovered.webSources ?? m.webSources,
-                                            generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
-                                        }))
-                                    } catch (e) { console.warn('Recover after reattach failed', e) }
+                            if (abortControllers.current.get(streamKey) === controller) {
+                                abortControllers.current.delete(streamKey)
+                                generationIds.current.delete(streamKey)
+                                headersReceived.current.delete(streamKey)
+                            }
+                            // Stop froze the card already; it only has to stop loading.
+                            if (!synthetic && !stopped) {
+                                // A run already over saved its reply before it left the
+                                // pending set. One that ended with nothing streamed saves
+                                // it just after its stream closes.
+                                if (!runFailed && (!cursor.active || !gotContent)) {
+                                    const saved = cursor.active
+                                        ? await recoverPersistedResponse(token, data.conversationId, targetId, 3)
+                                        : await fetchPersistedResponse(token, data.conversationId, targetId)
+                                    if (saved) patch(m => ({
+                                        ...m,
+                                        text: saved.text,
+                                        webSources: saved.webSources ?? m.webSources,
+                                        generatedAttachments: saved.generatedAttachments ?? m.generatedAttachments,
+                                        stopReason: saved.stopReason ?? m.stopReason,
+                                    }))
                                 }
                                 try {
                                     const metrics = await getAIUsageActivity(token, data.conversationId, targetId)
@@ -486,7 +518,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                                     ? { ...b, isLoading: b.responseMessages.some(m => m.messageId !== targetId && m.isLoading), responseMessages: b.responseMessages.map(m => m.messageId === targetId ? { ...m, isLoading: false } : m) }
                                     : b))
                         }
-                        reattachRun(token, runId, data.conversationId, {
+                        followRun(getAccessTokenSilently, cursor, data.conversationId, {
                             onDelta: (c) => { acc += c; gotContent = true; patch(m => ({ ...m, text: acc })) },
                             onContentReset: () => { acc = ''; patch(m => ({ ...m, text: '' })) },
                             onStopReason: (reason) => patch(m => ({ ...m, stopReason: reason })),
@@ -494,12 +526,21 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                             onWebSources: (ws) => patch(m => ({ ...m, webSources: ws })),
                             onGeneratedAttachments: (ga) => patch(m => ({ ...m, generatedAttachments: [...(m.generatedAttachments ?? []), ...ga] })),
                             onAwaitingInput: (p) => setAwaitingInputs(prev => ({ ...prev, [targetId]: { ...p, run_id: runId } })),
-                        }).catch(e => {
-                            console.warn('Reattach to pending run failed', e)
-                            if (e instanceof StreamGenerationError) {
-                                runFailed = true
-                                patch(m => ({ ...m, error: e.message }))
+                            onRun: (_, elapsedMs) => {
+                                if (elapsedMs != null) patch(m => ({ ...m, activity: [...(m.activity ?? []), turnClockEvent(elapsedMs)] }))
+                            },
+                            onSeq: (seq) => { cursor.lastSeq = seq },
+                        }, controller.signal).catch(e => {
+                            if (e?.name === 'AbortError') {
+                                stopped = true
+                                return
                             }
+                            reportReplyRecoveryFailed(e)
+                            runFailed = true
+                            patch(m => ({
+                                ...m,
+                                error: e instanceof StreamGenerationError ? e.message : i18n.t('errors.ai.generateTextStreamFailed'),
+                            }))
                         }).finally(finish)
                     }
 
@@ -853,6 +894,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                 let accumulatedText = ""
                 // Track the active message ID (starts as placeholder, updates to real backend ID)
                 let currentMsgId = msgId
+                const cursor = newRunCursor()
 
                 // Use explicit ID if provided (for parallel launches), otherwise ref (for first launch)
                 const idToUse = explicitConversationId || conversationIdRef.current
@@ -871,6 +913,40 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         return { ...block, responseMessages: msgs }
                     }))
                 }
+
+                const handleDelta = (chunk: string) => {
+                    accumulatedText += chunk
+                    setConversationBlockList(prev =>
+                        prev.map(block => {
+                            if (block.conversationBlockId === id) {
+                                const msgs = block.responseMessages.map(m => {
+                                    // Match either the current active ID (which might be new) OR the original placeholder ID (if state update hasn't landed yet)
+                                    const isMatch = (m.messageId === currentMsgId || m.messageId === msgId)
+                                    if (isMatch) {
+                                        return { ...m, text: accumulatedText }
+                                    }
+                                    return m
+                                })
+                                return { ...block, responseMessages: msgs }
+                            }
+                            return block
+                        })
+                    )
+                }
+
+                const handleRun = (runId: string, elapsedMs?: number) => {
+                    cursor.runId = runId
+                    if (elapsedMs == null) return
+                    setConversationBlockList(prev => prev.map(block => {
+                        if (block.conversationBlockId !== id) return block
+                        const msgs = block.responseMessages.map(m => {
+                            if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                            return { ...m, activity: [...(m.activity ?? []), turnClockEvent(elapsedMs)] }
+                        })
+                        return { ...block, responseMessages: msgs }
+                    }))
+                }
+                const handleSeq = (seq: number) => { cursor.lastSeq = seq }
 
                 const handleGeneratedAttachments = (attachments: AttachmentRef[]) => {
                     setConversationBlockList(prev => prev.map(block => {
@@ -969,25 +1045,7 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         finalSelectedResponseId,
                         instructionId,
                         instructionVersion,
-                        (chunk) => {
-                            accumulatedText += chunk
-                            setConversationBlockList(prev =>
-                                prev.map(block => {
-                                    if (block.conversationBlockId === id) {
-                                        const msgs = block.responseMessages.map(m => {
-                                            // Match either the current active ID (which might be new) OR the original placeholder ID (if state update hasn't landed yet)
-                                            const isMatch = (m.messageId === currentMsgId || m.messageId === msgId)
-                                            if (isMatch) {
-                                                return { ...m, text: accumulatedText }
-                                            }
-                                            return m
-                                        })
-                                        return { ...block, responseMessages: msgs }
-                                    }
-                                    return block
-                                })
-                            )
-                        },
+                        handleDelta,
                         (metadata: StreamMetadata) => {
                             const newConversationId = metadata.conversationId
 
@@ -1061,7 +1119,8 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         handleStopReason,
                         regenerateMessageId,
                         generationIds.current.get(streamKey),
-                        aiConfigs.length
+                        aiConfigs.length,
+                        { onRun: handleRun, onSeq: handleSeq }
                     )
                 } catch (err: any) {
                     // Session problems affect every vendor — let the outer
@@ -1083,56 +1142,105 @@ const ConversationDataProvider = ({ children }: { children: ReactNode }) => {
                         finishVendorMessage(null, STOP_REASON_CANCELLED)
                         return
                     }
-                    console.error(`Stream failed for vendor ${conf.aiVendor}`, err)
-                    // The server keeps generating after a dropped connection
-                    // (backgrounded mobile app). When the server-side response
-                    // id is already known (metadata arrived before the drop),
-                    // poll for the persisted message instead of failing the turn.
-                    // A StreamGenerationError is the server's final word, so nothing
-                    // more is coming: it saves a response only when text streamed,
-                    // and one look is enough to pick up that copy's usage and sources.
-                    const isFinal = err instanceof StreamGenerationError
-                    if (currentMsgId !== msgId && (!isFinal || accumulatedText)) {
-                        const recovered = await recoverPersistedResponse(
-                            token,
-                            explicitConversationId || conversationIdRef.current,
-                            currentMsgId,
-                            isFinal ? 1 : undefined
-                        )
-                        if (recovered) {
-                            setConversationBlockList(prev => prev.map(block => {
-                                if (block.conversationBlockId !== id) return block
-                                const msgs = block.responseMessages.map(m => {
-                                    if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
-                                    return {
-                                        ...m,
-                                        text: recovered.text,
-                                        webSources: recovered.webSources ?? m.webSources,
-                                        generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
-                                        inputTokens: recovered.inputTokens ?? m.inputTokens,
-                                        outputTokens: recovered.outputTokens ?? m.outputTokens,
-                                        totalTokens: recovered.totalTokens ?? m.totalTokens,
-                                        costUsd: recovered.costUsd ?? m.costUsd,
-                                    }
-                                })
-                                return { ...block, responseMessages: msgs }
-                            }))
-                            // A StreamGenerationError is the server explicitly
-                            // saying generation failed (vendor error / dropped
-                            // retrieval-server connection) — the recovered text
-                            // is whatever was salvaged, not a complete answer,
-                            // so still flag it rather than presenting it as a
-                            // clean finish. Any other error reaching here (e.g.
-                            // a plain dropped connection while the server-side
-                            // generation kept running, as with a backgrounded
-                            // mobile tab) recovered a real, complete answer —
-                            // stay silent.
-                            finishVendorMessage(err instanceof StreamGenerationError ? err.message : null)
+                    if (cursor.runId && !(err instanceof StreamGenerationError)) {
+                        // The run keeps generating without this page (tab hidden,
+                        // network dropped): pick its stream up after the last event applied.
+                        const targetConversation = explicitConversationId || conversationIdRef.current
+                        try {
+                            await followRun(getAccessTokenSilently, cursor, targetConversation, {
+                                onDelta: handleDelta,
+                                onContentReset: handleContentReset,
+                                onStopReason: handleStopReason,
+                                onActivity: handleActivity,
+                                onWebSources: handleWebSources,
+                                onGeneratedAttachments: handleGeneratedAttachments,
+                                onAwaitingInput: handleAwaitingInput,
+                                onRun: handleRun,
+                                onSeq: handleSeq,
+                            }, turnControllers.get(streamKey)?.signal)
+                        } catch (resumeErr: any) {
+                            if (resumeErr?.name === 'AbortError') {
+                                finishVendorMessage(null, STOP_REASON_CANCELLED)
+                                return
+                            }
+                            reportReplyRecoveryFailed(resumeErr)
+                            finishVendorMessage(resumeErr instanceof StreamGenerationError
+                                ? resumeErr.message
+                                : i18n.t('errors.ai.generateTextStreamFailed'))
                             return
                         }
+                        if (!cursor.active) {
+                            const saved = await fetchPersistedResponse(token, targetConversation, currentMsgId)
+                            if (saved) {
+                                accumulatedText = saved.text
+                                setConversationBlockList(prev => prev.map(block => {
+                                    if (block.conversationBlockId !== id) return block
+                                    const msgs = block.responseMessages.map(m => {
+                                        if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                                        return {
+                                            ...m,
+                                            text: saved.text,
+                                            webSources: saved.webSources ?? m.webSources,
+                                            generatedAttachments: saved.generatedAttachments ?? m.generatedAttachments,
+                                            stopReason: saved.stopReason ?? m.stopReason,
+                                        }
+                                    })
+                                    return { ...block, responseMessages: msgs }
+                                }))
+                            }
+                        }
+                    } else {
+                        console.error(`Stream failed for vendor ${conf.aiVendor}`, err)
+                        // No durable run to reattach to (the server fell back to a
+                        // direct stream): it still saves the reply, so when the
+                        // response id is known (metadata arrived before the drop),
+                        // poll for the persisted message instead of failing the turn.
+                        // A StreamGenerationError is the server's final word, so nothing
+                        // more is coming: it saves a response only when text streamed,
+                        // and one look is enough to pick up that copy's usage and sources.
+                        const isFinal = err instanceof StreamGenerationError
+                        if (currentMsgId !== msgId && (!isFinal || accumulatedText)) {
+                            const recovered = await recoverPersistedResponse(
+                                token,
+                                explicitConversationId || conversationIdRef.current,
+                                currentMsgId,
+                                isFinal ? 1 : undefined
+                            )
+                            if (recovered) {
+                                setConversationBlockList(prev => prev.map(block => {
+                                    if (block.conversationBlockId !== id) return block
+                                    const msgs = block.responseMessages.map(m => {
+                                        if (m.messageId !== currentMsgId && m.messageId !== msgId) return m
+                                        return {
+                                            ...m,
+                                            text: recovered.text,
+                                            webSources: recovered.webSources ?? m.webSources,
+                                            generatedAttachments: recovered.generatedAttachments ?? m.generatedAttachments,
+                                            inputTokens: recovered.inputTokens ?? m.inputTokens,
+                                            outputTokens: recovered.outputTokens ?? m.outputTokens,
+                                            totalTokens: recovered.totalTokens ?? m.totalTokens,
+                                            costUsd: recovered.costUsd ?? m.costUsd,
+                                        }
+                                    })
+                                    return { ...block, responseMessages: msgs }
+                                }))
+                                // A StreamGenerationError is the server explicitly
+                                // saying generation failed (vendor error / dropped
+                                // retrieval-server connection) — the recovered text
+                                // is whatever was salvaged, not a complete answer,
+                                // so still flag it rather than presenting it as a
+                                // clean finish. Any other error reaching here (e.g.
+                                // a plain dropped connection while the server-side
+                                // generation kept running, as with a backgrounded
+                                // mobile tab) recovered a real, complete answer —
+                                // stay silent.
+                                finishVendorMessage(err instanceof StreamGenerationError ? err.message : null)
+                                return
+                            }
+                        }
+                        finishVendorMessage(err?.message || i18n.t('errors.ai.generateTextStreamFailed'))
+                        return
                     }
-                    finishVendorMessage(err?.message || i18n.t('errors.ai.generateTextStreamFailed'))
-                    return
                 }
 
                 const finalConversationId = explicitConversationId || conversationIdRef.current
